@@ -8,14 +8,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterD
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+        // Toestemming voor notificaties wordt hier bewust NIET gevraagd. Dat gebeurt
+        // pas nadat iemand is ingelogd, vanuit de webapp via de PushNotifications-plugin
+        // (register() regelt dan ook registerForRemoteNotifications). Zo krijgt niemand
+        // een pop-up over meldingen bij de allereerste start, nog voor het inlogscherm.
         UNUserNotificationCenter.current().delegate = self
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
-            if granted {
-                DispatchQueue.main.async {
-                    UIApplication.shared.registerForRemoteNotifications()
-                }
-            }
-        }
         return true
     }
 

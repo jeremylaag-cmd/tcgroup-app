@@ -24,21 +24,29 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string></string>
+			<string>com.tcgroup.planning</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>tcgroup</string>
 			</array>
-			<key>com.tcgroup.planning</key>
-			<string></string>
 		</dict>
 	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>TC Group Planning gebruikt de camera als je zelf een foto of document aan een klus wilt toevoegen.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>TC Group Planning legt vast waar je in- en uitklokt, als bewijs bij je urenregistratie.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>TC Group Planning gebruikt de microfoon alleen als je zelf een video met geluid opneemt voor een klus.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>TC Group Planning bewaart een foto in je fotobibliotheek wanneer je die zelf opslaat.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>TC Group Planning heeft toegang tot je fotobibliotheek nodig als je daar een bestand of foto uit kiest om aan een klus toe te voegen.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -50,8 +58,6 @@
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
