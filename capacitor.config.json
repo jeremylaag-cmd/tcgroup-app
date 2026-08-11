@@ -1,0 +1,8 @@
+{
+  "appId": "com.tcgroup.planning",
+  "appName": "TC Group Planning",
+  "webDir": "www",
+  "server": {
+    "iosScheme": "tcgroup"
+  }
+}
