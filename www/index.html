@@ -2510,7 +2510,19 @@ function minToStr(min){
 
 async function getLocatie(){
   return new Promise(resolve=>{
-    if(!navigator.geolocation){resolve('Locatie niet beschikbaar');return;}
+    let afgerond=false;
+    const klaar=waarde=>{
+      if(afgerond)return;
+      afgerond=true;
+      clearTimeout(vangnet);
+      resolve(waarde);
+    };
+    // Vangnet. Op iOS krijgt de app geen locatierechten (die ontbreken in
+    // Info.plist), en dan roept de webview soms geen van beide callbacks aan.
+    // Zonder deze timer blijft de app dan eeuwig op "Locatie ophalen..." staan.
+    const vangnet=setTimeout(()=>klaar('Locatie niet beschikbaar'),10000);
+
+    if(!navigator.geolocation){klaar('Locatie niet beschikbaar');return;}
     navigator.geolocation.getCurrentPosition(
       async pos=>{
         const lat=pos.coords.latitude;const lng=pos.coords.longitude;
@@ -2523,12 +2535,12 @@ async function getLocatie(){
           const straat=[a.road,a.house_number].filter(Boolean).join(' ');
           const plaats=a.city||a.town||a.village||a.municipality||'';
           const adres=[straat,plaats].filter(Boolean).join(', ');
-          resolve(adres||`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+          klaar(adres||`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
         }catch{
-          resolve(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+          klaar(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
         }
       },
-      ()=>resolve('Locatie geweigerd'),
+      ()=>klaar('Locatie geweigerd'),
       {timeout:8000,maximumAge:60000}
     );
   });
@@ -2642,31 +2654,94 @@ function renderIngeklokt(reg,klus){
   updateTimer();
 }
 
+function toonUurFout(tekst){
+  const card=document.getElementById('uurRegistratieCard');
+  if(!card)return;
+  let el=document.getElementById('uurFout');
+  if(!el){
+    el=document.createElement('div');
+    el.id='uurFout';
+    el.style.cssText='margin-top:12px;font-size:12px;color:#DC2626;line-height:1.45';
+    card.appendChild(el);
+  }
+  el.textContent=tekst;
+}
+
 async function doInklokken(klusId){
   const btn=document.querySelector('.uur-btn-in');
+  const herstel=melding=>{
+    if(btn){btn.disabled=false;btn.textContent='Inklokken';}
+    if(melding)toonUurFout(melding);
+  };
+  const foutEl=document.getElementById('uurFout');
+  if(foutEl)foutEl.textContent='';
   if(btn){btn.disabled=true;btn.textContent='Locatie ophalen...';}
-  const locatie=await getLocatie();
-  await sb.from('urenregistraties').insert({
-    gebruiker_id:CURRENT_USER.id,
-    klus_id:klusId||null,
-    locatie_in:locatie,
-    status:'lopend'
-  });
+
+  let locatie='Locatie niet beschikbaar';
+  try{
+    locatie=await getLocatie();
+  }catch(e){
+    console.warn('Locatie ophalen mislukt:',e);
+  }
+
+  if(btn)btn.textContent='Inklokken...';
+  try{
+    const{error}=await sb.from('urenregistraties').insert({
+      gebruiker_id:CURRENT_USER.id,
+      klus_id:klusId||null,
+      locatie_in:locatie,
+      status:'lopend'
+    });
+    if(error){
+      console.error('Inklokken mislukt:',error);
+      herstel('Inklokken mislukt: '+error.message+'. Probeer het opnieuw.');
+      return;
+    }
+  }catch(e){
+    console.error('Inklokken mislukt:',e);
+    herstel('Inklokken mislukt: '+(e&&e.message?e.message:'geen verbinding')+'. Probeer het opnieuw.');
+    return;
+  }
   loadUrenPersoneel();
 }
 
 async function doUitklokken(regId){
   const btn=document.querySelector('.uur-btn-out');
+  const herstel=melding=>{
+    if(btn){btn.disabled=false;btn.textContent='Uitklokken';}
+    if(melding)toonUurFout(melding);
+  };
+  const foutEl=document.getElementById('uurFout');
+  if(foutEl)foutEl.textContent='';
   if(btn){btn.disabled=true;btn.textContent='Locatie ophalen...';}
-  const locatie=await getLocatie();
-  const{data:reg}=await sb.from('urenregistraties').select('ingeklokt_op').eq('id',regId).single();
-  const totaal_minuten=reg?Math.round((Date.now()-new Date(reg.ingeklokt_op).getTime())/60000):0;
-  await sb.from('urenregistraties').update({
-    uitgeklokt_op:new Date().toISOString(),
-    locatie_uit:locatie,
-    totaal_minuten,
-    status:'wacht'
-  }).eq('id',regId);
+
+  let locatie='Locatie niet beschikbaar';
+  try{
+    locatie=await getLocatie();
+  }catch(e){
+    console.warn('Locatie ophalen mislukt:',e);
+  }
+
+  if(btn)btn.textContent='Uitklokken...';
+  try{
+    const{data:reg}=await sb.from('urenregistraties').select('ingeklokt_op').eq('id',regId).single();
+    const totaal_minuten=reg?Math.round((Date.now()-new Date(reg.ingeklokt_op).getTime())/60000):0;
+    const{error}=await sb.from('urenregistraties').update({
+      uitgeklokt_op:new Date().toISOString(),
+      locatie_uit:locatie,
+      totaal_minuten,
+      status:'wacht'
+    }).eq('id',regId);
+    if(error){
+      console.error('Uitklokken mislukt:',error);
+      herstel('Uitklokken mislukt: '+error.message+'. Probeer het opnieuw.');
+      return;
+    }
+  }catch(e){
+    console.error('Uitklokken mislukt:',e);
+    herstel('Uitklokken mislukt: '+(e&&e.message?e.message:'geen verbinding')+'. Probeer het opnieuw.');
+    return;
+  }
   if(urenTimer){clearInterval(urenTimer);urenTimer=null;}
   loadUrenPersoneel();
 }
