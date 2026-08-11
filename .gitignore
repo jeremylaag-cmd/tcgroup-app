@@ -7,3 +7,4 @@ ios/App/App/public/
 build/
 *.log
 tcgroup-app.bundle
+ios/App/.git-oud-backup/
