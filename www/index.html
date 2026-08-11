@@ -943,6 +943,9 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         <div style="margin-top:1rem">
           <button onclick="openVerwijderAccount()" style="width:100%;background:transparent;color:#991B1B;border:none;padding:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font);text-decoration:underline">Account verwijderen</button>
         </div>
+
+        <!-- Versie-info (wordt gevuld door het live-update script onderaan) -->
+        <div id="appVersie" style="margin-top:1.25rem;text-align:center;font-size:11px;color:var(--muted)"></div>
       </div>
     </div>
   </div>
@@ -3458,5 +3461,82 @@ window.addEventListener('load', ()=>{
   }
 });
 </script>
+
+<!-- ══════════════════════════════════════════════════════════════════
+     LIVE UPDATES — haalt nieuwe versies op zonder App Store
+     Publiceren doe je door naar GitHub te pushen. De GitHub Action
+     bouwt dan automatisch een nieuwe bundel en zet die online.
+     ══════════════════════════════════════════════════════════════════ -->
+<script>
+/* LET OP: niet handmatig aanpassen. De GitHub Action vervangt deze regel
+   bij het publiceren door het echte versienummer. */
+const APP_VERSION = '0.0.0-dev';
+
+const UPDATE_MANIFEST = 'https://jeremylaag-cmd.github.io/tcgroup-app/version.json';
+
+(function(){
+  // Versienummer tonen op het profielscherm
+  function toonVersie(){
+    const el = document.getElementById('appVersie');
+    if(el) el.textContent = 'Versie ' + APP_VERSION;
+  }
+  if(document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', toonVersie);
+  } else {
+    toonVersie();
+  }
+
+  const U = window.Capacitor
+         && window.Capacitor.Plugins
+         && window.Capacitor.Plugins.CapacitorUpdater;
+
+  // Draait in een gewone browser of op een build zonder de plugin: niets doen.
+  if(!U) return;
+
+  // Bevestig dat deze bundel goed opstart. Zonder deze melding draait iOS
+  // automatisch terug naar de vorige werkende versie. Dit is het vangnet
+  // dat voorkomt dat een kapotte update de app onbruikbaar maakt.
+  U.notifyAppReady().catch(e => console.warn('notifyAppReady mislukt:', e));
+
+  let bezig = false;
+
+  async function checkUpdate(){
+    if(bezig) return;
+    bezig = true;
+    try{
+      const res = await fetch(UPDATE_MANIFEST + '?t=' + Date.now(), {cache:'no-store'});
+      if(!res.ok) return;
+
+      const info = await res.json();
+      if(!info || !info.version || !info.url) return;
+
+      // Al de nieuwste versie? Dan niets doen.
+      if(info.version === APP_VERSION) return;
+      const huidig = await U.current();
+      if(huidig && huidig.bundle && huidig.bundle.version === info.version) return;
+
+      console.log('Nieuwe versie gevonden:', info.version, '(nu:', APP_VERSION + ')');
+      const bundel = await U.download({url: info.url, version: info.version});
+      await U.set({id: bundel.id});   // activeert de update en herlaadt direct
+    }catch(e){
+      // Stil falen: geen internet of GitHub even onbereikbaar mag de app
+      // nooit blokkeren. Volgende keer opstarten proberen we het opnieuw.
+      console.warn('Update-check mislukt:', e);
+    }finally{
+      bezig = false;
+    }
+  }
+
+  checkUpdate();
+
+  // Ook checken wanneer de app vanuit de achtergrond terugkomt
+  if(window.Capacitor.Plugins.App){
+    window.Capacitor.Plugins.App.addListener('appStateChange', state => {
+      if(state.isActive) checkUpdate();
+    });
+  }
+})();
+</script>
 </body>
 </html>
+

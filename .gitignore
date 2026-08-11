@@ -6,3 +6,4 @@ ios/App/Pods/
 ios/App/App/public/
 build/
 *.log
+tcgroup-app.bundle

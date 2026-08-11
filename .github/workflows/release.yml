@@ -1,0 +1,101 @@
+name: Publiceer app-update
+
+# Elke push naar main rolt automatisch een nieuwe versie uit naar alle telefoons.
+# Je kunt hem ook handmatig starten via het tabblad "Actions" op GitHub.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'www/**'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publiceren:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Code ophalen
+        uses: actions/checkout@v4
+
+      - name: Versienummer bepalen
+        id: versie
+        run: echo "nummer=1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Bundel bouwen
+        run: |
+          set -e
+          mkdir -p bundel site
+          cp -R www/. bundel/
+
+          # Versienummer in de bundel zetten
+          sed -i "s|const APP_VERSION = '0.0.0-dev';|const APP_VERSION = '${{ steps.versie.outputs.nummer }}';|" bundel/index.html
+
+          if ! grep -q "const APP_VERSION = '${{ steps.versie.outputs.nummer }}';" bundel/index.html; then
+            echo "FOUT: het versienummer kon niet in index.html gezet worden."
+            echo "Waarschijnlijk is de regel 'const APP_VERSION' aangepast of verwijderd."
+            exit 1
+          fi
+
+          # Rommel die niet mee hoeft
+          find bundel -name '.DS_Store' -delete
+
+          (cd bundel && zip -qr ../site/dist.zip .)
+          echo "Bundel gebouwd: $(du -h site/dist.zip | cut -f1)"
+
+      - name: version.json schrijven
+        run: |
+          set -e
+          CHECKSUM=$(sha256sum site/dist.zip | cut -d' ' -f1)
+          cat > site/version.json <<EOF
+          {
+            "version": "${{ steps.versie.outputs.nummer }}",
+            "url": "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/dist.zip",
+            "checksum": "${CHECKSUM}",
+            "gepubliceerd": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "commit": "${{ github.sha }}"
+          }
+          EOF
+          cat site/version.json
+
+      - name: Simpele statuspagina
+        run: |
+          cat > site/index.html <<'EOF'
+          <!DOCTYPE html><html lang="nl"><head><meta charset="utf-8">
+          <title>TC Group Planning — updates</title>
+          <style>body{font-family:system-ui,sans-serif;max-width:520px;margin:4rem auto;padding:0 1.5rem;color:#1A1917}
+          a{color:#1A1917}code{background:#F7F6F2;padding:2px 6px;border-radius:4px}</style></head>
+          <body><h1>TC Group Planning</h1>
+          <p>Deze pagina host de live-updates van de app.</p>
+          <ul><li><a href="version.json">version.json</a> — welke versie nu actueel is</li>
+          <li><a href="dist.zip">dist.zip</a> — de bundel die de app downloadt</li></ul>
+          </body></html>
+          EOF
+
+      - name: Pages voorbereiden
+        uses: actions/configure-pages@v5
+
+      - name: Bestanden uploaden
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Publiceren
+        id: deploy
+        uses: actions/deploy-pages@v4
+
+      - name: Klaar
+        run: |
+          echo "Versie ${{ steps.versie.outputs.nummer }} staat online."
+          echo "De app pikt hem op bij de eerstvolgende keer openen."

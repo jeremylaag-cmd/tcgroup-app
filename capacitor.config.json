@@ -4,5 +4,12 @@
   "webDir": "www",
   "server": {
     "iosScheme": "tcgroup"
+  },
+  "plugins": {
+    "CapacitorUpdater": {
+      "autoUpdate": false,
+      "resetWhenUpdate": true,
+      "directUpdate": false
+    }
   }
 }
