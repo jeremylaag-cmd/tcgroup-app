@@ -52,6 +52,9 @@ jobs:
           find bundel -name '.DS_Store' -delete
 
           (cd bundel && zip -qr ../site/dist.zip .)
+
+          # Ook de losse webversie publiceren, zodat de site nooit achterloopt
+          cp bundel/index.html site/app.html
           echo "Bundel gebouwd: $(du -h site/dist.zip | cut -f1)"
 
       - name: version.json schrijven
@@ -78,6 +81,7 @@ jobs:
           a{color:#1A1917}code{background:#F7F6F2;padding:2px 6px;border-radius:4px}</style></head>
           <body><h1>TC Group Planning</h1>
           <p>Deze pagina host de live-updates van de app.</p>
+          <p><a href="app.html"><strong>Open de webversie van de app</strong></a></p>
           <ul><li><a href="version.json">version.json</a> — welke versie nu actueel is</li>
           <li><a href="dist.zip">dist.zip</a> — de bundel die de app downloadt</li></ul>
           </body></html>
