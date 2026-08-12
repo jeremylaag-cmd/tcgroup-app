@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="TC Planning">
@@ -11,6 +11,8 @@
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
+/* Voorkomt dat dubbel- of drievoudig tikken inzoomt. Scrollen blijft gewoon werken. */
+html{touch-action:manipulation;-webkit-text-size-adjust:100%}
 :root{--bg:#F7F6F2;--surface:#fff;--border:#E5E3DB;--text:#1A1917;--muted:#888580;--radius:10px;--font:'DM Sans',sans-serif;--bnav-h:64px}
 body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;min-height:100dvh;-webkit-text-size-adjust:100%}
 
@@ -1883,6 +1885,9 @@ function closePersDetail(){
 
 
 let BESCHIKBAARHEID=[];
+// Het rooster toont standaard alleen klussen vanaf vandaag. Met de knop
+// boven de lijst kun je ook terugkijken naar wat geweest is.
+let toonEerdereKlussen=false;
 
 async function loadAll(){
   const [
@@ -1917,6 +1922,32 @@ async function loadAll(){
   }));
   renderMededelingen(meds||[]);
   renderAll();
+}
+
+function toggleEerdere(){
+  toonEerdereKlussen=!toonEerdereKlussen;
+  renderAll();
+  const lijst=document.getElementById('klusList');
+  if(lijst&&lijst.scrollIntoView)lijst.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+// Knop boven de kluslijst om ook eerdere klussen te tonen of weer te verbergen.
+function toonEerderBalk(){
+  const lijst=document.getElementById('klusList');
+  if(!lijst||!lijst.parentNode)return;
+  let balk=document.getElementById('eerderBalk');
+  if(!balk){
+    balk=document.createElement('div');
+    balk.id='eerderBalk';
+    lijst.parentNode.insertBefore(balk,lijst);
+  }
+  const vandaag=fmt(new Date());
+  const aantal=KLUSSEN.filter(k=>(k.datum_eind||k.datum)<vandaag).length;
+  if(selDate||!aantal){balk.innerHTML='';return;}
+  const tekst=toonEerdereKlussen
+    ?'Alleen klussen vanaf vandaag'
+    :`&#x2191; Ook eerdere klussen tonen (${aantal})`;
+  balk.innerHTML=`<div onclick="toggleEerdere()" style="cursor:pointer;text-align:center;font-size:12px;font-weight:500;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px;margin-bottom:.75rem">${tekst}</div>`;
 }
 
 function renderAll(){
@@ -1974,12 +2005,19 @@ function renderAll(){
   if(conflicts.length){cb.className='conflict show';cb.innerHTML='⚠ Conflict: '+conflicts.join(' — ');}
   else cb.className='conflict';
 
-  // Klussen
-  const filtered=selDate?KLUSSEN.filter(k=>klusDagen(k).includes(selDate)):KLUSSEN;
-  document.getElementById('mainTitle').textContent=selDate?new Date(selDate).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'}):'Alle klussen';
+  // Klussen — standaard vanaf vandaag
+  const vandaagStr=fmt(new Date());
+  const basis=(!selDate&&!toonEerdereKlussen)
+    ?KLUSSEN.filter(k=>(k.datum_eind||k.datum)>=vandaagStr)
+    :KLUSSEN;
+  const filtered=selDate?KLUSSEN.filter(k=>klusDagen(k).includes(selDate)):basis;
+  document.getElementById('mainTitle').textContent=selDate
+    ?new Date(selDate).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})
+    :(toonEerdereKlussen?'Alle klussen':'Klussen vanaf vandaag');
   document.getElementById('btnClear').style.display=selDate?'':'none';
   const sorted=[...filtered].sort((a,b)=>a.datum.localeCompare(b.datum));
   const isBeheerder=CURRENT_ROL==='beheerder';
+  toonEerderBalk();
 
   document.getElementById('klusList').innerHTML=sorted.length===0?'<div class="empty">Geen klussen gepland</div>':sorted.map(k=>{
     const ds=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
@@ -3607,6 +3645,23 @@ document.addEventListener('deviceready', ()=>{
     initPushNotifications();
   }
 }, false);
+
+// ── TOETSENBORD SLUITEN ──
+// Tik je naast een invoerveld, dan gaat het toetsenbord weg. In een webview
+// gebeurt dat niet vanzelf, waardoor het toetsenbord bleef staan.
+(function(){
+  const isInvoer=el=>el&&el.closest&&el.closest('input,textarea,select,[contenteditable="true"]');
+  const sluitToetsenbord=e=>{
+    if(isInvoer(e.target))return;
+    const actief=document.activeElement;
+    if(!actief||!/^(INPUT|TEXTAREA|SELECT)$/.test(actief.tagName))return;
+    actief.blur();
+    const K=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Keyboard;
+    if(K&&K.hide)K.hide().catch(()=>{});
+  };
+  document.addEventListener('touchend',sluitToetsenbord,{passive:true});
+  document.addEventListener('mousedown',sluitToetsenbord);
+})();
 
 // ── DEEP LINK HANDLER (Apple login callback) ──
 window.addEventListener('load', ()=>{
