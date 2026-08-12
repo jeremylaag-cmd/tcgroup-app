@@ -1309,18 +1309,69 @@ function showForgotPw(show=true){
   document.getElementById('authMsg').style.display='none';
 }
 
+// Inloggen met Apple.
+// Apple keurde versie 1.1 af omdat de app hiervoor naar Safari sprong (richtlijn 4).
+// Daarom nu drie stappen, van mooi naar minst mooi:
+//   1. het systeemvenster van Apple zelf (Face ID) via de native plugin
+//   2. lukt dat niet: de inlogpagina in een venster BINNEN de app
+//   3. op een gewone browser: de normale doorverwijzing
+// Stap 2 en 3 vereisen de Browser-plugin die vanaf versie 1.2 is meegeleverd;
+// op oudere builds valt hij terug op het oude gedrag.
 async function doAppleLogin(){
   const err=document.getElementById('authErr');
-  err.style.display='none';
-  const isNative=window.Capacitor&&window.Capacitor.isNativePlatform();
-  const{error}=await sb.auth.signInWithOAuth({
-    provider:'apple',
-    options:{
-      redirectTo: isNative ? 'tcgroup://login' : 'https://jeremylaag-cmd.github.io',
-      scopes:'name email',
+  if(err)err.style.display='none';
+  const toonFout=t=>{ if(err){err.textContent=t;err.style.display='block';} };
+
+  const isNative=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
+  const Apple=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.SignInWithApple;
+
+  // ── 1. Systeemvenster van Apple ────────────────────────────────────
+  if(isNative&&Apple){
+    try{
+      const res=await Apple.authorize({
+        clientId:'com.tcgroup.planning',
+        redirectURI:'tcgroup://login',
+        scopes:'name email'
+      });
+      const idToken=res&&res.response&&res.response.identityToken;
+      if(!idToken)throw new Error('Apple gaf geen inlogtoken terug');
+
+      // Bewust zonder nonce: Apple en Supabase coderen die hash verschillend
+      // (hex tegenover base64url), waardoor de controle altijd faalt.
+      const{data,error}=await sb.auth.signInWithIdToken({provider:'apple',token:idToken});
+      if(error)throw error;
+      if(data&&data.user){initApp(data.user);return;}
+      throw new Error('De server accepteerde de Apple-inlog niet');
+    }catch(e){
+      const melding=(e&&(e.message||e.error||''))+'';
+      // Zelf geannuleerd in het Apple-venster: dan gewoon niets doen.
+      if(/cancel|1001/i.test(melding))return;
+      console.error('Apple-inlog via het systeemvenster mislukt:',e);
+      // en anders: doorvallen naar stap 2
     }
-  });
-  if(error){err.textContent=error.message;err.style.display='block';}
+  }
+
+  // ── 2 en 3. Inlogpagina in een venster binnen de app ───────────────
+  try{
+    const{data,error}=await sb.auth.signInWithOAuth({
+      provider:'apple',
+      options:{
+        redirectTo: isNative ? 'tcgroup://login' : 'https://jeremylaag-cmd.github.io',
+        scopes:'name email',
+        skipBrowserRedirect: isNative
+      }
+    });
+    if(error)throw error;
+
+    if(isNative&&data&&data.url){
+      const Browser=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Browser;
+      if(Browser)await Browser.open({url:data.url,presentationStyle:'popover'});
+      else window.location.href=data.url;   // oudere build zonder Browser-plugin
+    }
+  }catch(e){
+    console.error('Apple-inlog mislukt:',e);
+    toonFout('Inloggen met Apple lukte niet. Probeer het opnieuw, of log in met je e-mailadres en wachtwoord.');
+  }
 }
 
 async function doForgotPw(){
@@ -1844,7 +1895,7 @@ async function loadAll(){
     {data:klusSoorten},{data:klusTruckSoorten},{data:beschData}
   ]=await Promise.all([
     sb.from('trucks').select('*').order('volgorde'),
-    sb.from('gebruikers').select('id,naam,rol').in('rol',['part-timer','full-timer']).order('naam'),
+    sb.from('personeel_publiek').select('id,naam,rol').in('rol',['part-timer','full-timer']).order('naam'),
     sb.from('klussen').select('*').order('datum'),
     sb.from('klus_trucks').select('*'),
     sb.from('klus_gebruikers').select('*'),
@@ -2181,17 +2232,47 @@ function renderPdfList(){
 }
 function removeExistingPdf(id){existingPdfs=existingPdfs.filter(p=>p.id!==id);renderPdfList();}
 function removeNewPdf(i){formPdfs.splice(i,1);renderPdfList();}
-function openPdf(url,naam){
+// PDF openen. De opslag staat sinds augustus 2026 op prive, dus een opgeslagen
+// bestand heeft een tijdelijke link nodig. En op iOS gooit window.open je de app
+// uit naar Safari, daarom liever het venster binnen de app (Browser-plugin,
+// aanwezig vanaf versie 1.2).
+async function openPdf(url,naam){
   if(!url)return;
-  if(url.startsWith('data:')){
-    // Oude base64 PDFs (backwards compat)
-    const arr=url.split(',');const mime=arr[0].match(/:(.*?);/)[1];
-    const bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);
-    while(n--)u8[n]=bstr.charCodeAt(n);
-    window.open(URL.createObjectURL(new Blob([u8],{type:mime})),'_blank');
-  }else{
-    // Storage URL — gewoon openen
-    window.open(url,'_blank');
+
+  const openLink=async link=>{
+    const Browser=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Browser;
+    if(Browser){await Browser.open({url:link});}
+    else{window.open(link,'_blank');}
+  };
+
+  try{
+    if(url.startsWith('data:')){
+      // Oude base64-PDF's uit de begintijd. In de app kan een blob-link niet
+      // geopend worden, dus daar melden we het eerlijk.
+      if(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()){
+        alert('Deze bijlage is in een oud formaat opgeslagen en kan niet in de app geopend worden. Vraag de beheerder om hem opnieuw toe te voegen.');
+        return;
+      }
+      const arr=url.split(',');const mime=arr[0].match(/:(.*?);/)[1];
+      const bstr=atob(arr[1]);let n=bstr.length;const u8=new Uint8Array(n);
+      while(n--)u8[n]=bstr.charCodeAt(n);
+      window.open(URL.createObjectURL(new Blob([u8],{type:mime})),'_blank');
+      return;
+    }
+
+    const merk='/storage/v1/object/public/pdf/';
+    if(url.includes(merk)){
+      const pad=decodeURIComponent(url.split(merk)[1]);
+      const{data,error}=await sb.storage.from('pdf').createSignedUrl(pad,3600);
+      if(error||!data||!data.signedUrl)throw new Error(error?error.message:'geen link gekregen');
+      await openLink(data.signedUrl);
+      return;
+    }
+
+    await openLink(url);
+  }catch(e){
+    console.error('PDF openen mislukt:',e);
+    alert('Deze bijlage kon niet geopend worden. Probeer het opnieuw.');
   }
 }
 
@@ -2798,7 +2879,7 @@ async function loadUrenBeheer(){
 
   // Haal alle registraties op
   const{data:regs}=await sb.from('urenregistraties').select('*').order('ingeklokt_op',{ascending:false});
-  const{data:gebruikers}=await sb.from('gebruikers').select('id,naam');
+  const{data:gebruikers}=await sb.from('personeel_publiek').select('id,naam');
   const gMap=Object.fromEntries((gebruikers||[]).map(g=>[g.id,g.naam]));
 
   // Te accorderen
@@ -3167,7 +3248,7 @@ async function loadAlleBeschikbaarheid(){
   if(!agendaEl||!lijstEl)return;
 
   const{data:beschData}=await sb.from('beschikbaarheid').select('*').order('datum_start',{ascending:true});
-  const{data:gebruikers}=await sb.from('gebruikers').select('id,naam').in('rol',['part-timer','full-timer','hal']);
+  const{data:gebruikers}=await sb.from('personeel_publiek').select('id,naam').in('rol',['part-timer','full-timer','hal']);
   const gMap=Object.fromEntries((gebruikers||[]).map(g=>[g.id,g]));
 
   const{days,month,year}=getBeschMonthDates();
@@ -3538,6 +3619,10 @@ window.addEventListener('load', ()=>{
       const url=data.url;
       console.log('Deep link ontvangen:', url);
       if(!url)return;
+
+      // Het in-app browservenster mag dicht zodra we terug zijn.
+      const Browser=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Browser;
+      if(Browser&&Browser.close)Browser.close().catch(()=>{});
 
       // Haal hash fragment op (access_token zit na #)
       const hashIndex=url.indexOf('#');
