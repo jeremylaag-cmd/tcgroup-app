@@ -1323,17 +1323,13 @@ async function doAppleLogin(){
   const toonFout=t=>{ if(err){err.textContent=t;err.style.display='block';} };
 
   const isNative=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
-  const Apple=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.SignInWithApple;
+  const AppleLogin=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.AppleLogin;
 
   // ── 1. Systeemvenster van Apple ────────────────────────────────────
-  if(isNative&&Apple){
+  if(isNative&&AppleLogin){
     try{
-      const res=await Apple.authorize({
-        clientId:'com.tcgroup.planning',
-        redirectURI:'tcgroup://login',
-        scopes:'name email'
-      });
-      const idToken=res&&res.response&&res.response.identityToken;
+      const res=await AppleLogin.authorize();
+      const idToken=res&&res.identityToken;
       if(!idToken)throw new Error('Apple gaf geen inlogtoken terug');
 
       // Bewust zonder nonce: Apple en Supabase coderen die hash verschillend
@@ -1345,7 +1341,7 @@ async function doAppleLogin(){
     }catch(e){
       const melding=(e&&(e.message||e.error||''))+'';
       // Zelf geannuleerd in het Apple-venster: dan gewoon niets doen.
-      if(/cancel|1001/i.test(melding))return;
+      if(/cancel|geannuleerd|1001/i.test(melding))return;
       console.error('Apple-inlog via het systeemvenster mislukt:',e);
       // en anders: doorvallen naar stap 2
     }
