@@ -922,6 +922,15 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           </div>
         </div>
 
+        <!-- Telefoonnummer -->
+        <div class="detail-section">
+          <div class="detail-label">Telefoonnummer</div>
+          <div style="display:flex;gap:8px;margin-top:4px">
+            <input type="tel" id="profielTelefoon" inputmode="tel" autocomplete="tel" placeholder="06 12345678" style="flex:1;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+            <button class="btn-sm" onclick="saveProfielTelefoon()" style="flex-shrink:0;padding:8px 14px">Opslaan</button>
+          </div>
+        </div>
+
         <!-- Adres -->
         <div class="detail-section">
           <div class="detail-label">Adres</div>
@@ -973,7 +982,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="bc">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
           <div class="bt" style="margin-bottom:0">Personeelsaccounts</div>
-          <button class="btn-sm" onclick="exportPersoneelCSV()" style="font-size:11px;padding:5px 14px">&#x21E9; Export CSV</button>
+          <button class="btn-sm" onclick="exportPersoneel()" style="font-size:11px;padding:5px 14px">Exporteren</button>
         </div>
         <div class="acc-list" id="accList"><div class="spin">Laden...</div></div>
       </div>
@@ -1001,34 +1010,39 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 
       <div class="detail-section" id="expDagVeld" style="display:none">
         <div class="detail-label" id="expDagLabel">Datum</div>
-        <input type="date" id="expDatum" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+        <input type="date" id="expDatum" oninput="expToonInfo()" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
       </div>
 
       <div class="detail-section" id="expMaandVeld">
         <div class="detail-label">Maand</div>
-        <input type="month" id="expMaand" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+        <div style="display:flex;gap:8px">
+          <select id="expMaandNr" onchange="expToonInfo()" style="flex:2;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"></select>
+          <select id="expMaandJaar" onchange="expToonInfo()" style="flex:1;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"></select>
+        </div>
       </div>
 
       <div class="detail-section" id="expJaarVeld" style="display:none">
         <div class="detail-label">Jaar</div>
-        <input type="number" id="expJaar" min="2020" max="2100" step="1" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+        <select id="expJaar" onchange="expToonInfo()" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"></select>
       </div>
 
       <div class="detail-section" id="expVrijVeld" style="display:none">
         <div class="detail-label">Van en tot en met</div>
         <div style="display:flex;gap:8px">
-          <input type="date" id="expVan" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
-          <input type="date" id="expTot" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+          <input type="date" id="expVan" oninput="expToonInfo()" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+          <input type="date" id="expTot" oninput="expToonInfo()" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
         </div>
       </div>
 
       <div class="detail-section">
         <div class="detail-label">Medewerker</div>
-        <select id="expPersoon" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"><option value="">Iedereen</option></select>
+        <input type="search" id="expZoek" placeholder="Zoek op naam..." oninput="expFilterPersonen()" autocomplete="off" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);margin-bottom:6px">
+        <select id="expPersoon" onchange="expToonInfo()" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"><option value="">Iedereen</option></select>
+        <div id="expZoekInfo" style="font-size:11px;color:var(--muted);margin-top:4px"></div>
       </div>
 
       <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-bottom:1rem;cursor:pointer">
-        <input type="checkbox" id="expAlleenGoedgekeurd" checked style="width:16px;height:16px">
+        <input type="checkbox" id="expAlleenGoedgekeurd" checked onchange="expToonInfo()" style="width:16px;height:16px">
         Alleen goedgekeurde uren
       </label>
 
@@ -1781,6 +1795,55 @@ function changeMedWeek(dir){medWeekOffset=dir===0?0:medWeekOffset+dir;renderMede
 function toggleDate(ds){selDate=ds===selDate?null:ds;renderAll();}
 function clearFilter(){selDate=null;renderAll();}
 function formatTijd(el){let v=el.value.replace(/[^0-9]/g,'');if(v.length>2)v=v.slice(0,2)+'.'+v.slice(2,4);el.value=v;}
+
+// Vult een half ingetypte tijd aan zodra je het veld verlaat.
+//   10    -> 10.00       9     -> 09.00
+//   930   -> 09.30       1745  -> 17.45
+// Onmogelijke waarden worden bijgetrokken (25 uur wordt 23 uur).
+function aanvulTijd(el){
+  const cijfers=(el.value||'').replace(/[^0-9]/g,'');
+  if(!cijfers){el.value='';return;}
+  let u,m;
+  if(cijfers.length<=2){u=+cijfers;m=0;}
+  else if(cijfers.length===3){u=+cijfers.slice(0,1);m=+cijfers.slice(1);}
+  else{u=+cijfers.slice(0,2);m=+cijfers.slice(2,4);}
+  if(u>23)u=23;
+  if(m>59)m=59;
+  el.value=String(u).padStart(2,'0')+'.'+String(m).padStart(2,'0');
+}
+
+// Tijdvelden aanvullen bij verlaten, en overal waar alleen cijfers in horen
+// het cijfertoetsenbord tonen. focusout gebruiken we omdat blur niet omhoog
+// borrelt in de pagina.
+document.addEventListener('focusout',e=>{
+  if(e.target&&e.target.classList&&e.target.classList.contains('tijd-input'))aanvulTijd(e.target);
+});
+function zetCijferToetsenbord(wortel){
+  const w=wortel||document;
+  if(!w.querySelectorAll)return;
+  w.querySelectorAll('.tijd-input').forEach(el=>{
+    el.setAttribute('inputmode','numeric');
+    el.setAttribute('autocomplete','off');
+  });
+  w.querySelectorAll('input[type=number]').forEach(el=>{
+    el.setAttribute('inputmode','numeric');
+  });
+  w.querySelectorAll('input[type=tel]').forEach(el=>{
+    el.setAttribute('inputmode','tel');
+  });
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  zetCijferToetsenbord(document);
+  // Velden die pas later worden opgebouwd (modals, lijsten) krijgen het
+  // cijfertoetsenbord alsnog zodra ze in de pagina verschijnen.
+  try{
+    new MutationObserver(muts=>{
+      muts.forEach(m=>m.addedNodes.forEach(n=>{
+        if(n.nodeType===1)zetCijferToetsenbord(n);
+      }));
+    }).observe(document.body,{childList:true,subtree:true});
+  }catch(e){}
+});
 function tijdToDb(v){if(!v)return null;const p=v.replace('.',':').split(':');if(p.length===2)return`${p[0].padStart(2,'0')}:${p[1].padEnd(2,'0')}:00`;return null;}
 function tijdFromDb(t){return t?t.slice(0,5).replace(':','.'):''}
 function showPage(id,btn){
@@ -1889,6 +1952,54 @@ async function loadAccounts(){
       </div>
     </div>`;
   }).join('');
+}
+
+// Zet de complete accountlijst in een CSV-bestand.
+async function exportPersoneel(){
+  const knop=document.querySelector('[onclick="exportPersoneel()"]');
+  const oud=knop?knop.textContent:'';
+  if(knop){knop.disabled=true;knop.textContent='Bezig...';}
+  try{
+    const[{data:mensen,error},{data:skillsData}]=await Promise.all([
+      sb.from('gebruikers').select('*').order('naam'),
+      sb.from('skills').select('id,naam'),
+    ]);
+    if(error)throw new Error(error.message);
+    if(!mensen||!mensen.length){toast('Geen accounts gevonden','fout');return;}
+
+    const skillNaam=Object.fromEntries((skillsData||[]).map(s=>[s.id,s.naam]));
+    const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','personeel':'Personeel'};
+
+    const rijen=[['Naam','Rol','E-mail','Telefoon','Straat','Postcode','Plaats','Shirtmaat','Rijbewijs','Skills']];
+    mensen.forEach(u=>{
+      let ids=[];
+      try{ids=u.skills?(typeof u.skills==='string'?JSON.parse(u.skills):u.skills):[];}catch(e){ids=[];}
+      if(!Array.isArray(ids))ids=[];
+      rijen.push([
+        u.naam||'',
+        rolLabels[u.rol]||u.rol||'',
+        u.email||'',
+        u.telefoon||'',
+        u.straat||'',
+        u.postcode||'',
+        u.plaats||'',
+        u.shirtmaat||'',
+        u.rijbewijs||'',
+        ids.map(id=>skillNaam[id]).filter(Boolean).join(', ')
+      ]);
+    });
+    rijen.push([]);
+    rijen.push(['Totaal aantal accounts',mensen.length]);
+
+    const csv='﻿'+rijen.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+    const gelukt=await bewaarCsv('accounts_'+fmt(new Date())+'.csv',csv);
+    if(gelukt)toast(mensen.length+' accounts geëxporteerd');
+  }catch(e){
+    console.error('Export accounts mislukt:',e);
+    toast('Export mislukt: '+(e&&e.message?e.message:'onbekende fout'),'fout');
+  }finally{
+    if(knop){knop.disabled=false;knop.textContent=oud||'Exporteren';}
+  }
 }
 
 async function toggleUserSkill(userId,skillId,btn){
@@ -2732,9 +2843,10 @@ function loadProfiel(){
   document.getElementById('profielEmail').textContent=CURRENT_USER.email||'–';
   document.getElementById('profielNaamInput').value=CURRENT_NAAM;
   // Laad adresgegevens
-  sb.from('gebruikers').select('straat,postcode,plaats').eq('id',CURRENT_USER.id).single().then(({data})=>{
+  sb.from('gebruikers').select('straat,postcode,plaats,telefoon').eq('id',CURRENT_USER.id).single().then(({data})=>{
     if(data){
       document.getElementById('profielStraat').value=data.straat||'';
+      document.getElementById('profielTelefoon').value=data.telefoon||'';
       document.getElementById('profielPostcode').value=data.postcode||'';
       document.getElementById('profielPlaats').value=data.plaats||'';
     }
@@ -2754,17 +2866,35 @@ async function saveProfielNaam(){
 }
 
 async function saveProfielAdres(){
+  const btn=document.querySelector('[onclick="saveProfielAdres()"]');
   const straat=document.getElementById('profielStraat').value.trim();
   const postcode=document.getElementById('profielPostcode').value.trim();
   const plaats=document.getElementById('profielPlaats').value.trim();
+  if(btn){btn.disabled=true;btn.textContent='Bezig...';}
   const{error:adresErr}=await sb.from('gebruikers').update({straat,postcode,plaats}).eq('id',CURRENT_USER.id);
+  if(btn)btn.disabled=false;
   if(adresErr){
-    if(btn){btn.disabled=false;btn.textContent='Adres opslaan';}
+    if(btn)btn.textContent='Adres opslaan';
     toast('Adres opslaan mislukt: '+adresErr.message,'fout');
     return;
   }
-  const btn=document.querySelector('[onclick="saveProfielAdres()"]');
   if(btn){btn.textContent='✓ Opgeslagen';setTimeout(()=>btn.textContent='Adres opslaan',2000);}
+}
+
+async function saveProfielTelefoon(){
+  const btn=document.querySelector('[onclick="saveProfielTelefoon()"]');
+  const veld=document.getElementById('profielTelefoon');
+  const telefoon=(veld.value||'').trim();
+  if(!telefoon){toast('Vul eerst een telefoonnummer in','fout');return;}
+  if(btn){btn.disabled=true;btn.textContent='...';}
+  const{error}=await sb.from('gebruikers').update({telefoon}).eq('id',CURRENT_USER.id);
+  if(btn)btn.disabled=false;
+  if(error){
+    if(btn)btn.textContent='Opslaan';
+    toast('Telefoonnummer opslaan mislukt: '+error.message,'fout');
+    return;
+  }
+  if(btn){btn.textContent='✓';setTimeout(()=>btn.textContent='Opslaan',2000);}
 }
 
 // ── URENREGISTRATIE ──
@@ -3170,21 +3300,55 @@ async function saveEditUren(id,status){
 // wat toevallig op het scherm staat. Je kiest zelf de periode en of het om
 // iedereen of om één medewerker gaat.
 
+const EXP_MAANDEN=['januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december'];
+let EXPORT_PERSONEN=[];
+
 async function openExport(){
   const nu=new Date();
   document.getElementById('expDatum').value=fmt(nu);
-  document.getElementById('expMaand').value=fmt(nu).slice(0,7);
-  document.getElementById('expJaar').value=nu.getFullYear();
   document.getElementById('expVan').value=fmt(new Date(nu.getFullYear(),nu.getMonth(),1));
   document.getElementById('expTot').value=fmt(nu);
+
+  // Maand en jaar als keuzelijst, zodat je niets meer hoeft te typen.
+  const mSel=document.getElementById('expMaandNr');
+  mSel.innerHTML=EXP_MAANDEN.map((n,i)=>`<option value="${i}">${n.charAt(0).toUpperCase()+n.slice(1)}</option>`).join('');
+  mSel.value=nu.getMonth();
+
+  const jNu=nu.getFullYear();
+  const jaren=[];
+  for(let j=jNu+1;j>=jNu-5;j--)jaren.push(j);
+  const jOpties=jaren.map(j=>`<option value="${j}">${j}</option>`).join('');
+  document.getElementById('expMaandJaar').innerHTML=jOpties;
+  document.getElementById('expMaandJaar').value=jNu;
+  document.getElementById('expJaar').innerHTML=jOpties;
+  document.getElementById('expJaar').value=jNu;
+
+  document.getElementById('expZoek').value='';
   expWissel();
   document.getElementById('exportOverlay').classList.add('open');
 
   // Namenlijst: iedereen, dus ook hal-medewerkers en beheerders
-  const sel=document.getElementById('expPersoon');
   const{data:mensen}=await sb.from('personeel_publiek').select('id,naam').order('naam');
+  EXPORT_PERSONEN=mensen||[];
+  expFilterPersonen();
+}
+
+// Filtert de namenlijst op wat er in het zoekveld staat. Handig zodra er
+// honderd medewerkers in het systeem staan.
+function expFilterPersonen(){
+  const sel=document.getElementById('expPersoon');
+  if(!sel)return;
+  const zoek=(document.getElementById('expZoek').value||'').trim().toLowerCase();
+  const huidig=sel.value;
+  const lijst=zoek?EXPORT_PERSONEN.filter(m=>(m.naam||'').toLowerCase().includes(zoek)):EXPORT_PERSONEN;
   sel.innerHTML='<option value="">Iedereen</option>'+
-    (mensen||[]).map(m=>`<option value="${m.id}">${m.naam}</option>`).join('');
+    lijst.map(m=>`<option value="${m.id}">${m.naam}</option>`).join('');
+  if(huidig&&lijst.some(m=>m.id===huidig))sel.value=huidig;
+  const info=document.getElementById('expZoekInfo');
+  if(info)info.textContent=zoek
+    ?lijst.length+' van '+EXPORT_PERSONEN.length+' medewerkers'
+    :EXPORT_PERSONEN.length+' medewerkers';
+  expToonInfo();
 }
 
 function sluitExport(){document.getElementById('exportOverlay').classList.remove('open');}
@@ -3220,10 +3384,11 @@ function expPeriodeGrenzen(){
     return {van,tot,label:'week-van-'+fmt(van)};
   }
   if(per==='maand'){
-    const x=document.getElementById('expMaand').value;
-    if(!x)return null;
-    const jaar=+x.slice(0,4), maand=+x.slice(5,7)-1;
-    return {van:new Date(jaar,maand,1),tot:new Date(jaar,maand+1,1),label:x};
+    const maand=+document.getElementById('expMaandNr').value;
+    const jaar=+document.getElementById('expMaandJaar').value;
+    if(isNaN(maand)||!jaar)return null;
+    const label=jaar+'-'+String(maand+1).padStart(2,'0');
+    return {van:new Date(jaar,maand,1),tot:new Date(jaar,maand+1,1),label};
   }
   if(per==='jaar'){
     const j=+document.getElementById('expJaar').value;
@@ -3241,12 +3406,21 @@ function expToonInfo(){
   const el=document.getElementById('expInfo');
   if(!el)return;
   const g=expPeriodeGrenzen();
-  if(!g){el.textContent='';return;}
+  if(!g){el.textContent='Kies eerst een geldige periode.';return;}
   const laatste=new Date(g.tot); laatste.setDate(laatste.getDate()-1);
   const o={day:'numeric',month:'long',year:'numeric'};
-  el.textContent=g.van.toDateString()===laatste.toDateString()
-    ?'Exporteert '+g.van.toLocaleDateString('nl-NL',o)
-    :'Exporteert '+g.van.toLocaleDateString('nl-NL',o)+' tot en met '+laatste.toLocaleDateString('nl-NL',o);
+  const periode=g.van.toDateString()===laatste.toDateString()
+    ?g.van.toLocaleDateString('nl-NL',o)
+    :g.van.toLocaleDateString('nl-NL',o)+' tot en met '+laatste.toLocaleDateString('nl-NL',o);
+
+  const pSel=document.getElementById('expPersoon');
+  const wie=pSel&&pSel.value
+    ?(pSel.selectedOptions[0]?pSel.selectedOptions[0].textContent:'één medewerker')
+    :'alle medewerkers';
+  const goed=document.getElementById('expAlleenGoedgekeurd');
+  const soort=goed&&goed.checked?'alleen goedgekeurde uren':'alle uren, ook nog niet goedgekeurde';
+
+  el.textContent='Exporteert '+periode+' — '+wie+', '+soort+'.';
 }
 
 // Opslaan van het bestand. In de app via het deelvenster van iOS, in een
@@ -3255,28 +3429,100 @@ function expToonInfo(){
 async function bewaarCsv(bestandsnaam,csv){
   const P=window.Capacitor&&window.Capacitor.Plugins;
   const FS=P&&P.Filesystem, Delen=P&&P.Share;
+  const inApp=!!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
+
   if(FS&&Delen){
+    let uri=null;
     try{
       const res=await FS.writeFile({path:bestandsnaam,data:csv,directory:'CACHE',encoding:'utf8'});
-      await Delen.share({title:bestandsnaam,url:res.uri,dialogTitle:'Urenoverzicht delen'});
-      return true;
+      uri=res&&res.uri;
     }catch(e){
-      const m=(e&&e.message||'')+'';
-      if(/cancel/i.test(m))return false;      // deelvenster weggeklikt
-      console.error('Delen mislukt, terugvallen op download:',e);
+      console.error('Wegschrijven mislukt:',e);
+    }
+    if(uri){
+      // Nieuwere Capacitor wil files:[], oudere url:. Allebei proberen.
+      try{
+        await Delen.share({title:bestandsnaam,files:[uri],dialogTitle:'Urenoverzicht delen'});
+        return true;
+      }catch(e){
+        const m=(e&&e.message||'')+'';
+        if(/cancel/i.test(m))return false;      // deelvenster weggeklikt
+        try{
+          await Delen.share({title:bestandsnaam,url:uri,dialogTitle:'Urenoverzicht delen'});
+          return true;
+        }catch(e2){
+          const m2=(e2&&e2.message||'')+'';
+          if(/cancel/i.test(m2))return false;
+          console.error('Delen mislukt:',e2);
+        }
+      }
     }
   }
+
+  // In een gewone browser werkt een download wel.
+  if(!inApp){
+    try{
+      const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');
+      a.href=url; a.download=bestandsnaam;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+      return true;
+    }catch(e){
+      console.error('Opslaan mislukt:',e);
+    }
+  }
+
+  // Laatste redmiddel: laat de gegevens zien zodat je ze kunt kopiëren.
+  toonCsvVenster(bestandsnaam,csv);
+  return true;
+}
+
+// Toont de export als tekst met een kopieerknop. Zo kom je altijd aan je
+// gegevens, ook als het deelvenster van iOS niet meewerkt.
+function toonCsvVenster(bestandsnaam,csv){
+  let ov=document.getElementById('csvOverlay');
+  if(!ov){
+    ov=document.createElement('div');
+    ov.id='csvOverlay';
+    ov.className='modal-overlay';
+    ov.onclick=e=>{if(e.target===ov)ov.classList.remove('open');};
+    ov.innerHTML=`<div class="modal" style="max-width:560px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
+        <div style="font-size:15px;font-weight:600" id="csvTitel">Export</div>
+        <button class="btn-ghost" onclick="document.getElementById('csvOverlay').classList.remove('open')" style="padding:5px 10px">&#x2715;</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:8px">
+        Kopieer de tekst hieronder en plak die in Excel, Numbers of een e-mail.
+      </div>
+      <textarea id="csvTekst" readonly style="width:100%;height:220px;font-size:11px;font-family:ui-monospace,Menlo,monospace;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);white-space:pre"></textarea>
+      <button id="csvKopieer" onclick="kopieerCsv()" style="width:100%;margin-top:10px;background:var(--text);color:#fff;border:none;border-radius:9px;padding:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font)">Kopieer alles</button>
+    </div>`;
+    document.body.appendChild(ov);
+  }
+  document.getElementById('csvTitel').textContent=bestandsnaam;
+  document.getElementById('csvTekst').value=csv.replace(/^﻿/,'');
+  ov.classList.add('open');
+}
+
+async function kopieerCsv(){
+  const ta=document.getElementById('csvTekst');
+  const knop=document.getElementById('csvKopieer');
   try{
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url; a.download=bestandsnaam;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(()=>URL.revokeObjectURL(url),1000);
-    return true;
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(ta.value);
+    }else{
+      ta.removeAttribute('readonly');
+      ta.select(); ta.setSelectionRange(0,ta.value.length);
+      document.execCommand('copy');
+      ta.setAttribute('readonly','');
+    }
+    knop.textContent='✓ Gekopieerd';
+    setTimeout(()=>knop.textContent='Kopieer alles',2000);
   }catch(e){
-    console.error('Opslaan mislukt:',e);
-    return false;
+    ta.select();
+    toast('Kopiëren lukte niet, selecteer de tekst zelf','fout');
   }
 }
 
