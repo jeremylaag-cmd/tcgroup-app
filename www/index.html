@@ -980,6 +980,64 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     </div>
   </div>
 
+  <!-- UREN EXPORTEREN -->
+  <div class="modal-overlay" id="exportOverlay" onclick="if(event.target===this)sluitExport()">
+    <div class="modal" style="max-width:420px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
+        <div style="font-size:15px;font-weight:600">Uren exporteren</div>
+        <button class="btn-ghost" onclick="sluitExport()" style="padding:5px 10px">&#x2715;</button>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-label">Periode</div>
+        <select id="expPeriode" onchange="expWissel()" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+          <option value="dag">E&eacute;n dag</option>
+          <option value="week">Week</option>
+          <option value="maand" selected>Maand</option>
+          <option value="jaar">Jaar</option>
+          <option value="vrij">Zelf kiezen</option>
+        </select>
+      </div>
+
+      <div class="detail-section" id="expDagVeld" style="display:none">
+        <div class="detail-label" id="expDagLabel">Datum</div>
+        <input type="date" id="expDatum" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+      </div>
+
+      <div class="detail-section" id="expMaandVeld">
+        <div class="detail-label">Maand</div>
+        <input type="month" id="expMaand" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+      </div>
+
+      <div class="detail-section" id="expJaarVeld" style="display:none">
+        <div class="detail-label">Jaar</div>
+        <input type="number" id="expJaar" min="2020" max="2100" step="1" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+      </div>
+
+      <div class="detail-section" id="expVrijVeld" style="display:none">
+        <div class="detail-label">Van en tot en met</div>
+        <div style="display:flex;gap:8px">
+          <input type="date" id="expVan" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+          <input type="date" id="expTot" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-label">Medewerker</div>
+        <select id="expPersoon" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"><option value="">Iedereen</option></select>
+      </div>
+
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text);margin-bottom:1rem;cursor:pointer">
+        <input type="checkbox" id="expAlleenGoedgekeurd" checked style="width:16px;height:16px">
+        Alleen goedgekeurde uren
+      </label>
+
+      <div id="expInfo" style="font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:1rem"></div>
+
+      <button id="expKnop" onclick="doeExport()" style="width:100%;background:var(--text);color:#fff;border:none;border-radius:9px;padding:12px;font-size:14px;font-weight:500;cursor:pointer;font-family:var(--font)">Exporteren</button>
+    </div>
+  </div>
+
   <!-- PERSONEEL DETAIL MODAL -->
   <div class="modal-overlay" id="persDetailOverlay" onclick="if(event.target===this)closePersDetail()">
     <div class="modal" style="max-width:520px">
@@ -1077,7 +1135,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
                 <span class="week-nav-label" id="urenMaandLabel" style="min-width:110px"></span>
                 <button class="btn-nav" onclick="changeUrenMaand(1)">&#8594;</button>
               </div>
-              <button class="btn-sm" onclick="exportUrenCSV()" style="font-size:11px;padding:5px 12px">CSV</button>
+              <button class="btn-sm" onclick="openExport()" style="font-size:11px;padding:5px 12px">Exporteren</button>
             </div>
           </div>
           <div id="urenMaandList"><div class="spin">Laden...</div></div>
@@ -1257,7 +1315,57 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 const SB_URL='https://rxfrdocioodfxrnjtipa.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4ZnJkb2Npb29kZnhybmp0aXBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MjM1MDQsImV4cCI6MjA5MzM5OTUwNH0.dvTDgvVSQQILHdgm0FI_FW8WmALTZI06VTqabLrwu1E';
-const sb=supabase.createClient(SB_URL,SB_KEY);
+// ── MELDINGEN ──────────────────────────────────────────────────────
+// Eén plek voor korte meldingen onderin beeld. Wordt gebruikt door het
+// vangnet hieronder en door losse functies die iets willen bevestigen.
+function toast(tekst,soort){
+  let el=document.getElementById('appToast');
+  if(!el){
+    el=document.createElement('div');
+    el.id='appToast';
+    el.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:99999;max-width:90%;padding:11px 16px;border-radius:10px;font-size:13px;font-weight:500;line-height:1.4;box-shadow:0 6px 24px rgba(0,0,0,.18);display:none;text-align:center';
+    document.body.appendChild(el);
+  }
+  const fout=soort==='fout';
+  el.style.background=fout?'#FEF2F2':'#ECFDF5';
+  el.style.color=fout?'#991B1B':'#065F46';
+  el.style.border='1px solid '+(fout?'#FECACA':'#A7F3D0');
+  el.textContent=tekst;
+  el.style.display='block';
+  clearTimeout(el._t);
+  el._t=setTimeout(()=>{el.style.display='none';},fout?6000:2500);
+}
+
+// Vangnet. De app controleert lang niet overal of een databaseverzoek is
+// gelukt; mislukte verzoeken zagen er daardoor uit als "er gebeurt niets"
+// of, erger, als een leeg scherm. Deze wrapper vangt elk mislukt verzoek af
+// en toont het. Inloggen slaan we over, want die schermen tonen hun eigen
+// foutmelding.
+async function sbFetch(input,init){
+  const url=typeof input==='string'?input:(input&&input.url)||'';
+  try{
+    const res=await fetch(input,init);
+    if(!res.ok&&!url.includes('/auth/v1/')&&res.status!==406){
+      let detail='';
+      try{ detail=(await res.clone().json()).message||''; }catch(e){}
+      console.error('Databaseverzoek mislukt',res.status,url,detail);
+      if(res.status===401||res.status===403){
+        toast('Je hebt hier geen toegang toe, of je sessie is verlopen. Log opnieuw in.','fout');
+      }else{
+        toast('Er ging iets mis bij de server'+(detail?': '+detail:'')+'. Probeer het opnieuw.','fout');
+      }
+    }
+    return res;
+  }catch(e){
+    if(!url.includes('/auth/v1/')){
+      console.error('Geen verbinding met de server:',url,e);
+      toast('Geen verbinding met de server. Controleer je internet.','fout');
+    }
+    throw e;
+  }
+}
+
+const sb=supabase.createClient(SB_URL,SB_KEY,{global:{fetch:sbFetch}});
 
 let TRUCKS=[],PERSONEEL=[],KLUSSEN=[],SOORTEN=[];
 let selDate=null,editId=null,weekOffset=0,medWeekOffset=0;
@@ -2649,7 +2757,12 @@ async function saveProfielAdres(){
   const straat=document.getElementById('profielStraat').value.trim();
   const postcode=document.getElementById('profielPostcode').value.trim();
   const plaats=document.getElementById('profielPlaats').value.trim();
-  await sb.from('gebruikers').update({straat,postcode,plaats}).eq('id',CURRENT_USER.id);
+  const{error:adresErr}=await sb.from('gebruikers').update({straat,postcode,plaats}).eq('id',CURRENT_USER.id);
+  if(adresErr){
+    if(btn){btn.disabled=false;btn.textContent='Adres opslaan';}
+    toast('Adres opslaan mislukt: '+adresErr.message,'fout');
+    return;
+  }
   const btn=document.querySelector('[onclick="saveProfielAdres()"]');
   if(btn){btn.textContent='✓ Opgeslagen';setTimeout(()=>btn.textContent='Adres opslaan',2000);}
 }
@@ -3052,19 +3165,204 @@ async function saveEditUren(id,status){
   loadUrenBeheer();
 }
 
-function exportUrenCSV(){
-  const maandEl=document.getElementById('urenMaandLabel');
-  const maandNaam=maandEl?.textContent||'export';
-  const rows=[['Naam','Klussen','Minuten','Uren']];
-  document.querySelectorAll('.uur-tbl tbody tr:not(.totaal)').forEach(tr=>{
-    const cells=[...tr.querySelectorAll('td')].map(td=>td.textContent.trim());
-    if(cells.length>=3)rows.push([cells[0],cells[1],cells[2]]);
-  });
-  const csv=rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=`uren-${maandNaam.replace(' ','-')}.csv`;
-  a.click();URL.revokeObjectURL(url);
+// ── UREN EXPORTEREN ────────────────────────────────────────────────
+// Haalt de registraties rechtstreeks uit de database op, dus niet alleen
+// wat toevallig op het scherm staat. Je kiest zelf de periode en of het om
+// iedereen of om één medewerker gaat.
+
+async function openExport(){
+  const nu=new Date();
+  document.getElementById('expDatum').value=fmt(nu);
+  document.getElementById('expMaand').value=fmt(nu).slice(0,7);
+  document.getElementById('expJaar').value=nu.getFullYear();
+  document.getElementById('expVan').value=fmt(new Date(nu.getFullYear(),nu.getMonth(),1));
+  document.getElementById('expTot').value=fmt(nu);
+  expWissel();
+  document.getElementById('exportOverlay').classList.add('open');
+
+  // Namenlijst: iedereen, dus ook hal-medewerkers en beheerders
+  const sel=document.getElementById('expPersoon');
+  const{data:mensen}=await sb.from('personeel_publiek').select('id,naam').order('naam');
+  sel.innerHTML='<option value="">Iedereen</option>'+
+    (mensen||[]).map(m=>`<option value="${m.id}">${m.naam}</option>`).join('');
+}
+
+function sluitExport(){document.getElementById('exportOverlay').classList.remove('open');}
+
+function expWissel(){
+  const per=document.getElementById('expPeriode').value;
+  const toon=(id,ja)=>{const e=document.getElementById(id);if(e)e.style.display=ja?'':'none';};
+  toon('expDagVeld', per==='dag'||per==='week');
+  toon('expMaandVeld', per==='maand');
+  toon('expJaarVeld', per==='jaar');
+  toon('expVrijVeld', per==='vrij');
+  const lbl=document.getElementById('expDagLabel');
+  if(lbl)lbl.textContent=per==='week'?'Kies een dag — de hele week eromheen wordt meegenomen':'Datum';
+  expToonInfo();
+}
+
+// Bepaalt begin en eind van de gekozen periode. Eind is exclusief.
+function expPeriodeGrenzen(){
+  const per=document.getElementById('expPeriode').value;
+  if(per==='dag'){
+    const x=document.getElementById('expDatum').value;
+    if(!x)return null;
+    const van=parseDate(x); const tot=new Date(van); tot.setDate(tot.getDate()+1);
+    return {van,tot,label:x};
+  }
+  if(per==='week'){
+    const x=document.getElementById('expDatum').value;
+    if(!x)return null;
+    const d=parseDate(x);
+    const dag=(d.getDay()+6)%7;               // maandag = 0
+    const van=new Date(d); van.setDate(d.getDate()-dag);
+    const tot=new Date(van); tot.setDate(van.getDate()+7);
+    return {van,tot,label:'week-van-'+fmt(van)};
+  }
+  if(per==='maand'){
+    const x=document.getElementById('expMaand').value;
+    if(!x)return null;
+    const jaar=+x.slice(0,4), maand=+x.slice(5,7)-1;
+    return {van:new Date(jaar,maand,1),tot:new Date(jaar,maand+1,1),label:x};
+  }
+  if(per==='jaar'){
+    const j=+document.getElementById('expJaar').value;
+    if(!j)return null;
+    return {van:new Date(j,0,1),tot:new Date(j+1,0,1),label:''+j};
+  }
+  const a=document.getElementById('expVan').value, b=document.getElementById('expTot').value;
+  if(!a||!b)return null;
+  const van=parseDate(a); const tot=parseDate(b); tot.setDate(tot.getDate()+1);
+  if(tot<=van)return null;
+  return {van,tot,label:a+'-tm-'+b};
+}
+
+function expToonInfo(){
+  const el=document.getElementById('expInfo');
+  if(!el)return;
+  const g=expPeriodeGrenzen();
+  if(!g){el.textContent='';return;}
+  const laatste=new Date(g.tot); laatste.setDate(laatste.getDate()-1);
+  const o={day:'numeric',month:'long',year:'numeric'};
+  el.textContent=g.van.toDateString()===laatste.toDateString()
+    ?'Exporteert '+g.van.toLocaleDateString('nl-NL',o)
+    :'Exporteert '+g.van.toLocaleDateString('nl-NL',o)+' tot en met '+laatste.toLocaleDateString('nl-NL',o);
+}
+
+// Opslaan van het bestand. In de app via het deelvenster van iOS, in een
+// browser als gewone download. Het downloadattribuut werkt niet in een
+// webview, vandaar het onderscheid.
+async function bewaarCsv(bestandsnaam,csv){
+  const P=window.Capacitor&&window.Capacitor.Plugins;
+  const FS=P&&P.Filesystem, Delen=P&&P.Share;
+  if(FS&&Delen){
+    try{
+      const res=await FS.writeFile({path:bestandsnaam,data:csv,directory:'CACHE',encoding:'utf8'});
+      await Delen.share({title:bestandsnaam,url:res.uri,dialogTitle:'Urenoverzicht delen'});
+      return true;
+    }catch(e){
+      const m=(e&&e.message||'')+'';
+      if(/cancel/i.test(m))return false;      // deelvenster weggeklikt
+      console.error('Delen mislukt, terugvallen op download:',e);
+    }
+  }
+  try{
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=bestandsnaam;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+    return true;
+  }catch(e){
+    console.error('Opslaan mislukt:',e);
+    return false;
+  }
+}
+
+async function doeExport(){
+  const knop=document.getElementById('expKnop');
+  const grenzen=expPeriodeGrenzen();
+  if(!grenzen){toast('Vul eerst een geldige periode in','fout');return;}
+
+  const persoonId=document.getElementById('expPersoon').value;
+  const persoonNaam=document.getElementById('expPersoon').selectedOptions[0]?.textContent||'Iedereen';
+  const alleenGoed=document.getElementById('expAlleenGoedgekeurd').checked;
+
+  knop.disabled=true; knop.textContent='Bezig...';
+  try{
+    let q=sb.from('urenregistraties').select('*')
+      .gte('ingeklokt_op',grenzen.van.toISOString())
+      .lt('ingeklokt_op',grenzen.tot.toISOString())
+      .order('ingeklokt_op',{ascending:true});
+    if(persoonId)q=q.eq('gebruiker_id',persoonId);
+    if(alleenGoed)q=q.eq('status','goedgekeurd');
+
+    const{data:regs,error}=await q;
+    if(error)throw new Error(error.message);
+    if(!regs||!regs.length){
+      toast(alleenGoed?'Geen goedgekeurde uren in deze periode':'Geen uren gevonden in deze periode','fout');
+      return;
+    }
+
+    const{data:mensen}=await sb.from('personeel_publiek').select('id,naam');
+    const naamVan=Object.fromEntries((mensen||[]).map(m=>[m.id,m.naam]));
+    const klusVan=Object.fromEntries((KLUSSEN||[]).map(k=>[k.id,k.naam||k.food||'']));
+
+    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Duur','Uren (decimaal)','Klus','Status','Locatie inklokken','Locatie uitklokken','Notitie medewerker','Notitie beheer']];
+    let totaalMin=0;
+    const perPersoon={};
+
+    regs.forEach(r=>{
+      const inD=new Date(r.ingeklokt_op);
+      const uitD=r.uitgeklokt_op?new Date(r.uitgeklokt_op):null;
+      const min=r.totaal_minuten||0;
+      totaalMin+=min;
+      const naam=naamVan[r.gebruiker_id]||'Onbekend';
+      perPersoon[naam]=(perPersoon[naam]||0)+min;
+      const tijd=d=>d?d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'';
+      rijen.push([
+        naam,
+        inD.toLocaleDateString('nl-NL'),
+        tijd(inD),
+        tijd(uitD),
+        minToStr(min),
+        (min/60).toFixed(2).replace('.',','),
+        klusVan[r.klus_id]||'',
+        r.status||'',
+        r.locatie_in||'',
+        r.locatie_uit||'',
+        r.notitie_pers||'',
+        r.notitie_beh||''
+      ]);
+    });
+
+    rijen.push([]);
+    rijen.push(['Totaal per persoon']);
+    Object.keys(perPersoon).sort().forEach(n=>{
+      rijen.push([n,'','','',minToStr(perPersoon[n]),(perPersoon[n]/60).toFixed(2).replace('.',',')]);
+    });
+    rijen.push([]);
+    rijen.push(['Totaal','','','',minToStr(totaalMin),(totaalMin/60).toFixed(2).replace('.',',')]);
+
+    // Puntkomma als scheidingsteken, dat opent goed in Nederlandse Excel.
+    // De losse tekens vooraan zorgen dat Excel het als UTF-8 leest.
+    const csv='﻿'+rijen.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+
+    const wie=persoonId?persoonNaam.replace(/[^a-zA-Z0-9]+/g,'-').toLowerCase():'iedereen';
+    const bestand=`uren_${wie}_${grenzen.label}.csv`;
+
+    const gelukt=await bewaarCsv(bestand,csv);
+    if(gelukt){
+      toast(regs.length+' registraties geëxporteerd');
+      sluitExport();
+    }
+  }catch(e){
+    console.error('Export mislukt:',e);
+    toast('Export mislukt: '+(e&&e.message?e.message:'onbekende fout'),'fout');
+  }finally{
+    knop.disabled=false; knop.textContent='Exporteren';
+  }
 }
 
 // ── BESCHIKBAARHEID ──
