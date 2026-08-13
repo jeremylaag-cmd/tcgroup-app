@@ -4794,7 +4794,10 @@ function pbGetShifts(k){
   if(nodig===0&&bezet===0)return[];
   const t1=tijdFromDb(k.vertrek_tijd)||tijdFromDb(k.start_opbouw)||'?';
   const t2=tijdFromDb(k.einde_feest)||'?';
-  return[{id:'shift-'+k.id,tijd:t1!=='?'||t2!=='?'?`${t1} → ${t2}`:'Hele dag',team:(k.trucks&&k.trucks.length)?k.trucks.map(t=>t.label).join(', '):'Onbekend',bezet,totaal:Math.max(nodig,bezet),namen:k.personeel?k.personeel.map(p=>p.naam):[]}];
+  const team=(k.trucks&&k.trucks.length)
+    ?k.trucks.map(t=>t.label).join(', ')
+    :(k.categorie==='franklins'?'Snackbar':'Onbekend');
+  return[{id:'shift-'+k.id,tijd:t1!=='?'||t2!=='?'?`${t1} → ${t2}`:'Hele dag',team,bezet,totaal:Math.max(nodig,bezet),namen:k.personeel?k.personeel.map(p=>p.naam):[]}];
 }
 function pbGetStatus(k){
   const shifts=pbGetShifts(k);
