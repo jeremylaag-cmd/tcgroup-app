@@ -246,40 +246,62 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .bnav-item.active .ni{stroke:var(--text)}
 
 /* ── Medewerkersprofiel (beheerder) ─────────────────────────────── */
-.pd-wrap{display:grid;grid-template-columns:280px 1fr;min-height:520px;max-height:86vh}
-.pd-zij{background:var(--bg);border-right:1px solid var(--border);padding:1.5rem 1.25rem;overflow-y:auto}
+/* ── Beschikbaarheidskalender (part-timers) ─────────────────────── */
+.bk-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+.bk-kop{text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:4px 0}
+.bk-dag{border:1px solid var(--border);border-radius:9px;background:var(--surface);min-height:50px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:14px;font-weight:500;color:var(--text);cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none;padding:4px 2px}
+.bk-dag.leeg{border:none;background:none;cursor:default;min-height:0}
+.bk-dag.uit{opacity:.35;cursor:not-allowed}
+.bk-dag.vandaag{border-color:#BFDBFE}
+.bk-dag.aan{background:#ECFDF5;border-color:#6EE7B7;color:#065F46;font-weight:600}
+.bk-dag.nieuw{background:#059669;border-color:#059669;color:#fff;font-weight:600}
+.bk-dag.weg{background:#FEF2F2;border-color:#FECACA;color:#991B1B;text-decoration:line-through}
+.bk-dag.vrij{background:#FEF2F2;border-color:#FECACA;color:#991B1B;cursor:not-allowed}
+.bk-mini{font-size:9px;font-weight:600;letter-spacing:.02em}
+
+.modal.pd-modal{width:min(1100px,96vw);max-width:none;max-height:92vh;overflow:hidden}
+.pd-wrap{display:grid;grid-template-columns:320px minmax(0,1fr);min-height:min(660px,84vh);max-height:92vh}
+.pd-zij{background:var(--bg);border-right:1px solid var(--border);padding:2rem 1.5rem;overflow-y:auto;min-width:0}
 .pd-hoofd{display:flex;flex-direction:column;min-width:0;overflow:hidden}
-.pd-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 .5rem;background:var(--bg);flex-shrink:0}
-.pd-tab{background:none;border:none;border-bottom:2px solid transparent;padding:14px 16px;font-size:13px;font-family:var(--font);color:var(--muted);cursor:pointer;white-space:nowrap}
+.pd-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 .75rem;background:var(--bg);flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.pd-tab{background:none;border:none;border-bottom:2px solid transparent;padding:16px 20px;font-size:14px;font-family:var(--font);color:var(--muted);cursor:pointer;white-space:nowrap;flex-shrink:0}
 .pd-tab.on{color:var(--text);font-weight:600;border-bottom-color:var(--text);background:var(--surface)}
-.pd-body{padding:1.25rem;overflow-y:auto;flex:1}
-.pd-av{width:110px;height:110px;border-radius:50%;background:var(--text);color:#fff;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:600;margin:0 auto 1rem}
-.pd-naam{font-size:19px;font-weight:600;text-align:center;margin-bottom:1.25rem;line-height:1.25}
-.pd-rij{display:flex;gap:10px;font-size:13px;color:var(--text);margin-bottom:10px;align-items:flex-start;line-height:1.4}
+.pd-body{padding:1.75rem;overflow:auto;flex:1;min-width:0}
+.pd-av{width:120px;height:120px;border-radius:50%;background:var(--text);color:#fff;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:600;margin:0 auto 1.25rem}
+.pd-naam{font-size:21px;font-weight:600;text-align:center;margin-bottom:1.5rem;line-height:1.25;word-break:break-word}
+.pd-rij{display:flex;gap:10px;font-size:14px;color:var(--text);margin-bottom:12px;align-items:flex-start;line-height:1.45;min-width:0}
 .pd-rij .pd-ico{width:18px;flex-shrink:0;text-align:center;color:var(--muted)}
+.pd-rij span:last-child{min-width:0;overflow-wrap:anywhere}
 .pd-rij a{color:#2563EB;text-decoration:none}
-.pd-maanden{display:grid;grid-template-columns:repeat(12,1fr);border-bottom:1px solid var(--border)}
-.pd-maand{text-align:center;padding:8px 2px;border-right:1px solid var(--border)}
+.pd-maanden{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.pd-maand{text-align:center;padding:10px 2px;border-right:1px solid var(--border)}
 .pd-maand:last-child{border-right:none}
 .pd-maand.nu{background:#EFF6FF}
-.pd-mlbl{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
-.pd-mval{font-size:14px;font-weight:600;color:var(--text);margin-top:2px}
+.pd-mlbl{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.pd-mval{font-size:16px;font-weight:600;color:var(--text);margin-top:3px}
 .pd-mval.leeg{color:var(--border);font-weight:400}
-.pd-stat{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 2px;border-bottom:1px solid var(--border);font-size:14px}
+.pd-stat{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 2px;border-bottom:1px solid var(--border);font-size:15px}
 .pd-stat b{font-weight:600;white-space:nowrap}
-.pd-kal{display:grid;grid-template-columns:44px repeat(7,1fr);gap:3px}
-.pd-kcel{border:1px solid var(--border);border-radius:7px;min-height:62px;padding:4px 5px;background:var(--surface);font-size:11px}
+.pd-kal{display:grid;grid-template-columns:48px repeat(7,minmax(0,1fr));gap:4px}
+.pd-kcel{border:1px solid var(--border);border-radius:8px;min-height:82px;padding:6px 7px;background:var(--surface);font-size:12px;min-width:0;overflow:hidden}
 .pd-kcel.buiten{background:var(--bg);color:var(--muted)}
 .pd-kcel.vandaag{border-color:#BFDBFE;background:#EFF6FF}
-.pd-kweek{display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--border);border-radius:7px;font-size:11px;font-weight:600;color:var(--muted)}
+.pd-kweek{display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:12px;font-weight:600;color:var(--muted)}
+@media(max-width:1023px){
+  .pd-wrap{grid-template-columns:1fr;max-height:90vh;min-height:0}
+  .modal.pd-modal{width:min(720px,96vw)}
+  .pd-zij{border-right:none;border-bottom:1px solid var(--border);padding:1.25rem;max-height:38vh}
+  .pd-av{width:78px;height:78px;font-size:26px;margin:0 auto .75rem}
+  .pd-naam{margin-bottom:1rem;font-size:19px}
+  .pd-body{padding:1.25rem}
+  .pd-kcel{min-height:62px}
+}
 @media(max-width:767px){
-  .pd-wrap{grid-template-columns:1fr;max-height:88vh}
-  .pd-zij{border-right:none;border-bottom:1px solid var(--border);padding:1rem}
-  .pd-av{width:72px;height:72px;font-size:24px}
-  .pd-tabs{overflow-x:auto}
-  .pd-maanden{grid-template-columns:repeat(6,1fr)}
-  .pd-kal{grid-template-columns:32px repeat(7,1fr);gap:2px}
-  .pd-kcel{min-height:46px;font-size:10px}
+  .modal.pd-modal{width:100%;max-width:100%;border-radius:20px 20px 0 0;padding:0}
+  .pd-maanden{grid-template-columns:repeat(6,minmax(0,1fr))}
+  .pd-kal{grid-template-columns:30px repeat(7,minmax(0,1fr));gap:2px}
+  .pd-kcel{min-height:52px;font-size:10px;padding:3px 4px}
+  .pd-stat{font-size:14px;padding:13px 2px}
 }
 
 /* Mobiel: header versimpeld + ruimte voor bottom nav */
@@ -998,6 +1020,43 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           </div>
         </div>
 
+        <!-- Persoonlijke gegevens -->
+        <div class="detail-section">
+          <div class="detail-label">Over jezelf</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;margin:2px 0 6px">
+            Handig voor de planning en de kleding. Alleen de beheerder kan dit inzien.
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;gap:6px">
+              <select id="profielGeslacht" style="flex:1;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+                <option value="">Geslacht —</option>
+                <option value="man">Man</option>
+                <option value="vrouw">Vrouw</option>
+                <option value="anders">Anders</option>
+                <option value="zeg-ik-liever-niet">Zeg ik liever niet</option>
+              </select>
+              <input type="date" id="profielGeboortedatum" oninput="toonLeeftijd()" style="flex:1;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+            </div>
+            <div id="profielLeeftijd" style="font-size:11px;color:var(--muted)"></div>
+            <select id="profielContractvorm" style="font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+              <option value="">Contractvorm —</option>
+              <option value="oproep">Oproepkracht</option>
+              <option value="bepaalde-tijd">Bepaalde tijd</option>
+              <option value="onbepaalde-tijd">Onbepaalde tijd</option>
+              <option value="stage">Stage</option>
+              <option value="zzp">ZZP</option>
+              <option value="vakantiekracht">Vakantiekracht</option>
+            </select>
+            <div style="display:flex;gap:6px">
+              <select id="profielShirtmaat" style="flex:1;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+                <option value="">Shirtmaat —</option>
+              </select>
+              <input type="text" id="profielRijbewijs" placeholder="Rijbewijs (bv. B, BE)" style="flex:1;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+            </div>
+            <button class="btn-sm" onclick="saveProfielGegevens()" style="align-self:flex-end;padding:8px 14px">Gegevens opslaan</button>
+          </div>
+        </div>
+
         <!-- Uitloggen -->
         <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border)">
           <button onclick="doLogout()" style="width:100%;background:#FEF2F2;color:#991B1B;border:1px solid #FECACA;border-radius:10px;padding:13px;font-size:15px;font-weight:500;cursor:pointer;font-family:var(--font)">Uitloggen</button>
@@ -1135,6 +1194,18 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
   <!-- BESCHIKBAARHEID (personeel: eigen invoer) -->
   <div id="page-beschikbaarheid" class="page">
     <div style="padding:1rem;max-width:700px;margin:0 auto">
+
+      <!-- Meerdere dagen tegelijk beschikbaar melden (part-timers) -->
+      <div class="sc" id="beschKalCard" style="margin-bottom:1rem;display:none">
+        <div class="sc-header" style="margin-bottom:.5rem">
+          <div class="st">Wanneer kun je werken?</div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
+          Tik alle dagen aan waarop je kunt. Je kunt er zoveel aanklikken als je wilt en
+          daarna in één keer opslaan.
+        </div>
+        <div id="beschKal"></div>
+      </div>
 
       <!-- 2-weken schema -->
       <div class="sc" style="margin-bottom:1rem">
@@ -2064,11 +2135,15 @@ async function exportPersoneel(){
     const skillNaam=Object.fromEntries((skillsData||[]).map(s=>[s.id,s.naam]));
     const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','personeel':'Personeel'};
 
-    const rijen=[['Naam','Rol','E-mail','Telefoon','Straat','Postcode','Plaats','Shirtmaat','Rijbewijs','Skills']];
+    const geslachtLabel={'man':'Man','vrouw':'Vrouw','anders':'Anders','zeg-ik-liever-niet':'Zegt het liever niet'};
+    const contractLabel={'oproep':'Oproepkracht','bepaalde-tijd':'Bepaalde tijd','onbepaalde-tijd':'Onbepaalde tijd','stage':'Stage','zzp':'ZZP','vakantiekracht':'Vakantiekracht'};
+
+    const rijen=[['Naam','Rol','E-mail','Telefoon','Straat','Postcode','Plaats','Geslacht','Geboortedatum','Leeftijd','Contractvorm','Uurloon','Shirtmaat','Rijbewijs','Skills']];
     mensen.forEach(u=>{
       let ids=[];
       try{ids=u.skills?(typeof u.skills==='string'?JSON.parse(u.skills):u.skills):[];}catch(e){ids=[];}
       if(!Array.isArray(ids))ids=[];
+      const leeftijd=berekenLeeftijd(u.geboortedatum);
       rijen.push([
         u.naam||'',
         rolLabels[u.rol]||u.rol||'',
@@ -2077,6 +2152,11 @@ async function exportPersoneel(){
         u.straat||'',
         u.postcode||'',
         u.plaats||'',
+        geslachtLabel[u.geslacht]||'',
+        u.geboortedatum?parseDate(u.geboortedatum).toLocaleDateString('nl-NL'):'',
+        leeftijd===null?'':leeftijd,
+        contractLabel[u.contractvorm]||'',
+        u.uurloon!=null?Number(u.uurloon).toFixed(2).replace('.',','):'',
         u.shirtmaat||'',
         u.rijbewijs||'',
         ids.map(id=>skillNaam[id]).filter(Boolean).join(', ')
@@ -2113,6 +2193,8 @@ let PD=null;            // medewerker die nu open staat, met zijn gegevens
 let pdAgendaOffset=0;   // 0 = deze maand
 
 const PD_ROLLABEL={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','personeel':'Personeel'};
+const PD_GESLACHT={'man':'Man','vrouw':'Vrouw','anders':'Anders','zeg-ik-liever-niet':'Zegt het liever niet'};
+const PD_CONTRACT={'oproep':'Oproepkracht','bepaalde-tijd':'Bepaalde tijd','onbepaalde-tijd':'Onbepaalde tijd','stage':'Stage','zzp':'ZZP','vakantiekracht':'Vakantiekracht'};
 const PD_MAANDEN=['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];
 
 async function openPersDetail(uid){
@@ -2165,10 +2247,16 @@ function pdRenderZij(){
   const adres=[u.straat,[u.postcode,u.plaats].filter(Boolean).join(' ')].filter(Boolean).join(', ');
   const rij=(ico,inhoud)=>inhoud?`<div class="pd-rij"><span class="pd-ico">${ico}</span><span>${inhoud}</span></div>`:'';
 
+  const leeftijd=berekenLeeftijd(u.geboortedatum);
+  const persoon=[PD_GESLACHT[u.geslacht],leeftijd!==null?leeftijd+' jaar':null].filter(Boolean).join(', ');
+
   document.getElementById('pdZij').innerHTML=
     `<div class="pd-av">${initialen}</div>
      <div class="pd-naam">${u.naam||'Onbekend'}</div>
      ${rij('&#9679;',PD_ROLLABEL[u.rol]||u.rol||'')}
+     ${rij('&#9787;',persoon)}
+     ${rij('&#128196;',PD_CONTRACT[u.contractvorm]||'')}
+     ${rij('&euro;',u.uurloon!=null?('&euro; '+Number(u.uurloon).toFixed(2).replace('.',',')+' <span style="color:var(--muted)">per uur</span>'):'')}
      ${rij('&#9993;',u.email?`<a href="mailto:${u.email}">${u.email}</a>`:'')}
      ${rij('&#9742;',u.telefoon?`<a href="tel:${u.telefoon}">${u.telefoon}</a>`:'')}
      ${rij('&#9873;',adres)}
@@ -2409,6 +2497,28 @@ function pdRenderGegevens(){
          <input type="text" id="pdRijbewijs" value="${(u.rijbewijs||'').replace(/"/g,'&quot;')}" placeholder="bv. B, BE" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
        </div>
      </div>
+     <div class="two">
+       <div class="fr"><span class="fl">Geslacht</span>
+         <select id="pdGeslacht" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
+           <option value="">—</option>
+           ${Object.entries(PD_GESLACHT).map(([w,l])=>`<option value="${w}"${u.geslacht===w?' selected':''}>${l}</option>`).join('')}
+         </select>
+       </div>
+       <div class="fr"><span class="fl">Geboortedatum</span>
+         <input type="date" id="pdGeboortedatum" value="${u.geboortedatum||''}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       </div>
+     </div>
+     <div class="two">
+       <div class="fr"><span class="fl">Contractvorm</span>
+         <select id="pdContract" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
+           <option value="">—</option>
+           ${Object.entries(PD_CONTRACT).map(([w,l])=>`<option value="${w}"${u.contractvorm===w?' selected':''}>${l}</option>`).join('')}
+         </select>
+       </div>
+       <div class="fr"><span class="fl">Uurloon <span style="color:var(--muted);font-weight:400">(alleen jij ziet dit)</span></span>
+         <input type="number" id="pdUurloon" value="${u.uurloon!=null?u.uurloon:''}" min="0" max="999" step="0.01" inputmode="decimal" placeholder="15.00" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       </div>
+     </div>
      <div class="warn-box" id="pdWarn"></div>
      <div class="mfooter" style="margin-top:1rem">
        <button class="btn-ghost" onclick="closePersDetail()">Annuleren</button>
@@ -2427,11 +2537,18 @@ async function savePersDetail(){
   const plaats=document.getElementById('pdPlaats').value.trim();
   const shirtmaat=document.getElementById('pdMaat').value;
   const rijbewijs=document.getElementById('pdRijbewijs').value.trim();
+  const geslacht=document.getElementById('pdGeslacht').value||null;
+  const geboortedatum=document.getElementById('pdGeboortedatum').value||null;
+  const contractvorm=document.getElementById('pdContract').value||null;
+  const uurloonRuw=document.getElementById('pdUurloon').value;
+  const uurloon=uurloonRuw===''?null:Number(uurloonRuw);
   const wb=document.getElementById('pdWarn');
   if(!naam){wb.textContent='Naam is verplicht.';wb.className='warn-box show';return;}
+  if(uurloon!==null&&(isNaN(uurloon)||uurloon<0)){wb.textContent='Uurloon klopt niet.';wb.className='warn-box show';return;}
   wb.className='warn-box';
   const{error}=await sb.from('gebruikers')
-    .update({naam,rol,email,telefoon,straat,postcode,plaats,shirtmaat,rijbewijs}).eq('id',uid);
+    .update({naam,rol,email,telefoon,straat,postcode,plaats,shirtmaat,rijbewijs,
+             geslacht,geboortedatum,contractvorm,uurloon}).eq('id',uid);
   if(error){wb.textContent='Opslaan mislukt: '+error.message;wb.className='warn-box show';return;}
   closePersDetail();
 }
@@ -3311,14 +3428,64 @@ function loadProfiel(){
   document.getElementById('profielEmail').textContent=CURRENT_USER.email||'–';
   document.getElementById('profielNaamInput').value=CURRENT_NAAM;
   // Laad adresgegevens
-  sb.from('gebruikers').select('straat,postcode,plaats,telefoon').eq('id',CURRENT_USER.id).single().then(({data})=>{
+  const maatSel=document.getElementById('profielShirtmaat');
+  if(maatSel&&maatSel.options.length<=1){
+    maatSel.innerHTML='<option value="">Shirtmaat —</option>'+
+      ['XS','S','M','L','XL','XXL','XXXL','XXXXL'].map(m=>`<option value="${m}">${m}</option>`).join('');
+  }
+  sb.from('gebruikers')
+    .select('straat,postcode,plaats,telefoon,geslacht,geboortedatum,contractvorm,shirtmaat,rijbewijs')
+    .eq('id',CURRENT_USER.id).single().then(({data})=>{
     if(data){
       document.getElementById('profielStraat').value=data.straat||'';
       document.getElementById('profielTelefoon').value=data.telefoon||'';
       document.getElementById('profielPostcode').value=data.postcode||'';
       document.getElementById('profielPlaats').value=data.plaats||'';
+      document.getElementById('profielGeslacht').value=data.geslacht||'';
+      document.getElementById('profielGeboortedatum').value=data.geboortedatum||'';
+      document.getElementById('profielContractvorm').value=data.contractvorm||'';
+      document.getElementById('profielShirtmaat').value=data.shirtmaat||'';
+      document.getElementById('profielRijbewijs').value=data.rijbewijs||'';
+      toonLeeftijd();
     }
   });
+}
+
+// Leeftijd in hele jaren, of leeg als er geen geboortedatum staat.
+function berekenLeeftijd(datum){
+  if(!datum)return null;
+  const d=parseDate(datum), nu=new Date();
+  let jaar=nu.getFullYear()-d.getFullYear();
+  const m=nu.getMonth()-d.getMonth();
+  if(m<0||(m===0&&nu.getDate()<d.getDate()))jaar--;
+  return (jaar>=0&&jaar<130)?jaar:null;
+}
+
+function toonLeeftijd(){
+  const el=document.getElementById('profielLeeftijd');
+  if(!el)return;
+  const jaar=berekenLeeftijd(document.getElementById('profielGeboortedatum').value);
+  el.textContent=jaar===null?'':jaar+' jaar';
+}
+
+async function saveProfielGegevens(){
+  const btn=document.querySelector('[onclick="saveProfielGegevens()"]');
+  const geslacht=document.getElementById('profielGeslacht').value||null;
+  const geboortedatum=document.getElementById('profielGeboortedatum').value||null;
+  const contractvorm=document.getElementById('profielContractvorm').value||null;
+  const shirtmaat=document.getElementById('profielShirtmaat').value||null;
+  const rijbewijs=document.getElementById('profielRijbewijs').value.trim()||null;
+  if(btn){btn.disabled=true;btn.textContent='Bezig...';}
+  const{error}=await sb.from('gebruikers')
+    .update({geslacht,geboortedatum,contractvorm,shirtmaat,rijbewijs}).eq('id',CURRENT_USER.id);
+  if(btn)btn.disabled=false;
+  if(error){
+    if(btn)btn.textContent='Gegevens opslaan';
+    toast('Opslaan mislukt: '+error.message,'fout');
+    return;
+  }
+  toonLeeftijd();
+  if(btn){btn.textContent='✓ Opgeslagen';setTimeout(()=>btn.textContent='Gegevens opslaan',2000);}
 }
 
 async function saveProfielNaam(){
@@ -4352,6 +4519,178 @@ async function loadPersoonlijkSchema(){
   loadMijnBeschikbaarheid();
 }
 
+// ── KALENDER: in één keer meerdere dagen beschikbaar melden ─────────────
+let MIJN_BESCH=[];      // eigen beschikbaarheid, gevuld door loadMijnBeschikbaarheid
+let bkOffset=0;         // 0 = deze maand
+let bkAan=new Set();    // dagen die je aanzet maar nog niet hebt opgeslagen
+let bkUit=new Set();    // dagen die je weghaalt maar nog niet hebt opgeslagen
+
+const BK_MAANDEN=['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];
+
+// Welke regel dekt deze dag? Losse dagregels kun je vanuit de kalender
+// aan- en uitzetten; een reeks van meerdere dagen haal je weg in de lijst.
+function bkDekking(ds){
+  return MIJN_BESCH.find(b=>b.soort==='beschikbaar'&&b.status==='goedgekeurd'&&beschDekt(b,ds));
+}
+function bkIsLosseDag(b){
+  return b&&(b.datum_start||'').slice(0,10)===(b.datum_eind||b.datum_start||'').slice(0,10);
+}
+function bkVrijOp(ds){
+  return MIJN_BESCH.find(b=>b.soort==='onbeschikbaar'&&b.status==='goedgekeurd'&&beschDekt(b,ds));
+}
+
+function bkWissel(richting){
+  bkOffset=richting===0?0:bkOffset+richting;
+  bkRender();
+}
+
+function bkTik(ds){
+  const vandaag=fmt(new Date());
+  if(ds<vandaag)return;
+  if(bkVrijOp(ds)){toast('Je hebt deze dag als vrij doorgegeven','fout');return;}
+
+  if(bkAan.has(ds)){bkAan.delete(ds);bkRender();return;}
+  if(bkUit.has(ds)){bkUit.delete(ds);bkRender();return;}
+
+  const dekking=bkDekking(ds);
+  if(dekking){
+    if(!bkIsLosseDag(dekking)){
+      toast('Deze dag zit in een periode — haal die weg in de lijst hieronder','fout');
+      return;
+    }
+    bkUit.add(ds);
+  }else{
+    bkAan.add(ds);
+  }
+  bkRender();
+}
+
+// Alle nog vrije dagen van deze maand in één klap aanzetten.
+function bkSelecteer(soort){
+  const nu=new Date();
+  const basis=new Date(nu.getFullYear(),nu.getMonth()+bkOffset,1);
+  const laatste=new Date(basis.getFullYear(),basis.getMonth()+1,0).getDate();
+  const vandaag=fmt(new Date());
+  for(let d=1;d<=laatste;d++){
+    const dag=new Date(basis.getFullYear(),basis.getMonth(),d);
+    const ds=fmt(dag);
+    if(ds<vandaag)continue;
+    const weekend=dag.getDay()===0||dag.getDay()===6;
+    if(soort==='weekend'&&!weekend)continue;
+    if(soort==='doordeweeks'&&weekend)continue;
+    if(bkVrijOp(ds)||bkDekking(ds))continue;
+    bkAan.add(ds);
+  }
+  bkRender();
+}
+
+function bkWis(){
+  bkAan.clear(); bkUit.clear();
+  bkRender();
+}
+
+function bkRender(){
+  const kaart=document.getElementById('beschKalCard');
+  const el=document.getElementById('beschKal');
+  if(!kaart||!el)return;
+  if(!werktOpAanvraag(CURRENT_ROL)){kaart.style.display='none';return;}
+  kaart.style.display='';
+
+  const vandaagDatum=new Date();
+  const vandaag=fmt(vandaagDatum);
+  const basis=new Date(vandaagDatum.getFullYear(),vandaagDatum.getMonth()+bkOffset,1);
+  const jaar=basis.getFullYear(), maand=basis.getMonth();
+  const eerste=new Date(jaar,maand,1);
+  const dagenInMaand=new Date(jaar,maand+1,0).getDate();
+  const voorloop=(eerste.getDay()+6)%7;
+
+  const koppen=['MA','DI','WO','DO','VR','ZA','ZO'].map(n=>`<div class="bk-kop">${n}</div>`).join('');
+
+  let cellen='';
+  for(let i=0;i<voorloop;i++)cellen+='<div class="bk-dag leeg"></div>';
+  for(let d=1;d<=dagenInMaand;d++){
+    const dag=new Date(jaar,maand,d);
+    const ds=fmt(dag);
+    const verleden=ds<vandaag;
+    const vrij=bkVrijOp(ds);
+    const dekking=bkDekking(ds);
+
+    let cls='bk-dag', label='';
+    if(verleden)cls+=' uit';
+    else if(vrij){cls+=' vrij';label='vrij';}
+    else if(bkAan.has(ds)){cls+=' nieuw';label='nieuw';}
+    else if(bkUit.has(ds)){cls+=' weg';label='weg';}
+    else if(dekking){cls+=' aan';label=bkIsLosseDag(dekking)?'kan':'periode';}
+    if(ds===vandaag)cls+=' vandaag';
+
+    cellen+=`<div class="${cls}" ${verleden||vrij?'':`onclick="bkTik('${ds}')"`}>
+      <span>${d}</span>${label?`<span class="bk-mini">${label}</span>`:''}
+    </div>`;
+  }
+
+  const wijzigingen=bkAan.size+bkUit.size;
+  const balk=wijzigingen
+    ?`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:.875rem;padding-top:.875rem;border-top:1px solid var(--border)">
+        <span style="font-size:12px;color:var(--muted);flex:1;min-width:140px">
+          ${bkAan.size?bkAan.size+' '+(bkAan.size===1?'dag erbij':'dagen erbij'):''}${bkAan.size&&bkUit.size?' · ':''}${bkUit.size?bkUit.size+' eraf':''}
+        </span>
+        <button class="btn-ghost" style="padding:8px 14px" onclick="bkWis()">Annuleren</button>
+        <button class="btn-sm" style="padding:8px 16px" onclick="bkOpslaan()">Opslaan</button>
+      </div>`
+    :'';
+
+  el.innerHTML=
+    `<div style="display:flex;align-items:center;gap:8px;margin-bottom:.75rem">
+       <button class="btn-nav" onclick="bkWissel(-1)">&#8592;</button>
+       <div style="flex:1;text-align:center;font-size:14px;font-weight:600">${BK_MAANDEN[maand]} ${jaar}</div>
+       <button class="btn-nav" onclick="bkWissel(0)" style="font-size:11px">Nu</button>
+       <button class="btn-nav" onclick="bkWissel(1)">&#8594;</button>
+     </div>
+     <div class="bk-grid" style="margin-bottom:4px">${koppen}</div>
+     <div class="bk-grid">${cellen}</div>
+     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:.875rem">
+       <button class="btn-nav" style="font-size:11px" onclick="bkSelecteer('alles')">Hele maand</button>
+       <button class="btn-nav" style="font-size:11px" onclick="bkSelecteer('weekend')">Alle weekenden</button>
+       <button class="btn-nav" style="font-size:11px" onclick="bkSelecteer('doordeweeks')">Doordeweeks</button>
+     </div>
+     ${balk}`;
+}
+
+async function bkOpslaan(){
+  const knop=document.querySelector('[onclick="bkOpslaan()"]');
+  if(knop){knop.disabled=true;knop.textContent='Bezig...';}
+
+  const nieuw=[...bkAan].map(ds=>({
+    gebruiker_id:CURRENT_USER.id,
+    datum_start:ds, datum_eind:ds,
+    soort:'beschikbaar', status:'goedgekeurd',
+  }));
+  const wegIds=[...bkUit].map(ds=>{const b=bkDekking(ds);return b?b.id:null;}).filter(Boolean);
+
+  if(nieuw.length){
+    const{error}=await sb.from('beschikbaarheid').insert(nieuw);
+    if(error){
+      if(knop){knop.disabled=false;knop.textContent='Opslaan';}
+      toast('Opslaan mislukt: '+error.message,'fout');
+      return;
+    }
+  }
+  if(wegIds.length){
+    const{error}=await sb.from('beschikbaarheid').delete().in('id',wegIds);
+    if(error){
+      if(knop){knop.disabled=false;knop.textContent='Opslaan';}
+      toast('Verwijderen mislukt: '+error.message,'fout');
+      return;
+    }
+  }
+
+  const erbij=bkAan.size, eraf=bkUit.size;
+  bkAan.clear(); bkUit.clear();
+  toast([erbij?erbij+' '+(erbij===1?'dag':'dagen')+' toegevoegd':'',eraf?eraf+' weggehaald':'']
+    .filter(Boolean).join(' · ')||'Bijgewerkt');
+  await loadPersoonlijkSchema();
+}
+
 async function loadMijnBeschikbaarheid(){
   const el=document.getElementById('mijnBeschList');
   const aanvraag=werktOpAanvraag(CURRENT_ROL);
@@ -4371,6 +4710,8 @@ async function loadMijnBeschikbaarheid(){
 
   el.innerHTML='<div class="spin">Laden...</div>';
   const{data}=await sb.from('beschikbaarheid').select('*').eq('gebruiker_id',CURRENT_USER.id).order('datum_start',{ascending:true});
+  MIJN_BESCH=data||[];
+  bkRender();
   if(!data||!data.length){
     el.innerHTML='<div class="empty">'+(aanvraag
       ?'Je hebt nog geen dagen doorgegeven — zo kun je nog niet ingepland worden'
