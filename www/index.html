@@ -1026,33 +1026,37 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <div style="font-size:11px;color:var(--muted);line-height:1.5;margin:2px 0 6px">
             Handig voor de planning en de kleding. Alleen de beheerder kan dit inzien.
           </div>
-          <div style="display:flex;flex-direction:column;gap:6px">
-            <div style="display:flex;gap:6px">
-              <select id="profielGeslacht" style="flex:1;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
-                <option value="">Geslacht —</option>
-                <option value="man">Man</option>
-                <option value="vrouw">Vrouw</option>
-                <option value="anders">Anders</option>
-                <option value="zeg-ik-liever-niet">Zeg ik liever niet</option>
-              </select>
-              <input type="date" id="profielGeboortedatum" oninput="toonLeeftijd()" style="flex:1;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <div style="flex:1;min-width:130px">
+                <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:3px">Geslacht</div>
+                <select id="profielGeslacht" style="width:100%;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+                  <option value="">Kies —</option>
+                  <option value="man">Man</option>
+                  <option value="vrouw">Vrouw</option>
+                  <option value="anders">Anders</option>
+                  <option value="zeg-ik-liever-niet">Zeg ik liever niet</option>
+                </select>
+              </div>
+              <div style="flex:1;min-width:150px">
+                <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:3px">Geboortedatum</div>
+                <input type="date" id="profielGeboortedatum" oninput="toonLeeftijd()" style="width:100%;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+                <div id="profielLeeftijd" style="font-size:11px;color:var(--muted);margin-top:3px"></div>
+              </div>
             </div>
-            <div id="profielLeeftijd" style="font-size:11px;color:var(--muted)"></div>
-            <select id="profielContractvorm" style="font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
-              <option value="">Contractvorm —</option>
-              <option value="oproep">Oproepkracht</option>
-              <option value="bepaalde-tijd">Bepaalde tijd</option>
-              <option value="onbepaalde-tijd">Onbepaalde tijd</option>
-              <option value="stage">Stage</option>
-              <option value="zzp">ZZP</option>
-              <option value="vakantiekracht">Vakantiekracht</option>
-            </select>
-            <div style="display:flex;gap:6px">
-              <select id="profielShirtmaat" style="flex:1;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
-                <option value="">Shirtmaat —</option>
-              </select>
-              <input type="text" id="profielRijbewijs" placeholder="Rijbewijs (bv. B, BE)" style="flex:1;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <div style="flex:1;min-width:130px">
+                <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:3px">Shirtmaat</div>
+                <select id="profielShirtmaat" style="width:100%;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+                  <option value="">Kies —</option>
+                </select>
+              </div>
+              <div style="flex:1;min-width:130px">
+                <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:3px">Rijbewijs</div>
+                <input type="text" id="profielRijbewijs" placeholder="bv. B, BE" style="width:100%;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+              </div>
             </div>
+            <div id="profielContractRegel" style="font-size:12px;color:var(--muted);display:none"></div>
             <button class="btn-sm" onclick="saveProfielGegevens()" style="align-self:flex-end;padding:8px 14px">Gegevens opslaan</button>
           </div>
         </div>
@@ -3430,7 +3434,7 @@ function loadProfiel(){
   // Laad adresgegevens
   const maatSel=document.getElementById('profielShirtmaat');
   if(maatSel&&maatSel.options.length<=1){
-    maatSel.innerHTML='<option value="">Shirtmaat —</option>'+
+    maatSel.innerHTML='<option value="">Kies —</option>'+
       ['XS','S','M','L','XL','XXL','XXXL','XXXXL'].map(m=>`<option value="${m}">${m}</option>`).join('');
   }
   sb.from('gebruikers')
@@ -3443,9 +3447,15 @@ function loadProfiel(){
       document.getElementById('profielPlaats').value=data.plaats||'';
       document.getElementById('profielGeslacht').value=data.geslacht||'';
       document.getElementById('profielGeboortedatum').value=data.geboortedatum||'';
-      document.getElementById('profielContractvorm').value=data.contractvorm||'';
       document.getElementById('profielShirtmaat').value=data.shirtmaat||'';
       document.getElementById('profielRijbewijs').value=data.rijbewijs||'';
+      // De contractvorm zet de beheerder; jij ziet alleen wat er staat.
+      const cr=document.getElementById('profielContractRegel');
+      if(cr){
+        const label={'oproep':'Oproepkracht','bepaalde-tijd':'Bepaalde tijd','onbepaalde-tijd':'Onbepaalde tijd','stage':'Stage','zzp':'ZZP','vakantiekracht':'Vakantiekracht'}[data.contractvorm];
+        cr.style.display=label?'':'none';
+        cr.textContent=label?'Contractvorm: '+label+' — dit stelt de beheerder in.':'';
+      }
       toonLeeftijd();
     }
   });
@@ -3472,12 +3482,11 @@ async function saveProfielGegevens(){
   const btn=document.querySelector('[onclick="saveProfielGegevens()"]');
   const geslacht=document.getElementById('profielGeslacht').value||null;
   const geboortedatum=document.getElementById('profielGeboortedatum').value||null;
-  const contractvorm=document.getElementById('profielContractvorm').value||null;
   const shirtmaat=document.getElementById('profielShirtmaat').value||null;
   const rijbewijs=document.getElementById('profielRijbewijs').value.trim()||null;
   if(btn){btn.disabled=true;btn.textContent='Bezig...';}
   const{error}=await sb.from('gebruikers')
-    .update({geslacht,geboortedatum,contractvorm,shirtmaat,rijbewijs}).eq('id',CURRENT_USER.id);
+    .update({geslacht,geboortedatum,shirtmaat,rijbewijs}).eq('id',CURRENT_USER.id);
   if(btn)btn.disabled=false;
   if(error){
     if(btn)btn.textContent='Gegevens opslaan';
