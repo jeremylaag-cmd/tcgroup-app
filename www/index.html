@@ -1075,18 +1075,35 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="sc" style="margin-bottom:1rem">
         <div class="sc-header" style="margin-bottom:.875rem">
           <div class="st">Mijn schema</div>
-          <button class="btn-sm" onclick="openBeschModal()" style="font-size:12px;padding:7px 14px">+ Onbeschikbaar</button>
+          <button class="btn-sm" id="beschToevoegKnop" onclick="openBeschModal()" style="font-size:12px;padding:7px 14px">+ Onbeschikbaar</button>
         </div>
         <div id="persWeek1" style="margin-bottom:1rem"></div>
         <div id="persWeek2"></div>
       </div>
 
-      <!-- Mijn onbeschikbaarheid lijst -->
+      <!-- Mijn beschikbaarheid / onbeschikbaarheid lijst -->
       <div class="sc">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem">
-          <div class="st">Mijn onbeschikbaarheid</div>
+          <div class="st" id="beschLijstTitel">Mijn onbeschikbaarheid</div>
         </div>
+        <div id="beschUitleg" style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem;display:none"></div>
         <div id="mijnBeschList"><div class="spin">Laden...</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OPEN KLUSSEN (part-timers: zelf aanmelden) -->
+  <div id="page-open-klussen" class="page">
+    <div style="padding:1rem;max-width:700px;margin:0 auto">
+      <div class="sc">
+        <div class="sc-header" style="margin-bottom:.75rem">
+          <div class="st">Klussen waar je je voor kunt aanmelden</div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
+          Meld je aan voor de klussen die je leuk lijken. De planning bevestigt daarna of je mee kunt.
+        </div>
+        <input type="search" id="okZoek" placeholder="Zoek op naam of plaats..." oninput="renderOpenKlussen()" autocomplete="off" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);margin-bottom:.75rem">
+        <div id="okLijst"><div class="spin">Laden...</div></div>
       </div>
     </div>
   </div>
@@ -1109,6 +1126,12 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         <div id="beschAgenda"><div class="spin">Laden...</div></div>
       </div>
 
+      <!-- Aanmeldingen van part-timers -->
+      <div class="sc" style="margin-bottom:1.25rem">
+        <div class="bt" style="margin-bottom:.875rem">Aanmeldingen voor klussen</div>
+        <div id="aanmeldList"><div class="spin">Laden...</div></div>
+      </div>
+
       <!-- Verzoeken lijst -->
       <div class="sc">
         <div class="bt" style="margin-bottom:.875rem">Openstaande verzoeken</div>
@@ -1120,12 +1143,14 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
   <!-- UREN — PERSONEEL -->
   <div id="page-uren" class="page">
     <div style="padding:1.25rem;max-width:600px;margin:0 auto">
+      <div class="sc" id="uurWeekCard" style="margin-bottom:1rem"></div>
       <div class="sc" id="uurKlusCard" style="margin-bottom:1rem"></div>
       <div class="sc" id="uurRegistratieCard"></div>
       <div class="sc" style="margin-top:1rem">
         <div class="st" style="margin-bottom:.875rem">Mijn registraties</div>
         <div id="mijnUrenList"><div class="spin">Laden...</div></div>
       </div>
+      <div class="sc" id="uurMaandCard" style="margin-top:1rem"></div>
     </div>
   </div>
 
@@ -1226,7 +1251,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 <div class="modal-overlay" id="beschModal" onclick="if(event.target===this)closeBeschModal()">
   <div class="modal">
     <div class="modal-title" id="beschModalTitle">Onbeschikbaarheid toevoegen</div>
-    <div class="fr"><span class="fl">Reden</span>
+    <div class="fr"><span class="fl" id="bRedenLabel">Reden</span>
       <input type="text" id="bReden" placeholder="bv. Vakantie, Ziek, Vrij, Bruiloft...">
     </div>
     <div class="two">
@@ -1710,7 +1735,9 @@ async function initApp(user){
       <button class="htab" onclick="showPage('rooster',this)">Rooster</button>`;
     ['addKlusBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   }else{
-    const extraTab=isFullTimer?`<button class="htab" onclick="showPage('rooster',this)">Rooster</button>`:'';
+    const extraTab=isFullTimer
+      ?`<button class="htab" onclick="showPage('rooster',this)">Rooster</button>`
+      :`<button class="htab" onclick="showPage('open-klussen',this)">Open klussen</button>`;
     tabs.innerHTML=`
       <button class="htab active" onclick="showPage('beschikbaarheid',this)">Mijn schema</button>
       <button class="htab" onclick="showPage('uren',this)">Uren</button>
@@ -1750,6 +1777,7 @@ async function initApp(user){
       // Part-timer
       bn.innerHTML=
         bnavItem('beschikbaarheid','Mijn schema',ico.rooster,true)+
+        bnavItem('open-klussen','Klussen',ico.schema)+
         bnavItem('uren','Uren',ico.uren)+
         bnavItem('profiel','Profiel',ico.profiel);
     }
@@ -1854,7 +1882,8 @@ function showPage(id,btn){
   if(id==='beheer')renderBeheer();
   if(id==='accounts')loadAccounts();
   if(id==='beschikbaarheid')loadPersoonlijkSchema();
-  if(id==='beschikbaarheid-beheer')loadAlleBeschikbaarheid();
+  if(id==='beschikbaarheid-beheer'){loadAlleBeschikbaarheid();loadAanmeldingen();}
+  if(id==='open-klussen')loadOpenKlussen();
   if(id==='profiel')loadProfiel();
   if(id==='uren')loadUrenPersoneel();
   if(id==='uren-beheer')loadUrenBeheer();
@@ -2104,6 +2133,25 @@ function closePersDetail(){
 
 
 let BESCHIKBAARHEID=[];
+
+// Vaste krachten werken standaard en geven aan wanneer ze NIET kunnen.
+// Part-timers doen het andersom: die staan standaard nergens ingepland en
+// geven zelf door wanneer ze WEL kunnen.
+function werktOpAanvraag(rol){return rol==='part-timer';}
+function beschDekt(b,datum){
+  const ds=(b.datum_start||'').slice(0,10);
+  const de=(b.datum_eind||'').slice(0,10)||ds;
+  return !!ds&&ds<=datum&&datum<=de;
+}
+// Mag deze persoon op deze datum ingepland worden?
+function magIngepland(persoonId,datum,rol){
+  if(!datum)return{ok:true,reden:''};
+  const regels=BESCHIKBAARHEID.filter(b=>b.gebruiker_id===persoonId&&beschDekt(b,datum));
+  if(regels.some(b=>b.soort==='onbeschikbaar'))return{ok:false,reden:'is niet beschikbaar op deze dag'};
+  if(werktOpAanvraag(rol)&&!regels.some(b=>b.soort==='beschikbaar'))
+    return{ok:false,reden:'heeft zich nog niet beschikbaar gemeld voor deze dag'};
+  return{ok:true,reden:''};
+}
 // Het rooster toont standaard alleen klussen vanaf vandaag. Met de knop
 // boven de lijst kun je ook terugkijken naar wat geweest is.
 let toonEerdereKlussen=false;
@@ -2323,14 +2371,9 @@ function renderPersChips(bezette){
     const on=formPers.includes(p.id);
     const warn=bezette.includes(p.id)&&!on;
     // Vergelijk datums als strings YYYY-MM-DD
-    const onbesch=datum&&BESCHIKBAARHEID.some(b=>{
-      if(b.gebruiker_id!==p.id)return false;
-      const ds=b.datum_start?.slice(0,10)||'';
-      const de=b.datum_eind?.slice(0,10)||ds;
-      return ds<=datum&&datum<=de;
-    });
-    if(onbesch&&!on){
-      return`<div class="chip" style="opacity:.45;cursor:not-allowed;border-color:#FECACA;background:#FEF2F2;color:#991B1B" title="Niet beschikbaar op deze dag">${p.naam} 🚫</div>`;
+    const check=magIngepland(p.id,datum,p.rol);
+    if(!check.ok&&!on){
+      return`<div class="chip" style="opacity:.45;cursor:not-allowed;border-color:#FECACA;background:#FEF2F2;color:#991B1B" title="${p.naam} ${check.reden}">${p.naam} 🚫</div>`;
     }
     const cls='chip'+(on?' on':'')+(warn?' warn':'');
     return`<div class="${cls}" onclick="togglePers('${p.id}')" title="${warn?'Al ingepland op deze dag':''}">${p.naam}${warn?' ⚠':''}</div>`;
@@ -2369,14 +2412,10 @@ function toggleTruck(id){
 function togglePers(id){
   const datum=document.getElementById('fDatum')?.value||'';
   const{trucks,pers}=getBezette(datum);
-  // Blokkeer als onbeschikbaar
-  const onbesch=datum&&BESCHIKBAARHEID.some(b=>{
-    if(b.gebruiker_id!==id)return false;
-    const ds=b.datum_start?.slice(0,10)||'';
-    const de=b.datum_eind?.slice(0,10)||ds;
-    return ds<=datum&&datum<=de;
-  });
-  if(onbesch&&!formPers.includes(id)){showWarn(`⚠ ${PERSONEEL.find(p=>p.id===id)?.naam} is niet beschikbaar op deze dag.`);return;}
+  // Blokkeer als iemand niet inzetbaar is op deze dag
+  const persoon=PERSONEEL.find(p=>p.id===id);
+  const check=magIngepland(id,datum,persoon?.rol);
+  if(!check.ok&&!formPers.includes(id)){showWarn(`⚠ ${persoon?.naam||'Deze medewerker'} ${check.reden}.`);return;}
   if(!formPers.includes(id)&&pers.includes(id)){showWarn(`⚠ ${PERSONEEL.find(p=>p.id===id)?.naam} staat al ingepland op deze dag.`);return;}
   formPers=formPers.includes(id)?formPers.filter(x=>x!==id):[...formPers,id];
   renderPersChips(pers);document.getElementById('warnBox').className='warn-box';
@@ -2945,7 +2984,104 @@ async function getLocatie(){
   });
 }
 
+// ── OVERZICHT BOVENAAN: deze week geklokt en ingepland ──────────────
+// Maandag van de week waar deze datum in valt.
+function maandagVan(d){
+  const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());
+  x.setDate(x.getDate()-((x.getDay()+6)%7));
+  return x;
+}
+
+// Ruwe schatting van hoe lang een klus duurt: van vertrek tot einde feest.
+// Loopt het einde over middernacht heen, dan telt de nacht mee.
+function klusMinuten(k){
+  const naarMin=t=>{if(!t)return null;const p=(''+t).split(':');return (+p[0])*60+(+(p[1]||0));};
+  const start=naarMin(k.vertrek_tijd)??naarMin(k.start_opbouw)??naarMin(k.start_feest);
+  const eind=naarMin(k.einde_feest)??naarMin(k.eind_tijd);
+  if(start==null||eind==null)return null;
+  let m=eind-start;
+  if(m<=0)m+=24*60;
+  return m;
+}
+
+async function loadUrenOverzicht(){
+  const weekEl=document.getElementById('uurWeekCard');
+  const maandEl=document.getElementById('uurMaandCard');
+  if(!weekEl&&!maandEl)return;
+
+  const nu=new Date();
+  const wStart=maandagVan(nu);
+  const wEind=new Date(wStart); wEind.setDate(wStart.getDate()+7);
+  const mStart=new Date(nu.getFullYear(),nu.getMonth(),1);
+  const mEind=new Date(nu.getFullYear(),nu.getMonth()+1,1);
+  const vanaf=mStart<wStart?mStart:wStart;
+  const tot=mEind>wEind?mEind:wEind;
+
+  const{data:regs}=await sb.from('urenregistraties')
+    .select('ingeklokt_op,totaal_minuten,status')
+    .eq('gebruiker_id',CURRENT_USER.id)
+    .gte('ingeklokt_op',vanaf.toISOString())
+    .lt('ingeklokt_op',tot.toISOString());
+
+  let weekMin=0, maandMin=0, maandGoed=0, maandWacht=0;
+  (regs||[]).forEach(r=>{
+    if(r.status==='afgewezen'||r.status==='lopend')return;
+    const d=new Date(r.ingeklokt_op);
+    const m=r.totaal_minuten||0;
+    if(d>=wStart&&d<wEind)weekMin+=m;
+    if(d>=mStart&&d<mEind){
+      maandMin+=m;
+      if(r.status==='goedgekeurd')maandGoed+=m; else maandWacht+=m;
+    }
+  });
+
+  // Ingepland deze week: klussen waar je op staat.
+  let planMin=0, planKlussen=0, planOnbekend=0;
+  const{data:kg}=await sb.from('klus_gebruikers').select('klus_id').eq('gebruiker_id',CURRENT_USER.id);
+  const mijn=new Set((kg||[]).map(x=>x.klus_id));
+  const weekDagen=new Set(Array.from({length:7},(_,i)=>{const d=new Date(wStart);d.setDate(wStart.getDate()+i);return fmt(d);}));
+  (KLUSSEN||[]).forEach(k=>{
+    if(!mijn.has(k.id))return;
+    const dagen=klusDagen(k).filter(d=>weekDagen.has(d));
+    if(!dagen.length)return;
+    planKlussen++;
+    const m=klusMinuten(k);
+    if(m==null)planOnbekend++; else planMin+=m;
+  });
+
+  if(weekEl){
+    const weekLabel=wStart.toLocaleDateString('nl-NL',{day:'numeric',month:'short'})+' – '+
+      new Date(wEind.getTime()-86400000).toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+    const planTekst=planKlussen
+      ?(planMin?minToStr(planMin):'–')+(planOnbekend?' *':'')
+      :'0u 00m';
+    weekEl.innerHTML=`<div class="slabel" style="margin-bottom:.75rem">Deze week · ${weekLabel}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Geklokt</div>
+          <div style="font-size:20px;font-weight:600;color:var(--text)">${minToStr(weekMin)}</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Ingepland</div>
+          <div style="font-size:20px;font-weight:600;color:var(--text)">${planTekst}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:3px">${planKlussen} ${planKlussen===1?'klus':'klussen'}</div>
+        </div>
+      </div>
+      ${planOnbekend?`<div style="font-size:10px;color:var(--muted);margin-top:8px">* bij ${planOnbekend} ${planOnbekend===1?'klus staan':'klussen staan'} nog geen tijden ingevuld</div>`:''}`;
+  }
+
+  if(maandEl){
+    const maandNaam=nu.toLocaleDateString('nl-NL',{month:'long',year:'numeric'});
+    maandEl.innerHTML=`<div class="slabel" style="margin-bottom:.75rem">Geklokt in ${maandNaam}</div>
+      <div style="font-size:26px;font-weight:600;color:var(--text);line-height:1.1">${minToStr(maandMin)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:6px">
+        ${minToStr(maandGoed)} goedgekeurd${maandWacht?' · '+minToStr(maandWacht)+' in afwachting':''}
+      </div>`;
+  }
+}
+
 async function loadUrenPersoneel(){
+  loadUrenOverzicht();
   // Haal actieve klus van vandaag op
   const klusCard=document.getElementById('uurKlusCard');
   const regCard=document.getElementById('uurRegistratieCard');
@@ -3648,11 +3784,15 @@ async function loadPersoonlijkSchemaRooster(){
           <span style="font-size:11px;color:var(--muted);margin-left:auto">${d.toLocaleDateString('nl-NL',{month:'short'})}</span>
         </div>
         <div style="padding:7px 8px;display:flex;flex-direction:column;gap:4px">
-          ${dagBesch.map(b=>`<div style="background:#FEF2F2;border-radius:6px;padding:5px 8px;border-left:3px solid #DC2626">
-            <div style="font-size:11px;font-weight:600;color:#991B1B">🚫 Niet beschikbaar</div>
-            ${b.reden?`<div style="font-size:11px;color:#DC2626;margin-top:1px">${b.reden}</div>`:''}
-            ${b.tijd_start?`<div style="font-size:10px;color:#DC2626;margin-top:1px">${b.tijd_start.slice(0,5)} – ${b.tijd_eind?b.tijd_eind.slice(0,5):'?'}</div>`:''}
-          </div>`).join('')}
+          ${dagBesch.map(b=>{
+            const wel=b.soort==='beschikbaar';
+            const bg=wel?'#EFF6FF':'#FEF2F2', lijn=wel?'#2563EB':'#DC2626';
+            const kop=wel?'#1E40AF':'#991B1B', sub=wel?'#2563EB':'#DC2626';
+            return`<div style="background:${bg};border-radius:6px;padding:5px 8px;border-left:3px solid ${lijn}">
+            <div style="font-size:11px;font-weight:600;color:${kop}">${wel?'✓ Beschikbaar':'🚫 Niet beschikbaar'}</div>
+            ${b.reden?`<div style="font-size:11px;color:${sub};margin-top:1px">${b.reden}</div>`:''}
+            ${b.tijd_start?`<div style="font-size:10px;color:${sub};margin-top:1px">${b.tijd_start.slice(0,5)} – ${b.tijd_eind?b.tijd_eind.slice(0,5):'?'}</div>`:''}
+          </div>`;}).join('')}
           ${dagKlussen.map(k=>{
             const t1=tijdFromDb(k.vertrek_tijd),t4=tijdFromDb(k.einde_feest);
             const tijdStr=t1?`${t1}${t4?' → '+t4:''}`:'' ;
@@ -3713,11 +3853,15 @@ async function loadPersoonlijkSchema(){
             ${isToday?`<span style="font-size:10px;background:#BFDBFE;color:#1E40AF;border-radius:20px;padding:2px 8px;font-weight:600">Vandaag</span>`:''}
           </div>
           <div style="padding:10px 14px;display:flex;flex-direction:column;gap:8px">
-            ${dagBesch.map(b=>`<div style="background:#FEF2F2;border-radius:8px;padding:10px 12px;border-left:3px solid #DC2626">
-              <div style="font-size:13px;font-weight:600;color:#991B1B">Niet beschikbaar</div>
-              ${b.reden?`<div style="font-size:12px;color:#DC2626;margin-top:3px">${b.reden}</div>`:''}
-              ${b.tijd_start?`<div style="font-size:12px;color:#DC2626;margin-top:3px">${b.tijd_start.slice(0,5)} – ${b.tijd_eind?b.tijd_eind.slice(0,5):'?'}</div>`:''}
-            </div>`).join('')}
+            ${dagBesch.map(b=>{
+              const wel=b.soort==='beschikbaar';
+              const bg=wel?'#EFF6FF':'#FEF2F2', lijn=wel?'#2563EB':'#DC2626';
+              const kop=wel?'#1E40AF':'#991B1B', sub=wel?'#2563EB':'#DC2626';
+              return`<div style="background:${bg};border-radius:8px;padding:10px 12px;border-left:3px solid ${lijn}">
+              <div style="font-size:13px;font-weight:600;color:${kop}">${wel?'Ik ben beschikbaar':'Niet beschikbaar'}</div>
+              ${b.reden?`<div style="font-size:12px;color:${sub};margin-top:3px">${b.reden}</div>`:''}
+              ${b.tijd_start?`<div style="font-size:12px;color:${sub};margin-top:3px">${b.tijd_start.slice(0,5)} – ${b.tijd_eind?b.tijd_eind.slice(0,5):'?'}</div>`:''}
+            </div>`;}).join('')}
             ${dagKlussen.map(k=>{
               const t1=tijdFromDb(k.vertrek_tijd),t2=tijdFromDb(k.start_opbouw),t3=tijdFromDb(k.start_feest),t4=tijdFromDb(k.einde_feest);
               const tijdLines=[t1&&`Vertrek: ${t1}`,t2&&`Opbouw: ${t2}`,t3&&`Feest: ${t3}`,t4&&`Einde: ${t4}`].filter(Boolean);
@@ -3748,10 +3892,12 @@ async function loadPersoonlijkSchema(){
             <span style="font-size:15px;font-weight:700;color:${isToday?'#1E40AF':'var(--text)'}">${d.getDate()}</span>
           </div>
           <div style="padding:7px 8px;display:flex;flex-direction:column;gap:4px">
-            ${dagBesch.map(b=>`<div style="background:#FEF2F2;border-radius:6px;padding:5px 8px;border-left:3px solid #DC2626">
-              <div style="font-size:11px;font-weight:600;color:#991B1B">Niet beschikbaar</div>
-              ${b.reden?`<div style="font-size:11px;color:#DC2626;margin-top:1px">${b.reden}</div>`:''}
-            </div>`).join('')}
+            ${dagBesch.map(b=>{
+              const wel=b.soort==='beschikbaar';
+              return`<div style="background:${wel?'#EFF6FF':'#FEF2F2'};border-radius:6px;padding:5px 8px;border-left:3px solid ${wel?'#2563EB':'#DC2626'}">
+              <div style="font-size:11px;font-weight:600;color:${wel?'#1E40AF':'#991B1B'}">${wel?'Beschikbaar':'Niet beschikbaar'}</div>
+              ${b.reden?`<div style="font-size:11px;color:${wel?'#2563EB':'#DC2626'};margin-top:1px">${b.reden}</div>`:''}
+            </div>`;}).join('')}
             ${dagKlussen.map(k=>{
               const t1=tijdFromDb(k.vertrek_tijd),t4=tijdFromDb(k.einde_feest);
               const tijdStr=t1?`${t1}${t4?' → '+t4:''}`:''  ;
@@ -3779,20 +3925,43 @@ async function loadPersoonlijkSchema(){
 
 async function loadMijnBeschikbaarheid(){
   const el=document.getElementById('mijnBeschList');
+  const aanvraag=werktOpAanvraag(CURRENT_ROL);
+
+  // De hele pagina spreekt de taal die bij je rol hoort.
+  const knop=document.getElementById('beschToevoegKnop');
+  if(knop)knop.textContent=aanvraag?'+ Ik kan werken':'+ Onbeschikbaar';
+  const titel=document.getElementById('beschLijstTitel');
+  if(titel)titel.textContent=aanvraag?'Wanneer ik kan werken':'Mijn onbeschikbaarheid';
+  const uitleg=document.getElementById('beschUitleg');
+  if(uitleg){
+    uitleg.style.display=aanvraag?'':'none';
+    uitleg.textContent=aanvraag
+      ?'Je staat standaard niet ingepland. Geef hieronder de dagen door waarop je wél kunt werken — alleen op die dagen kan de planning je inzetten.'
+      :'';
+  }
+
   el.innerHTML='<div class="spin">Laden...</div>';
   const{data}=await sb.from('beschikbaarheid').select('*').eq('gebruiker_id',CURRENT_USER.id).order('datum_start',{ascending:true});
-  if(!data||!data.length){el.innerHTML='<div class="empty">Geen onbeschikbaarheid ingevoerd — je staat overal op beschikbaar</div>';return;}
-  el.innerHTML=data.map(b=>`<div class="besch-item ${b.status}">
+  if(!data||!data.length){
+    el.innerHTML='<div class="empty">'+(aanvraag
+      ?'Je hebt nog geen dagen doorgegeven — zo kun je nog niet ingepland worden'
+      :'Geen onbeschikbaarheid ingevoerd — je staat overal op beschikbaar')+'</div>';
+    return;
+  }
+  el.innerHTML=data.map(b=>{
+    const wel=b.soort==='beschikbaar';
+    const statusTekst=wel?'Doorgegeven':(b.status==='wacht'?'In afwachting':b.status==='goedgekeurd'?'Goedgekeurd':'Afgewezen');
+    return`<div class="besch-item ${b.status}" style="${wel?'border-left:3px solid #059669':''}">
     <div class="besch-info">
-      <div class="besch-reden">${b.reden||'Onbeschikbaar'}</div>
+      <div class="besch-reden">${wel?'Beschikbaar':(b.reden||'Onbeschikbaar')}${wel&&b.reden?' — '+b.reden:''}</div>
       <div class="besch-datum">${fmtDatum(b.datum_start)}${b.datum_eind&&b.datum_eind!==b.datum_start?` – ${fmtDatum(b.datum_eind)}`:''}`+fmtTijdRange(b.tijd_start,b.tijd_eind)+`</div>
     </div>
     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-      <span class="besch-status ${b.status}">${b.status==='wacht'?'In afwachting':b.status==='goedgekeurd'?'Goedgekeurd':'Afgewezen'}</span>
-      ${b.status==='wacht'?`<button class="btn-edit" onclick="openBeschModal('${b.id}')">Bewerk</button>`:''}
+      <span class="besch-status ${b.status}">${statusTekst}</span>
+      ${(wel||b.status==='wacht')?`<button class="btn-edit" onclick="openBeschModal('${b.id}')">Bewerk</button>`:''}
       <button class="btn-danger-sm" onclick="deleteBeschikbaarheid('${b.id}')">×</button>
     </div>
-  </div>`).join('');
+  </div>`;}).join('');
 }
 
 let beschWeekOffset=0;
@@ -3853,8 +4022,11 @@ async function loadAlleBeschikbaarheid(){
         ${dagBesch.map(b=>{
           const g=gMap[b.gebruiker_id];
           const kleur=persKleur[b.gebruiker_id]||'#888';
+          const wel=b.soort==='beschikbaar';
           const tijdStr=b.tijd_start?` ${b.tijd_start.slice(0,5)}–${b.tijd_eind?b.tijd_eind.slice(0,5):'?'}`:'';
-          return`<div style="font-size:9px;font-weight:500;border-radius:3px;padding:2px 4px;background:${kleur}20;color:${kleur};white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${g?.naam||'?'}${tijdStr}${b.reden?' — '+b.reden:''}">${g?.naam?.split(' ')[0]||'?'}${tijdStr}</div>`;
+          const teken=wel?'✓ ':'✕ ';
+          const soortTekst=wel?'kan werken':'niet beschikbaar';
+          return`<div style="font-size:9px;font-weight:500;border-radius:3px;padding:2px 4px;background:${kleur}20;color:${kleur};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${wel?'':'text-decoration:line-through'}" title="${g?.naam||'?'} — ${soortTekst}${tijdStr}${b.reden?' — '+b.reden:''}">${teken}${g?.naam?.split(' ')[0]||'?'}${tijdStr}</div>`;
         }).join('')}
       </div>
     </div>`;
@@ -3864,27 +4036,31 @@ async function loadAlleBeschikbaarheid(){
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">${hdrHTML}</div>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px">${celHTML}</div>`;
 
-  // Verzoeken
-  const wacht=(beschData||[]).filter(b=>b.status==='wacht');
-  const goed=(beschData||[]).filter(b=>b.status==='goedgekeurd');
-  const afgewezen=(beschData||[]).filter(b=>b.status==='afgewezen');
+  // Verlofaanvragen van vaste krachten en doorgegeven beschikbaarheid van
+  // part-timers staan in dezelfde tabel, maar horen apart in beeld.
+  const vrijVerzoeken=(beschData||[]).filter(b=>b.soort!=='beschikbaar');
+  const kanWerken=(beschData||[]).filter(b=>b.soort==='beschikbaar'&&(b.datum_eind||b.datum_start)>=todayStr);
+  const wacht=vrijVerzoeken.filter(b=>b.status==='wacht');
+  const goed=vrijVerzoeken.filter(b=>b.status==='goedgekeurd');
+  const afgewezen=vrijVerzoeken.filter(b=>b.status==='afgewezen');
 
   function renderVerzoek(b,toonKnoppen){
     const g=gMap[b.gebruiker_id];
+    const wel=b.soort==='beschikbaar';
     const ds=parseDate(b.datum_start).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
     const de=b.datum_eind&&b.datum_eind!==b.datum_start?` – ${parseDate(b.datum_eind).toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}`:'';
     const tijdStr=b.tijd_start?` · ${b.tijd_start.slice(0,5)}–${b.tijd_eind?b.tijd_eind.slice(0,5):'?'}`:'';
-    return`<div class="besch-item ${b.status}">
+    return`<div class="besch-item ${b.status}" style="${wel?'border-left:3px solid #2563EB':''}">
       <div class="besch-info">
         <div class="besch-naam">${g?.naam||'Onbekend'}</div>
-        <div class="besch-reden">${b.reden||'Onbeschikbaar'}</div>
+        <div class="besch-reden">${wel?'Kan werken':(b.reden||'Onbeschikbaar')}${wel&&b.reden?' — '+b.reden:''}</div>
         <div class="besch-datum">${ds}${de}${tijdStr}</div>
       </div>
       <div class="besch-actions">
         ${toonKnoppen?`
           <button class="btn-sm" style="background:#059669;padding:6px 12px;font-size:12px" onclick="keurBeschikbaarheid('${b.id}','goedgekeurd')">✓ Goed</button>
           <button class="btn-danger-sm" style="padding:6px 12px;font-size:12px" onclick="keurBeschikbaarheid('${b.id}','afgewezen')">✗ Af</button>
-        `:`<span class="besch-status ${b.status}">${b.status==='goedgekeurd'?'✓ Goedgekeurd':'✗ Afgewezen'}</span>`}
+        `:wel?'':`<span class="besch-status ${b.status}">${b.status==='goedgekeurd'?'✓ Goedgekeurd':'✗ Afgewezen'}</span>`}
         <button class="btn-danger-sm" onclick="deleteBeschikbaarheid('${b.id}')">×</button>
       </div>
     </div>`;
@@ -3896,8 +4072,11 @@ async function loadAlleBeschikbaarheid(){
   }else{
     html+='<div class="empty" style="padding:.75rem 0;font-size:12px">Geen openstaande verzoeken</div>';
   }
+  if(kanWerken.length){
+    html+=`<div class="slabel" style="margin:1rem 0 .625rem">✓ Doorgegeven beschikbaarheid (${kanWerken.length})</div>${kanWerken.map(b=>renderVerzoek(b,false)).join('')}`;
+  }
   if(goed.length){
-    html+=`<div class="slabel" style="margin:1rem 0 .625rem">✓ Goedgekeurd (${goed.length})</div>${goed.map(b=>renderVerzoek(b,false)).join('')}`;
+    html+=`<div class="slabel" style="margin:1rem 0 .625rem">✓ Goedgekeurd vrij (${goed.length})</div>${goed.map(b=>renderVerzoek(b,false)).join('')}`;
   }
   if(afgewezen.length){
     html+=`<div class="slabel" style="margin:1rem 0 .625rem">✗ Afgewezen (${afgewezen.length})</div>${afgewezen.map(b=>renderVerzoek(b,false)).join('')}`;
@@ -3907,7 +4086,14 @@ async function loadAlleBeschikbaarheid(){
 
 function openBeschModal(id=null){
   editBeschId=id;
-  document.getElementById('beschModalTitle').textContent=id?'Onbeschikbaarheid bewerken':'Onbeschikbaarheid toevoegen';
+  const aanvraag=werktOpAanvraag(CURRENT_ROL);
+  document.getElementById('beschModalTitle').textContent=
+    aanvraag?(id?'Beschikbaarheid bewerken':'Ik ben beschikbaar')
+            :(id?'Onbeschikbaarheid bewerken':'Onbeschikbaarheid toevoegen');
+  const lbl=document.getElementById('bRedenLabel');
+  const red=document.getElementById('bReden');
+  if(lbl)lbl.textContent=aanvraag?'Toelichting (optioneel)':'Reden';
+  if(red)red.placeholder=aanvraag?'bv. alleen avonden, liefst met de foodtruck...':'bv. Vakantie, Ziek, Vrij, Bruiloft...';
   document.getElementById('beschWarnBox').className='warn-box';
   if(id){
     sb.from('beschikbaarheid').select('*').eq('id',id).single().then(({data:b})=>{
@@ -3937,14 +4123,26 @@ async function saveBeschikbaarheid(){
   const wb=document.getElementById('beschWarnBox');
   if(!datum_start){wb.textContent='Vul een startdatum in.';wb.className='warn-box show';return;}
   if(datum_eind<datum_start){wb.textContent='Einddatum moet na startdatum liggen.';wb.className='warn-box show';return;}
+  // Part-timers melden zich beschikbaar; dat hoeft niemand goed te keuren.
+  // Vaste krachten vragen vrij, en dat gaat wel langs de beheerder.
+  const aanvraag=werktOpAanvraag(CURRENT_ROL);
+  const soort=aanvraag?'beschikbaar':'onbeschikbaar';
+  const status=aanvraag?'goedgekeurd':'wacht';
+
   document.getElementById('beschSavingMsg').style.display='inline';
+  let fout=null;
   if(editBeschId){
-    await sb.from('beschikbaarheid').update({reden,datum_start,datum_eind,tijd_start,tijd_eind,status:'wacht'}).eq('id',editBeschId);
+    const{error}=await sb.from('beschikbaarheid')
+      .update({reden,datum_start,datum_eind,tijd_start,tijd_eind,soort,status}).eq('id',editBeschId);
+    fout=error;
   }else{
-    await sb.from('beschikbaarheid').insert({gebruiker_id:CURRENT_USER.id,reden,datum_start,datum_eind,tijd_start,tijd_eind,status:'wacht'});
+    const{error}=await sb.from('beschikbaarheid')
+      .insert({gebruiker_id:CURRENT_USER.id,reden,datum_start,datum_eind,tijd_start,tijd_eind,soort,status});
+    fout=error;
   }
   document.getElementById('beschSavingMsg').style.display='none';
-  closeBeschModal();loadMijnBeschikbaarheid();
+  if(fout){wb.textContent='Opslaan mislukt: '+fout.message;wb.className='warn-box show';return;}
+  closeBeschModal();loadPersoonlijkSchema();
 }
 
 async function deleteBeschikbaarheid(id){
@@ -3957,6 +4155,167 @@ async function deleteBeschikbaarheid(id){
 async function keurBeschikbaarheid(id,status){
   await sb.from('beschikbaarheid').update({status}).eq('id',id);
   loadAlleBeschikbaarheid();
+}
+
+// ── OPEN KLUSSEN: part-timers melden zich zelf aan ────────────────────────
+// De lijst komt uit een databasefunctie die bewust maar een paar velden
+// teruggeeft: naam, datum, tijden, adres en wie er al staat. Notities en
+// klantgegevens blijven binnen de planning.
+let OPEN_KLUSSEN=[];
+
+async function loadOpenKlussen(){
+  const el=document.getElementById('okLijst');
+  if(!el)return;
+  el.innerHTML='<div class="spin">Laden...</div>';
+  const{data,error}=await sb.rpc('beschikbare_klussen');
+  if(error){
+    el.innerHTML='<div class="empty">Klussen laden mislukt: '+error.message+'</div>';
+    return;
+  }
+  OPEN_KLUSSEN=data||[];
+  renderOpenKlussen();
+}
+
+function renderOpenKlussen(){
+  const el=document.getElementById('okLijst');
+  if(!el)return;
+  const zoek=(document.getElementById('okZoek')?.value||'').trim().toLowerCase();
+  const lijst=zoek
+    ?OPEN_KLUSSEN.filter(k=>((k.naam||'')+' '+(k.adres||'')).toLowerCase().includes(zoek))
+    :OPEN_KLUSSEN;
+
+  if(!lijst.length){
+    el.innerHTML='<div class="empty">'+(zoek?'Niets gevonden':'Er staan op dit moment geen komende klussen')+'</div>';
+    return;
+  }
+
+  el.innerHTML=lijst.map(k=>{
+    const datum=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
+    const tot=k.datum_eind&&k.datum_eind!==k.datum
+      ?' t/m '+parseDate(k.datum_eind).toLocaleDateString('nl-NL',{day:'numeric',month:'long'}):'';
+    const tijden=[
+      k.vertrek_tijd&&'Vertrek '+tijdFromDb(k.vertrek_tijd),
+      k.start_opbouw&&'Opbouw '+tijdFromDb(k.start_opbouw),
+      k.start_feest&&'Feest '+tijdFromDb(k.start_feest),
+      k.einde_feest&&'Einde '+tijdFromDb(k.einde_feest),
+    ].filter(Boolean).join(' · ');
+
+    const namen=(k.ingedeeld||[]);
+    const nodig=k.personeel_nodig||0;
+    const plekVrij=nodig?Math.max(0,nodig-k.ingedeeld_aantal):null;
+
+    let knop='';
+    if(k.ben_ingedeeld){
+      knop=`<span style="font-size:12px;font-weight:600;color:#059669">✓ Je bent ingedeeld</span>`;
+    }else if(k.mijn_status==='aangemeld'){
+      knop=`<div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:12px;font-weight:600;color:#92400E">Aangemeld — wacht op bevestiging</span>
+        <button class="btn-ghost" style="font-size:11px;padding:5px 10px" onclick="trekAanmeldingIn('${k.id}')">Intrekken</button>
+      </div>`;
+    }else if(k.mijn_status==='afgewezen'){
+      knop=`<span style="font-size:12px;font-weight:600;color:#DC2626">Niet ingedeeld voor deze klus</span>`;
+    }else{
+      knop=`<button class="btn-sm" style="font-size:12px;padding:8px 16px" onclick="meldAan('${k.id}')">Ik wil deze klus</button>`;
+    }
+
+    return`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:15px;font-weight:600;color:var(--text)">${k.naam||'Klus'}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:3px">${datum}${tot}</div>
+      ${tijden?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${tijden}</div>`:''}
+      ${k.adres?`<div style="font-size:12px;color:var(--muted);margin-top:3px">📍 ${k.adres}</div>`:''}
+      <div style="font-size:12px;color:var(--text);margin-top:8px">
+        <span style="color:var(--muted)">Al ingedeeld:</span>
+        ${namen.length?namen.join(', '):'nog niemand'}
+        ${plekVrij!==null?`<span style="color:var(--muted)"> · ${plekVrij} van de ${nodig} plekken vrij</span>`:''}
+      </div>
+      <div style="margin-top:12px">${knop}</div>
+    </div>`;
+  }).join('');
+}
+
+async function meldAan(klusId){
+  const{error}=await sb.from('klus_aanmeldingen')
+    .insert({klus_id:klusId,gebruiker_id:CURRENT_USER.id,status:'aangemeld'});
+  if(error){toast('Aanmelden mislukt: '+error.message,'fout');return;}
+  toast('Je aanmelding is doorgegeven');
+  loadOpenKlussen();
+}
+
+async function trekAanmeldingIn(klusId){
+  const{error}=await sb.from('klus_aanmeldingen').delete()
+    .eq('klus_id',klusId).eq('gebruiker_id',CURRENT_USER.id);
+  if(error){toast('Intrekken mislukt: '+error.message,'fout');return;}
+  toast('Aanmelding ingetrokken');
+  loadOpenKlussen();
+}
+
+// ── AANMELDINGEN BEOORDELEN (beheerder) ───────────────────────────────────
+async function loadAanmeldingen(){
+  const el=document.getElementById('aanmeldList');
+  if(!el)return;
+  el.innerHTML='<div class="spin">Laden...</div>';
+  const[{data:aanm,error},{data:mensen}]=await Promise.all([
+    sb.from('klus_aanmeldingen').select('*').order('aangemaakt_op',{ascending:true}),
+    sb.from('personeel_publiek').select('id,naam'),
+  ]);
+  if(error){el.innerHTML='<div class="empty">Laden mislukt: '+error.message+'</div>';return;}
+  const naamVan=Object.fromEntries((mensen||[]).map(m=>[m.id,m.naam]));
+
+  const open=(aanm||[]).filter(a=>a.status==='aangemeld');
+  if(!open.length){el.innerHTML='<div class="empty" style="padding:.75rem 0;font-size:12px">Geen openstaande aanmeldingen</div>';return;}
+
+  el.innerHTML=open.map(a=>{
+    const k=(KLUSSEN||[]).find(x=>x.id===a.klus_id);
+    const datum=k?parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}):'';
+    return`<div class="besch-item wacht">
+      <div class="besch-info">
+        <div class="besch-naam">${naamVan[a.gebruiker_id]||'Onbekend'}</div>
+        <div class="besch-reden">${k?(k.naam||k.food||'Klus'):'Klus'}</div>
+        <div class="besch-datum">${datum}</div>
+      </div>
+      <div class="besch-actions">
+        <button class="btn-sm" style="background:#059669;padding:6px 12px;font-size:12px" onclick="beslisAanmelding('${a.id}','geaccepteerd')">✓ Indelen</button>
+        <button class="btn-danger-sm" style="padding:6px 12px;font-size:12px" onclick="beslisAanmelding('${a.id}','afgewezen')">✗ Nee</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function beslisAanmelding(id,status){
+  const{data:rij,error:leesFout}=await sb.from('klus_aanmeldingen').select('*').eq('id',id).single();
+  if(leesFout||!rij){toast('Aanmelding niet gevonden','fout');return;}
+
+  const{error}=await sb.from('klus_aanmeldingen').update({status}).eq('id',id);
+  if(error){toast('Bijwerken mislukt: '+error.message,'fout');return;}
+
+  if(status==='geaccepteerd'){
+    const{error:koppelFout}=await sb.from('klus_gebruikers')
+      .upsert({klus_id:rij.klus_id,gebruiker_id:rij.gebruiker_id},{onConflict:'klus_id,gebruiker_id'});
+    if(koppelFout){toast('Indelen mislukt: '+koppelFout.message,'fout');return;}
+
+    // Wie zich aanmeldt en wordt ingedeeld, is die dag dus beschikbaar.
+    // Dat zetten we er meteen bij, anders blokkeert de planning die dag later.
+    const klus=(KLUSSEN||[]).find(x=>x.id===rij.klus_id);
+    if(klus){
+      const dekt=BESCHIKBAARHEID.some(b=>
+        b.gebruiker_id===rij.gebruiker_id&&b.soort==='beschikbaar'&&beschDekt(b,klus.datum));
+      if(!dekt){
+        await sb.from('beschikbaarheid').insert({
+          gebruiker_id:rij.gebruiker_id,
+          reden:'Aangemeld voor '+(klus.naam||klus.food||'klus'),
+          datum_start:klus.datum,
+          datum_eind:klus.datum_eind||klus.datum,
+          soort:'beschikbaar',
+          status:'goedgekeurd',
+        });
+      }
+    }
+    toast('Ingedeeld op de klus');
+    await loadAll();
+  }else{
+    toast('Aanmelding afgewezen');
+  }
+  loadAanmeldingen();
 }
 
 // ── PLANNING BEHEERDER ────────────────────────────────────────────────────────
