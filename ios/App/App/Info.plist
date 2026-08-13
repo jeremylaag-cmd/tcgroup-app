@@ -39,6 +39,8 @@
 	<true/>
 	<key>NSCameraUsageDescription</key>
 	<string>TC Group Planning gebruikt de camera als je zelf een foto of document aan een klus wilt toevoegen.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>TC Group Planning gebruikt je locatie alleen op het moment dat je zelf in- of uitklokt, als bewijs bij je urenregistratie. De app volgt je niet op de achtergrond.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>TC Group Planning legt vast waar je in- en uitklokt, als bewijs bij je urenregistratie.</string>
 	<key>NSMicrophoneUsageDescription</key>
