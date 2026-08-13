@@ -245,6 +245,43 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .bnav-item .ni{stroke:var(--muted);fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
 .bnav-item.active .ni{stroke:var(--text)}
 
+/* ── Medewerkersprofiel (beheerder) ─────────────────────────────── */
+.pd-wrap{display:grid;grid-template-columns:280px 1fr;min-height:520px;max-height:86vh}
+.pd-zij{background:var(--bg);border-right:1px solid var(--border);padding:1.5rem 1.25rem;overflow-y:auto}
+.pd-hoofd{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.pd-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 .5rem;background:var(--bg);flex-shrink:0}
+.pd-tab{background:none;border:none;border-bottom:2px solid transparent;padding:14px 16px;font-size:13px;font-family:var(--font);color:var(--muted);cursor:pointer;white-space:nowrap}
+.pd-tab.on{color:var(--text);font-weight:600;border-bottom-color:var(--text);background:var(--surface)}
+.pd-body{padding:1.25rem;overflow-y:auto;flex:1}
+.pd-av{width:110px;height:110px;border-radius:50%;background:var(--text);color:#fff;display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:600;margin:0 auto 1rem}
+.pd-naam{font-size:19px;font-weight:600;text-align:center;margin-bottom:1.25rem;line-height:1.25}
+.pd-rij{display:flex;gap:10px;font-size:13px;color:var(--text);margin-bottom:10px;align-items:flex-start;line-height:1.4}
+.pd-rij .pd-ico{width:18px;flex-shrink:0;text-align:center;color:var(--muted)}
+.pd-rij a{color:#2563EB;text-decoration:none}
+.pd-maanden{display:grid;grid-template-columns:repeat(12,1fr);border-bottom:1px solid var(--border)}
+.pd-maand{text-align:center;padding:8px 2px;border-right:1px solid var(--border)}
+.pd-maand:last-child{border-right:none}
+.pd-maand.nu{background:#EFF6FF}
+.pd-mlbl{font-size:9px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.pd-mval{font-size:14px;font-weight:600;color:var(--text);margin-top:2px}
+.pd-mval.leeg{color:var(--border);font-weight:400}
+.pd-stat{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 2px;border-bottom:1px solid var(--border);font-size:14px}
+.pd-stat b{font-weight:600;white-space:nowrap}
+.pd-kal{display:grid;grid-template-columns:44px repeat(7,1fr);gap:3px}
+.pd-kcel{border:1px solid var(--border);border-radius:7px;min-height:62px;padding:4px 5px;background:var(--surface);font-size:11px}
+.pd-kcel.buiten{background:var(--bg);color:var(--muted)}
+.pd-kcel.vandaag{border-color:#BFDBFE;background:#EFF6FF}
+.pd-kweek{display:flex;align-items:center;justify-content:center;background:var(--bg);border:1px solid var(--border);border-radius:7px;font-size:11px;font-weight:600;color:var(--muted)}
+@media(max-width:767px){
+  .pd-wrap{grid-template-columns:1fr;max-height:88vh}
+  .pd-zij{border-right:none;border-bottom:1px solid var(--border);padding:1rem}
+  .pd-av{width:72px;height:72px;font-size:24px}
+  .pd-tabs{overflow-x:auto}
+  .pd-maanden{grid-template-columns:repeat(6,1fr)}
+  .pd-kal{grid-template-columns:32px repeat(7,1fr);gap:2px}
+  .pd-kcel{min-height:46px;font-size:10px}
+}
+
 /* Mobiel: header versimpeld + ruimte voor bottom nav */
 @media(max-width:767px){
   header{padding:0 1.25rem}
@@ -866,6 +903,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <button class="pb-fbtn on" onclick="pbSetFilter('alle',this)">Alle klussen</button>
           <button class="pb-fbtn" onclick="pbSetFilter('incompleet',this)">Incompleet</button>
           <button class="pb-fbtn" onclick="pbSetFilter('compleet',this)">Compleet</button>
+          <button class="pb-fbtn" onclick="pbSetFilter('franklins',this)" style="border-color:#F59E0B;color:#B45309">Franklins</button>
         </div>
         <div class="pb-dag-hdr">
           <span class="pb-dag-lbl" id="pbDagLbl"></span>
@@ -888,6 +926,22 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         </div>
         <div class="bc"><div class="bt">Skills personeel</div><div class="bl" id="skillsBeheer"><div class="spin">Laden...</div></div>
           <div class="add-form"><input type="text" id="newSkillNaam" placeholder="bv. Bar ervaring, Poffers bakken"><button class="btn-sm" onclick="addSkill()">Toevoegen</button></div>
+        </div>
+      </div>
+
+      <!-- Franklins: vast weekschema -->
+      <div class="bc" style="margin-top:1.25rem">
+        <div class="bt">Franklins &mdash; weekschema</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
+          Zet per dag van de week de diensten neer. De app maakt die diensten daarna automatisch
+          aan als klussen, zodat personeel zich kan aanmelden en kan inklokken. Ze staan apart van
+          de gewone klussen: in het rooster verborgen tot je ze aanzet, en op het planningsbord
+          onder het filter <b>Franklins</b>.
+        </div>
+        <div id="vasteBeheer"><div class="spin">Laden...</div></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+          <button class="btn-sm" onclick="genereerVasteDiensten()">Diensten 8 weken vooruit aanmaken</button>
+          <span id="vasteInfo" style="font-size:12px;color:var(--muted)"></span>
         </div>
       </div>
     </div>
@@ -1054,15 +1108,26 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 
   <!-- PERSONEEL DETAIL MODAL -->
   <div class="modal-overlay" id="persDetailOverlay" onclick="if(event.target===this)closePersDetail()">
-    <div class="modal" style="max-width:520px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem">
-        <div style="font-size:15px;font-weight:600" id="persDetailNaam">—</div>
-        <button class="btn-ghost" onclick="closePersDetail()" style="padding:5px 10px">&#x2715;</button>
-      </div>
-      <div id="persDetailBody"></div>
-      <div class="mfooter" style="margin-top:1rem">
-        <button class="btn-ghost" onclick="closePersDetail()">Annuleren</button>
-        <button class="btn-sm" onclick="savePersDetail()">Opslaan</button>
+    <div class="modal pd-modal" style="max-width:920px;padding:0;overflow:hidden">
+      <div class="pd-wrap">
+        <!-- Linkerkolom: wie is dit -->
+        <div class="pd-zij" id="pdZij"></div>
+        <!-- Rechterkolom: tabbladen -->
+        <div class="pd-hoofd">
+          <div class="pd-tabs">
+            <button class="pd-tab on" onclick="pdToon('algemeen',this)">Algemeen</button>
+            <button class="pd-tab" onclick="pdToon('agenda',this)">Agenda</button>
+            <button class="pd-tab" onclick="pdToon('skills',this)">Vaardigheden</button>
+            <button class="pd-tab" onclick="pdToon('gegevens',this)">Gegevens</button>
+            <button class="btn-ghost" onclick="closePersDetail()" style="padding:5px 10px;margin-left:auto;align-self:center">&#x2715;</button>
+          </div>
+          <div class="pd-body">
+            <div id="pdVak-algemeen"></div>
+            <div id="pdVak-agenda" style="display:none"></div>
+            <div id="pdVak-skills" style="display:none"></div>
+            <div id="pdVak-gegevens" style="display:none"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -2040,65 +2105,315 @@ async function toggleUserSkill(userId,skillId,btn){
   await sb.from('gebruikers').update({skills:JSON.stringify(skills)}).eq('id',userId);
 }
 
-// ── PERSONEEL DETAIL ──
+// ── PERSONEEL DETAIL (beheerder) ────────────────────────────────────────
+// Eén venster met alles wat je over een medewerker wilt weten: kerncijfers,
+// agenda, vaardigheden en de gegevens om te bewerken.
 let persDetailId=null;
+let PD=null;            // medewerker die nu open staat, met zijn gegevens
+let pdAgendaOffset=0;   // 0 = deze maand
+
+const PD_ROLLABEL={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','personeel':'Personeel'};
+const PD_MAANDEN=['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];
 
 async function openPersDetail(uid){
-  persDetailId=uid;
-  const[{data:u},{data:skillsData}]=await Promise.all([
+  persDetailId=uid; pdAgendaOffset=0; PD=null;
+  const jaar=new Date().getFullYear();
+  const van=new Date(jaar,0,1), tot=new Date(jaar+1,0,1);
+
+  const[{data:u},{data:skillsData},{data:regs},{data:kg},{data:besch}]=await Promise.all([
     sb.from('gebruikers').select('*').eq('id',uid).single(),
     sb.from('skills').select('*').order('naam'),
+    sb.from('urenregistraties').select('ingeklokt_op,uitgeklokt_op,totaal_minuten,status,klus_id')
+      .eq('gebruiker_id',uid)
+      .gte('ingeklokt_op',van.toISOString())
+      .lt('ingeklokt_op',tot.toISOString()),
+    sb.from('klus_gebruikers').select('klus_id').eq('gebruiker_id',uid),
+    sb.from('beschikbaarheid').select('*').eq('gebruiker_id',uid),
   ]);
+  if(!u){toast('Medewerker niet gevonden','fout');return;}
   SKILLS=skillsData||[];
-  if(!u)return;
+  PD={u,regs:regs||[],klusIds:(kg||[]).map(x=>x.klus_id),besch:besch||[]};
 
-  document.getElementById('persDetailNaam').textContent=u.naam||'Onbekend';
-
-  let userSkills=[];
-  try{userSkills=u.skills?JSON.parse(typeof u.skills==='string'?u.skills:'[]'):[];}catch(e){}
-
-  const skillPills=SKILLS.length
-    ?SKILLS.map(s=>`<button type="button" class="chip${userSkills.includes(s.id)?' on':''}" style="font-size:11px;padding:4px 11px" onclick="pdToggleSkill('${uid}','${s.id}',this)">${s.naam}</button>`).join('')
-    :'<span style="font-size:12px;color:var(--muted)">Nog geen skills aangemaakt — ga naar Beheer → Skills.</span>';
-
-  document.getElementById('persDetailBody').innerHTML=`
-    <div class="fr"><span class="fl">Naam</span>
-      <input type="text" id="pdNaam" value="${u.naam||''}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
-    </div>
-    <div class="fr"><span class="fl">Rol</span>
-      <select id="pdRol" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
-        ${u.rol==='personeel'?'<option value="personeel" selected>Personeel (verouderd)</option>':''}
-        <option value="part-timer"${u.rol==='part-timer'?' selected':''}>Part-timer</option>
-        <option value="full-timer"${u.rol==='full-timer'?' selected':''}>Full-timer</option>
-        <option value="hal"${u.rol==='hal'?' selected':''}>Hal medewerker</option>
-        <option value="beheerder"${u.rol==='beheerder'?' selected':''}>Beheerder</option>
-      </select>
-    </div>
-    <div class="two">
-      <div class="fr"><span class="fl">E-mailadres</span>
-        <input type="email" id="pdEmail" value="${u.email||''}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
-      </div>
-      <div class="fr"><span class="fl">Telefoonnummer</span>
-        <input type="tel" id="pdTel" value="${u.telefoon||''}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
-      </div>
-    </div>
-    <div class="two">
-      <div class="fr"><span class="fl">Shirtmaat</span>
-        <select id="pdMaat" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
-          <option value="">—</option>
-          ${['XS','S','M','L','XL','XXL','XXXL','XXXXL'].map(m=>`<option value="${m}"${u.shirtmaat===m?' selected':''}>${m}</option>`).join('')}
-        </select>
-      </div>
-      <div class="fr"><span class="fl">Rijbewijs</span>
-        <input type="text" id="pdRijbewijs" value="${u.rijbewijs||''}" placeholder="bv. Auto, Aanhanger" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
-      </div>
-    </div>
-    <div class="fr"><span class="fl">Skills</span>
-      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:2px">${skillPills}</div>
-    </div>
-    <div class="warn-box" id="pdWarn"></div>`;
-
+  pdRenderZij();
+  pdRenderAlgemeen();
+  pdRenderAgenda();
+  pdRenderSkills();
+  pdRenderGegevens();
+  pdToon('algemeen',document.querySelectorAll('.pd-tab')[0]);
   document.getElementById('persDetailOverlay').classList.add('open');
+}
+
+function pdToon(vak,btn){
+  ['algemeen','agenda','skills','gegevens'].forEach(v=>{
+    const el=document.getElementById('pdVak-'+v);
+    if(el)el.style.display=v===vak?'':'none';
+  });
+  document.querySelectorAll('.pd-tab').forEach(t=>t.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+}
+
+function pdSkillIds(){
+  let ids=[];
+  try{const rauw=PD.u.skills;ids=rauw?(typeof rauw==='string'?JSON.parse(rauw):rauw):[];}catch(e){ids=[];}
+  return Array.isArray(ids)?ids:[];
+}
+
+function pdRenderZij(){
+  const u=PD.u;
+  const initialen=(u.naam||'?').split(' ').filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase()||'?';
+  const namen=pdSkillIds().map(id=>{const s=SKILLS.find(x=>x.id===id);return s?s.naam:null;}).filter(Boolean);
+  const adres=[u.straat,[u.postcode,u.plaats].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+  const rij=(ico,inhoud)=>inhoud?`<div class="pd-rij"><span class="pd-ico">${ico}</span><span>${inhoud}</span></div>`:'';
+
+  document.getElementById('pdZij').innerHTML=
+    `<div class="pd-av">${initialen}</div>
+     <div class="pd-naam">${u.naam||'Onbekend'}</div>
+     ${rij('&#9679;',PD_ROLLABEL[u.rol]||u.rol||'')}
+     ${rij('&#9993;',u.email?`<a href="mailto:${u.email}">${u.email}</a>`:'')}
+     ${rij('&#9742;',u.telefoon?`<a href="tel:${u.telefoon}">${u.telefoon}</a>`:'')}
+     ${rij('&#9873;',adres)}
+     ${rij('&#128085;',u.shirtmaat)}
+     ${rij('&#128663;',u.rijbewijs)}
+     ${namen.length?`<div style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:4px">${namen.map(n=>`<span style="font-size:10px;background:#F0FDF4;color:#166534;border:1px solid #BBF7D0;border-radius:20px;padding:2px 8px;font-weight:500">${n}</span>`).join('')}</div>`:''}
+     <button class="btn-ghost" style="width:100%;margin-top:1.25rem;justify-content:center" onclick="pdToon('gegevens',document.querySelectorAll('.pd-tab')[3])">Gegevens bewerken</button>`;
+}
+
+// Registraties die meetellen: geen afgewezen uren en niets wat nog loopt.
+function pdTelt(r){return r.status!=='afgewezen'&&r.status!=='lopend';}
+
+// Hoeveel staat er in een bepaalde week ingepland voor deze medewerker?
+function pdIngepland(weekStart){
+  const dagenSet=new Set(Array.from({length:7},(_,i)=>{
+    const d=new Date(weekStart);d.setDate(weekStart.getDate()+i);return fmt(d);
+  }));
+  let min=0,aantal=0,onbekend=0;
+  (KLUSSEN||[]).forEach(k=>{
+    if(!PD.klusIds.includes(k.id))return;
+    if(!klusDagen(k).some(d=>dagenSet.has(d)))return;
+    aantal++;
+    const m=klusMinuten(k);
+    if(m==null)onbekend++; else min+=m;
+  });
+  return{min,aantal,onbekend};
+}
+
+function pdRenderAlgemeen(){
+  const nu=new Date();
+  const perMaand=Array(12).fill(0);
+  const dagen=new Set();
+  let shiften=0,totaal=0;
+  PD.regs.forEach(r=>{
+    if(!pdTelt(r))return;
+    const d=new Date(r.ingeklokt_op), m=r.totaal_minuten||0;
+    perMaand[d.getMonth()]+=m; totaal+=m; shiften++; dagen.add(fmt(d));
+  });
+
+  const wStart=maandagVan(nu);
+  const vorigeStart=new Date(wStart); vorigeStart.setDate(wStart.getDate()-7);
+  const vorigeWeekMin=PD.regs.reduce((s,r)=>{
+    if(!pdTelt(r))return s;
+    const d=new Date(r.ingeklokt_op);
+    return (d>=vorigeStart&&d<wStart)?s+(r.totaal_minuten||0):s;
+  },0);
+  const volgendeStart=new Date(wStart); volgendeStart.setDate(wStart.getDate()+7);
+  const deze=pdIngepland(wStart), volgende=pdIngepland(volgendeStart);
+
+  const laatste=PD.regs.filter(pdTelt).map(r=>new Date(r.ingeklokt_op)).sort((a,b)=>b-a)[0];
+
+  const mnd=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+  const strip=perMaand.map((m,i)=>
+    `<div class="pd-maand${i===nu.getMonth()?' nu':''}">
+       <div class="pd-mlbl">${mnd[i]}</div>
+       <div class="pd-mval${m?'':' leeg'}">${m?Math.round(m/60):'&mdash;'}</div>
+     </div>`).join('');
+
+  const stat=(label,waarde)=>`<div class="pd-stat"><span>${label}</span><b>${waarde}</b></div>`;
+  const planTekst=p=>p.aantal
+    ?`${minToStr(p.min)}${p.onbekend?' *':''} · ${p.aantal} ${p.aantal===1?'klus':'klussen'}`
+    :'0u 00m';
+
+  document.getElementById('pdVak-algemeen').innerHTML=
+    `<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Gewerkte uren per maand in ${nu.getFullYear()}</div>
+     <div class="pd-maanden" style="margin-bottom:1rem">${strip}</div>
+     ${stat('Dagen gewerkt dit jaar',dagen.size+' '+(dagen.size===1?'dag':'dagen'))}
+     ${stat('Shiften gewerkt dit jaar',shiften+' '+(shiften===1?'shift':'shiften'))}
+     ${stat('Gewerkte uren dit jaar',minToStr(totaal))}
+     ${stat('Uren gewerkt vorige week',minToStr(vorigeWeekMin))}
+     ${stat('Uren ingepland deze week',planTekst(deze))}
+     ${stat('Uren ingepland volgende week',planTekst(volgende))}
+     ${stat('Klussen totaal',PD.klusIds.length)}
+     ${stat('Laatst gewerkt',laatste?laatste.toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'}):'nog nooit')}
+     ${(deze.onbekend||volgende.onbekend)?'<div style="font-size:10px;color:var(--muted);margin-top:6px">* bij sommige klussen staan nog geen tijden ingevuld</div>':''}
+     <div style="margin-top:1.25rem">
+       <div class="pd-mlbl" style="margin-bottom:6px">Interne notitie</div>
+       <textarea id="pdNotitie" placeholder="Alleen zichtbaar voor beheerders" style="width:100%;height:84px;font-size:13px;font-family:var(--font);padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">${(PD.u.notitie||'').replace(/</g,'&lt;')}</textarea>
+       <button class="btn-sm" style="margin-top:8px" onclick="pdBewaarNotitie()">Notitie opslaan</button>
+     </div>`;
+}
+
+async function pdBewaarNotitie(){
+  const veld=document.getElementById('pdNotitie');
+  const knop=document.querySelector('[onclick="pdBewaarNotitie()"]');
+  if(!veld||!persDetailId)return;
+  if(knop){knop.disabled=true;knop.textContent='Bezig...';}
+  const{error}=await sb.rpc('zet_notitie',{p_gebruiker:persDetailId,p_notitie:veld.value});
+  if(knop)knop.disabled=false;
+  if(error){
+    if(knop)knop.textContent='Notitie opslaan';
+    toast('Notitie opslaan mislukt: '+error.message,'fout');
+    return;
+  }
+  PD.u.notitie=veld.value;
+  if(knop){knop.textContent='✓ Opgeslagen';setTimeout(()=>knop.textContent='Notitie opslaan',2000);}
+}
+
+// ISO-weeknummer, zodat de agenda dezelfde weeknummers toont als de rest.
+function pdWeeknr(d){
+  const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));
+  t.setUTCDate(t.getUTCDate()-((t.getUTCDay()+6)%7)+3);
+  const eerste=new Date(Date.UTC(t.getUTCFullYear(),0,4));
+  eerste.setUTCDate(eerste.getUTCDate()-((eerste.getUTCDay()+6)%7)+3);
+  return 1+Math.round((t-eerste)/(7*86400000));
+}
+
+function pdAgendaWissel(richting){
+  pdAgendaOffset=richting===0?0:pdAgendaOffset+richting;
+  pdRenderAgenda();
+}
+
+function pdRenderAgenda(){
+  const vandaag=new Date();
+  const basis=new Date(vandaag.getFullYear(),vandaag.getMonth()+pdAgendaOffset,1);
+  const jaar=basis.getFullYear(), maand=basis.getMonth();
+  const eersteDag=new Date(jaar,maand,1), laatsteDag=new Date(jaar,maand+1,0);
+  const start=new Date(eersteDag); start.setDate(eersteDag.getDate()-((eersteDag.getDay()+6)%7));
+  const eind=new Date(laatsteDag); eind.setDate(laatsteDag.getDate()+((7-laatsteDag.getDay())%7));
+
+  const dagen=[];
+  for(let d=new Date(start); d<=eind; d.setDate(d.getDate()+1))dagen.push(new Date(d));
+
+  const kopjes=['MA','DI','WO','DO','VR','ZA','ZO']
+    .map(n=>`<div style="text-align:center;font-size:10px;font-weight:600;color:var(--muted);padding:4px 0">${n}</div>`).join('');
+
+  let cellen='';
+  for(let i=0;i<dagen.length;i+=7){
+    cellen+=`<div class="pd-kweek">${pdWeeknr(dagen[i])}</div>`;
+    for(let j=0;j<7;j++){
+      const d=dagen[i+j];
+      const ds=fmt(d);
+      const buiten=d.getMonth()!==maand;
+      const isVandaag=ds===fmt(vandaag);
+      const kl=(KLUSSEN||[]).filter(k=>PD.klusIds.includes(k.id)&&klusDagen(k).includes(ds));
+      const bs=PD.besch.filter(b=>b.status==='goedgekeurd'&&beschDekt(b,ds));
+      cellen+=
+        `<div class="pd-kcel${buiten?' buiten':''}${isVandaag?' vandaag':''}">
+           <div style="font-weight:${isVandaag?'700':'500'};margin-bottom:2px">${d.getDate()}</div>
+           ${bs.map(b=>{
+             const wel=b.soort==='beschikbaar';
+             return`<div style="border-radius:3px;padding:1px 3px;margin-bottom:2px;background:${wel?'#EFF6FF':'#FEF2F2'};color:${wel?'#1E40AF':'#991B1B'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${wel?'Beschikbaar':'Niet beschikbaar'}${b.reden?' — '+b.reden:''}">${wel?'✓ kan':'✕ vrij'}</div>`;
+           }).join('')}
+           ${kl.map(k=>`<div style="border-radius:3px;padding:1px 3px;margin-bottom:2px;background:#F0FDF4;color:#065F46;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="${(k.naam||k.food||'Klus')}" onclick="closePersDetail();openDetail('${k.id}')">${k.naam||k.food||'Klus'}</div>`).join('')}
+         </div>`;
+    }
+  }
+
+  // Samenvatting onder de kalender
+  const inMaand=(KLUSSEN||[]).filter(k=>PD.klusIds.includes(k.id)&&
+    klusDagen(k).some(ds=>{const d=parseDate(ds);return d.getFullYear()===jaar&&d.getMonth()===maand;}));
+  const gewerktMin=PD.regs.filter(r=>{
+    if(!pdTelt(r))return false;
+    const d=new Date(r.ingeklokt_op);
+    return d.getFullYear()===jaar&&d.getMonth()===maand;
+  }).reduce((s,r)=>s+(r.totaal_minuten||0),0);
+
+  document.getElementById('pdVak-agenda').innerHTML=
+    `<div style="display:flex;align-items:center;gap:8px;margin-bottom:.75rem">
+       <button class="btn-nav" onclick="pdAgendaWissel(-1)">&#8592;</button>
+       <div style="flex:1;text-align:center;font-size:14px;font-weight:600">${PD_MAANDEN[maand]} ${jaar}</div>
+       <button class="btn-nav" onclick="pdAgendaWissel(0)" style="font-size:11px">Nu</button>
+       <button class="btn-nav" onclick="pdAgendaWissel(1)">&#8594;</button>
+     </div>
+     <div class="pd-kal" style="margin-bottom:4px"><div></div>${kopjes}</div>
+     <div class="pd-kal">${cellen}</div>
+     <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:.875rem;padding-top:.875rem;border-top:1px solid var(--border)">
+       <span><b style="color:var(--text)">${inMaand.length}</b> ${inMaand.length===1?'klus':'klussen'} deze maand</span>
+       <span><b style="color:var(--text)">${minToStr(gewerktMin)}</b> geklokt deze maand</span>
+     </div>`;
+}
+
+function pdRenderSkills(){
+  const gekozen=pdSkillIds();
+  const pills=SKILLS.length
+    ?SKILLS.map(s=>`<button type="button" class="chip${gekozen.includes(s.id)?' on':''}" style="font-size:12px;padding:6px 13px" onclick="pdToggleSkill('${PD.u.id}','${s.id}',this)">${s.naam}</button>`).join('')
+    :'<span style="font-size:12px;color:var(--muted)">Nog geen vaardigheden aangemaakt — ga naar Beheer → Skills.</span>';
+
+  // Waar is deze medewerker de afgelopen tijd voor ingezet?
+  const soortTeller={};
+  (KLUSSEN||[]).forEach(k=>{
+    if(!PD.klusIds.includes(k.id))return;
+    (k.soorten||[]).forEach(s=>{soortTeller[s.titel]=(soortTeller[s.titel]||0)+1;});
+  });
+  const ervaring=Object.entries(soortTeller).sort((a,b)=>b[1]-a[1]);
+
+  document.getElementById('pdVak-skills').innerHTML=
+    `<div class="pd-mlbl" style="margin-bottom:8px">Vaardigheden — tik om aan of uit te zetten</div>
+     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.5rem">${pills}</div>
+     <div class="pd-mlbl" style="margin-bottom:8px">Ingezet bij</div>
+     ${ervaring.length
+       ?ervaring.map(([naam,n])=>`<div class="pd-stat"><span><b>${n}x</b> ${naam}</span></div>`).join('')
+       :'<div style="font-size:12px;color:var(--muted)">Nog niet ingedeeld op klussen met een soort.</div>'}`;
+}
+
+function pdRenderGegevens(){
+  const u=PD.u;
+  document.getElementById('pdVak-gegevens').innerHTML=
+    `<div class="fr"><span class="fl">Naam</span>
+       <input type="text" id="pdNaam" value="${(u.naam||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+     </div>
+     <div class="fr"><span class="fl">Rol</span>
+       <select id="pdRol" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
+         ${u.rol==='personeel'?'<option value="personeel" selected>Personeel (verouderd)</option>':''}
+         <option value="part-timer"${u.rol==='part-timer'?' selected':''}>Part-timer</option>
+         <option value="full-timer"${u.rol==='full-timer'?' selected':''}>Full-timer</option>
+         <option value="hal"${u.rol==='hal'?' selected':''}>Hal medewerker</option>
+         <option value="beheerder"${u.rol==='beheerder'?' selected':''}>Beheerder</option>
+       </select>
+     </div>
+     <div class="two">
+       <div class="fr"><span class="fl">E-mailadres</span>
+         <input type="email" id="pdEmail" value="${(u.email||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       </div>
+       <div class="fr"><span class="fl">Telefoonnummer</span>
+         <input type="tel" id="pdTel" value="${(u.telefoon||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       </div>
+     </div>
+     <div class="fr"><span class="fl">Straat en huisnummer</span>
+       <input type="text" id="pdStraat" value="${(u.straat||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+     </div>
+     <div class="two">
+       <div class="fr"><span class="fl">Postcode</span>
+         <input type="text" id="pdPostcode" value="${(u.postcode||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       </div>
+       <div class="fr"><span class="fl">Plaats</span>
+         <input type="text" id="pdPlaats" value="${(u.plaats||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       </div>
+     </div>
+     <div class="two">
+       <div class="fr"><span class="fl">Shirtmaat</span>
+         <select id="pdMaat" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
+           <option value="">—</option>
+           ${['XS','S','M','L','XL','XXL','XXXL','XXXXL'].map(m=>`<option value="${m}"${u.shirtmaat===m?' selected':''}>${m}</option>`).join('')}
+         </select>
+       </div>
+       <div class="fr"><span class="fl">Rijbewijs</span>
+         <input type="text" id="pdRijbewijs" value="${(u.rijbewijs||'').replace(/"/g,'&quot;')}" placeholder="bv. B, BE" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       </div>
+     </div>
+     <div class="warn-box" id="pdWarn"></div>
+     <div class="mfooter" style="margin-top:1rem">
+       <button class="btn-ghost" onclick="closePersDetail()">Annuleren</button>
+       <button class="btn-sm" onclick="savePersDetail()">Opslaan</button>
+     </div>`;
 }
 
 async function savePersDetail(){
@@ -2107,13 +2422,17 @@ async function savePersDetail(){
   const rol=document.getElementById('pdRol').value;
   const email=document.getElementById('pdEmail').value.trim();
   const telefoon=document.getElementById('pdTel').value.trim();
+  const straat=document.getElementById('pdStraat').value.trim();
+  const postcode=document.getElementById('pdPostcode').value.trim();
+  const plaats=document.getElementById('pdPlaats').value.trim();
   const shirtmaat=document.getElementById('pdMaat').value;
   const rijbewijs=document.getElementById('pdRijbewijs').value.trim();
   const wb=document.getElementById('pdWarn');
   if(!naam){wb.textContent='Naam is verplicht.';wb.className='warn-box show';return;}
   wb.className='warn-box';
-  await sb.from('gebruikers').update({naam,rol,email,telefoon,shirtmaat,rijbewijs}).eq('id',uid);
-  document.getElementById('persDetailNaam').textContent=naam;
+  const{error}=await sb.from('gebruikers')
+    .update({naam,rol,email,telefoon,straat,postcode,plaats,shirtmaat,rijbewijs}).eq('id',uid);
+  if(error){wb.textContent='Opslaan mislukt: '+error.message;wb.className='warn-box show';return;}
   closePersDetail();
 }
 
@@ -2133,6 +2452,7 @@ function closePersDetail(){
 
 
 let BESCHIKBAARHEID=[];
+let AANMELDINGEN=[];
 
 // Vaste krachten werken standaard en geven aan wanneer ze NIET kunnen.
 // Part-timers doen het andersom: die staan standaard nergens ingepland en
@@ -2155,12 +2475,16 @@ function magIngepland(persoonId,datum,rol){
 // Het rooster toont standaard alleen klussen vanaf vandaag. Met de knop
 // boven de lijst kun je ook terugkijken naar wat geweest is.
 let toonEerdereKlussen=false;
+// Franklins-diensten staan standaard buiten de kluslijst en het rooster.
+let toonFranklins=false;
+let VASTE_DIENSTEN=[];
 
 async function loadAll(){
   const [
     {data:trucks},{data:personeel},{data:klussen},{data:klusTrucks},
     {data:klusGebruikers},{data:klusPdfs},{data:soorten},{data:meds},
-    {data:klusSoorten},{data:klusTruckSoorten},{data:beschData}
+    {data:klusSoorten},{data:klusTruckSoorten},{data:beschData},{data:aanmData},
+    {data:vasteData}
   ]=await Promise.all([
     sb.from('trucks').select('*').order('volgorde'),
     sb.from('personeel_publiek').select('id,naam,rol').in('rol',['part-timer','full-timer']).order('naam'),
@@ -2173,9 +2497,13 @@ async function loadAll(){
     sb.from('klus_soorten').select('*'),
     sb.from('klus_truck_soorten').select('*'),
     sb.from('beschikbaarheid').select('*').eq('status','goedgekeurd'),
+    sb.from('klus_aanmeldingen').select('*'),
+    sb.from('vaste_diensten').select('*').order('weekdag').order('volgorde'),
   ]);
   TRUCKS=trucks||[];PERSONEEL=personeel||[];SOORTEN=soorten||[];
   BESCHIKBAARHEID=beschData||[];
+  AANMELDINGEN=aanmData||[];
+  VASTE_DIENSTEN=vasteData||[];
   const tMap=Object.fromEntries(TRUCKS.map(t=>[t.id,t]));
   const pMap=Object.fromEntries(PERSONEEL.map(p=>[p.id,p]));
   const sMap=Object.fromEntries(SOORTEN.map(s=>[s.id,s]));
@@ -2198,6 +2526,11 @@ function toggleEerdere(){
   if(lijst&&lijst.scrollIntoView)lijst.scrollIntoView({behavior:'smooth',block:'start'});
 }
 
+function toggleFranklins(){
+  toonFranklins=!toonFranklins;
+  renderAll();
+}
+
 // Knop boven de kluslijst om ook eerdere klussen te tonen of weer te verbergen.
 function toonEerderBalk(){
   const lijst=document.getElementById('klusList');
@@ -2209,12 +2542,15 @@ function toonEerderBalk(){
     lijst.parentNode.insertBefore(balk,lijst);
   }
   const vandaag=fmt(new Date());
-  const aantal=KLUSSEN.filter(k=>(k.datum_eind||k.datum)<vandaag).length;
-  if(selDate||!aantal){balk.innerHTML='';return;}
-  const tekst=toonEerdereKlussen
-    ?'Alleen klussen vanaf vandaag'
-    :`&#x2191; Ook eerdere klussen tonen (${aantal})`;
-  balk.innerHTML=`<div onclick="toggleEerdere()" style="cursor:pointer;text-align:center;font-size:12px;font-weight:500;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px;margin-bottom:.75rem">${tekst}</div>`;
+  const aantal=KLUSSEN.filter(k=>k.categorie!=='franklins'&&(k.datum_eind||k.datum)<vandaag).length;
+  const fAantal=KLUSSEN.filter(k=>k.categorie==='franklins'&&(k.datum_eind||k.datum)>=vandaag).length;
+  if(selDate){balk.innerHTML='';return;}
+
+  const knop=(tekst,fn)=>`<div onclick="${fn}" style="flex:1;cursor:pointer;text-align:center;font-size:12px;font-weight:500;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px">${tekst}</div>`;
+  let html='';
+  if(aantal)html+=knop(toonEerdereKlussen?'Alleen vanaf vandaag':`&#x2191; Ook eerdere klussen (${aantal})`,'toggleEerdere()');
+  if(fAantal)html+=knop(toonFranklins?'Franklins verbergen':`Franklins tonen (${fAantal})`,'toggleFranklins()');
+  balk.innerHTML=html?`<div style="display:flex;gap:8px;margin-bottom:.75rem">${html}</div>`:'';
 }
 
 function renderAll(){
@@ -2274,9 +2610,12 @@ function renderAll(){
 
   // Klussen — standaard vanaf vandaag
   const vandaagStr=fmt(new Date());
+  // Franklins draait elke dag; die diensten zouden de kluslijst overspoelen.
+  // Ze staan er alleen tussen als je erom vraagt, of als je een dag aanklikt.
+  const zonderVast=KLUSSEN.filter(k=>toonFranklins||k.categorie!=='franklins');
   const basis=(!selDate&&!toonEerdereKlussen)
-    ?KLUSSEN.filter(k=>(k.datum_eind||k.datum)>=vandaagStr)
-    :KLUSSEN;
+    ?zonderVast.filter(k=>(k.datum_eind||k.datum)>=vandaagStr)
+    :zonderVast;
   const filtered=selDate?KLUSSEN.filter(k=>klusDagen(k).includes(selDate)):basis;
   document.getElementById('mainTitle').textContent=selDate
     ?new Date(selDate).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})
@@ -2293,10 +2632,12 @@ function renderAll(){
     const tB=k.trucks.map(t=>`<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${t.label}</span>`).join('');
     const t1=tijdFromDb(k.vertrek_tijd),t4=tijdFromDb(k.einde_feest);
     const tijdStr=t1&&t4?`${t1} → ${t4}`:t1||t4||'';
-    const soortBadges=k.truckSoorten&&k.truckSoorten.length
+    const vastBadge=k.categorie==='franklins'
+      ?'<span class="bdg" style="background:#FFFBEB;color:#B45309">Franklins</span>':'';
+    const soortBadges=vastBadge+(k.truckSoorten&&k.truckSoorten.length
       ?[...new Set(k.truckSoorten.map(ts=>ts.soort.titel))].map(t=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${t}</span>`).join('')
       :k.soorten&&k.soorten.length?k.soorten.map(s=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${s.titel}</span>`).join('')
-      :k.food?`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${k.food}</span>`:'';
+      :k.food?`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${k.food}</span>`:'');
     const pdfLinks=k.pdfs&&k.pdfs.length?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${p.url}\`,\`${p.naam}\`)">${p.naam}</span>`).join(''):'';
     return`<div class="kc" onclick="openDetail('${k.id}')">
       <div class="kc-top">
@@ -2304,7 +2645,7 @@ function renderAll(){
           ${k.naam?`<div class="knaam">${k.naam}</div>`:''}
           <div class="kdate">${datumStr}${tijdStr?` · ${tijdStr}`:''}</div>
           <div class="ktrucks">${tB}${soortBadges}</div>
-          <div class="kmeta"><strong>${k.personen} gasten</strong>${k.personeel_nodig?` &nbsp;·&nbsp; ${k.personeel_nodig} pers. nodig`:''}${k.personeel.length?' &nbsp;·&nbsp; '+k.personeel.map(p=>p.naam).join(', '):''}</div>
+          <div class="kmeta">${k.personen?`<strong>${k.personen} gasten</strong>`:'<strong>Dienst</strong>'}${k.personeel_nodig?` &nbsp;·&nbsp; ${k.personeel_nodig} pers. nodig`:''}${k.personeel.length?' &nbsp;·&nbsp; '+k.personeel.map(p=>p.naam).join(', '):''}</div>
           ${pdfLinks?`<div style="margin-top:4px">${pdfLinks}</div>`:''}
         </div>
         ${isBeheerder?`<div class="kactions" onclick="event.stopPropagation()">
@@ -2840,7 +3181,95 @@ function renderBeheer(){
   document.getElementById('truckBeheer').innerHTML=TRUCKS.map(t=>`<div class="bi" id="tb-${t.id}"><div class="bi-left"><div class="bi-name"><div class="cswatch" style="background:${t.color}"></div>${t.label}</div></div><div class="bi-actions"><button class="btn-edit" onclick="startEditTruck('${t.id}')">Bewerk</button><button class="btn-danger-sm" onclick="deleteTruck('${t.id}')">×</button></div></div>`).join('');
   document.getElementById('soortenBeheer').innerHTML=SOORTEN.map(s=>`<div class="bi" id="sb-${s.id}"><div class="bi-left"><div class="bi-name">${s.titel}</div>${s.beschrijving?`<div class="bi-desc">${s.beschrijving}</div>`:''}</div><div class="bi-actions"><button class="btn-edit" onclick="startEditSoort('${s.id}')">Bewerk</button><button class="btn-danger-sm" onclick="deleteSoort('${s.id}')">×</button></div></div>`).join('');
   loadSkills();
+  renderVasteDiensten();
 }
+
+// ── FRANKLINS: vast weekschema ──────────────────────────────────────────
+const VD_DAGEN=['Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag','Zondag'];
+
+function renderVasteDiensten(){
+  const el=document.getElementById('vasteBeheer');
+  if(!el)return;
+  const veld='font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);background:var(--surface);color:var(--text)';
+
+  el.innerHTML=VD_DAGEN.map((dagNaam,dag)=>{
+    const regels=VASTE_DIENSTEN.filter(v=>v.weekdag===dag);
+    const rijen=regels.map(v=>`
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+        <input type="text" id="vdn-${v.id}" value="${(v.naam||'').replace(/"/g,'&quot;')}" placeholder="Naam" style="${veld};flex:1;min-width:110px">
+        <input type="text" class="tijd-input" id="vds-${v.id}" value="${tijdFromDb(v.start_tijd)}" placeholder="11.00" maxlength="5" oninput="formatTijd(this)" style="${veld};width:64px">
+        <input type="text" class="tijd-input" id="vde-${v.id}" value="${tijdFromDb(v.eind_tijd)}" placeholder="20.00" maxlength="5" oninput="formatTijd(this)" style="${veld};width:64px">
+        <input type="number" id="vdp-${v.id}" value="${v.personeel_nodig||1}" min="0" max="20" inputmode="numeric" style="${veld};width:56px" title="Aantal mensen">
+        <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted);cursor:pointer">
+          <input type="checkbox" id="vda-${v.id}"${v.actief?' checked':''}> aan
+        </label>
+        <button class="btn-sm" style="font-size:11px;padding:5px 10px" onclick="bewaarVasteDienst('${v.id}')">Opslaan</button>
+        <button class="btn-danger-sm" onclick="verwijderVasteDienst('${v.id}')">&times;</button>
+      </div>`).join('');
+
+    return`<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:var(--surface)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:600">${dagNaam}</div>
+        <button class="btn-edit" onclick="voegVasteDienstToe(${dag})">+ dienst</button>
+      </div>
+      ${rijen||'<div style="font-size:12px;color:var(--muted);font-style:italic">Gesloten</div>'}
+    </div>`;
+  }).join('');
+
+  const info=document.getElementById('vasteInfo');
+  const vandaag=fmt(new Date());
+  if(info){
+    const aantal=(KLUSSEN||[]).filter(k=>k.categorie==='franklins'&&(k.datum_eind||k.datum)>=vandaag).length;
+    info.textContent=aantal?aantal+' diensten staan al klaar vanaf vandaag':'Nog geen diensten aangemaakt';
+  }
+}
+
+async function voegVasteDienstToe(weekdag){
+  const bestaand=VASTE_DIENSTEN.filter(v=>v.weekdag===weekdag);
+  const{error}=await sb.from('vaste_diensten').insert({
+    weekdag, locatie:'Franklins', naam:'Franklins',
+    start_tijd:'11:00:00', eind_tijd:'20:00:00',
+    personeel_nodig:1, volgorde:bestaand.length,
+  });
+  if(error){toast('Toevoegen mislukt: '+error.message,'fout');return;}
+  await loadAll();
+  renderVasteDiensten();
+}
+
+async function bewaarVasteDienst(id){
+  const naam=document.getElementById('vdn-'+id).value.trim()||'Franklins';
+  const start_tijd=tijdToDb(document.getElementById('vds-'+id).value);
+  const eind_tijd=tijdToDb(document.getElementById('vde-'+id).value);
+  const personeel_nodig=+document.getElementById('vdp-'+id).value||0;
+  const actief=document.getElementById('vda-'+id).checked;
+  const{error}=await sb.from('vaste_diensten')
+    .update({naam,start_tijd,eind_tijd,personeel_nodig,actief}).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  toast('Weekschema bijgewerkt');
+  await loadAll();
+  renderVasteDiensten();
+}
+
+async function verwijderVasteDienst(id){
+  if(!confirm('Deze dienst uit het weekschema halen? Al aangemaakte diensten blijven staan.'))return;
+  const{error}=await sb.from('vaste_diensten').delete().eq('id',id);
+  if(error){toast('Verwijderen mislukt: '+error.message,'fout');return;}
+  await loadAll();
+  renderVasteDiensten();
+}
+
+async function genereerVasteDiensten(){
+  const knop=document.querySelector('[onclick="genereerVasteDiensten()"]');
+  if(knop){knop.disabled=true;knop.textContent='Bezig...';}
+  const{data,error}=await sb.rpc('genereer_vaste_diensten',{p_weken:8});
+  if(knop){knop.disabled=false;knop.textContent='Diensten 8 weken vooruit aanmaken';}
+  if(error){toast('Aanmaken mislukt: '+error.message,'fout');return;}
+  toast(data?data+' nieuwe diensten aangemaakt':'Alles stond al klaar');
+  await loadAll();
+  renderVasteDiensten();
+  renderAll();
+}
+
 function startEditTruck(id){
   const t=TRUCKS.find(x=>x.id===id);
   document.getElementById('tb-'+id).innerHTML=`<div style="flex:1"><div class="bi-edit-form"><div style="display:flex;gap:6px;align-items:center"><input type="color" id="ec-${id}" value="${t.color}" style="width:32px;height:32px;border:1px solid var(--border);border-radius:5px;cursor:pointer;padding:1px"><input type="text" id="en-${id}" value="${t.label}" style="flex:1;font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:var(--font)"></div><div class="bi-edit-row"><button class="btn-danger-sm" onclick="renderBeheer()">Annuleer</button><button class="btn-sm" onclick="saveTruck('${id}')">Opslaan</button></div></div></div>`;
@@ -4162,6 +4591,7 @@ async function keurBeschikbaarheid(id,status){
 // teruggeeft: naam, datum, tijden, adres en wie er al staat. Notities en
 // klantgegevens blijven binnen de planning.
 let OPEN_KLUSSEN=[];
+let toonAlleFranklins=false;
 
 async function loadOpenKlussen(){
   const el=document.getElementById('okLijst');
@@ -4189,7 +4619,7 @@ function renderOpenKlussen(){
     return;
   }
 
-  el.innerHTML=lijst.map(k=>{
+  const kaart=k=>{
     const datum=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
     const tot=k.datum_eind&&k.datum_eind!==k.datum
       ?' t/m '+parseDate(k.datum_eind).toLocaleDateString('nl-NL',{day:'numeric',month:'long'}):'';
@@ -4230,7 +4660,26 @@ function renderOpenKlussen(){
       </div>
       <div style="margin-top:12px">${knop}</div>
     </div>`;
-  }).join('');
+  };
+
+  // Franklins draait dagelijks door; die diensten staan onder een eigen kopje
+  // zodat de gewone klussen niet ondersneeuwen.
+  const gewoon=lijst.filter(k=>k.categorie!=='franklins');
+  const vast=lijst.filter(k=>k.categorie==='franklins');
+  const kopje=(t,n)=>`<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 .625rem">${t} (${n})</div>`;
+
+  let html='';
+  if(gewoon.length)html+=kopje('Klussen',gewoon.length)+gewoon.map(kaart).join('');
+  if(vast.length){
+    html+=`<div style="${gewoon.length?'margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border)':''}">`
+      +kopje('Franklins &mdash; snackbar',vast.length)
+      +`<div id="okFranklinsLijst"${vast.length>7&&!toonAlleFranklins?' data-ingekort="1"':''}>`
+      +(toonAlleFranklins?vast:vast.slice(0,7)).map(kaart).join('')
+      +`</div>`
+      +(vast.length>7?`<div onclick="toonAlleFranklins=!toonAlleFranklins;renderOpenKlussen()" style="cursor:pointer;text-align:center;font-size:12px;font-weight:500;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px">${toonAlleFranklins?'Minder tonen':'Alle '+vast.length+' Franklins-dagen tonen'}</div>`:'')
+      +`</div>`;
+  }
+  el.innerHTML=html;
 }
 
 async function meldAan(klusId){
@@ -4360,16 +4809,31 @@ function pbSelectDay(y,m,d){
   pbOpenDrop=null;
   pbRenderKal();pbRenderContent();
 }
-function pbSetFilter(f,btn){pbFilter=f;document.querySelectorAll('.pb-fbtn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');pbRenderContent();}
+function pbSetFilter(f,btn){pbFilter=f;document.querySelectorAll('.pb-fbtn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');pbRenderKal();pbRenderContent();}
 function pbToggleDrop(id){pbOpenDrop=pbOpenDrop===id?null:id;pbRenderContent();}
 function pbWijsToe(klusId,mwId){
   const klus=KLUSSEN.find(k=>k.id===klusId);const mw=PERSONEEL.find(p=>p.id===mwId);
   if(!klus||!mw)return;if(!klus.personeel)klus.personeel=[];
   if(klus.personeel.find(p=>p.id===mwId))return;
   if(klus.personeel.length>=(klus.personeel_nodig||0)&&(klus.personeel_nodig||0)>0)return;
+
+  // Wie zich heeft aangemeld mag altijd; anders moet de dag vrij zijn.
+  const heeftGemeld=AANMELDINGEN.some(a=>a.klus_id===klusId&&a.gebruiker_id===mwId&&a.status!=='afgewezen');
+  if(!heeftGemeld){
+    const c=magIngepland(mwId,klus.datum,mw.rol);
+    if(!c.ok){toast(mw.naam+' '+c.reden,'fout');return;}
+  }
+
   klus.personeel.push({id:mw.id,naam:mw.naam});pbOpenDrop=null;
   pbShowToast('toe',mw.naam,klus.naam);
   sb.from('klus_gebruikers').insert({klus_id:klusId,gebruiker_id:mwId}).then(()=>{});
+  if(heeftGemeld){
+    sb.from('klus_aanmeldingen').update({status:'geaccepteerd'})
+      .eq('klus_id',klusId).eq('gebruiker_id',mwId).then(()=>{
+        const a=AANMELDINGEN.find(x=>x.klus_id===klusId&&x.gebruiker_id===mwId);
+        if(a)a.status='geaccepteerd';
+      });
+  }
   sendPushNotificatie(mwId, 'Je bent ingepland!', `Je bent toegewezen aan ${klus.naam}.`);
   pbRenderKal();pbRenderContent();
 }
@@ -4442,7 +4906,12 @@ function pbRenderKal(){
   const first=new Date(pbViewYear,pbViewMonth,1);let sd=first.getDay();sd=sd===0?6:sd-1;
   const dim=new Date(pbViewYear,pbViewMonth+1,0).getDate(),pd=new Date(pbViewYear,pbViewMonth,0).getDate();
   const dm={};
-  for(let d=1;d<=dim;d++){const dt=new Date(pbViewYear,pbViewMonth,d);const dagK=pbGetKlussenVoorDag(dt);if(dagK.length)dm[d]=[...new Set(dagK.map(k=>pbGetStatus(k)))];}
+  for(let d=1;d<=dim;d++){
+    const dt=new Date(pbViewYear,pbViewMonth,d);
+    const dagK=pbGetKlussenVoorDag(dt).filter(k=>
+      pbFilter==='franklins'?k.categorie==='franklins':k.categorie!=='franklins');
+    if(dagK.length)dm[d]=[...new Set(dagK.map(k=>pbGetStatus(k)))];
+  }
 
   let html='';
   for(let i=0;i<sd;i++)html+=`<div class="pb-day pb-other"><span class="pb-dn">${pd-sd+1+i}</span></div>`;
@@ -4466,7 +4935,14 @@ function pbRenderContent(){
   const leeg=dagK.filter(k=>k._status==='leeg').length,deel=dagK.filter(k=>k._status==='deel').length,vol=dagK.filter(k=>k._status==='vol').length;
   const sumEl=document.getElementById('pbSum');
   if(sumEl)sumEl.innerHTML=`<div class="pb-sum-card"><div class="pb-sum-num leeg">${leeg}</div><div class="pb-sum-lbl">Helemaal leeg</div></div><div class="pb-sum-card"><div class="pb-sum-num deel">${deel}</div><div class="pb-sum-lbl">Deels ingevuld</div></div><div class="pb-sum-card"><div class="pb-sum-num vol">${vol}</div><div class="pb-sum-lbl">Volledig bezet</div></div>`;
-  const filtered=dagK.filter(k=>pbFilter==='alle'||(pbFilter==='incompleet'&&(k._status==='leeg'||k._status==='deel'))||(pbFilter==='compleet'&&k._status==='vol'));
+  const filtered=dagK.filter(k=>{
+    const vast=k.categorie==='franklins';
+    if(pbFilter==='franklins')return vast;
+    if(vast)return false;                     // Franklins heeft zijn eigen filter
+    if(pbFilter==='incompleet')return k._status==='leeg'||k._status==='deel';
+    if(pbFilter==='compleet')return k._status==='vol';
+    return true;
+  });
   const dow=PB_DAGEN_LANG[pbSelDate.getDay()];
   const dateStr=dow+' '+pbSelDate.getDate()+' '+PB_MAANDEN[pbSelDate.getMonth()].toLowerCase()+' '+pbSelDate.getFullYear();
   const lblEl=document.getElementById('pbDagLbl'),statsEl=document.getElementById('pbDagStats');
@@ -4480,7 +4956,19 @@ function pbRenderContent(){
   filtered.forEach(k=>{
     const st=k._status,stLabel=st==='leeg'?'Leeg':st==='vol'?'Vol':'Deels';
     const shifts=pbGetShifts(k);const openSlots=shifts.reduce((s,sh)=>s+(sh.totaal-sh.bezet),0);
-    const beschikbaar=PERSONEEL.filter(p=>!k.personeel||!k.personeel.find(x=>x.id===p.id));
+    // Alleen mensen die nog niet op deze klus staan, en gesorteerd op
+    // bruikbaarheid: eerst wie zich aangemeld heeft, dan wie kan, dan de rest.
+    const nogNiet=PERSONEEL.filter(p=>!k.personeel||!k.personeel.find(x=>x.id===p.id));
+    const aangemeldIds=new Set(AANMELDINGEN
+      .filter(a=>a.klus_id===k.id&&a.status!=='afgewezen')
+      .map(a=>a.gebruiker_id));
+    const gemeld=[], kanWel=[], kanNiet=[];
+    nogNiet.forEach(p=>{
+      if(aangemeldIds.has(p.id)){gemeld.push(p);return;}
+      const c=magIngepland(p.id,k.datum,p.rol);
+      (c.ok?kanWel:kanNiet).push({...p,reden:c.reden});
+    });
+    const beschikbaar=gemeld.concat(kanWel);
     const isOpen=pbOpenDrop===k.id;const truckKleur=(k.trucks&&k.trucks.length)?k.trucks[0].color:'#6366F1';
     html+=`<div class="pb-klus ${st}"><div class="pb-klus-hdr"><div><div class="pb-knaam">${k.naam}</div><div class="pb-kloc">${k.adres||'Locatie onbekend'}</div></div><span class="pb-badge ${st}"><span class="pb-bdot"></span>${stLabel}</span></div>`;
     shifts.forEach(sh=>{
@@ -4490,8 +4978,23 @@ function pbRenderContent(){
     });
     if(isOpen){
       html+=`<div class="pb-dd">`;
-      if(!beschikbaar.length)html+=`<div class="pb-mw" style="color:var(--muted);cursor:default">Alle medewerkers al ingepland</div>`;
-      else beschikbaar.forEach(mw=>{const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();html+=`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}')"><div class="pb-av" style="background:${truckKleur}25;color:${truckKleur}">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol">${mw.rol}</span></div>`;});
+      const regel=(mw,extra)=>{
+        const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+        return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}')"><div class="pb-av" style="background:${truckKleur}25;color:${truckKleur}">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol">${extra||mw.rol}</span></div>`;
+      };
+      const kopje=t=>`<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px 4px">${t}</div>`;
+
+      if(gemeld.length)html+=kopje('Heeft zich aangemeld')+gemeld.map(mw=>regel(mw,'aangemeld ✋')).join('');
+      if(kanWel.length)html+=kopje(gemeld.length?'Verder beschikbaar':'Beschikbaar')+kanWel.map(mw=>regel(mw)).join('');
+      if(!beschikbaar.length)html+=`<div class="pb-mw" style="color:var(--muted);cursor:default">Niemand beschikbaar op deze dag</div>`;
+
+      if(kanNiet.length){
+        html+=kopje('Niet beschikbaar');
+        html+=kanNiet.map(mw=>{
+          const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+          return`<div class="pb-mw" style="opacity:.5;cursor:not-allowed" title="${mw.naam} ${mw.reden}"><div class="pb-av" style="background:#F3F4F6;color:#9CA3AF">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol" style="color:#DC2626">${mw.reden}</span></div>`;
+        }).join('');
+      }
       html+=`</div>`;
     }
     html+=`</div>`;
