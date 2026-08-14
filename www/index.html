@@ -66,7 +66,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .cd.sel{border-color:var(--text);background:#fff;opacity:1}
 .cd.has-klus .dr{display:flex;justify-content:center;gap:2px;margin-top:2px}
 .dn{font-size:11px;color:var(--text)}
-.dot{width:4px;height:4px;border-radius:50%}
+.dot{width:6px;height:6px;border-radius:50%}
 .wdiv{grid-column:1/-1;border-top:1px solid var(--border);margin:4px 0}
 .lgd{margin-top:1rem;display:flex;flex-direction:column;gap:3px}
 .lgr-btn{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer;padding:6px 8px;border-radius:7px;background:transparent;border:none;text-align:left;width:100%;font-family:var(--font)}
@@ -88,11 +88,12 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .tl-row{display:grid;grid-template-columns:80px 1fr;gap:8px;align-items:center}
 .tl-name{font-size:11px;color:var(--muted);text-align:right;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tl-cells{display:grid;grid-template-columns:repeat(14,1fr);gap:3px}
-.tc{height:24px;border-radius:4px;border:1px solid var(--border);background:var(--bg);cursor:pointer}
-.tc.busy{border-width:1px}
+.tc{height:26px;border-radius:5px;border:1px solid var(--border);background:var(--bg);cursor:pointer;transition:transform .1s}
+.tc.busy{border-width:0;box-shadow:inset 0 -2px 0 rgba(0,0,0,.18)}
+.tc.busy:hover{transform:scale(1.08)}
 .tc.tod-col{outline:2.5px solid #2563EB;outline-offset:-1px}
 .tc.sel-col{outline:2px solid var(--text);outline-offset:-1px}
-.tc.past-col{background:#EDECEA !important;border-color:#DEDAD5 !important;opacity:.45;cursor:default}
+.tc.past-col{background:#EDECEA !important;border-color:#DEDAD5 !important;box-shadow:none !important;opacity:.45;cursor:default}
 .kl{display:flex;flex-direction:column;gap:8px}
 .kc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.875rem 1rem;cursor:pointer}
 .kc:hover{box-shadow:0 1px 4px rgba(0,0,0,.06)}
@@ -665,6 +666,9 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 .pb-wijs:hover{border-color:#2563EB;color:#2563EB;background:#EFF6FF}
 .pb-wijs.open{background:#EFF6FF;color:#1E40AF;border-color:#BFDBFE}
 .pb-namen{display:flex;flex-wrap:wrap;gap:4px;padding:5px 0 2px}
+.pb-losregel{display:flex;gap:6px;align-items:center;padding:6px 0 2px}
+.pb-losregel input{flex:1;min-width:0;font-size:11px;font-family:var(--font);padding:5px 9px;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--text)}
+.pb-losregel input:focus{outline:none;border-color:var(--text)}
 .pb-naam-pill{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:500;color:#166534;background:#F0FDF4;border:1px solid #BBF7D0;padding:2px 5px 2px 9px;border-radius:20px}
 .pb-remove{display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;border:none;background:transparent;cursor:pointer;color:#166534;font-size:13px;padding:0;line-height:1}
 .pb-remove:hover{background:#BBF7D0}
@@ -1458,6 +1462,16 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="chips" id="losseKrachtenLijst" style="margin-top:8px"></div>
     </div>
     <div class="fr"><span class="fl">Adres</span><input type="text" id="fAdres" placeholder="Locatie of adres"></div>
+    <div class="fr">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:var(--text)">
+        <input type="checkbox" id="fMilieuzone" style="width:18px;height:18px;flex-shrink:0">
+        <span>Locatie ligt in een <b>milieuzone</b></span>
+      </label>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px">
+        Zet dit aan als de klus in een milieuzone valt. Het staat dan duidelijk bij de klus,
+        zodat je op tijd kijkt welke truck er naar binnen mag.
+      </div>
+    </div>
     <div class="two">
       <div class="fr"><span class="fl">Contactpersoon</span><input type="text" id="fContact" placeholder="Naam"></div>
       <div class="fr"><span class="fl">Telefoonnummer</span><input type="text" id="fTelefoon" placeholder="06-12345678"></div>
@@ -2899,7 +2913,10 @@ function renderAll(){
     <div class="tl-cells">${days.map(d=>{
       const ds=fmt(d);const busy=KLUSSEN.some(k=>klusDagen(k).includes(ds)&&k.trucks.some(t=>t.id===tr.id));
       const isPast=ds<todayStr;
-      return`<div class="tc${busy?' busy':''}${ds===todayStr?' tod-col':''}${isPast?' past-col':''}${ds===selDate?' sel-col':''}" onclick="${isPast?'':` toggleDate('${ds}')`}" style="${busy&&!isPast?`background:${hbg(tr.color)};border-color:${tr.color}`:busy&&isPast?`background:${hbg(tr.color)}40;border-color:${tr.color}40`:''}" title="${tr.label} — ${busy?'bezet':'vrij'}"></div>`;
+      // Bezette dagen krijgen de volle kleur van de truck. Met een lichte tint
+      // was op een druk scherm nauwelijks te zien wat bezet was.
+      const stijl=busy?(isPast?`background:${tr.color}55`:`background:${tr.color}`):'';
+      return`<div class="tc${busy?' busy':''}${ds===todayStr?' tod-col':''}${isPast?' past-col':''}${ds===selDate?' sel-col':''}" onclick="${isPast?'':` toggleDate('${ds}')`}" style="${stijl}" title="${tr.label} — ${busy?'bezet':'vrij'}"></div>`;
     }).join('')}</div>
   </div>`).join('');
 
@@ -2937,8 +2954,9 @@ function renderAll(){
     const tB=k.trucks.map(t=>`<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${t.label}</span>`).join('');
     const t1=tijdFromDb(k.vertrek_tijd),t4=tijdFromDb(k.einde_feest);
     const tijdStr=t1&&t4?`${t1} → ${t4}`:t1||t4||'';
-    const vastBadge=k.categorie==='franklins'
-      ?'<span class="bdg" style="background:#FFFBEB;color:#B45309">Franklins</span>':'';
+    const vastBadge=(k.categorie==='franklins'
+      ?'<span class="bdg" style="background:#FFFBEB;color:#B45309">Franklins</span>':'')
+      +(k.milieuzone?'<span class="bdg" style="background:#ECFDF5;color:#065F46">Milieuzone</span>':'');
     const soortBadges=vastBadge+(k.truckSoorten&&k.truckSoorten.length
       ?[...new Set(k.truckSoorten.map(ts=>ts.soort.titel))].map(t=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${t}</span>`).join('')
       :k.soorten&&k.soorten.length?k.soorten.map(s=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${s.titel}</span>`).join('')
@@ -3145,6 +3163,7 @@ function openModal(id=null){
   document.getElementById('herhalingEindRow').style.display='none';
   document.getElementById('herhalingPreview').textContent='';
   document.getElementById('fAdres').value=k?.adres||'';
+  document.getElementById('fMilieuzone').checked=!!k?.milieuzone;
   document.getElementById('fContact').value=k?.contactpersoon||'';
   document.getElementById('fTelefoon').value=k?.telefoon||'';
   document.getElementById('warnBox').className='warn-box';
@@ -3264,6 +3283,7 @@ async function saveKlus(){
   const personeel_nodig=parseInt(document.getElementById('fPersoneelNodig').value)||0;
   const notitie=document.getElementById('fNotitie').value||'';
   const adres=document.getElementById('fAdres').value.trim();
+  const milieuzone=document.getElementById('fMilieuzone').checked;
   const contactpersoon=document.getElementById('fContact').value.trim();
   const telefoon=document.getElementById('fTelefoon').value.trim();
   const herhalingPatroon=document.getElementById('fHerhaling').value;
@@ -3330,7 +3350,7 @@ async function saveKlus(){
     };
 
     if(editId){
-      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,contactpersoon,telefoon}).eq('id',editId);
+      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon}).eq('id',editId);
       if(updErr)throw new Error('Klus opslaan mislukt: '+updErr.message);
       await sb.from('klus_trucks').delete().eq('klus_id',editId);
       await sb.from('klus_gebruikers').delete().eq('klus_id',editId);
@@ -3350,7 +3370,7 @@ async function saveKlus(){
       // Maak klussen aan voor alle datums (herhaling)
       for(let i=0;i<allDatums.length;i++){
         const klusDatum=allDatums[i];
-        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,contactpersoon,telefoon}).select('id');
+        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon}).select('id');
         if(error||!data||!data.length)throw new Error(error?.message||'Insert mislukt');
         const thisKlusId=data[0].id;
         if(i===0)klusId=thisKlusId; // gebruik eerste voor PDFs
@@ -3420,7 +3440,9 @@ function openDetail(id){
     soortEl.innerHTML=sl.length?sl.map(s=>`<span style="font-size:13px">${s.titel}</span>`).join(', '):'–';
   }
   document.getElementById('detailPersonen').textContent=k.personen+' personen';
-  const ad=document.getElementById('detailAdresSection');ad.style.display=k.adres?'':'none';document.getElementById('detailAdres').textContent=k.adres||'';
+  const ad=document.getElementById('detailAdresSection');ad.style.display=(k.adres||k.milieuzone)?'':'none';
+  document.getElementById('detailAdres').innerHTML=(k.adres||'')+
+    (k.milieuzone?`<div style="margin-top:6px"><span class="bdg" style="background:#ECFDF5;color:#065F46">Let op: milieuzone</span></div>`:'');
   const cs=document.getElementById('detailContactSection');cs.style.display=(k.contactpersoon||k.telefoon)?'':'none';
   document.getElementById('detailContact').textContent=k.contactpersoon||'';
   const tel=document.getElementById('detailTelefoon');tel.style.display=k.telefoon?'':'none';
@@ -5650,6 +5672,34 @@ function pbWijsToe(klusId,mwId){
   sendPushNotificatie(mwId, 'Je bent ingepland!', `Je bent toegewezen aan ${klus.naam}.`);
   pbRenderKal();pbRenderContent();
 }
+// Losse krachten rechtstreeks vanaf het planningsbord toevoegen en weghalen.
+async function pbVoegLosToe(klusId){
+  const veld=document.getElementById('pbLos-'+klusId);
+  if(!veld)return;
+  const naam=(veld.value||'').trim();
+  if(!naam){veld.focus();return;}
+  const klus=KLUSSEN.find(k=>k.id===klusId);
+  if(klus&&(klus.losse||[]).some(l=>l.naam.toLowerCase()===naam.toLowerCase())){
+    pbShowToast('af',naam,'staat er al bij');
+    veld.value='';return;
+  }
+  const{data,error}=await sb.from('klus_losse_personen')
+    .insert({klus_id:klusId,naam}).select('*').single();
+  if(error){toast('Toevoegen mislukt: '+error.message,'fout');return;}
+  if(klus){if(!klus.losse)klus.losse=[];klus.losse.push(data);}
+  veld.value='';
+  pbShowToast('toe',naam,klus?klus.naam:'de klus');
+  pbRenderContent();
+}
+
+async function pbVerwijderLos(id,naam){
+  const{error}=await sb.from('klus_losse_personen').delete().eq('id',id);
+  if(error){toast('Verwijderen mislukt: '+error.message,'fout');return;}
+  (KLUSSEN||[]).forEach(k=>{if(k.losse)k.losse=k.losse.filter(l=>l.id!==id);});
+  pbShowToast('af',naam,'de klus');
+  pbRenderContent();
+}
+
 function pbVerwijder(klusId,mwId,naam){
   const klus=KLUSSEN.find(k=>k.id===klusId);if(!klus||!klus.personeel)return;
   klus.personeel=klus.personeel.filter(p=>p.id!==mwId);
@@ -5783,12 +5833,19 @@ function pbRenderContent(){
     });
     const beschikbaar=gemeld.concat(kanWel);
     const isOpen=pbOpenDrop===k.id;const truckKleur=(k.trucks&&k.trucks.length)?k.trucks[0].color:'#6366F1';
-    html+=`<div class="pb-klus ${st}"><div class="pb-klus-hdr"><div><div class="pb-knaam">${k.naam}</div><div class="pb-kloc">${k.adres||'Locatie onbekend'}</div></div><span class="pb-badge ${st}"><span class="pb-bdot"></span>${stLabel}</span></div>`;
+    html+=`<div class="pb-klus ${st}"><div class="pb-klus-hdr"><div><div class="pb-knaam">${k.naam}${k.milieuzone?' <span class="bdg" style="background:#ECFDF5;color:#065F46;font-size:9px">Milieuzone</span>':''}</div><div class="pb-kloc">${k.adres||'Locatie onbekend'}</div></div><span class="pb-badge ${st}"><span class="pb-bdot"></span>${stLabel}</span></div>`;
     shifts.forEach(sh=>{
       const shSt=sh.bezet>=sh.totaal?'vol':sh.bezet===0?'leeg':'deel';
       html+=`<div class="pb-shift"><span class="pb-stijd">${sh.tijd}</span><span class="pb-steam">${sh.team}</span><div class="pb-sright"><span class="pb-badge ${shSt}">${sh.bezet}/${sh.totaal}</span>${openSlots>0?`<button class="pb-wijs${isOpen?' open':''}" onclick="pbToggleDrop('${k.id}')">${isOpen?'&#x2715; Sluiten':'+ Toewijzen'}</button>`:''}</div></div>`;
-      if(sh.namen&&sh.namen.length)html+=`<div class="pb-namen">${sh.namen.map(naam=>{const mwObj=PERSONEEL.find(p=>p.naam===naam);const mwId=mwObj?mwObj.id:'';return`<span class="pb-naam-pill">${naam}<button class="pb-remove" onclick="pbVerwijder('${k.id}','${mwId}','${naam}')" title="Verwijder">&#x2715;</button></span>`;}).join('')}</div>`;
+      const losPills=(k.losse||[]).map(l=>`<span class="pb-naam-pill" style="background:#FFFBEB;color:#92400E" title="Losse kracht${l.telefoon?' · '+l.telefoon:''}">${l.naam} (los)<button class="pb-remove" onclick="pbVerwijderLos('${l.id}','${l.naam}')" title="Verwijder">&#x2715;</button></span>`).join('');
+      if((sh.namen&&sh.namen.length)||losPills)html+=`<div class="pb-namen">${(sh.namen||[]).map(naam=>{const mwObj=PERSONEEL.find(p=>p.naam===naam);const mwId=mwObj?mwObj.id:'';return`<span class="pb-naam-pill">${naam}<button class="pb-remove" onclick="pbVerwijder('${k.id}','${mwId}','${naam}')" title="Verwijder">&#x2715;</button></span>`;}).join('')}${losPills}</div>`;
     });
+
+    // Losse kracht er direct bij zetten, zonder de klus te hoeven bewerken.
+    html+=`<div class="pb-losregel">
+      <input type="text" id="pbLos-${k.id}" placeholder="Losse kracht (naam)" onkeydown="if(event.key==='Enter')pbVoegLosToe('${k.id}')">
+      <button class="pb-wijs" onclick="pbVoegLosToe('${k.id}')">+ Los</button>
+    </div>`;
     if(isOpen){
       html+=`<div class="pb-dd">`;
       const regel=(mw,extra)=>{
