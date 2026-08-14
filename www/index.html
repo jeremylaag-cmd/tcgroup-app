@@ -1697,6 +1697,49 @@ function switchNav(pageId,btn){
   });
 }
 
+// ── ANDROID TERUG-KNOP ──
+// Android-toestellen hebben een terugknop of terugveeg. Zonder afhandeling
+// sluit die meteen de hele app, ook midden in een formulier. We sluiten
+// daarom eerst wat er open staat (menu, modaal venster) en gaan pas daarna
+// een pagina terug. Staat er niets meer open, dan gaat de app naar de
+// achtergrond in plaats van dat hij afsluit.
+let PAGINA_HIST=[];
+function onthoudPagina(id){
+  if(PAGINA_HIST[PAGINA_HIST.length-1]===id)return;
+  PAGINA_HIST.push(id);
+  if(PAGINA_HIST.length>30)PAGINA_HIST.shift();
+}
+function sluitBovensteLaag(){
+  const drawer=document.getElementById('drawer');
+  if(drawer&&drawer.classList.contains('open')){closeDrawer();return true;}
+  const lagen=[...document.querySelectorAll('.modal-overlay.open,.plan-overlay.open,.med-detail-overlay.open,.detail-overlay.open')];
+  if(lagen.length){
+    lagen[lagen.length-1].classList.remove('open');
+    document.body.style.overflow='';
+    return true;
+  }
+  return false;
+}
+function gaNaarPagina(id){
+  const knop=[...document.querySelectorAll('.bnav-item')].find(b=>(b.getAttribute('onclick')||'').includes("'"+id+"'"));
+  if(knop)knop.click();
+  else showPage(id,null);
+}
+function terugKnop(){
+  if(sluitBovensteLaag())return;
+  if(PAGINA_HIST.length>1){
+    PAGINA_HIST.pop();                              // huidige pagina weg
+    const vorige=PAGINA_HIST.pop();                 // showPage zet hem zo terug
+    gaNaarPagina(vorige);
+    return;
+  }
+  const App=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.App;
+  if(App&&App.minimizeApp)App.minimizeApp();
+}
+if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.App){
+  window.Capacitor.Plugins.App.addListener('backButton',()=>terugKnop());
+}
+
 // ── DRAWER ──
 function openDrawer(){
   document.getElementById('drawer').classList.add('open');
@@ -2227,6 +2270,7 @@ function showPage(id,btn){
   if(id==='uren-beheer')loadUrenBeheer();
   if(id==='rooster'&&CURRENT_ROL!=='beheerder')loadPersoonlijkSchemaRooster();
   if(id==='planning-beheer'){pbInit();loadAanmeldingen();}
+  onthoudPagina(id);
 }
 
 
@@ -5900,6 +5944,19 @@ async function initPushNotifications(){
   try {
     const Push=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;
     if(!Push||pushGestart)return;
+
+    // Op Android lopen pushmeldingen via Firebase Cloud Messaging. Zolang er
+    // geen Firebase-project is (geen google-services.json in de Android-map)
+    // klapt Push.register() de hele app eruit met "Default FirebaseApp is not
+    // initialized". We slaan het registreren daar dus over; de rest van de app
+    // werkt gewoon. Zodra Firebase is ingericht mag deze afslag weg.
+    const platform=(window.Capacitor&&window.Capacitor.getPlatform)?window.Capacitor.getPlatform():'web';
+    if(platform==='android'&&!window.FIREBASE_KLAAR){
+      pushGestart=true;
+      console.warn('Pushmeldingen staan uit op Android: Firebase is nog niet ingericht.');
+      return;
+    }
+
     pushGestart=true;
 
     // Eerst luisteren, dan pas registreren. Andersom kan het toestel zijn token
