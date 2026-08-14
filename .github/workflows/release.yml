@@ -7,6 +7,7 @@ on:
     branches: [main]
     paths:
       - 'www/**'
+      - 'web/**'
       - '.github/workflows/release.yml'
   workflow_dispatch:
 
@@ -86,6 +87,10 @@ jobs:
           <li><a href="dist.zip">dist.zip</a> — de bundel die de app downloadt</li></ul>
           </body></html>
           EOF
+
+      - name: Losse pagina's meenemen
+        run: |
+          if [ -d web ]; then cp -R web/. site/; fi
 
       - name: Pages voorbereiden
         uses: actions/configure-pages@v5
