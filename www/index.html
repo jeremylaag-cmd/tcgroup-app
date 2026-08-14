@@ -939,6 +939,16 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 
       <div class="pb-main">
         <div class="pb-sum" id="pbSum"></div>
+
+        <!-- Aanmeldingen van personeel: hier wil je ze zien, tijdens het indelen -->
+        <div class="sc" id="aanmeldKaart" style="margin-bottom:1rem;display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.875rem">
+            <div class="st">Aanmeldingen voor klussen</div>
+            <span id="aanmeldCount" style="font-size:11px;background:#FFFBEB;color:#92400E;border-radius:20px;padding:2px 8px;font-weight:600"></span>
+          </div>
+          <div id="aanmeldList"><div class="spin">Laden...</div></div>
+        </div>
+
         <div class="pb-filter">
           <button class="pb-fbtn on" onclick="pbSetFilter('alle',this)">Alle klussen</button>
           <button class="pb-fbtn" onclick="pbSetFilter('incompleet',this)">Incompleet</button>
@@ -1355,12 +1365,6 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         <div id="beschAgenda"><div class="spin">Laden...</div></div>
       </div>
 
-      <!-- Aanmeldingen van part-timers -->
-      <div class="sc" style="margin-bottom:1.25rem">
-        <div class="bt" style="margin-bottom:.875rem">Aanmeldingen voor klussen</div>
-        <div id="aanmeldList"><div class="spin">Laden...</div></div>
-      </div>
-
       <!-- Verzoeken lijst -->
       <div class="sc">
         <div class="bt" style="margin-bottom:.875rem">Openstaande verzoeken</div>
@@ -1430,6 +1434,15 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="fr"><span class="fl">Startdatum <span style="color:#DC2626">*</span></span><input type="date" id="fDatum" onchange="onDateChange()"></div>
       <div class="fr"><span class="fl">Einddatum <span style="color:var(--muted);font-weight:400">(optioneel)</span></span><input type="date" id="fDatumEind"></div>
     </div>
+    <div class="fr">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:var(--text)">
+        <input type="checkbox" id="fMilieuzone" style="width:18px;height:18px;flex-shrink:0">
+        <span>Locatie ligt in een <b>milieuzone</b></span>
+      </label>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px">
+        Kijk dan even welke truck er naar binnen mag voordat je hem hieronder koppelt.
+      </div>
+    </div>
     <div class="fr"><span class="fl">Trucks <span style="color:#DC2626">*</span> <span style="color:var(--muted);font-weight:400">(min. 1)</span></span><div class="chips" id="truckChips"></div><div class="chip-warn" id="truckWarn"></div></div>
     <div class="fr"><span class="fl">Tijden <span style="color:#DC2626">*</span></span>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px">
@@ -1462,16 +1475,6 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="chips" id="losseKrachtenLijst" style="margin-top:8px"></div>
     </div>
     <div class="fr"><span class="fl">Adres</span><input type="text" id="fAdres" placeholder="Locatie of adres"></div>
-    <div class="fr">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:var(--text)">
-        <input type="checkbox" id="fMilieuzone" style="width:18px;height:18px;flex-shrink:0">
-        <span>Locatie ligt in een <b>milieuzone</b></span>
-      </label>
-      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px">
-        Zet dit aan als de klus in een milieuzone valt. Het staat dan duidelijk bij de klus,
-        zodat je op tijd kijkt welke truck er naar binnen mag.
-      </div>
-    </div>
     <div class="two">
       <div class="fr"><span class="fl">Contactpersoon</span><input type="text" id="fContact" placeholder="Naam"></div>
       <div class="fr"><span class="fl">Telefoonnummer</span><input type="text" id="fTelefoon" placeholder="06-12345678"></div>
@@ -2217,13 +2220,13 @@ function showPage(id,btn){
   if(id==='beheer')renderBeheer();
   if(id==='accounts')loadAccounts();
   if(id==='beschikbaarheid')loadPersoonlijkSchema();
-  if(id==='beschikbaarheid-beheer'){loadAlleBeschikbaarheid();loadAanmeldingen();}
+  if(id==='beschikbaarheid-beheer')loadAlleBeschikbaarheid();
   if(id==='open-klussen')loadOpenKlussen();
   if(id==='profiel')loadProfiel();
   if(id==='uren')loadUrenPersoneel();
   if(id==='uren-beheer')loadUrenBeheer();
   if(id==='rooster'&&CURRENT_ROL!=='beheerder')loadPersoonlijkSchemaRooster();
-  if(id==='planning-beheer')pbInit();
+  if(id==='planning-beheer'){pbInit();loadAanmeldingen();}
 }
 
 
@@ -5528,6 +5531,8 @@ async function trekAanmeldingIn(klusId){
 // ── AANMELDINGEN BEOORDELEN (beheerder) ───────────────────────────────────
 async function loadAanmeldingen(){
   const el=document.getElementById('aanmeldList');
+  const kaart=document.getElementById('aanmeldKaart');
+  const teller=document.getElementById('aanmeldCount');
   if(!el)return;
   el.innerHTML='<div class="spin">Laden...</div>';
   const[{data:aanm,error},{data:mensen}]=await Promise.all([
@@ -5538,6 +5543,9 @@ async function loadAanmeldingen(){
   const naamVan=Object.fromEntries((mensen||[]).map(m=>[m.id,m.naam]));
 
   const open=(aanm||[]).filter(a=>a.status==='aangemeld');
+  // De kaart staat alleen in beeld als er iets te beslissen valt.
+  if(kaart)kaart.style.display=open.length?'':'none';
+  if(teller)teller.textContent=open.length?open.length+' nieuw':'';
   if(!open.length){el.innerHTML='<div class="empty" style="padding:.75rem 0;font-size:12px">Geen openstaande aanmeldingen</div>';return;}
 
   el.innerHTML=open.map(a=>{
