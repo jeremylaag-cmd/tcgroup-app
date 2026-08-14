@@ -1061,6 +1061,16 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           </div>
         </div>
 
+        <!-- Meldingen testen (alleen beheerder) -->
+        <div class="detail-section" id="testMeldingBlok" style="display:none">
+          <div class="detail-label">Meldingen</div>
+          <div style="font-size:11px;color:var(--muted);line-height:1.5;margin:2px 0 6px">
+            Controleer of pushmeldingen op dit toestel aankomen.
+          </div>
+          <button class="btn-sm" onclick="testMelding()" style="padding:8px 14px">Stuur mezelf een testmelding</button>
+          <div id="testMeldingUitslag" style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:8px"></div>
+        </div>
+
         <!-- Uitloggen -->
         <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border)">
           <button onclick="doLogout()" style="width:100%;background:#FEF2F2;color:#991B1B;border:1px solid #FECACA;border-radius:10px;padding:13px;font-size:15px;font-weight:500;cursor:pointer;font-family:var(--font)">Uitloggen</button>
@@ -3072,6 +3082,11 @@ async function saveKlus(){
     // Werd alleen bij een NIEUWE klus gedaan; bij bewerken werden ze wel
     // verwijderd maar nooit teruggezet, waardoor elke bewerking de klus
     // leeghaalde. Nu gebruiken beide takken dezelfde functie.
+    // Wie stond er al op deze klus? Alleen nieuwe mensen krijgen een melding.
+    const alIngedeeld=editId
+      ?new Set((KLUSSEN.find(k=>k.id===editId)?.personeel||[]).map(p=>p.id))
+      :new Set();
+
     const schrijfKoppelingen=async id=>{
       if(formTrucks.length){
         const{error}=await sb.from('klus_trucks').insert(formTrucks.map(tid=>({klus_id:id,truck_id:tid})));
@@ -3091,6 +3106,14 @@ async function saveKlus(){
         const{error}=await sb.from('klus_truck_soorten').insert(truckSoortRows);
         if(error)throw new Error('Food per truck koppelen mislukt: '+error.message);
       }
+
+      // Iedereen die er nieuw bij komt krijgt bericht. Dit ging eerder alleen
+      // via de knop Toewijzen op het planningsbord, dus wie je hier indeelde
+      // hoorde er nooit iets van.
+      const nieuw=formPers.filter(gid=>!alIngedeeld.has(gid));
+      const dl=parseDate(datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
+      nieuw.forEach(gid=>sendPushNotificatie(gid,'Je bent ingepland!',
+        `${naam||foodLabel||'Klus'} op ${dl}.`));
     };
 
     if(editId){
@@ -3437,6 +3460,9 @@ function loadProfiel(){
   document.getElementById('profielEmail').textContent=CURRENT_USER.email||'–';
   document.getElementById('profielNaamInput').value=CURRENT_NAAM;
   // Laad adresgegevens
+  const testBlok=document.getElementById('testMeldingBlok');
+  if(testBlok)testBlok.style.display=CURRENT_ROL==='beheerder'?'':'none';
+
   const maatSel=document.getElementById('profielShirtmaat');
   if(maatSel&&maatSel.options.length<=1){
     maatSel.innerHTML='<option value="">Kies —</option>'+
@@ -5114,9 +5140,14 @@ async function beslisAanmelding(id,status){
         });
       }
     }
+    const dl=klus?parseDate(klus.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'}):'';
+    sendPushNotificatie(rij.gebruiker_id,'Je bent ingedeeld!',
+      `Je aanmelding voor ${klus?(klus.naam||klus.food||'de klus'):'de klus'}${dl?' op '+dl:''} is goedgekeurd.`);
     toast('Ingedeeld op de klus');
     await loadAll();
   }else{
+    sendPushNotificatie(rij.gebruiker_id,'Aanmelding afgewezen',
+      'Je bent deze keer niet ingedeeld. Meld je gerust aan voor een andere klus.');
     toast('Aanmelding afgewezen');
   }
   loadAanmeldingen();
@@ -5404,15 +5435,48 @@ async function initPushNotifications(){
 // de publieke sleutel: die staat namelijk in de app en daarmee kon iedereen
 // meldingen naar willekeurig wie sturen. De server controleert nu of je
 // beheerder bent.
-async function sendPushNotificatie(userId, titel, bericht){
+async function sendPushNotificatie(userId, titel, bericht, stil=true){
   try{
     const{data,error}=await sb.functions.invoke('stuur-notificatie',{
       body:{userId,titel,bericht},
     });
-    if(error){console.error('Notificatie fout:',error);return;}
+    if(error){
+      console.error('Notificatie fout:',error);
+      if(!stil)toast('Melding versturen mislukt: '+error.message,'fout');
+      return{verstuurd:false,reden:error.message};
+    }
     console.log('Notificatie result:',data);
+    if(!data.verstuurd&&!stil)toast(data.reden||'Melding niet bezorgd','fout');
+    return data;
   }catch(e){
     console.error('Notificatie fout:',e);
+    if(!stil)toast('Melding versturen mislukt','fout');
+    return{verstuurd:false,reden:String(e)};
+  }
+}
+
+// Testknop in je profiel: stuurt een melding naar je eigen toestel en laat
+// precies zien wat de server terugzegt.
+async function testMelding(){
+  const knop=document.querySelector('[onclick="testMelding()"]');
+  const uitslagEl=document.getElementById('testMeldingUitslag');
+  if(knop){knop.disabled=true;knop.textContent='Versturen...';}
+  if(uitslagEl)uitslagEl.textContent='';
+
+  const{data:eigen}=await sb.from('gebruikers').select('push_token').eq('id',CURRENT_USER.id).single();
+  if(!eigen||!eigen.push_token){
+    if(knop){knop.disabled=false;knop.textContent='Stuur mezelf een testmelding';}
+    if(uitslagEl)uitslagEl.textContent='Dit toestel is nog niet aangemeld voor meldingen. Sluit de app helemaal af, open hem opnieuw en sta meldingen toe.';
+    return;
+  }
+
+  const res=await sendPushNotificatie(CURRENT_USER.id,'Testmelding','Als je dit ziet werken de meldingen.',false);
+  if(knop){knop.disabled=false;knop.textContent='Stuur mezelf een testmelding';}
+  if(!uitslagEl)return;
+  if(res&&res.verstuurd){
+    uitslagEl.textContent='Verstuurd via '+(res.omgeving==='api.push.apple.com'?'Apple productie':'Apple test')+'. Komt er niets binnen, kijk dan of meldingen aanstaan bij Instellingen → TC Group.';
+  }else{
+    uitslagEl.textContent='Niet gelukt: '+((res&&(res.reden||(res.apns&&res.apns.reden)))||'onbekende reden');
   }
 }
 
