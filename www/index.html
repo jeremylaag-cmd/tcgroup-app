@@ -1195,6 +1195,30 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     </div>
   </div>
 
+  <!-- PAUZE INVULLEN BIJ UITKLOKKEN -->
+  <div class="modal-overlay" id="pauzeOverlay" onclick="if(event.target===this)sluitPauze()">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-title">Hoeveel pauze heb je gehad?</div>
+      <div id="pauzeGewerkt" style="font-size:13px;color:var(--text);margin-bottom:4px"></div>
+      <div id="pauzeUitleg" style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:1rem"></div>
+      <div class="chips" id="pauzeKnoppen" style="margin-bottom:10px">
+        <div class="chip" data-min="0" onclick="pauzeKies(0)">Geen</div>
+        <div class="chip" data-min="15" onclick="pauzeKies(15)">15 min</div>
+        <div class="chip" data-min="30" onclick="pauzeKies(30)">30 min</div>
+        <div class="chip" data-min="45" onclick="pauzeKies(45)">45 min</div>
+        <div class="chip" data-min="60" onclick="pauzeKies(60)">60 min</div>
+      </div>
+      <div class="fr"><span class="fl">Of vul zelf in (minuten)</span>
+        <input type="number" id="pauzeVeld" min="0" max="600" step="5" inputmode="numeric" oninput="pauzeMarkeer(this.value);pauzeControleer()" style="max-width:120px;font-size:15px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+      </div>
+      <div id="pauzeWaarschuwing" class="warn-box show" style="display:none"></div>
+      <div class="mfooter" style="margin-top:1rem">
+        <button class="btn-ghost" onclick="sluitPauze()">Annuleren</button>
+        <button class="btn-sm" onclick="bevestigPauze()">Uitklokken</button>
+      </div>
+    </div>
+  </div>
+
   <!-- PERSONEEL DETAIL MODAL -->
   <div class="modal-overlay" id="persDetailOverlay" onclick="if(event.target===this)closePersDetail()">
     <div class="modal pd-modal" style="max-width:920px;padding:0;overflow:hidden">
@@ -1217,6 +1241,41 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
             <div id="pdVak-gegevens" style="display:none"></div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- HANDMATIG UREN TOEVOEGEN (beheerder) -->
+  <div class="modal-overlay" id="handmatigOverlay" onclick="if(event.target===this)sluitHandmatig()">
+    <div class="modal" style="max-width:460px">
+      <div class="modal-title">Uren handmatig toevoegen</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:1rem">
+        Voor uren die niet via de app zijn geklokt. Komt er meteen goedgekeurd in te staan,
+        met een notitie dat jij hem hebt toegevoegd.
+      </div>
+      <div class="fr"><span class="fl">Medewerker <span style="color:#DC2626">*</span></span>
+        <input type="search" id="hmZoek" placeholder="Zoek op naam..." oninput="hmFilter()" autocomplete="off" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);margin-bottom:6px">
+        <select id="hmPersoon" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"></select>
+      </div>
+      <div class="fr"><span class="fl">Datum <span style="color:#DC2626">*</span></span>
+        <input type="date" id="hmDatum" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+      </div>
+      <div class="four">
+        <div><span class="fl" style="font-size:10px">Van <span style="color:#DC2626">*</span></span><input type="text" class="tijd-input" id="hmVan" placeholder="09.00" maxlength="5" oninput="formatTijd(this);hmBereken()"></div>
+        <div><span class="fl" style="font-size:10px">Tot <span style="color:#DC2626">*</span></span><input type="text" class="tijd-input" id="hmTot" placeholder="17.00" maxlength="5" oninput="formatTijd(this);hmBereken()"></div>
+        <div><span class="fl" style="font-size:10px">Pauze (min)</span><input type="number" id="hmPauze" min="0" max="600" step="5" inputmode="numeric" value="0" oninput="hmBereken()" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"></div>
+      </div>
+      <div class="fr"><span class="fl">Klus (optioneel)</span>
+        <select id="hmKlus" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"></select>
+      </div>
+      <div class="fr"><span class="fl">Notitie (optioneel)</span>
+        <input type="text" id="hmNotitie" placeholder="bv. vergeten in te klokken" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+      </div>
+      <div id="hmUitkomst" style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:.5rem"></div>
+      <div class="warn-box" id="hmWarn"></div>
+      <div class="mfooter" style="margin-top:1rem">
+        <button class="btn-ghost" onclick="sluitHandmatig()">Annuleren</button>
+        <button class="btn-sm" onclick="bewaarHandmatig()">Toevoegen</button>
       </div>
     </div>
   </div>
@@ -1325,9 +1384,12 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div style="padding:1.25rem;max-width:900px;margin:0 auto">
       <div id="urenBeheerGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
         <div class="sc">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.875rem;flex-wrap:wrap">
             <div class="st">Te accorderen</div>
-            <span id="urenWachtCount" style="font-size:11px;background:#FFFBEB;color:#92400E;border-radius:20px;padding:2px 8px;font-weight:600"></span>
+            <div style="display:flex;align-items:center;gap:6px">
+              <span id="urenWachtCount" style="font-size:11px;background:#FFFBEB;color:#92400E;border-radius:20px;padding:2px 8px;font-weight:600"></span>
+              <button class="btn-sm" onclick="openHandmatig()" style="font-size:11px;padding:5px 12px">+ Uren toevoegen</button>
+            </div>
           </div>
           <div id="urenAccordeerList"><div class="spin">Laden...</div></div>
         </div>
@@ -1366,11 +1428,16 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     </div>
     <div class="fr"><span class="fl">Trucks <span style="color:#DC2626">*</span> <span style="color:var(--muted);font-weight:400">(min. 1)</span></span><div class="chips" id="truckChips"></div><div class="chip-warn" id="truckWarn"></div></div>
     <div class="fr"><span class="fl">Tijden <span style="color:#DC2626">*</span></span>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px">
+        Starttijd en einde klus vormen samen de dienst — daarmee rekent de app de ingeplande uren uit.
+      </div>
       <div class="four">
+        <div><span class="fl" style="font-size:10px">Starttijd</span><input type="text" class="tijd-input" id="fStart" placeholder="07.30" maxlength="5" oninput="formatTijd(this)"></div>
         <div><span class="fl" style="font-size:10px">Vertrektijd</span><input type="text" class="tijd-input" id="fVertrek" placeholder="08.30" maxlength="5" oninput="formatTijd(this)"></div>
         <div><span class="fl" style="font-size:10px">Start opbouw</span><input type="text" class="tijd-input" id="fOpbouw" placeholder="10.00" maxlength="5" oninput="formatTijd(this)"></div>
         <div><span class="fl" style="font-size:10px">Start feest</span><input type="text" class="tijd-input" id="fFeest" placeholder="14.00" maxlength="5" oninput="formatTijd(this)"></div>
         <div><span class="fl" style="font-size:10px">Einde feest <span style="color:#DC2626">*</span></span><input type="text" class="tijd-input" id="fEinde" placeholder="23.00" maxlength="5" oninput="formatTijd(this)"></div>
+        <div><span class="fl" style="font-size:10px">Einde klus</span><input type="text" class="tijd-input" id="fEindeKlus" placeholder="01.00" maxlength="5" oninput="formatTijd(this)"></div>
       </div>
     </div>
     <div class="fr"><span class="fl">Personeel nodig <span style="color:#DC2626">*</span></span><input type="number" id="fPersoneelNodig" min="0" placeholder="bv. 5" style="max-width:120px"></div>
@@ -1378,6 +1445,18 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div class="fr"><span class="fl">Food per truck</span><div id="truckSoortBlocks"></div></div>
     <div class="fr"><span class="fl">Gasten (totaal)</span><input type="number" id="fPersonen" min="1" placeholder="bv. 200" style="max-width:120px"></div>
     <div class="fr"><span class="fl">Personeel (meerdere mogelijk)</span><div class="chips" id="persChips"></div><div class="chip-warn" id="persWarn"></div></div>
+    <div class="fr"><span class="fl">Losse krachten <span style="color:var(--muted);font-weight:400">(eenmalig, zonder account)</span></span>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px">
+        Iemand die één keer meeloopt en de app niet gebruikt. Staat gewoon op de klus en in het rooster;
+        uren zet je er zelf bij via Uren → Handmatig toevoegen.
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <input type="text" id="fLosNaam" placeholder="Naam" onkeydown="if(event.key==='Enter'){event.preventDefault();voegLosseKrachtToe();}" style="flex:2;min-width:120px;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+        <input type="tel" id="fLosTel" placeholder="Telefoon (optioneel)" onkeydown="if(event.key==='Enter'){event.preventDefault();voegLosseKrachtToe();}" style="flex:1;min-width:110px;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+        <button type="button" class="btn-sm" onclick="voegLosseKrachtToe()" style="flex-shrink:0;padding:8px 14px">Toevoegen</button>
+      </div>
+      <div class="chips" id="losseKrachtenLijst" style="margin-top:8px"></div>
+    </div>
     <div class="fr"><span class="fl">Adres</span><input type="text" id="fAdres" placeholder="Locatie of adres"></div>
     <div class="two">
       <div class="fr"><span class="fl">Contactpersoon</span><input type="text" id="fContact" placeholder="Naam"></div>
@@ -1584,7 +1663,7 @@ sb.auth.onAuthStateChange((gebeurtenis)=>{
 
 let TRUCKS=[],PERSONEEL=[],KLUSSEN=[],SOORTEN=[];
 let selDate=null,editId=null,weekOffset=0,medWeekOffset=0;
-let formTrucks=[],formPers=[],formTruckSoorten={},formPdfs=[],existingPdfs=[];
+let formTrucks=[],formPers=[],formTruckSoorten={},formPdfs=[],existingPdfs=[],formLos=[];
 let allMededelingen=[],editMedId=null;
 let CURRENT_USER=null,CURRENT_ROL=null,CURRENT_NAAM=null;
 const today=new Date();const todayStr=fmt(today);
@@ -1955,6 +2034,7 @@ async function initApp(user){
       <button class="htab" onclick="showPage('uren-beheer',this)">Uren</button>
       <button class="htab" onclick="showPage('beheer',this)">Beheer</button>
       <button class="htab" onclick="showPage('beschikbaarheid-beheer',this)">Beschikbaarheid</button>
+      <button class="htab" onclick="showPage('open-klussen',this)">Open klussen</button>
       <button class="htab" onclick="showPage('accounts',this)">Accounts</button>`;
     const topBtn=document.getElementById('addKlusBtnTop');if(topBtn)topBtn.style.display='';
     document.getElementById('addMedBtn').style.display='';
@@ -1966,10 +2046,11 @@ async function initApp(user){
   }else{
     const extraTab=isFullTimer
       ?`<button class="htab" onclick="showPage('rooster',this)">Rooster</button>`
-      :`<button class="htab" onclick="showPage('open-klussen',this)">Open klussen</button>`;
+      :'';
     tabs.innerHTML=`
       <button class="htab active" onclick="showPage('beschikbaarheid',this)">Mijn schema</button>
       <button class="htab" onclick="showPage('uren',this)">Uren</button>
+      <button class="htab" onclick="showPage('open-klussen',this)">Open klussen</button>
       ${extraTab}`;
     ['addKlusBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   }
@@ -1990,16 +2071,19 @@ async function initApp(user){
         bnavItem('uren-beheer','Uren',ico.uren)+
         bnavItem('beheer','Beheer',ico.beheer)+
         bnavItem('beschikbaarheid-beheer','Beschikbaarheid',ico.beschikbaarheid)+
+        bnavItem('open-klussen','Open klussen',ico.schema)+
         bnavItem('accounts','Accounts',ico.accounts);
     }else if(isHal){
       bn.innerHTML=
         bnavItem('uren','Uren',ico.uren,true)+
+        bnavItem('open-klussen','Klussen',ico.schema)+
         bnavItem('rooster','Rooster',ico.rooster)+
         bnavItem('profiel','Profiel',ico.profiel);
     }else if(isFullTimer){
       bn.innerHTML=
         bnavItem('beschikbaarheid','Mijn schema',ico.rooster,true)+
         bnavItem('uren','Uren',ico.uren)+
+        bnavItem('open-klussen','Klussen',ico.schema)+
         bnavItem('rooster','Rooster',ico.schema)+
         bnavItem('profiel','Profiel',ico.profiel);
     }else{
@@ -2702,10 +2786,11 @@ async function loadAll(){
     {data:trucks},{data:personeel},{data:klussen},{data:klusTrucks},
     {data:klusGebruikers},{data:klusPdfs},{data:soorten},{data:meds},
     {data:klusSoorten},{data:klusTruckSoorten},{data:beschData},{data:aanmData},
-    {data:vasteData}
+    {data:vasteData},{data:losData}
   ]=await Promise.all([
     sb.from('trucks').select('*').order('volgorde'),
-    sb.from('personeel_publiek').select('id,naam,rol').in('rol',['part-timer','full-timer']).order('naam'),
+    // Iedereen kan op een klus worden gezet — ook beheerders en hal-medewerkers.
+    sb.from('personeel_publiek').select('id,naam,rol').order('naam'),
     sb.from('klussen').select('*').order('datum'),
     sb.from('klus_trucks').select('*'),
     sb.from('klus_gebruikers').select('*'),
@@ -2717,6 +2802,7 @@ async function loadAll(){
     sb.from('beschikbaarheid').select('*').eq('status','goedgekeurd'),
     sb.from('klus_aanmeldingen').select('*'),
     sb.from('vaste_diensten').select('*').order('weekdag').order('volgorde'),
+    sb.from('klus_losse_personen').select('*').order('naam'),
   ]);
   TRUCKS=trucks||[];PERSONEEL=personeel||[];SOORTEN=soorten||[];
   BESCHIKBAARHEID=beschData||[];
@@ -2730,6 +2816,7 @@ async function loadAll(){
     trucks:(klusTrucks||[]).filter(x=>x.klus_id===k.id).map(x=>tMap[x.truck_id]).filter(Boolean),
     personeel:(klusGebruikers||[]).filter(x=>x.klus_id===k.id).map(x=>pMap[x.gebruiker_id]).filter(Boolean),
     pdfs:(klusPdfs||[]).filter(x=>x.klus_id===k.id),
+    losse:(losData||[]).filter(x=>x.klus_id===k.id),
     soorten:(klusSoorten||[]).filter(x=>x.klus_id===k.id).map(x=>sMap[x.soort_id]).filter(Boolean),
     truckSoorten:(klusTruckSoorten||[]).filter(x=>x.klus_id===k.id).map(x=>({truck:tMap[x.truck_id],soort:sMap[x.soort_id]})).filter(x=>x.truck&&x.soort),
   }));
@@ -2863,7 +2950,7 @@ function renderAll(){
           ${k.naam?`<div class="knaam">${k.naam}</div>`:''}
           <div class="kdate">${datumStr}${tijdStr?` · ${tijdStr}`:''}</div>
           <div class="ktrucks">${tB}${soortBadges}</div>
-          <div class="kmeta">${k.personen?`<strong>${k.personen} gasten</strong>`:'<strong>Dienst</strong>'}${k.personeel_nodig?` &nbsp;·&nbsp; ${k.personeel_nodig} pers. nodig`:''}${k.personeel.length?' &nbsp;·&nbsp; '+k.personeel.map(p=>p.naam).join(', '):''}</div>
+          <div class="kmeta">${k.personen?`<strong>${k.personen} gasten</strong>`:'<strong>Dienst</strong>'}${k.personeel_nodig?` &nbsp;·&nbsp; ${k.personeel_nodig} pers. nodig`:''}${k.personeel.length?' &nbsp;·&nbsp; '+k.personeel.map(p=>p.naam).join(', '):''}${(k.losse&&k.losse.length)?' &nbsp;·&nbsp; '+k.losse.map(l=>l.naam+' (los)').join(', '):''}</div>
           ${pdfLinks?`<div style="margin-top:4px">${pdfLinks}</div>`:''}
         </div>
         ${isBeheerder?`<div class="kactions" onclick="event.stopPropagation()">
@@ -3033,14 +3120,22 @@ function openModal(id=null){
   formTruckSoorten={};
   if(k?.truckSoorten)k.truckSoorten.forEach(ts=>{if(!formTruckSoorten[ts.truck.id])formTruckSoorten[ts.truck.id]=[];if(!formTruckSoorten[ts.truck.id].includes(ts.soort.id))formTruckSoorten[ts.truck.id].push(ts.soort.id);});
   formPdfs=[];existingPdfs=k?.pdfs?[...k.pdfs]:[];
+  formLos=k?.losse?k.losse.map(l=>({naam:l.naam,telefoon:l.telefoon||''})):[];
   document.getElementById('modalTitle').textContent=id?'Klus bewerken':'Nieuwe klus';
   document.getElementById('fNaam').value=k?.naam||'';
   document.getElementById('fDatum').value=k?k.datum:(selDate||todayStr);
   document.getElementById('fDatumEind').value=k?.datum_eind||'';
+  document.getElementById('fStart').value=tijdFromDb(k?.start_tijd);
   document.getElementById('fVertrek').value=tijdFromDb(k?.vertrek_tijd);
   document.getElementById('fOpbouw').value=tijdFromDb(k?.start_opbouw);
   document.getElementById('fFeest').value=tijdFromDb(k?.start_feest);
   document.getElementById('fEinde').value=tijdFromDb(k?.einde_feest);
+  document.getElementById('fEindeKlus').value=tijdFromDb(k?.einde_klus);
+  // Deze werd nooit teruggezet, waardoor de notitie van de vorige klus
+  // bleef staan als je daarna een nieuwe aanmaakte.
+  document.getElementById('fNotitie').value=k?.notitie||'';
+  document.getElementById('fLosNaam').value='';
+  document.getElementById('fLosTel').value='';
   document.getElementById('fPersonen').value=k?.personen||'';
   document.getElementById('fPersoneelNodig').value=k?.personeel_nodig||'';
   // Herhaling alleen bij nieuwe klus
@@ -3055,9 +3150,37 @@ function openModal(id=null){
   document.getElementById('warnBox').className='warn-box';
   const tw=document.getElementById('truckWarn');const pw=document.getElementById('persWarn');
   if(tw)tw.className='chip-warn';if(pw)pw.className='chip-warn';
-  renderTruckChips([]);renderPersChips([]);renderTruckSoortBlocks();renderPdfList();
+  renderTruckChips([]);renderPersChips([]);renderTruckSoortBlocks();renderPdfList();renderLosseKrachten();
   document.getElementById('modalOverlay').classList.add('open');
   if(k)onDateChange();
+}
+
+// ── LOSSE KRACHTEN OP EEN KLUS ──────────────────────────────────────────
+function voegLosseKrachtToe(){
+  const naamEl=document.getElementById('fLosNaam');
+  const telEl=document.getElementById('fLosTel');
+  const naam=(naamEl.value||'').trim();
+  if(!naam){naamEl.focus();return;}
+  if(formLos.some(l=>l.naam.toLowerCase()===naam.toLowerCase())){
+    showWarn('⚠ '+naam+' staat er al bij.');
+    naamEl.value='';telEl.value='';return;
+  }
+  formLos.push({naam,telefoon:(telEl.value||'').trim()});
+  naamEl.value='';telEl.value='';naamEl.focus();
+  renderLosseKrachten();
+}
+
+function verwijderLosseKracht(i){
+  formLos.splice(i,1);
+  renderLosseKrachten();
+}
+
+function renderLosseKrachten(){
+  const el=document.getElementById('losseKrachtenLijst');
+  if(!el)return;
+  el.innerHTML=formLos.length
+    ?formLos.map((l,i)=>`<div class="chip on" style="cursor:default">${l.naam}${l.telefoon?' · '+l.telefoon:''}<span onclick="verwijderLosseKracht(${i})" style="margin-left:8px;cursor:pointer;font-weight:700" title="Verwijderen">×</span></div>`).join('')
+    :'<span style="font-size:12px;color:var(--muted);font-style:italic">Nog geen losse krachten</span>';
 }
 function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
 
@@ -3131,10 +3254,12 @@ async function saveKlus(){
   const naam=document.getElementById('fNaam').value.trim();
   const datum=document.getElementById('fDatum').value;
   const datum_eind=document.getElementById('fDatumEind').value||null;
+  const start_tijd=tijdToDb(document.getElementById('fStart').value);
   const vertrek_tijd=tijdToDb(document.getElementById('fVertrek').value);
   const start_opbouw=tijdToDb(document.getElementById('fOpbouw').value);
   const start_feest=tijdToDb(document.getElementById('fFeest').value);
   const einde_feest=tijdToDb(document.getElementById('fEinde').value);
+  const einde_klus=tijdToDb(document.getElementById('fEindeKlus').value);
   const personen=parseInt(document.getElementById('fPersonen').value)||0;
   const personeel_nodig=parseInt(document.getElementById('fPersoneelNodig').value)||0;
   const notitie=document.getElementById('fNotitie').value||'';
@@ -3189,6 +3314,12 @@ async function saveKlus(){
         if(error)throw new Error('Food per truck koppelen mislukt: '+error.message);
       }
 
+      if(formLos.length){
+        const{error}=await sb.from('klus_losse_personen')
+          .insert(formLos.map(l=>({klus_id:id,naam:l.naam,telefoon:l.telefoon||null})));
+        if(error)throw new Error('Losse krachten opslaan mislukt: '+error.message);
+      }
+
       // Iedereen die er nieuw bij komt krijgt bericht. Dit ging eerder alleen
       // via de knop Toewijzen op het planningsbord, dus wie je hier indeelde
       // hoorde er nooit iets van.
@@ -3199,12 +3330,13 @@ async function saveKlus(){
     };
 
     if(editId){
-      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,vertrek_tijd,start_opbouw,start_feest,einde_feest,personen,personeel_nodig,food:foodLabel,notitie,adres,contactpersoon,telefoon}).eq('id',editId);
+      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,contactpersoon,telefoon}).eq('id',editId);
       if(updErr)throw new Error('Klus opslaan mislukt: '+updErr.message);
       await sb.from('klus_trucks').delete().eq('klus_id',editId);
       await sb.from('klus_gebruikers').delete().eq('klus_id',editId);
       await sb.from('klus_soorten').delete().eq('klus_id',editId);
       await sb.from('klus_truck_soorten').delete().eq('klus_id',editId);
+      await sb.from('klus_losse_personen').delete().eq('klus_id',editId);
       await schrijfKoppelingen(editId);
       const removedPdfs=KLUSSEN.find(k=>k.id===editId)?.pdfs.filter(p=>!existingPdfs.find(e=>e.id===p.id))||[];
       for(const p of removedPdfs){
@@ -3218,7 +3350,7 @@ async function saveKlus(){
       // Maak klussen aan voor alle datums (herhaling)
       for(let i=0;i<allDatums.length;i++){
         const klusDatum=allDatums[i];
-        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,vertrek_tijd,start_opbouw,start_feest,einde_feest,personen,personeel_nodig,food:foodLabel,notitie,adres,contactpersoon,telefoon}).select('id');
+        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,contactpersoon,telefoon}).select('id');
         if(error||!data||!data.length)throw new Error(error?.message||'Insert mislukt');
         const thisKlusId=data[0].id;
         if(i===0)klusId=thisKlusId; // gebruik eerste voor PDFs
@@ -3268,8 +3400,10 @@ async function deleteKlus(id){
 // ── DETAIL ──
 function openDetail(id){
   const k=KLUSSEN.find(x=>x.id===id);if(!k)return;
-  const t1=tijdFromDb(k.vertrek_tijd),t2=tijdFromDb(k.start_opbouw),t3=tijdFromDb(k.start_feest),t4=tijdFromDb(k.einde_feest);
-  const tijdLines=[t1&&`Vertrek: ${t1}`,t2&&`Opbouw: ${t2}`,t3&&`Start feest: ${t3}`,t4&&`Einde feest: ${t4}`].filter(Boolean);
+  const t0=tijdFromDb(k.start_tijd),t1=tijdFromDb(k.vertrek_tijd),t2=tijdFromDb(k.start_opbouw),
+        t3=tijdFromDb(k.start_feest),t4=tijdFromDb(k.einde_feest),t5=tijdFromDb(k.einde_klus);
+  const tijdLines=[t0&&`Start: ${t0}`,t1&&`Vertrek: ${t1}`,t2&&`Opbouw: ${t2}`,
+    t3&&`Start feest: ${t3}`,t4&&`Einde feest: ${t4}`,t5&&`Einde klus: ${t5}`].filter(Boolean);
   const ds=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const dsEind=k.datum_eind?parseDate(k.datum_eind).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
   const datumStr=dsEind&&dsEind!==ds?`${ds} – ${dsEind}`:ds;
@@ -3291,7 +3425,9 @@ function openDetail(id){
   document.getElementById('detailContact').textContent=k.contactpersoon||'';
   const tel=document.getElementById('detailTelefoon');tel.style.display=k.telefoon?'':'none';
   tel.innerHTML=k.telefoon?`<a href="tel:${k.telefoon}" style="color:#2563EB;text-decoration:none;font-size:13px">${k.telefoon}</a>`:'';
-  const ps=document.getElementById('detailPersSection');ps.style.display=k.personeel.length?'':'none';document.getElementById('detailPers').textContent=k.personeel.map(p=>p.naam).join(', ');
+  const namen=k.personeel.map(p=>p.naam).concat((k.losse||[]).map(l=>l.naam+' (los)'));
+  const ps=document.getElementById('detailPersSection');ps.style.display=namen.length?'':'none';
+  document.getElementById('detailPers').textContent=namen.join(', ');
   const ns=document.getElementById('detailNotitieSection');ns.style.display=k.notitie?'':'none';document.getElementById('detailNotitie').textContent=k.notitie;
   const pdfs=document.getElementById('detailPdfSection');pdfs.style.display=k.pdfs&&k.pdfs.length?'':'none';
   document.getElementById('detailPdfs').innerHTML=k.pdfs?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${p.url}\`,\`${p.naam}\`)">${p.naam}</span>`).join(''):'';
@@ -3666,6 +3802,7 @@ async function saveProfielTelefoon(){
 
 // ── URENREGISTRATIE ──
 let urenTimer=null;
+let PAUZE_START=null;   // wanneer de lopende registratie begon
 let urenMaandOffset=0;
 
 function minToStr(min){
@@ -3724,8 +3861,10 @@ function maandagVan(d){
 // Loopt het einde over middernacht heen, dan telt de nacht mee.
 function klusMinuten(k){
   const naarMin=t=>{if(!t)return null;const p=(''+t).split(':');return (+p[0])*60+(+(p[1]||0));};
-  const start=naarMin(k.vertrek_tijd)??naarMin(k.start_opbouw)??naarMin(k.start_feest);
-  const eind=naarMin(k.einde_feest)??naarMin(k.eind_tijd);
+  // Starttijd en einde klus zijn de dienst. Staan die er niet, dan schatten we
+  // het met de oude velden, zodat bestaande klussen blijven werken.
+  const start=naarMin(k.start_tijd)??naarMin(k.vertrek_tijd)??naarMin(k.start_opbouw)??naarMin(k.start_feest);
+  const eind=naarMin(k.einde_klus)??naarMin(k.einde_feest)??naarMin(k.eind_tijd);
   if(start==null||eind==null)return null;
   let m=eind-start;
   if(m<=0)m+=24*60;
@@ -3868,7 +4007,7 @@ async function loadUrenPersoneel(){
     return`<div class="uur-item">
       <div class="uur-item-info">
         <div class="uur-item-naam">${k?.naam||k?.food||'Klus'}</div>
-        <div class="uur-item-sub">${datum} · ${in_t} – ${uit_t}</div>
+        <div class="uur-item-sub">${datum} · ${in_t} – ${uit_t}${r.pauze_minuten?' · '+r.pauze_minuten+' min pauze':''}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
         <div class="uur-item-tijd">${minToStr(r.totaal_minuten)}</div>
@@ -3892,6 +4031,7 @@ function renderIngeklokt(reg,klus){
   const regCard=document.getElementById('uurRegistratieCard');
   if(!regCard)return;
   const inTijd=new Date(reg.ingeklokt_op);
+  PAUZE_START=reg.ingeklokt_op;
 
   function updateTimer(){
     const el=document.getElementById('urenTimerNum');
@@ -3910,7 +4050,7 @@ function renderIngeklokt(reg,klus){
       <div class="uur-loc-dot"></div>
       <div class="uur-loc-txt">Ingeklokt om ${inTijd.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}${reg.locatie_in&&reg.locatie_in!=='Locatie geweigerd'&&reg.locatie_in!=='Locatie niet beschikbaar'?` · ${reg.locatie_in}`:''}</div>
     </div>
-    <button class="uur-btn uur-btn-out" style="margin-top:14px" onclick="doUitklokken('${reg.id}')">Uitklokken</button>`;
+    <button class="uur-btn uur-btn-out" style="margin-top:14px" onclick="vraagPauze('${reg.id}')">Uitklokken</button>`;
 
   if(urenTimer)clearInterval(urenTimer);
   urenTimer=setInterval(updateTimer,1000);
@@ -3968,7 +4108,77 @@ async function doInklokken(klusId){
   loadUrenPersoneel();
 }
 
-async function doUitklokken(regId){
+// ── PAUZE ───────────────────────────────────────────────────────────────
+// Afspraak binnen TC Group: langer dan 4 uur werken vraagt om 15 minuten
+// pauze, langer dan 6 uur om 30 minuten, langer dan 10 uur om 45 minuten.
+function minimumPauze(gewerkteMinuten){
+  if(gewerkteMinuten>600)return 45;
+  if(gewerkteMinuten>360)return 30;
+  if(gewerkteMinuten>240)return 15;
+  return 0;
+}
+
+let pauzeRegId=null;
+
+function vraagPauze(regId){
+  pauzeRegId=regId;
+  const ov=document.getElementById('pauzeOverlay');
+  if(!ov){doUitklokken(regId,0);return;}
+
+  const start=PAUZE_START?new Date(PAUZE_START):null;
+  const gewerkt=start?Math.round((Date.now()-start.getTime())/60000):0;
+  const min=minimumPauze(gewerkt);
+
+  document.getElementById('pauzeGewerkt').textContent=gewerkt
+    ?`Je staat ${minToStr(gewerkt)} ingeklokt.`:'';
+  const uitleg=document.getElementById('pauzeUitleg');
+  uitleg.textContent=min
+    ?`Bij deze lengte hoort minimaal ${min} minuten pauze.`
+    :'Bij deze lengte hoort geen verplichte pauze.';
+  document.getElementById('pauzeVeld').value=min;
+  pauzeMarkeer(min);
+  document.getElementById('pauzeWaarschuwing').style.display='none';
+  ov.classList.add('open');
+}
+
+function pauzeKies(m){
+  document.getElementById('pauzeVeld').value=m;
+  pauzeMarkeer(m);
+  pauzeControleer();
+}
+
+function pauzeMarkeer(m){
+  document.querySelectorAll('#pauzeKnoppen .chip').forEach(c=>{
+    c.classList.toggle('on',+c.dataset.min===+m);
+  });
+}
+
+function pauzeControleer(){
+  const start=PAUZE_START?new Date(PAUZE_START):null;
+  const gewerkt=start?Math.round((Date.now()-start.getTime())/60000):0;
+  const min=minimumPauze(gewerkt);
+  const ingevuld=parseInt(document.getElementById('pauzeVeld').value)||0;
+  const w=document.getElementById('pauzeWaarschuwing');
+  if(ingevuld<min){
+    w.textContent=`Let op: minder dan de gebruikelijke ${min} minuten. Dat mag, de planning ziet het erbij staan.`;
+    w.style.display='';
+  }else{
+    w.style.display='none';
+  }
+}
+
+function sluitPauze(){
+  const ov=document.getElementById('pauzeOverlay');
+  if(ov)ov.classList.remove('open');
+}
+
+async function bevestigPauze(){
+  const pauze=Math.max(0,parseInt(document.getElementById('pauzeVeld').value)||0);
+  sluitPauze();
+  await doUitklokken(pauzeRegId,pauze);
+}
+
+async function doUitklokken(regId,pauze_minuten=0){
   const btn=document.querySelector('.uur-btn-out');
   const herstel=melding=>{
     if(btn){btn.disabled=false;btn.textContent='Uitklokken';}
@@ -3988,10 +4198,13 @@ async function doUitklokken(regId){
   if(btn)btn.textContent='Uitklokken...';
   try{
     const{data:reg}=await sb.from('urenregistraties').select('ingeklokt_op').eq('id',regId).single();
-    const totaal_minuten=reg?Math.round((Date.now()-new Date(reg.ingeklokt_op).getTime())/60000):0;
+    const geklokt=reg?Math.round((Date.now()-new Date(reg.ingeklokt_op).getTime())/60000):0;
+    // totaal_minuten is de gewerkte tijd, dus zonder de pauze.
+    const totaal_minuten=Math.max(0,geklokt-(pauze_minuten||0));
     const{error}=await sb.from('urenregistraties').update({
       uitgeklokt_op:new Date().toISOString(),
       locatie_uit:locatie,
+      pauze_minuten:pauze_minuten||0,
       totaal_minuten,
       status:'wacht'
     }).eq('id',regId);
@@ -4035,10 +4248,17 @@ async function loadUrenBeheer(){
       const datum=new Date(r.ingeklokt_op).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
       const in_t=new Date(r.ingeklokt_op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
       const uit_t=r.uitgeklokt_op?new Date(r.uitgeklokt_op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'–';
+      const pauze=r.pauze_minuten||0;
+      // Gewerkte tijd is exclusief pauze; de klokkentijd is dus de som.
+      const nodig=minimumPauze((r.totaal_minuten||0)+pauze);
+      const teWeinig=pauze<nodig;
       return`<div class="uur-item" id="uur-${r.id}">
         <div class="uur-item-info">
-          <div class="uur-item-naam">${gMap[r.gebruiker_id]||'Onbekend'}</div>
+          <div class="uur-item-naam">${gMap[r.gebruiker_id]||'Onbekend'}${r.handmatig?' <span style="font-size:10px;font-weight:500;color:var(--muted)">(handmatig)</span>':''}</div>
           <div class="uur-item-sub">${datum} · ${in_t}–${uit_t} · ${k?.naam||'Klus'}</div>
+          <div class="uur-item-sub" style="margin-top:2px;${teWeinig?'color:#B45309;font-weight:600':''}">
+            Pauze: ${pauze} min${teWeinig?` — normaal ${nodig} min bij deze lengte`:''}
+          </div>
           ${r.locatie_in&&!r.locatie_in.includes('niet')&&!r.locatie_in.includes('geweigerd')?`<div class="uur-item-sub" style="margin-top:2px">In: ${r.locatie_in}${r.locatie_uit&&!r.locatie_uit.includes('niet')?' · Uit: '+r.locatie_uit:''}</div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
@@ -4117,6 +4337,9 @@ async function startEditUren(id){
           style="width:100%;font-size:15px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);text-align:center">
       </div>
     </div>
+    <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">PAUZE (minuten)</div>
+    <input type="number" id="edit-pauze-${id}" value="${r.pauze_minuten||0}" min="0" max="600" step="5" inputmode="numeric"
+      style="width:100%;font-size:15px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);text-align:center;margin-bottom:8px">
     <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">NOTITIE (optioneel)</div>
     <input type="text" id="edit-notitie-${id}" value="${r.notitie_beh||''}" placeholder="Toelichting bij wijziging..."
       style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);margin-bottom:10px">
@@ -4144,18 +4367,127 @@ async function saveEditUren(id,status){
 
   const ingeklokt_op=parseTime(datum,inVal);
   const uitgeklokt_op=parseTime(datum,uitVal);
+  const pauze=Math.max(0,parseInt(document.getElementById(`edit-pauze-${id}`)?.value)||0);
   let totaal_minuten=null;
   if(ingeklokt_op&&uitgeklokt_op){
     totaal_minuten=Math.round((new Date(uitgeklokt_op)-new Date(ingeklokt_op))/60000);
     if(totaal_minuten<0)totaal_minuten+=24*60; // over middernacht
+    totaal_minuten=Math.max(0,totaal_minuten-pauze);   // gewerkt is zonder pauze
   }
 
-  const update={status,notitie_beh:notitie};
+  const update={status,notitie_beh:notitie,pauze_minuten:pauze};
   if(ingeklokt_op)update.ingeklokt_op=ingeklokt_op;
   if(uitgeklokt_op)update.uitgeklokt_op=uitgeklokt_op;
   if(totaal_minuten!==null)update.totaal_minuten=totaal_minuten;
 
-  await sb.from('urenregistraties').update(update).eq('id',id);
+  const{error}=await sb.from('urenregistraties').update(update).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  loadUrenBeheer();
+}
+
+// ── HANDMATIG UREN TOEVOEGEN (beheerder) ────────────────────────────────
+let HM_PERSONEN=[];
+
+async function openHandmatig(){
+  document.getElementById('hmDatum').value=todayStr;
+  document.getElementById('hmVan').value='';
+  document.getElementById('hmTot').value='';
+  document.getElementById('hmPauze').value=0;
+  document.getElementById('hmNotitie').value='';
+  document.getElementById('hmZoek').value='';
+  document.getElementById('hmUitkomst').textContent='';
+  document.getElementById('hmWarn').className='warn-box';
+
+  const{data:mensen}=await sb.from('personeel_publiek').select('id,naam').order('naam');
+  HM_PERSONEN=mensen||[];
+  hmFilter();
+
+  // Klussen van de laatste maand en de komende maand, dat is genoeg keuze.
+  const grens=new Date();grens.setMonth(grens.getMonth()-1);
+  const opties=(KLUSSEN||[])
+    .filter(k=>parseDate(k.datum)>=grens)
+    .sort((a,b)=>a.datum.localeCompare(b.datum))
+    .map(k=>`<option value="${k.id}">${parseDate(k.datum).toLocaleDateString('nl-NL',{day:'numeric',month:'short'})} — ${k.naam||k.food||'Klus'}</option>`)
+    .join('');
+  document.getElementById('hmKlus').innerHTML='<option value="">Geen klus</option>'+opties;
+
+  document.getElementById('handmatigOverlay').classList.add('open');
+}
+
+function sluitHandmatig(){document.getElementById('handmatigOverlay').classList.remove('open');}
+
+function hmFilter(){
+  const zoek=(document.getElementById('hmZoek').value||'').trim().toLowerCase();
+  const sel=document.getElementById('hmPersoon');
+  const huidig=sel.value;
+  const lijst=zoek?HM_PERSONEN.filter(m=>(m.naam||'').toLowerCase().includes(zoek)):HM_PERSONEN;
+  sel.innerHTML=lijst.map(m=>`<option value="${m.id}">${m.naam}</option>`).join('');
+  if(huidig&&lijst.some(m=>m.id===huidig))sel.value=huidig;
+}
+
+// Rekent van–tot om naar minuten, met de pauze eraf. Loopt het over
+// middernacht heen, dan telt de nacht mee.
+function hmMinuten(){
+  const naar=v=>{const c=(v||'').replace(/[^0-9]/g,'');if(c.length<3)return null;
+    const u=+c.slice(0,c.length-2),m=+c.slice(-2);return u*60+m;};
+  const van=naar(document.getElementById('hmVan').value);
+  const tot=naar(document.getElementById('hmTot').value);
+  if(van==null||tot==null)return null;
+  let d=tot-van; if(d<=0)d+=24*60;
+  const pauze=Math.max(0,parseInt(document.getElementById('hmPauze').value)||0);
+  return{geklokt:d,pauze,gewerkt:Math.max(0,d-pauze)};
+}
+
+function hmBereken(){
+  const el=document.getElementById('hmUitkomst');
+  const r=hmMinuten();
+  if(!r){el.textContent='';return;}
+  const nodig=minimumPauze(r.geklokt);
+  el.innerHTML=`Dat is <b>${minToStr(r.gewerkt)}</b> gewerkt (${minToStr(r.geklokt)} min ${r.pauze} min pauze).`+
+    (r.pauze<nodig?`<br><span style="color:#B45309">Bij deze lengte hoort normaal ${nodig} minuten pauze.</span>`:'');
+}
+
+async function bewaarHandmatig(){
+  const wb=document.getElementById('hmWarn');
+  const toonFout=t=>{wb.textContent=t;wb.className='warn-box show';};
+  wb.className='warn-box';
+
+  const gebruiker_id=document.getElementById('hmPersoon').value;
+  const datum=document.getElementById('hmDatum').value;
+  const klus_id=document.getElementById('hmKlus').value||null;
+  const notitie=document.getElementById('hmNotitie').value.trim();
+  const r=hmMinuten();
+
+  if(!gebruiker_id){toonFout('Kies eerst een medewerker.');return;}
+  if(!datum){toonFout('Vul een datum in.');return;}
+  if(!r){toonFout('Vul een geldige begin- en eindtijd in.');return;}
+
+  const naarTijd=v=>{const c=(v||'').replace(/[^0-9]/g,'');
+    return c.slice(0,c.length-2).padStart(2,'0')+':'+c.slice(-2);};
+  const van=naarTijd(document.getElementById('hmVan').value);
+  const tot=naarTijd(document.getElementById('hmTot').value);
+
+  const ingeklokt=new Date(`${datum}T${van}:00`);
+  const uitgeklokt=new Date(`${datum}T${tot}:00`);
+  if(uitgeklokt<=ingeklokt)uitgeklokt.setDate(uitgeklokt.getDate()+1);  // over middernacht
+
+  const{error}=await sb.from('urenregistraties').insert({
+    gebruiker_id,
+    klus_id,
+    ingeklokt_op:ingeklokt.toISOString(),
+    uitgeklokt_op:uitgeklokt.toISOString(),
+    pauze_minuten:r.pauze,
+    totaal_minuten:r.gewerkt,
+    status:'goedgekeurd',
+    handmatig:true,
+    locatie_in:'Handmatig toegevoegd',
+    locatie_uit:'Handmatig toegevoegd',
+    notitie_beh:(notitie?notitie+' — ':'')+'handmatig toegevoegd door '+CURRENT_NAAM,
+  });
+  if(error){toonFout('Toevoegen mislukt: '+error.message);return;}
+
+  sluitHandmatig();
+  toast(minToStr(r.gewerkt)+' toegevoegd');
   loadUrenBeheer();
 }
 
@@ -4419,7 +4751,7 @@ async function doeExport(){
     const naamVan=Object.fromEntries((mensen||[]).map(m=>[m.id,m.naam]));
     const klusVan=Object.fromEntries((KLUSSEN||[]).map(k=>[k.id,k.naam||k.food||'']));
 
-    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Duur','Uren (decimaal)','Klus','Status','Locatie inklokken','Locatie uitklokken','Notitie medewerker','Notitie beheer']];
+    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Pauze (min)','Duur','Uren (decimaal)','Klus','Status','Handmatig','Locatie inklokken','Locatie uitklokken','Notitie medewerker','Notitie beheer']];
     let totaalMin=0;
     const perPersoon={};
 
@@ -4436,10 +4768,12 @@ async function doeExport(){
         inD.toLocaleDateString('nl-NL'),
         tijd(inD),
         tijd(uitD),
+        r.pauze_minuten||0,
         minToStr(min),
         (min/60).toFixed(2).replace('.',','),
         klusVan[r.klus_id]||'',
         r.status||'',
+        r.handmatig?'ja':'',
         r.locatie_in||'',
         r.locatie_uit||'',
         r.notitie_pers||'',
@@ -4450,10 +4784,10 @@ async function doeExport(){
     rijen.push([]);
     rijen.push(['Totaal per persoon']);
     Object.keys(perPersoon).sort().forEach(n=>{
-      rijen.push([n,'','','',minToStr(perPersoon[n]),(perPersoon[n]/60).toFixed(2).replace('.',',')]);
+      rijen.push([n,'','','','',minToStr(perPersoon[n]),(perPersoon[n]/60).toFixed(2).replace('.',',')]);
     });
     rijen.push([]);
-    rijen.push(['Totaal','','','',minToStr(totaalMin),(totaalMin/60).toFixed(2).replace('.',',')]);
+    rijen.push(['Totaal','','','','',minToStr(totaalMin),(totaalMin/60).toFixed(2).replace('.',',')]);
 
     // Puntkomma als scheidingsteken, dat opent goed in Nederlandse Excel.
     // De losse tekens vooraan zorgen dat Excel het als UTF-8 leest.
@@ -4941,7 +5275,6 @@ async function loadAlleBeschikbaarheid(){
   // Verlofaanvragen van vaste krachten en doorgegeven beschikbaarheid van
   // part-timers staan in dezelfde tabel, maar horen apart in beeld.
   const vrijVerzoeken=(beschData||[]).filter(b=>b.soort!=='beschikbaar');
-  const kanWerken=(beschData||[]).filter(b=>b.soort==='beschikbaar'&&(b.datum_eind||b.datum_start)>=todayStr);
   const wacht=vrijVerzoeken.filter(b=>b.status==='wacht');
   const goed=vrijVerzoeken.filter(b=>b.status==='goedgekeurd');
   const afgewezen=vrijVerzoeken.filter(b=>b.status==='afgewezen');
@@ -4974,9 +5307,8 @@ async function loadAlleBeschikbaarheid(){
   }else{
     html+='<div class="empty" style="padding:.75rem 0;font-size:12px">Geen openstaande verzoeken</div>';
   }
-  if(kanWerken.length){
-    html+=`<div class="slabel" style="margin:1rem 0 .625rem">✓ Doorgegeven beschikbaarheid (${kanWerken.length})</div>${kanWerken.map(b=>renderVerzoek(b,false)).join('')}`;
-  }
+  // De doorgegeven beschikbaarheid staat al in de agenda hierboven. Als lijst
+  // met verwijderknoppen erbij was het alleen maar ruis, dus die is eruit.
   if(goed.length){
     html+=`<div class="slabel" style="margin:1rem 0 .625rem">✓ Goedgekeurd vrij (${goed.length})</div>${goed.map(b=>renderVerzoek(b,false)).join('')}`;
   }
@@ -5742,6 +6074,16 @@ const UPDATE_MANIFEST = 'https://jeremylaag-cmd.github.io/tcgroup-app/version.js
 
   let bezig = false;
 
+  // Een update laadt de app opnieuw. Doe dat nooit terwijl er een venster
+  // openstaat of iemand aan het typen is — dan ben je je werk kwijt. Dit was
+  // de oorzaak van "ik was een notitie aan het typen en toen verdween hij".
+  function magNuHerladen(){
+    if(document.querySelector('.modal-overlay.open')) return false;
+    const a = document.activeElement;
+    if(a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return false;
+    return true;
+  }
+
   async function checkUpdate(){
     if(bezig) return;
     bezig = true;
@@ -5759,6 +6101,16 @@ const UPDATE_MANIFEST = 'https://jeremylaag-cmd.github.io/tcgroup-app/version.js
 
       console.log('Nieuwe versie gevonden:', info.version, '(nu:', APP_VERSION + ')');
       const bundel = await U.download({url: info.url, version: info.version});
+
+      // Wachten tot je niets kwijt kunt raken. We kijken elke 5 seconden.
+      if(!magNuHerladen()){
+        console.log('Update klaargezet, wachten tot je klaar bent met typen.');
+        await new Promise(klaar => {
+          const t = setInterval(() => {
+            if(magNuHerladen()){ clearInterval(t); klaar(); }
+          }, 5000);
+        });
+      }
       await U.set({id: bundel.id});   // activeert de update en herlaadt direct
     }catch(e){
       // Stil falen: geen internet of GitHub even onbereikbaar mag de app
