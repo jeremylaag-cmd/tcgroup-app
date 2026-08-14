@@ -5538,26 +5538,43 @@ async function loadAanmeldingen(){
   const naamVan=Object.fromEntries((mensen||[]).map(m=>[m.id,m.naam]));
 
   const open=(aanm||[]).filter(a=>a.status==='aangemeld');
-  // De kaart staat alleen in beeld als er iets te beslissen valt.
-  if(kaart)kaart.style.display=open.length?'':'none';
-  if(teller)teller.textContent=open.length?open.length+' nieuw':'';
-  if(!open.length){el.innerHTML='<div class="empty" style="padding:.75rem 0;font-size:12px">Geen openstaande aanmeldingen</div>';return;}
+  const afgehandeld=(aanm||[]).filter(a=>a.status!=='aangemeld').slice(-6).reverse();
 
-  el.innerHTML=open.map(a=>{
+  // De kaart blijft altijd staan. Verdween hij bij nul aanmeldingen, dan lijkt
+  // het of de functie er niet is.
+  if(kaart)kaart.style.display='';
+  if(teller)teller.textContent=open.length?open.length+' nieuw':'';
+
+  const regel=(a,metKnoppen)=>{
     const k=(KLUSSEN||[]).find(x=>x.id===a.klus_id);
     const datum=k?parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}):'';
-    return`<div class="besch-item wacht">
+    const status=a.status==='geaccepteerd'?'✓ ingedeeld':a.status==='afgewezen'?'✗ afgewezen':'';
+    return`<div class="besch-item ${a.status==='aangemeld'?'wacht':a.status==='geaccepteerd'?'goedgekeurd':'afgewezen'}">
       <div class="besch-info">
         <div class="besch-naam">${naamVan[a.gebruiker_id]||'Onbekend'}</div>
         <div class="besch-reden">${k?(k.naam||k.food||'Klus'):'Klus'}</div>
         <div class="besch-datum">${datum}</div>
       </div>
       <div class="besch-actions">
-        <button class="btn-sm" style="background:#059669;padding:6px 12px;font-size:12px" onclick="beslisAanmelding('${a.id}','geaccepteerd')">✓ Indelen</button>
-        <button class="btn-danger-sm" style="padding:6px 12px;font-size:12px" onclick="beslisAanmelding('${a.id}','afgewezen')">✗ Nee</button>
+        ${metKnoppen?`
+          <button class="btn-sm" style="background:#059669;padding:6px 12px;font-size:12px" onclick="beslisAanmelding('${a.id}','geaccepteerd')">✓ Indelen</button>
+          <button class="btn-danger-sm" style="padding:6px 12px;font-size:12px" onclick="beslisAanmelding('${a.id}','afgewezen')">✗ Nee</button>
+        `:`<span class="besch-status ${a.status==='geaccepteerd'?'goedgekeurd':'afgewezen'}">${status}</span>`}
       </div>
     </div>`;
-  }).join('');
+  };
+
+  let html='';
+  if(open.length){
+    html+=open.map(a=>regel(a,true)).join('');
+  }else{
+    html+='<div class="empty" style="padding:.75rem 0;font-size:12px">Niemand heeft zich aangemeld op dit moment. Zodra iemand zich via Open klussen meldt, staat hij hier.</div>';
+  }
+  if(afgehandeld.length){
+    html+=`<div class="slabel" style="margin:1rem 0 .625rem">Laatst afgehandeld</div>`+
+      afgehandeld.map(a=>regel(a,false)).join('');
+  }
+  el.innerHTML=html;
 }
 
 async function beslisAanmelding(id,status){
