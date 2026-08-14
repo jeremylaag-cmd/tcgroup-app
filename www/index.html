@@ -745,6 +745,20 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <button class="auth-btn" onclick="doForgotPw()">Reset link versturen</button>
       <button type="button" onclick="showForgotPw(false)" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:.5rem;font-family:var(--font);text-decoration:underline;display:block;width:100%;text-align:center">Terug naar inloggen</button>
     </div>
+    <div id="nieuwPwForm" style="display:none">
+      <div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:1rem">
+        Kies een nieuw wachtwoord voor je account. Daarna log je er meteen mee in.
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Nieuw wachtwoord</label>
+        <input type="password" id="nieuwPw1" placeholder="Minimaal 6 tekens" autocomplete="new-password">
+      </div>
+      <div class="auth-field">
+        <label class="auth-label">Nog een keer</label>
+        <input type="password" id="nieuwPw2" placeholder="Herhaal je wachtwoord" autocomplete="new-password">
+      </div>
+      <button class="auth-btn" onclick="bewaarNieuwWachtwoord()">Wachtwoord opslaan</button>
+    </div>
     <div id="registerForm" style="display:none">
       <div class="auth-field"><label class="auth-label">Volledige naam <span style="color:#DC2626">*</span></label><input type="text" id="regNaam" placeholder="Voornaam Achternaam"></div>
       <div class="auth-field"><label class="auth-label">Telefoonnummer <span style="color:#DC2626">*</span></label><input type="tel" id="regTel" placeholder="06-12345678"></div>
@@ -1556,7 +1570,17 @@ async function sbFetch(input,init){
   }
 }
 
+// Komt iemand binnen via de herstellink uit de wachtwoordmail, dan staat dat in
+// het adres. Dit lezen we uit vóórdat Supabase het adres opschoont, anders is
+// het weg tegen de tijd dat we het nodig hebben.
+const HERSTEL_MODUS=/[#&?]type=recovery/.test(location.hash+location.search);
+
 const sb=supabase.createClient(SB_URL,SB_KEY,{global:{fetch:sbFetch}});
+
+// Supabase meldt zelf ook wanneer iemand via een herstellink binnenkomt.
+sb.auth.onAuthStateChange((gebeurtenis)=>{
+  if(gebeurtenis==='PASSWORD_RECOVERY')toonNieuwWachtwoord();
+});
 
 let TRUCKS=[],PERSONEEL=[],KLUSSEN=[],SOORTEN=[];
 let selDate=null,editId=null,weekOffset=0,medWeekOffset=0;
@@ -1671,6 +1695,16 @@ async function doAppleLogin(){
   }
 }
 
+// De link uit de mail moet uitkomen op de webversie van de app, niet op de
+// oude website. Daar staat namelijk het scherm waarin je je nieuwe wachtwoord
+// kiest. Draait de app zelf al op het web, dan sturen we terug naar precies
+// dezelfde pagina.
+function herstelBestemming(){
+  const opWeb=location.protocol==='https:'&&location.hostname.endsWith('github.io');
+  if(opWeb)return location.origin+location.pathname;
+  return 'https://jeremylaag-cmd.github.io/tcgroup-app/app.html';
+}
+
 async function doForgotPw(){
   const email=document.getElementById('forgotEmail').value.trim();
   const err=document.getElementById('authErr');
@@ -1678,11 +1712,54 @@ async function doForgotPw(){
   err.style.display='none';msg.style.display='none';
   if(!email){err.textContent='Vul je e-mailadres in.';err.style.display='block';return;}
   const{error}=await sb.auth.resetPasswordForEmail(email,{
-    redirectTo:'https://jeremylaag-cmd.github.io'
+    redirectTo:herstelBestemming()
   });
   if(error){err.textContent=error.message;err.style.display='block';return;}
-  msg.textContent='Reset link verstuurd! Controleer je e-mail.';
+  msg.textContent='Gelukt! Je krijgt een mail met een link. Open die op dit toestel en kies daarna een nieuw wachtwoord.';
   msg.style.display='block';
+}
+
+// Scherm om een nieuw wachtwoord te kiezen, na het volgen van de herstellink.
+function toonNieuwWachtwoord(){
+  const auth=document.getElementById('authWrap');
+  ['loginForm','forgotForm','registerForm'].forEach(id=>{
+    const el=document.getElementById(id);if(el)el.style.display='none';
+  });
+  const tabs=document.querySelector('.auth-tabs');if(tabs)tabs.style.display='none';
+  const sub=document.getElementById('authSub');if(sub)sub.textContent='Kies een nieuw wachtwoord';
+  const nieuw=document.getElementById('nieuwPwForm');if(nieuw)nieuw.style.display='';
+  const err=document.getElementById('authErr');if(err)err.style.display='none';
+  const msg=document.getElementById('authMsg');if(msg)msg.style.display='none';
+  if(auth)auth.style.display='flex';
+}
+
+async function bewaarNieuwWachtwoord(){
+  const pw1=document.getElementById('nieuwPw1').value;
+  const pw2=document.getElementById('nieuwPw2').value;
+  const err=document.getElementById('authErr');
+  const msg=document.getElementById('authMsg');
+  const toonFout=t=>{err.textContent=t;err.style.display='block';};
+  err.style.display='none';msg.style.display='none';
+
+  if(pw1.length<6){toonFout('Je wachtwoord moet minimaal 6 tekens lang zijn.');return;}
+  if(pw1!==pw2){toonFout('De twee wachtwoorden zijn niet gelijk.');return;}
+
+  const{data:{session}}=await sb.auth.getSession();
+  if(!session){
+    toonFout('De herstellink is verlopen of al gebruikt. Vraag een nieuwe link aan.');
+    return;
+  }
+
+  const{error}=await sb.auth.updateUser({password:pw1});
+  if(error){toonFout('Opslaan mislukt: '+error.message);return;}
+
+  // Adres opschonen zodat een herlaadbeurt niet opnieuw in herstelmodus komt.
+  try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
+
+  msg.textContent='Je wachtwoord is gewijzigd. Je wordt nu ingelogd...';
+  msg.style.display='block';
+  const{data:{user}}=await sb.auth.getUser();
+  if(user)await initApp(user);
 }
 
 async function doLogin(){
@@ -1954,8 +2031,11 @@ async function initApp(user){
   }
 }
 
-// Check bestaande sessie
+// Check bestaande sessie. Komt iemand binnen via de herstellink, dan krijgt hij
+// eerst het scherm om een nieuw wachtwoord te kiezen — anders zou hij gewoon
+// ingelogd worden en nooit de kans krijgen het te wijzigen.
 sb.auth.getSession().then(({data:{session}})=>{
+  if(HERSTEL_MODUS){toonNieuwWachtwoord();return;}
   if(session)initApp(session.user);
 });
 
@@ -3448,9 +3528,19 @@ async function maakBeheerder(id){
   await sb.from('gebruikers').update({rol:'beheerder'}).eq('id',id);
   loadAccounts();
 }
+// Verwijderen gaat via de server, want alleen daar kan ook de inlog worden
+// weggehaald. Deed de app dat zelf, dan bleef het e-mailadres bezet en kon
+// diegene zich nooit meer aanmelden met datzelfde adres.
 async function verwijderAccount(id){
-  if(!confirm('Account verwijderen?'))return;
-  await sb.from('gebruikers').delete().eq('id',id);
+  const wie=(PERSONEEL.find(p=>p.id===id)||{}).naam||'dit account';
+  if(!confirm(`${wie} verwijderen?\n\nHet account, de uren, de beschikbaarheid en de inlog worden definitief verwijderd. Diegene kan zich daarna wel opnieuw aanmelden met hetzelfde e-mailadres.`))return;
+  const{data,error}=await sb.functions.invoke('delete-account',{body:{userId:id}});
+  if(error||(data&&data.error)){
+    toast('Verwijderen mislukt: '+((data&&data.error)||error.message),'fout');
+    return;
+  }
+  toast('Account verwijderd');
+  await loadAll();
   loadAccounts();
 }
 
