@@ -5396,6 +5396,7 @@ function pbRenderContent(){
 // Het toestel geeft zijn token vaak al door voordat je ingelogd bent. We houden
 // het daarom vast en schrijven het weg zodra we weten wie je bent.
 let PUSH_TOKEN=null;
+let PUSH_RECHT='onbekend';
 let pushGestart=false;
 
 async function bewaarPushToken(){
@@ -5410,11 +5411,8 @@ async function initPushNotifications(){
     if(!Push||pushGestart)return;
     pushGestart=true;
 
-    const permResult=await Push.requestPermissions();
-    if(permResult.receive==='granted'){
-      await Push.register();
-    }
-
+    // Eerst luisteren, dan pas registreren. Andersom kan het toestel zijn token
+    // al doorgeven voordat wij meeluisteren, en dan raken we hem kwijt.
     await Push.addListener('registration', async token=>{
       PUSH_TOKEN=token.value;
       await bewaarPushToken();
@@ -5423,6 +5421,13 @@ async function initPushNotifications(){
     await Push.addListener('registrationError', err=>{
       console.error('Push registratie fout:', err);
     });
+
+    let perm=await Push.checkPermissions();
+    if(perm.receive!=='granted')perm=await Push.requestPermissions();
+    PUSH_RECHT=perm.receive;
+    if(perm.receive==='granted'){
+      await Push.register();
+    }
 
     // Staat de app open, dan toont iOS zelf géén balk (dat is standaardgedrag:
     // alleen het cijfertje op het icoon wordt bijgewerkt). We laten de melding
@@ -5475,27 +5480,60 @@ async function testMelding(){
   if(knop){knop.disabled=true;knop.textContent='Versturen...';}
   if(uitslagEl)uitslagEl.textContent='';
 
-  const{data:eigen}=await sb.from('gebruikers').select('push_token').eq('id',CURRENT_USER.id).single();
-  if(!eigen||!eigen.push_token){
+  const Push=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;
+  const klaar=tekst=>{
     if(knop){knop.disabled=false;knop.textContent='Stuur mezelf een testmelding';}
-    if(uitslagEl)uitslagEl.textContent='Dit toestel is nog niet aangemeld voor meldingen. Sluit de app helemaal af, open hem opnieuw en sta meldingen toe.';
+    if(uitslagEl)uitslagEl.innerHTML=tekst;
+  };
+
+  if(!Push){
+    klaar('Je gebruikt de app nu in een browser. Pushmeldingen werken alleen in de app op je telefoon.');
     return;
   }
 
-  const res=await sendPushNotificatie(CURRENT_USER.id,'Testmelding','Als je dit ziet werken de meldingen.',false);
-  if(knop){knop.disabled=false;knop.textContent='Stuur mezelf een testmelding';}
-  if(!uitslagEl)return;
-  if(res&&res.verstuurd){
-    uitslagEl.innerHTML='<b>Apple heeft de melding aangenomen</b> ('+
-      (res.omgeving==='api.push.apple.com'?'productie':'testomgeving')+').<br>'+
-      'Zie je hierboven een balkje in de app verschijnen, dan werkt alles. '+
-      'iOS toont bewust géén melding bovenaan je scherm zolang de app open staat — '+
-      'alleen het cijfertje op het app-icoon loopt op. Wil je de echte melding zien: '+
-      'leg je telefoon op slot en druk daarna op deze knop via een tweede toestel, '+
-      'of laat iemand je op een klus indelen.';
-  }else{
-    uitslagEl.textContent='Niet gelukt: '+((res&&(res.reden||res.error||(res.apns&&res.apns.reden)))||'onbekende reden');
+  // Wat vindt iOS er zelf van? Dit is meestal waar het misgaat: het versturen
+  // lukt prima, maar het toestel mag de melding niet tonen.
+  let recht='onbekend';
+  try{ recht=(await Push.checkPermissions()).receive; }catch(e){}
+
+  if(recht==='denied'){
+    klaar('<b>Meldingen staan uit op dit toestel.</b><br>'+
+      'Ga naar Instellingen → TC Group Planning → Berichtgeving en zet '+
+      '<i>Sta berichtgeving toe</i> aan. Zet daar ook <i>Stroken</i> aan, '+
+      'en controleer of <i>Geplande samenvatting</i> uit staat — anders bewaart '+
+      'iOS je meldingen tot een vast moment op de dag.');
+    return;
   }
+  if(recht!=='granted'){
+    try{ await Push.requestPermissions(); }catch(e){}
+    klaar('iOS heeft nog geen toestemming voor meldingen. Beantwoord de vraag die nu verschijnt en probeer het opnieuw.');
+    return;
+  }
+
+  // Zorg dat het toestel opnieuw aanmeldt, dan weten we zeker dat het token klopt.
+  try{ await Push.register(); }catch(e){}
+
+  const{data:eigen}=await sb.from('gebruikers').select('push_token').eq('id',CURRENT_USER.id).single();
+  if(!eigen||!eigen.push_token){
+    klaar('Dit toestel is nog niet aangemeld bij Apple. Sluit de app helemaal af, open hem opnieuw en probeer het dan nog eens.');
+    return;
+  }
+  const zelfdeToestel=!PUSH_TOKEN||PUSH_TOKEN===eigen.push_token;
+
+  const res=await sendPushNotificatie(CURRENT_USER.id,'Testmelding','Als je dit ziet werken de meldingen.',false);
+  if(!res||!res.verstuurd){
+    klaar('Niet gelukt: '+((res&&(res.reden||res.error||(res.apns&&res.apns.reden)))||'onbekende reden'));
+    return;
+  }
+
+  klaar('<b>Apple heeft de melding aangenomen</b> ('+
+    (res.omgeving==='api.push.apple.com'?'productie':'testomgeving')+').<br>'+
+    'iOS zegt: meldingen staan <b>aan</b> voor deze app.'+
+    (zelfdeToestel?'':'<br><b>Let op:</b> dit account stond op een ander toestel geregistreerd. Dat is nu rechtgezet — probeer het nog een keer.')+
+    '<br><br>Zie je nu geen melding bovenaan je scherm terwijl je buiten de app bent, '+
+    'kijk dan in Instellingen → TC Group Planning → Berichtgeving of <i>Stroken</i> '+
+    'aanstaat en <i>Geplande samenvatting</i> uit. Ook een Focus-stand (maantje) houdt '+
+    'meldingen tegen.');
 }
 
 // 'deviceready' komt uit Cordova en vuurt in Capacitor niet altijd. We starten
