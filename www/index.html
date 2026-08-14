@@ -1065,7 +1065,9 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         <div class="detail-section" id="testMeldingBlok" style="display:none">
           <div class="detail-label">Meldingen</div>
           <div style="font-size:11px;color:var(--muted);line-height:1.5;margin:2px 0 6px">
-            Controleer of pushmeldingen op dit toestel aankomen.
+            Controleer of pushmeldingen op dít toestel aankomen. Let op: word je op een klus
+            ingedeeld, dan gaat de melding naar het toestel van dat account — niet naar het
+            account waarmee je aan het indelen bent.
           </div>
           <button class="btn-sm" onclick="testMelding()" style="padding:8px 14px">Stuur mezelf een testmelding</button>
           <div id="testMeldingUitslag" style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:8px"></div>
@@ -3461,7 +3463,7 @@ function loadProfiel(){
   document.getElementById('profielNaamInput').value=CURRENT_NAAM;
   // Laad adresgegevens
   const testBlok=document.getElementById('testMeldingBlok');
-  if(testBlok)testBlok.style.display=CURRENT_ROL==='beheerder'?'':'none';
+  if(testBlok)testBlok.style.display='';
 
   const maatSel=document.getElementById('profielShirtmaat');
   if(maatSel&&maatSel.options.length<=1){
