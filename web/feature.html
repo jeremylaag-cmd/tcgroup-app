@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:1024px;height:500px;overflow:hidden}
+  body{
+    background:#1A1917;
+    display:flex;align-items:center;
+    font-family:-apple-system,"SF Pro Display","Helvetica Neue",sans-serif;
+    color:#F7F6F2;
+    position:relative;
+  }
+  .gloed{
+    position:absolute;right:-140px;top:-160px;
+    width:620px;height:620px;border-radius:50%;
+    background:radial-gradient(circle,rgba(220,226,249,.16) 0%,rgba(26,25,23,0) 68%);
+  }
+  .logo{
+    width:230px;height:230px;margin-left:76px;
+    border-radius:44px;background:#F7F6F2;
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 18px 44px rgba(0,0,0,.45);
+    flex:0 0 auto;z-index:1;
+  }
+  .logo img{width:196px;height:196px;object-fit:contain;border-radius:32px}
+  .tekst{margin-left:56px;z-index:1}
+  h1{font-size:62px;line-height:1.05;font-weight:700;letter-spacing:-1.4px}
+  h1 span{display:block;color:#DCE2F9}
+  p{margin-top:22px;font-size:26px;line-height:1.4;color:#B9B7B0;max-width:430px}
+  .streep{margin-top:26px;width:88px;height:5px;border-radius:3px;background:#DCE2F9}
+</style>
+</head>
+<body>
+  <div class="gloed"></div>
+  <div class="logo"><img src="icon.png" alt=""></div>
+  <div class="tekst">
+    <h1>TC Group<span>Planning</span></h1>
+    <p>Rooster, beschikbaarheid en uren voor het hele team — in één app.</p>
+    <div class="streep"></div>
+  </div>
+</body>
+</html>
