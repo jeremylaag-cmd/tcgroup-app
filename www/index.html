@@ -1354,7 +1354,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <!-- Week agenda -->
       <div class="sc" style="margin-bottom:1.25rem">
         <div class="sc-header" style="margin-bottom:.75rem">
-          <div class="st">Onbeschikbaarheid overzicht</div>
+          <div class="st">Wie is er niet — vrij, vakantie of ziek</div>
           <div class="week-nav">
             <button class="btn-nav" onclick="changeBeschWeek(-1)">&#8592;</button>
             <span class="week-nav-label" id="beschWeekLabel" style="min-width:140px"></span>
@@ -5264,11 +5264,10 @@ async function loadAlleBeschikbaarheid(){
   const wl=document.getElementById('beschWeekLabel');
   if(wl)wl.textContent=`${maandNamen[month]} ${year}`;
 
-  const goedgekeurd=(beschData||[]).filter(b=>b.status==='goedgekeurd');
+  // Deze agenda gaat alleen over wie er níét is: vrij, vakantie, ziek. Wie zich
+  // beschikbaar meldt zie je bij het indelen zelf, dat hoeft hier niet ook nog.
+  const goedgekeurd=(beschData||[]).filter(b=>b.status==='goedgekeurd'&&b.soort!=='beschikbaar');
   const dagNamen=['Ma','Di','Wo','Do','Vr','Za','Zo'];
-  const kleuren=['#2563EB','#059669','#DC2626','#7C3AED','#D97706','#0891B2','#BE185D','#65A30D'];
-  const persKleur={};
-  (gebruikers||[]).forEach((g,i)=>{persKleur[g.id]=kleuren[i%kleuren.length];});
 
   // Maand grid
   const hdrHTML=dagNamen.map(n=>`<div style="font-size:9px;font-weight:600;color:var(--muted);text-align:center;text-transform:uppercase;letter-spacing:.05em;padding:4px 0">${n}</div>`).join('');
@@ -5282,12 +5281,8 @@ async function loadAlleBeschikbaarheid(){
       <div style="display:flex;flex-direction:column;gap:2px">
         ${dagBesch.map(b=>{
           const g=gMap[b.gebruiker_id];
-          const kleur=persKleur[b.gebruiker_id]||'#888';
-          const wel=b.soort==='beschikbaar';
           const tijdStr=b.tijd_start?` ${b.tijd_start.slice(0,5)}–${b.tijd_eind?b.tijd_eind.slice(0,5):'?'}`:'';
-          const teken=wel?'✓ ':'✕ ';
-          const soortTekst=wel?'kan werken':'niet beschikbaar';
-          return`<div style="font-size:9px;font-weight:500;border-radius:3px;padding:2px 4px;background:${kleur}20;color:${kleur};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;${wel?'':'text-decoration:line-through'}" title="${g?.naam||'?'} — ${soortTekst}${tijdStr}${b.reden?' — '+b.reden:''}">${teken}${g?.naam?.split(' ')[0]||'?'}${tijdStr}</div>`;
+          return`<div style="font-size:9px;font-weight:600;border-radius:3px;padding:2px 4px;background:#FEE2E2;color:#991B1B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${g?.naam||'?'} — niet beschikbaar${tijdStr}${b.reden?' — '+b.reden:''}">${g?.naam?.split(' ')[0]||'?'}${b.reden?' · '+b.reden:''}${tijdStr}</div>`;
         }).join('')}
       </div>
     </div>`;
@@ -5630,10 +5625,12 @@ function pbIsToday(d){const t=new Date();t.setHours(0,0,0,0);const x=new Date(d)
 function pbFmt(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function pbGetKlussenVoorDag(d){const ds=pbFmt(d);return KLUSSEN.filter(k=>{const start=k.datum;const end=k.datum_eind||k.datum;return ds>=start&&ds<=end;});}
 function pbGetShifts(k){
-  const bezet=k.personeel?k.personeel.length:0;const nodig=k.personeel_nodig||0;
+  // Losse krachten staan óók op de klus, dus die tellen gewoon mee in de bezetting.
+  const bezet=(k.personeel?k.personeel.length:0)+(k.losse?k.losse.length:0);
+  const nodig=k.personeel_nodig||0;
   if(nodig===0&&bezet===0)return[];
-  const t1=tijdFromDb(k.vertrek_tijd)||tijdFromDb(k.start_opbouw)||'?';
-  const t2=tijdFromDb(k.einde_feest)||'?';
+  const t1=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd)||tijdFromDb(k.start_opbouw)||'?';
+  const t2=tijdFromDb(k.einde_klus)||tijdFromDb(k.einde_feest)||'?';
   const team=(k.trucks&&k.trucks.length)
     ?k.trucks.map(t=>t.label).join(', ')
     :(k.categorie==='franklins'?'Snackbar':'Onbekend');
@@ -5658,7 +5655,8 @@ function pbWijsToe(klusId,mwId){
   const klus=KLUSSEN.find(k=>k.id===klusId);const mw=PERSONEEL.find(p=>p.id===mwId);
   if(!klus||!mw)return;if(!klus.personeel)klus.personeel=[];
   if(klus.personeel.find(p=>p.id===mwId))return;
-  if(klus.personeel.length>=(klus.personeel_nodig||0)&&(klus.personeel_nodig||0)>0)return;
+  const alBezet=klus.personeel.length+((klus.losse||[]).length);
+  if(alBezet>=(klus.personeel_nodig||0)&&(klus.personeel_nodig||0)>0)return;
 
   // Wie zich heeft aangemeld mag altijd; anders moet de dag vrij zijn.
   const heeftGemeld=AANMELDINGEN.some(a=>a.klus_id===klusId&&a.gebruiker_id===mwId&&a.status!=='afgewezen');
