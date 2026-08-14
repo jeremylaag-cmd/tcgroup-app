@@ -1924,6 +1924,11 @@ async function initApp(user){
   }
 
   document.getElementById('detailEditBtn').style.display=isBeheerder?'':'none';
+
+  // Meldingen: nu we weten wie je bent, kan het toesteltoken worden bewaard.
+  initPushNotifications();
+  bewaarPushToken();
+
   await loadAll();
   if(!isBeheerder){
     document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -5355,10 +5360,22 @@ function pbRenderContent(){
   listEl.innerHTML=html;
 }
 // ── PUSH NOTIFICATIES ──
+// Het toestel geeft zijn token vaak al door voordat je ingelogd bent. We houden
+// het daarom vast en schrijven het weg zodra we weten wie je bent.
+let PUSH_TOKEN=null;
+let pushGestart=false;
+
+async function bewaarPushToken(){
+  if(!PUSH_TOKEN||!CURRENT_USER)return;
+  const{error}=await sb.from('gebruikers').update({push_token:PUSH_TOKEN}).eq('id',CURRENT_USER.id);
+  if(error)console.error('Push token opslaan mislukt:',error);
+}
+
 async function initPushNotifications(){
   try {
-    const Push=window.Capacitor.Plugins.PushNotifications;
-    if(!Push)return;
+    const Push=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;
+    if(!Push||pushGestart)return;
+    pushGestart=true;
 
     const permResult=await Push.requestPermissions();
     if(permResult.receive==='granted'){
@@ -5366,10 +5383,8 @@ async function initPushNotifications(){
     }
 
     await Push.addListener('registration', async token=>{
-      console.log('Push token:', token.value);
-      if(!CURRENT_USER)return;
-      await sb.from('gebruikers').update({push_token:token.value}).eq('id',CURRENT_USER.id);
-      console.log('Push token opgeslagen');
+      PUSH_TOKEN=token.value;
+      await bewaarPushToken();
     });
 
     await Push.addListener('registrationError', err=>{
@@ -5385,25 +5400,31 @@ async function initPushNotifications(){
   }
 }
 
-function sendPushNotificatie(userId, titel, bericht){
-  const SUPABASE_URL='https://rxfrdocioodfxrnjtipa.supabase.co';
-  const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4ZnJkb2Npb29kZnhybmp0aXBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MjM1MDQsImV4cCI6MjA5MzM5OTUwNH0.dvTDgvVSQQILHdgm0FI_FW8WmALTZI06VTqabLrwu1E';
-  fetch(`${SUPABASE_URL}/functions/v1/stuur-notificatie`,{
-    method:'POST',
-    headers:{
-      'Content-Type':'application/json',
-      'Authorization':`Bearer ${SUPABASE_ANON_KEY}`,
-      'apikey': SUPABASE_ANON_KEY
-    },
-    body:JSON.stringify({userId, titel, bericht})
-  }).then(r=>r.json()).then(d=>console.log('Notificatie result:',d)).catch(e=>console.error('Notificatie fout:',e));
+// Stuurt een melding via de server. We sturen je eigen sessie mee in plaats van
+// de publieke sleutel: die staat namelijk in de app en daarmee kon iedereen
+// meldingen naar willekeurig wie sturen. De server controleert nu of je
+// beheerder bent.
+async function sendPushNotificatie(userId, titel, bericht){
+  try{
+    const{data,error}=await sb.functions.invoke('stuur-notificatie',{
+      body:{userId,titel,bericht},
+    });
+    if(error){console.error('Notificatie fout:',error);return;}
+    console.log('Notificatie result:',data);
+  }catch(e){
+    console.error('Notificatie fout:',e);
+  }
 }
 
-document.addEventListener('deviceready', ()=>{
-  if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications){
+// 'deviceready' komt uit Cordova en vuurt in Capacitor niet altijd. We starten
+// de meldingen daarom ook gewoon bij het laden; initPushNotifications() zorgt
+// zelf dat het maar één keer gebeurt.
+document.addEventListener('deviceready', ()=>initPushNotifications(), false);
+document.addEventListener('DOMContentLoaded', ()=>{
+  if(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform()){
     initPushNotifications();
   }
-}, false);
+});
 
 // ── TOETSENBORD SLUITEN ──
 // Tik je naast een invoerveld, dan gaat het toetsenbord weg. In een webview
