@@ -5424,8 +5424,18 @@ async function initPushNotifications(){
       console.error('Push registratie fout:', err);
     });
 
+    // Staat de app open, dan toont iOS zelf géén balk (dat is standaardgedrag:
+    // alleen het cijfertje op het icoon wordt bijgewerkt). We laten de melding
+    // daarom zelf even in beeld zien, zodat je ziet dat hij is aangekomen.
     await Push.addListener('pushNotificationReceived', notification=>{
       console.log('Notificatie ontvangen:', notification);
+      const t=(notification&&notification.title)||'Melding';
+      const b=(notification&&notification.body)||'';
+      toast(b?`${t} — ${b}`:t);
+    });
+
+    await Push.addListener('pushNotificationActionPerformed', actie=>{
+      console.log('Notificatie aangetikt:', actie);
     });
 
   } catch(e){
@@ -5476,9 +5486,15 @@ async function testMelding(){
   if(knop){knop.disabled=false;knop.textContent='Stuur mezelf een testmelding';}
   if(!uitslagEl)return;
   if(res&&res.verstuurd){
-    uitslagEl.textContent='Verstuurd via '+(res.omgeving==='api.push.apple.com'?'Apple productie':'Apple test')+'. Komt er niets binnen, kijk dan of meldingen aanstaan bij Instellingen → TC Group.';
+    uitslagEl.innerHTML='<b>Apple heeft de melding aangenomen</b> ('+
+      (res.omgeving==='api.push.apple.com'?'productie':'testomgeving')+').<br>'+
+      'Zie je hierboven een balkje in de app verschijnen, dan werkt alles. '+
+      'iOS toont bewust géén melding bovenaan je scherm zolang de app open staat — '+
+      'alleen het cijfertje op het app-icoon loopt op. Wil je de echte melding zien: '+
+      'leg je telefoon op slot en druk daarna op deze knop via een tweede toestel, '+
+      'of laat iemand je op een klus indelen.';
   }else{
-    uitslagEl.textContent='Niet gelukt: '+((res&&(res.reden||(res.apns&&res.apns.reden)))||'onbekende reden');
+    uitslagEl.textContent='Niet gelukt: '+((res&&(res.reden||res.error||(res.apns&&res.apns.reden)))||'onbekende reden');
   }
 }
 
