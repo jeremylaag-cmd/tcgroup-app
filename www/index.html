@@ -5367,7 +5367,9 @@ async function loadAlleBeschikbaarheid(){
   if(!agendaEl||!lijstEl)return;
 
   const{data:beschData}=await sb.from('beschikbaarheid').select('*').order('datum_start',{ascending:true});
-  const{data:gebruikers}=await sb.from('personeel_publiek').select('id,naam').in('rol',['part-timer','full-timer','hal']);
+  // Iedereen erbij, ook beheerders — die kunnen zelf ook vrij zijn. Stond de
+  // rolfilter er nog in, dan verscheen hun naam als "Onbekend".
+  const{data:gebruikers}=await sb.from('personeel_publiek').select('id,naam');
   const gMap=Object.fromEntries((gebruikers||[]).map(g=>[g.id,g]));
 
   const{days,month,year}=getBeschMonthDates();
