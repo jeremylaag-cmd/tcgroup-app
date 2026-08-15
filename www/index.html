@@ -260,6 +260,18 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .bk-dag.vrij{background:#FEF2F2;border-color:#FECACA;color:#991B1B;cursor:not-allowed}
 .bk-mini{font-size:9px;font-weight:600;letter-spacing:.02em}
 
+/* Afwezigheid invoeren voor anderen (alleen beheerders) */
+.afw-lijst{max-height:210px;overflow-y:auto;border:1px solid var(--border);border-radius:9px;background:var(--surface)}
+.afw-regel{display:flex;align-items:center;gap:10px;padding:8px 11px;border-bottom:1px solid var(--border);cursor:pointer;-webkit-tap-highlight-color:transparent}
+.afw-regel:last-child{border-bottom:none}
+.afw-regel:hover{background:var(--bg)}
+.afw-regel.aan{background:#EFF6FF}
+.afw-regel input{width:16px;height:16px;accent-color:#1E40AF;flex:0 0 auto}
+.afw-naam{font-size:13px;font-weight:500;color:var(--text);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.afw-rol{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;flex:0 0 auto}
+.afw-leeg{padding:14px 11px;font-size:12px;color:var(--muted);text-align:center}
+.afw-telling{font-size:11px;color:var(--muted);margin-top:5px}
+
 .modal.pd-modal{width:min(1100px,96vw);max-width:none;max-height:92vh;overflow:hidden}
 .pd-wrap{display:grid;grid-template-columns:320px minmax(0,1fr);min-height:min(660px,84vh);max-height:92vh}
 .pd-zij{background:var(--bg);border-right:1px solid var(--border);padding:2rem 1.5rem;overflow-y:auto;min-width:0}
@@ -1294,6 +1306,59 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     </div>
   </div>
 
+  <!-- AFWEZIGHEID INVOEREN VOOR ANDEREN (alleen beheerders) -->
+  <div class="modal-overlay" id="afwezigOverlay" onclick="if(event.target===this)sluitAfwezig()">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-title">Vrij of vakantie invoeren</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:1rem">
+        Voor mensen die het niet zelf doorgeven. Staat er meteen goedgekeurd in, en telt
+        direct mee bij het indelen.
+      </div>
+
+      <div class="fr">
+        <span class="fl">Wie <span style="color:#DC2626">*</span></span>
+        <input type="search" id="afwZoek" placeholder="Zoek op naam..." oninput="afwRenderLijst()" autocomplete="off" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);margin-bottom:6px">
+        <div class="afw-lijst" id="afwLijst"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <div class="afw-telling" id="afwTelling">Niemand gekozen</div>
+          <button class="btn-nav" onclick="afwWisSelectie()" style="font-size:11px">Selectie wissen</button>
+        </div>
+      </div>
+
+      <div class="fr">
+        <span class="fl">Reden <span style="color:#DC2626">*</span></span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+          <button class="chip" onclick="afwKiesReden('Vakantie')">Vakantie</button>
+          <button class="chip" onclick="afwKiesReden('Ziek')">Ziek</button>
+          <button class="chip" onclick="afwKiesReden('Vrij')">Vrij</button>
+          <button class="chip" onclick="afwKiesReden('Verlof')">Verlof</button>
+        </div>
+        <input type="text" id="afwReden" placeholder="bv. Vakantie, Ziek, Bruiloft..." style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+      </div>
+
+      <div class="two">
+        <div class="fr"><span class="fl">Van <span style="color:#DC2626">*</span></span><input type="date" id="afwStart" onchange="afwCheck()"></div>
+        <div class="fr"><span class="fl">Tot en met</span><input type="date" id="afwEind" onchange="afwCheck()"></div>
+      </div>
+
+      <div class="fr">
+        <span class="fl">Tijdstip <span style="color:var(--muted);font-weight:400">(optioneel — laat leeg voor hele dagen)</span></span>
+        <div class="two">
+          <div><span class="fl" style="font-size:10px">Vanaf</span><input type="text" class="tijd-input" id="afwTijdStart" placeholder="09.00" maxlength="5" oninput="formatTijd(this)"></div>
+          <div><span class="fl" style="font-size:10px">Tot</span><input type="text" class="tijd-input" id="afwTijdEind" placeholder="17.00" maxlength="5" oninput="formatTijd(this)"></div>
+        </div>
+      </div>
+
+      <div class="warn-box" id="afwConflict"></div>
+      <div class="warn-box" id="afwWarn"></div>
+      <div class="mfooter" style="margin-top:1rem">
+        <span class="saving-msg" id="afwBezig" style="display:none">Opslaan...</span>
+        <button class="btn-ghost" onclick="sluitAfwezig()">Annuleren</button>
+        <button class="btn-sm" onclick="bewaarAfwezig()">Opslaan</button>
+      </div>
+    </div>
+  </div>
+
   <!-- BESCHIKBAARHEID (personeel: eigen invoer) -->
   <div id="page-beschikbaarheid" class="page">
     <div style="padding:1rem;max-width:700px;margin:0 auto">
@@ -1356,6 +1421,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         <div class="sc-header" style="margin-bottom:.75rem">
           <div class="st">Wie is er niet — vrij, vakantie of ziek</div>
           <div class="week-nav">
+            <button class="btn-sm" onclick="openAfwezig()" style="font-size:11px;padding:6px 12px">+ Vrij invoeren</button>
             <button class="btn-nav" onclick="changeBeschWeek(-1)">&#8592;</button>
             <span class="week-nav-label" id="beschWeekLabel" style="min-width:140px"></span>
             <button class="btn-nav" onclick="changeBeschWeek(0)" style="font-size:11px">Deze maand</button>
@@ -2666,6 +2732,7 @@ function pdRenderAgenda(){
        <div style="flex:1;text-align:center;font-size:14px;font-weight:600">${PD_MAANDEN[maand]} ${jaar}</div>
        <button class="btn-nav" onclick="pdAgendaWissel(0)" style="font-size:11px">Nu</button>
        <button class="btn-nav" onclick="pdAgendaWissel(1)">&#8594;</button>
+       <button class="btn-sm" onclick="openAfwezig('${PD.u.id}')" style="font-size:11px;padding:6px 12px">+ Vrij invoeren</button>
      </div>
      <div class="pd-kal" style="margin-bottom:4px"><div></div>${kopjes}</div>
      <div class="pd-kal">${cellen}</div>
@@ -5453,6 +5520,144 @@ async function deleteBeschikbaarheid(id){
 async function keurBeschikbaarheid(id,status){
   await sb.from('beschikbaarheid').update({status}).eq('id',id);
   loadAlleBeschikbaarheid();
+}
+
+// ── VRIJ OF VAKANTIE INVOEREN VOOR ANDEREN ────────────────────────────────
+// Niet iedereen geeft het zelf door. Een beheerder kan het daarom voor een of
+// meer mensen tegelijk invullen. Het staat er meteen goedgekeurd in, want wie
+// het invoert is degene die het anders had moeten goedkeuren. De database laat
+// dit alleen toe als je echt beheerder bent (zie de regel "zelf verzoek
+// indienen" op de tabel beschikbaarheid).
+let AFW_GEKOZEN=new Set();
+
+function openAfwezig(vastId=null){
+  if(CURRENT_ROL!=='beheerder')return;
+  AFW_GEKOZEN=new Set(vastId?[vastId]:[]);
+  document.getElementById('afwZoek').value='';
+  document.getElementById('afwReden').value='';
+  document.getElementById('afwStart').value=todayStr;
+  document.getElementById('afwEind').value=todayStr;
+  document.getElementById('afwTijdStart').value='';
+  document.getElementById('afwTijdEind').value='';
+  document.getElementById('afwWarn').className='warn-box';
+  document.getElementById('afwConflict').className='warn-box';
+  afwRenderLijst();
+  document.getElementById('afwezigOverlay').classList.add('open');
+}
+
+function sluitAfwezig(){document.getElementById('afwezigOverlay').classList.remove('open');}
+
+function afwRenderLijst(){
+  const el=document.getElementById('afwLijst');
+  if(!el)return;
+  const zoek=(document.getElementById('afwZoek').value||'').toLowerCase().trim();
+  const mensen=(PERSONEEL||[]).filter(p=>!zoek||(p.naam||'').toLowerCase().includes(zoek));
+  el.innerHTML=mensen.length
+    ? mensen.map(p=>{
+        const aan=AFW_GEKOZEN.has(p.id);
+        return`<label class="afw-regel${aan?' aan':''}">
+          <input type="checkbox" ${aan?'checked':''} onchange="afwVink('${p.id}',this.checked)">
+          <span class="afw-naam">${p.naam||'—'}</span>
+          <span class="afw-rol">${p.rol||''}</span>
+        </label>`;
+      }).join('')
+    : '<div class="afw-leeg">Niemand gevonden</div>';
+  afwTelling();
+}
+
+function afwVink(id,aan){
+  if(aan)AFW_GEKOZEN.add(id);else AFW_GEKOZEN.delete(id);
+  afwRenderLijst();
+  afwCheck();
+}
+
+function afwWisSelectie(){
+  AFW_GEKOZEN.clear();
+  afwRenderLijst();
+  afwCheck();
+}
+
+function afwTelling(){
+  const el=document.getElementById('afwTelling');
+  if(!el)return;
+  const n=AFW_GEKOZEN.size;
+  el.textContent=n===0?'Niemand gekozen':(n===1?'1 persoon gekozen':`${n} personen gekozen`);
+}
+
+function afwKiesReden(tekst){
+  const el=document.getElementById('afwReden');
+  if(el)el.value=tekst;
+}
+
+// Waarschuwen als iemand in die periode al op een klus staat. We blokkeren het
+// niet — soms wíl je juist zien dat er iets herverdeeld moet worden.
+function afwCheck(){
+  const box=document.getElementById('afwConflict');
+  if(!box)return;
+  const start=document.getElementById('afwStart').value;
+  let eind=document.getElementById('afwEind').value||start;
+  if(!start||!AFW_GEKOZEN.size){box.className='warn-box';return;}
+  if(eind<start)eind=start;
+
+  const botsingen=[];
+  (KLUSSEN||[]).forEach(k=>{
+    const dagen=klusDagen(k).filter(ds=>ds>=start&&ds<=eind);
+    if(!dagen.length)return;
+    (k.personeel||[]).forEach(p=>{
+      if(!AFW_GEKOZEN.has(p.id))return;
+      const dag=parseDate(dagen[0]).toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+      botsingen.push(`${p.naam} staat op ${dag} ingedeeld op ${k.naam||k.food||'een klus'}`);
+    });
+  });
+
+  if(botsingen.length){
+    box.innerHTML='<b>Let op:</b><br>'+botsingen.slice(0,6).join('<br>')+
+      (botsingen.length>6?`<br>en nog ${botsingen.length-6} andere`:'');
+    box.className='warn-box show';
+  }else{
+    box.className='warn-box';
+  }
+}
+
+async function bewaarAfwezig(){
+  const wb=document.getElementById('afwWarn');
+  const reden=document.getElementById('afwReden').value.trim();
+  const datum_start=document.getElementById('afwStart').value;
+  const datum_eind=document.getElementById('afwEind').value||datum_start;
+  const tijd_start=tijdToDb(document.getElementById('afwTijdStart').value);
+  const tijd_eind=tijdToDb(document.getElementById('afwTijdEind').value);
+
+  if(!AFW_GEKOZEN.size){wb.textContent='Kies eerst wie er vrij is.';wb.className='warn-box show';return;}
+  if(!reden){wb.textContent='Vul een reden in, bijvoorbeeld Vakantie of Ziek.';wb.className='warn-box show';return;}
+  if(!datum_start){wb.textContent='Vul een startdatum in.';wb.className='warn-box show';return;}
+  if(datum_eind<datum_start){wb.textContent='De einddatum ligt vóór de startdatum.';wb.className='warn-box show';return;}
+
+  const rijen=[...AFW_GEKOZEN].map(id=>({
+    gebruiker_id:id,reden,datum_start,datum_eind,tijd_start,tijd_eind,
+    soort:'onbeschikbaar',status:'goedgekeurd'
+  }));
+
+  document.getElementById('afwBezig').style.display='inline';
+  const{error}=await sb.from('beschikbaarheid').insert(rijen);
+  document.getElementById('afwBezig').style.display='none';
+  if(error){wb.textContent='Opslaan mislukt: '+error.message;wb.className='warn-box show';return;}
+
+  // De planning kijkt naar BESCHIKBAARHEID; die moet dus meteen bij zijn,
+  // anders kun je iemand die je net vrij hebt gegeven nog gewoon indelen.
+  const{data:vers}=await sb.from('beschikbaarheid').select('*').eq('status','goedgekeurd');
+  BESCHIKBAARHEID=vers||[];
+
+  sluitAfwezig();
+  toast(rijen.length===1?'Vrij ingevoerd.':`Vrij ingevoerd voor ${rijen.length} personen.`);
+  loadAlleBeschikbaarheid();
+  renderAll();
+
+  // Staat er een profiel open, dan meteen ook die agenda bijwerken.
+  if(PD&&PD.u&&AFW_GEKOZEN.has(PD.u.id)){
+    const{data:besch}=await sb.from('beschikbaarheid').select('*').eq('gebruiker_id',PD.u.id);
+    PD.besch=besch||[];
+    pdRenderAgenda();
+  }
 }
 
 // ── OPEN KLUSSEN: part-timers melden zich zelf aan ────────────────────────
