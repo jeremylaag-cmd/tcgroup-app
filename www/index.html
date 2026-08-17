@@ -1541,6 +1541,10 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
   <!-- UREN — BEHEERDER -->
   <div id="page-uren-beheer" class="page">
     <div style="padding:1.25rem;max-width:900px;margin:0 auto">
+      <!-- Eigen in- en uitklokken. De kaarten hieronder worden bij het inloggen
+           hierheen verplaatst als je beheerder bent, zodat alle bestaande
+           knoppen en de timer blijven werken. -->
+      <div id="urenBehEigen" style="margin-bottom:1.25rem"></div>
       <div id="urenBeheerGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
         <div class="sc">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.875rem;flex-wrap:wrap">
@@ -2254,6 +2258,18 @@ async function initApp(user){
   }
 
   if(isBeheerder){
+    // De klokkaarten staan standaard op de persoonlijke urenpagina, die een
+    // beheerder niet in zijn menu heeft. We verhuizen ze naar zijn eigen
+    // urenpagina; dan blijven alle knoppen, de timer en het pauzevenster werken
+    // zonder dat er een tweede versie van dezelfde code nodig is.
+    const eigenPlek=document.getElementById('urenBehEigen');
+    const klusK=document.getElementById('uurKlusCard');
+    const regK=document.getElementById('uurRegistratieCard');
+    if(eigenPlek&&klusK&&regK&&!eigenPlek.contains(klusK)){
+      klusK.style.marginBottom='1rem';
+      eigenPlek.appendChild(klusK);
+      eigenPlek.appendChild(regK);
+    }
     tabs.innerHTML=`
       <button class="htab active" onclick="showPage('rooster',this)">Rooster</button>
       <button class="htab" onclick="showPage('planning-beheer',this)">Planning</button>
@@ -4417,8 +4433,11 @@ async function loadUrenPersoneel(){
   if(!klusCard||!regCard)return;
 
   const isHal=CURRENT_ROL==='hal';
+  // Hal-medewerkers hebben geen klussen en beheerders springen overal bij, dus
+  // die twee mogen altijd inklokken — ook op een dag zonder klus.
+  const altijdInklokken=isHal||CURRENT_ROL==='beheerder';
 
-  // Klus van vandaag (niet voor hal)
+  // Klus van vandaag (hal heeft die nooit)
   let vandaagKlus=null;
   if(!isHal){
     const{data:kgData}=await sb.from('klus_gebruikers').select('klus_id').eq('gebruiker_id',CURRENT_USER.id);
@@ -4426,15 +4445,15 @@ async function loadUrenPersoneel(){
     vandaagKlus=KLUSSEN.find(k=>mijnKlusIds.includes(k.id)&&klusDagen(k).includes(todayStr));
   }
 
-  if(!isHal&&vandaagKlus){
+  if(vandaagKlus){
     klusCard.innerHTML=`<div class="slabel" style="margin-bottom:.5rem">Mijn klus vandaag</div>
       <div style="font-size:16px;font-weight:600;color:var(--text)">${vandaagKlus.naam||vandaagKlus.food||'Klus'}</div>
       <div style="font-size:12px;color:var(--muted);margin-top:3px">${parseDate(vandaagKlus.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})}</div>
       ${vandaagKlus.trucks.map(t=>`<span class="bdg" style="background:${t.color}18;color:${t.color};margin-top:6px;display:inline-flex">${t.label}</span>`).join(' ')}`;
-  }else if(isHal){
+  }else if(altijdInklokken){
     klusCard.innerHTML=`<div class="slabel" style="margin-bottom:.5rem">Vandaag</div>
       <div style="font-size:16px;font-weight:600;color:var(--text)">${new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:3px">Hal medewerker — je kunt altijd inklokken</div>`;
+      <div style="font-size:12px;color:var(--muted);margin-top:3px">${isHal?'Hal medewerker':'Beheerder'} — je kunt altijd inklokken, ook zonder klus</div>`;
   }else{
     klusCard.innerHTML=`<div style="font-size:13px;color:var(--muted);font-style:italic">Geen klus ingepland voor vandaag</div>`;
   }
@@ -4444,7 +4463,7 @@ async function loadUrenPersoneel(){
     .select('*').eq('gebruiker_id',CURRENT_USER.id).eq('status','lopend').maybeSingle();
 
   // Check inklokken mogelijk
-  const kanInklokken=isHal||(vandaagKlus!=null);
+  const kanInklokken=altijdInklokken||(vandaagKlus!=null);
   if(lopend){
     renderIngeklokt(lopend,vandaagKlus);
   }else{
@@ -4567,7 +4586,9 @@ async function doInklokken(klusId){
     herstel('Inklokken mislukt: '+(e&&e.message?e.message:'geen verbinding')+'. Probeer het opnieuw.');
     return;
   }
-  loadUrenPersoneel();
+  // Bij een beheerder staat de klok op het beheer-tabblad; die lijst willen we
+  // dan ook meteen bijwerken.
+  if(CURRENT_ROL==='beheerder')loadUrenBeheer(); else loadUrenPersoneel();
 }
 
 // ── PAUZE ───────────────────────────────────────────────────────────────
@@ -4688,13 +4709,16 @@ async function doUitklokken(regId,pauze_minuten=0,notitie=''){
     return;
   }
   if(urenTimer){clearInterval(urenTimer);urenTimer=null;}
-  loadUrenPersoneel();
+  if(CURRENT_ROL==='beheerder')loadUrenBeheer(); else loadUrenPersoneel();
 }
 
 // ── UREN BEHEER ──
 function changeUrenMaand(dir){urenMaandOffset+=dir;loadUrenBeheer();}
 
 async function loadUrenBeheer(){
+  // Beheerders klokken op dit tabblad ook zelf in en uit.
+  if(CURRENT_ROL==='beheerder')loadUrenPersoneel();
+
   const accordEl=document.getElementById('urenAccordeerList');
   const maandEl=document.getElementById('urenMaandList');
   const wachtEl=document.getElementById('urenWachtCount');
