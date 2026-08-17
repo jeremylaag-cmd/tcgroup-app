@@ -820,6 +820,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div class="htabs" id="headerTabs"></div>
     <div class="header-right">
       <span class="user-badge" id="userBadge"></span>
+      <button id="addOptieBtnTop" style="display:none" class="btn-nav" onclick="openOptie()" title="Een klus die nog niet zeker is">+ Optie</button>
       <button id="addKlusBtnTop" style="display:none" class="btn-sm" onclick="openModal()" style="font-size:12px;padding:6px 14px">+ Klus aanmaken</button>
       <div class="mob-avatar" id="mobAvatar" title="Profiel"></div>
       <button class="logout-btn" onclick="doLogout()">Uitloggen</button>
@@ -1306,6 +1307,33 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     </div>
   </div>
 
+  <!-- OPTIE-KLUS: snel een datum vastleggen die nog niet zeker is -->
+  <div class="modal-overlay" id="optieOverlay" onclick="if(event.target===this)sluitOptie()">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-title">Optie in de agenda</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:1rem">
+        Voor een klus die vrijwel zeker doorgaat maar nog niet rond is. Alleen de datum en
+        een naam; de rest vul je later aan. Part-timers zien deze klus niet.
+      </div>
+      <div class="fr"><span class="fl">Naam <span style="color:#DC2626">*</span></span>
+        <input type="text" id="optieNaam" placeholder="bv. Bruiloft Jansen" onkeydown="if(event.key==='Enter'){event.preventDefault();bewaarOptie();}" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+      </div>
+      <div class="two">
+        <div class="fr"><span class="fl">Datum <span style="color:#DC2626">*</span></span><input type="date" id="optieDatum"></div>
+        <div class="fr"><span class="fl">T/m (optioneel)</span><input type="date" id="optieDatumEind"></div>
+      </div>
+      <div class="fr"><span class="fl">Notitie (optioneel)</span>
+        <input type="text" id="optieNotitie" placeholder="bv. wacht op bevestiging klant" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+      </div>
+      <div class="warn-box" id="optieWarn"></div>
+      <div class="mfooter" style="margin-top:1rem">
+        <span class="saving-msg" id="optieBezig" style="display:none">Opslaan...</span>
+        <button class="btn-ghost" onclick="sluitOptie()">Annuleren</button>
+        <button class="btn-sm" id="optieOpslaanKnop" onclick="bewaarOptie()">Opslaan</button>
+      </div>
+    </div>
+  </div>
+
   <!-- AFWEZIGHEID INVOEREN VOOR ANDEREN (alleen beheerders) -->
   <div class="modal-overlay" id="afwezigOverlay" onclick="if(event.target===this)sluitAfwezig()">
     <div class="modal" style="max-width:520px">
@@ -1509,7 +1537,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         Kijk dan even welke truck er naar binnen mag voordat je hem hieronder koppelt.
       </div>
     </div>
-    <div class="fr"><span class="fl">Trucks <span style="color:#DC2626">*</span> <span style="color:var(--muted);font-weight:400">(min. 1)</span></span><div class="chips" id="truckChips"></div><div class="chip-warn" id="truckWarn"></div></div>
+    <div class="fr"><span class="fl">Trucks <span style="color:var(--muted);font-weight:400">(optioneel)</span></span><div class="chips" id="truckChips"></div><div class="chip-warn" id="truckWarn"></div></div>
     <div class="fr"><span class="fl">Tijden <span style="color:#DC2626">*</span></span>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px">
         Starttijd en einde klus vormen samen de dienst — daarmee rekent de app de ingeplande uren uit.
@@ -1524,10 +1552,23 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       </div>
     </div>
     <div class="fr"><span class="fl">Personeel nodig <span style="color:#DC2626">*</span></span><input type="number" id="fPersoneelNodig" min="0" placeholder="bv. 5" style="max-width:120px"></div>
+
+    <!-- Shifts: niet iedereen begint tegelijk -->
+    <div class="fr">
+      <span class="fl">Shifts <span style="color:var(--muted);font-weight:400">(optioneel — voor wie eerder of later begint)</span></span>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px">
+        Laat je dit leeg, dan geldt gewoon de tijd van de klus voor iedereen.
+      </div>
+      <div id="shiftRijen"></div>
+      <button type="button" class="btn-nav" onclick="voegShiftToe()" style="font-size:11px;margin-top:4px">+ Shift toevoegen</button>
+    </div>
+
     <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:1rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)">Optionele velden</div>
     <div class="fr"><span class="fl">Food per truck</span><div id="truckSoortBlocks"></div></div>
     <div class="fr"><span class="fl">Gasten (totaal)</span><input type="number" id="fPersonen" min="1" placeholder="bv. 200" style="max-width:120px"></div>
-    <div class="fr"><span class="fl">Personeel (meerdere mogelijk)</span><div class="chips" id="persChips"></div><div class="chip-warn" id="persWarn"></div></div>
+    <div class="fr"><span class="fl">Personeel (meerdere mogelijk)</span><div class="chips" id="persChips"></div><div class="chip-warn" id="persWarn"></div>
+      <div id="persShiftKeuze" style="margin-top:8px"></div>
+    </div>
     <div class="fr"><span class="fl">Losse krachten <span style="color:var(--muted);font-weight:400">(eenmalig, zonder account)</span></span>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px">
         Iemand die één keer meeloopt en de app niet gebruikt. Staat gewoon op de klus en in het rooster;
@@ -1643,6 +1684,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     </div>
     <div class="detail-footer">
       <button class="btn-ghost" onclick="closeDetail()">Sluiten</button>
+      <button class="btn-sm" id="detailBevestigBtn" style="display:none">Klus bevestigen</button>
       <button class="btn-edit" id="detailEditBtn" style="display:none">Bewerk</button>
     </div>
   </div>
@@ -2163,12 +2205,13 @@ async function initApp(user){
       <button class="htab" onclick="showPage('open-klussen',this)">Open klussen</button>
       <button class="htab" onclick="showPage('accounts',this)">Accounts</button>`;
     const topBtn=document.getElementById('addKlusBtnTop');if(topBtn)topBtn.style.display='';
+    const optieBtn=document.getElementById('addOptieBtnTop');if(optieBtn)optieBtn.style.display='';
     document.getElementById('addMedBtn').style.display='';
   }else if(isHal){
     tabs.innerHTML=`
       <button class="htab active" onclick="showPage('uren',this)">Uren</button>
       <button class="htab" onclick="showPage('rooster',this)">Rooster</button>`;
-    ['addKlusBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   }else{
     const extraTab=isFullTimer
       ?`<button class="htab" onclick="showPage('rooster',this)">Rooster</button>`
@@ -2178,7 +2221,7 @@ async function initApp(user){
       <button class="htab" onclick="showPage('uren',this)">Uren</button>
       <button class="htab" onclick="showPage('open-klussen',this)">Open klussen</button>
       ${extraTab}`;
-    ['addKlusBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   }
 
   // Bottom nav
@@ -2914,11 +2957,11 @@ async function loadAll(){
     {data:trucks},{data:personeel},{data:klussen},{data:klusTrucks},
     {data:klusGebruikers},{data:klusPdfs},{data:soorten},{data:meds},
     {data:klusSoorten},{data:klusTruckSoorten},{data:beschData},{data:aanmData},
-    {data:vasteData},{data:losData}
+    {data:vasteData},{data:losData},{data:shiftData}
   ]=await Promise.all([
     sb.from('trucks').select('*').order('volgorde'),
     // Iedereen kan op een klus worden gezet — ook beheerders en hal-medewerkers.
-    sb.from('personeel_publiek').select('id,naam,rol').order('naam'),
+    sb.from('personeel_publiek').select('id,naam,rol,geboortedag,geboortemaand').order('naam'),
     sb.from('klussen').select('*').order('datum'),
     sb.from('klus_trucks').select('*'),
     sb.from('klus_gebruikers').select('*'),
@@ -2931,6 +2974,7 @@ async function loadAll(){
     sb.from('klus_aanmeldingen').select('*'),
     sb.from('vaste_diensten').select('*').order('weekdag').order('volgorde'),
     sb.from('klus_losse_personen').select('*').order('naam'),
+    sb.from('klus_shifts').select('*').order('volgorde'),
   ]);
   TRUCKS=trucks||[];PERSONEEL=personeel||[];SOORTEN=soorten||[];
   BESCHIKBAARHEID=beschData||[];
@@ -2942,7 +2986,11 @@ async function loadAll(){
   KLUSSEN=(klussen||[]).map(k=>({
     ...k,
     trucks:(klusTrucks||[]).filter(x=>x.klus_id===k.id).map(x=>tMap[x.truck_id]).filter(Boolean),
-    personeel:(klusGebruikers||[]).filter(x=>x.klus_id===k.id).map(x=>pMap[x.gebruiker_id]).filter(Boolean),
+    // shift_id gaat mee, zodat we bij een klus met shifts kunnen laten zien wie
+    // waar staat. Leeg betekent gewoon: de hele klus.
+    personeel:(klusGebruikers||[]).filter(x=>x.klus_id===k.id)
+      .map(x=>{const p=pMap[x.gebruiker_id];return p?{...p,shift_id:x.shift_id||null}:null;}).filter(Boolean),
+    shifts:(shiftData||[]).filter(x=>x.klus_id===k.id).sort((a,b)=>(a.volgorde-b.volgorde)||String(a.start_tijd||'').localeCompare(String(b.start_tijd||''))),
     pdfs:(klusPdfs||[]).filter(x=>x.klus_id===k.id),
     losse:(losData||[]).filter(x=>x.klus_id===k.id),
     soorten:(klusSoorten||[]).filter(x=>x.klus_id===k.id).map(x=>sMap[x.soort_id]).filter(Boolean),
@@ -3068,7 +3116,8 @@ function renderAll(){
     const tB=k.trucks.map(t=>`<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${t.label}</span>`).join('');
     const t1=tijdFromDb(k.vertrek_tijd),t4=tijdFromDb(k.einde_feest);
     const tijdStr=t1&&t4?`${t1} → ${t4}`:t1||t4||'';
-    const vastBadge=(k.categorie==='franklins'
+    const vastBadge=(k.is_optie?'<span class="bdg" style="background:#EEF2FF;color:#3730A3;border:1px dashed #A5B4FC">Optie</span>':'')
+      +(k.categorie==='franklins'
       ?'<span class="bdg" style="background:#FFFBEB;color:#B45309">Franklins</span>':'')
       +(k.milieuzone?'<span class="bdg" style="background:#ECFDF5;color:#065F46">Milieuzone</span>':'');
     const soortBadges=vastBadge+(k.truckSoorten&&k.truckSoorten.length
@@ -3076,7 +3125,7 @@ function renderAll(){
       :k.soorten&&k.soorten.length?k.soorten.map(s=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${s.titel}</span>`).join('')
       :k.food?`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${k.food}</span>`:'');
     const pdfLinks=k.pdfs&&k.pdfs.length?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${p.url}\`,\`${p.naam}\`)">${p.naam}</span>`).join(''):'';
-    return`<div class="kc" onclick="openDetail('${k.id}')">
+    return`<div class="kc" onclick="openDetail('${k.id}')"${k.is_optie?' style="border-style:dashed"':''}>
       <div class="kc-top">
         <div style="min-width:0;flex:1">
           ${k.naam?`<div class="knaam">${k.naam}</div>`:''}
@@ -3196,8 +3245,84 @@ function togglePers(id){
   if(!check.ok&&!formPers.includes(id)){showWarn(`⚠ ${persoon?.naam||'Deze medewerker'} ${check.reden}.`);return;}
   if(!formPers.includes(id)&&pers.includes(id)){showWarn(`⚠ ${PERSONEEL.find(p=>p.id===id)?.naam} staat al ingepland op deze dag.`);return;}
   formPers=formPers.includes(id)?formPers.filter(x=>x!==id):[...formPers,id];
-  renderPersChips(pers);document.getElementById('warnBox').className='warn-box';
+  if(!formPers.includes(id))delete formPersShift[id];
+  renderPersChips(pers);renderPersShiftKeuze();
+  document.getElementById('warnBox').className='warn-box';
 }
+// ── SHIFTS IN EEN KLUS ────────────────────────────────────────────────────
+// Soms begint een deel van de ploeg eerder en een deel later. Met shifts zet je
+// die tijden apart neer en kies je per persoon in welke shift hij staat. Laat je
+// het leeg, dan geldt gewoon de tijd van de klus voor iedereen.
+let formShifts=[];       // {sleutel, naam, start, eind, nodig}
+let formPersShift={};    // gebruiker_id -> sleutel ('' = hele klus)
+let formLosShift={};     // volgnummer losse kracht -> sleutel
+let shiftTeller=0;
+
+function nieuweShiftSleutel(){return 's'+(++shiftTeller);}
+
+function voegShiftToe(){
+  formShifts.push({sleutel:nieuweShiftSleutel(),naam:'',start:'',eind:'',nodig:1});
+  renderShiftRijen();renderPersShiftKeuze();
+}
+
+function verwijderShift(sleutel){
+  formShifts=formShifts.filter(s=>s.sleutel!==sleutel);
+  Object.keys(formPersShift).forEach(g=>{if(formPersShift[g]===sleutel)formPersShift[g]='';});
+  Object.keys(formLosShift).forEach(i=>{if(formLosShift[i]===sleutel)formLosShift[i]='';});
+  renderShiftRijen();renderPersShiftKeuze();
+}
+
+function shiftVeld(sleutel,veld,waarde){
+  const s=formShifts.find(x=>x.sleutel===sleutel);
+  if(!s)return;
+  s[veld]=waarde;
+  if(veld!=='nodig')renderPersShiftKeuze();
+}
+
+function shiftLabel(s,i){
+  const t=[s.start,s.eind].filter(Boolean).join('–');
+  return (s.naam||('Shift '+(i+1)))+(t?' · '+t:'');
+}
+
+function renderShiftRijen(){
+  const el=document.getElementById('shiftRijen');
+  if(!el)return;
+  const veld='font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-family:var(--font);background:var(--surface);color:var(--text)';
+  el.innerHTML=formShifts.map((s,i)=>`
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+      <input type="text" value="${(s.naam||'').replace(/"/g,'&quot;')}" placeholder="bv. Opbouw" oninput="shiftVeld('${s.sleutel}','naam',this.value)" style="${veld};flex:1;min-width:110px">
+      <input type="text" class="tijd-input" value="${s.start||''}" placeholder="09.00" maxlength="5" oninput="formatTijd(this);shiftVeld('${s.sleutel}','start',this.value)" style="${veld};width:64px">
+      <input type="text" class="tijd-input" value="${s.eind||''}" placeholder="17.00" maxlength="5" oninput="formatTijd(this);shiftVeld('${s.sleutel}','eind',this.value)" style="${veld};width:64px">
+      <input type="number" value="${s.nodig}" min="0" max="50" inputmode="numeric" title="Aantal mensen" oninput="shiftVeld('${s.sleutel}','nodig',this.value)" style="${veld};width:60px">
+      <button type="button" class="btn-danger-sm" onclick="verwijderShift('${s.sleutel}')">&times;</button>
+    </div>`).join('');
+}
+
+function renderPersShiftKeuze(){
+  const el=document.getElementById('persShiftKeuze');
+  if(!el)return;
+  if(!formShifts.length||(!formPers.length&&!formLos.length)){el.innerHTML='';return;}
+  const veld='font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:7px;font-family:var(--font);background:var(--surface);color:var(--text)';
+  const opties=(gekozen)=>['<option value=""'+(gekozen?'':' selected')+'>Hele klus</option>']
+    .concat(formShifts.map((s,i)=>`<option value="${s.sleutel}"${gekozen===s.sleutel?' selected':''}>${shiftLabel(s,i)}</option>`)).join('');
+
+  const rijen=formPers.map(gid=>{
+    const p=PERSONEEL.find(x=>x.id===gid);
+    return`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px">
+      <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p?.naam||'—'}</span>
+      <select onchange="formPersShift['${gid}']=this.value" style="${veld};max-width:190px">${opties(formPersShift[gid]||'')}</select>
+    </div>`;
+  }).concat(formLos.map((l,i)=>`
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:5px">
+      <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.naam} <span style="color:var(--muted)">(los)</span></span>
+      <select onchange="formLosShift['${i}']=this.value" style="${veld};max-width:190px">${opties(formLosShift[i]||'')}</select>
+    </div>`)).join('');
+
+  el.innerHTML=`<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px;background:var(--bg)">
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:7px">Wie werkt welke shift</div>
+    ${rijen}</div>`;
+}
+
 function toggleTruckSoort(tid,sid){
   if(!formTruckSoorten[tid])formTruckSoorten[tid]=[];
   formTruckSoorten[tid]=formTruckSoorten[tid].includes(sid)?formTruckSoorten[tid].filter(x=>x!==sid):[...formTruckSoorten[tid],sid];
@@ -3253,6 +3378,18 @@ function openModal(id=null){
   if(k?.truckSoorten)k.truckSoorten.forEach(ts=>{if(!formTruckSoorten[ts.truck.id])formTruckSoorten[ts.truck.id]=[];if(!formTruckSoorten[ts.truck.id].includes(ts.soort.id))formTruckSoorten[ts.truck.id].push(ts.soort.id);});
   formPdfs=[];existingPdfs=k?.pdfs?[...k.pdfs]:[];
   formLos=k?.losse?k.losse.map(l=>({naam:l.naam,telefoon:l.telefoon||''})):[];
+  // Shifts van deze klus terugzetten in het formulier. Elke shift krijgt een
+  // eigen sleutel, zodat we personeel eraan kunnen koppelen voordat de shift
+  // een nummer uit de database heeft.
+  shiftTeller=0;formShifts=[];formPersShift={};formLosShift={};
+  const shiftSleutelVanId={};
+  (k?.shifts||[]).forEach(sh=>{
+    const sleutel=nieuweShiftSleutel();
+    shiftSleutelVanId[sh.id]=sleutel;
+    formShifts.push({sleutel,naam:sh.naam||'',start:tijdFromDb(sh.start_tijd),eind:tijdFromDb(sh.eind_tijd),nodig:sh.personeel_nodig??1});
+  });
+  (k?.personeel||[]).forEach(p=>{if(p.shift_id&&shiftSleutelVanId[p.shift_id])formPersShift[p.id]=shiftSleutelVanId[p.shift_id];});
+  (k?.losse||[]).forEach((l,i)=>{if(l.shift_id&&shiftSleutelVanId[l.shift_id])formLosShift[i]=shiftSleutelVanId[l.shift_id];});
   document.getElementById('modalTitle').textContent=id?'Klus bewerken':'Nieuwe klus';
   document.getElementById('fNaam').value=k?.naam||'';
   document.getElementById('fDatum').value=k?k.datum:(selDate||todayStr);
@@ -3284,6 +3421,7 @@ function openModal(id=null){
   const tw=document.getElementById('truckWarn');const pw=document.getElementById('persWarn');
   if(tw)tw.className='chip-warn';if(pw)pw.className='chip-warn';
   renderTruckChips([]);renderPersChips([]);renderTruckSoortBlocks();renderPdfList();renderLosseKrachten();
+  renderShiftRijen();renderPersShiftKeuze();
   document.getElementById('modalOverlay').classList.add('open');
   if(k)onDateChange();
 }
@@ -3300,12 +3438,13 @@ function voegLosseKrachtToe(){
   }
   formLos.push({naam,telefoon:(telEl.value||'').trim()});
   naamEl.value='';telEl.value='';naamEl.focus();
-  renderLosseKrachten();
+  renderLosseKrachten();renderPersShiftKeuze();
 }
 
 function verwijderLosseKracht(i){
   formLos.splice(i,1);
-  renderLosseKrachten();
+  formLosShift={};   // de volgnummers schuiven op, dus die keuzes beginnen opnieuw
+  renderLosseKrachten();renderPersShiftKeuze();
 }
 
 function renderLosseKrachten(){
@@ -3426,7 +3565,6 @@ async function saveKlusIntern(){
   const herhalingEind=document.getElementById('fHerhalingEind').value;
   if(!naam){showWarn('Vul een naam in voor de klus.');return;}
   if(!datum){showWarn('Vul een datum in.');return;}
-  if(!formTrucks.length){showWarn('Selecteer minimaal 1 truck.');return;}
   if(!einde_feest){showWarn('Vul een eindtijd in.');return;}
   if(!personeel_nodig&&personeel_nodig!==0){showWarn('Vul het aantal benodigde personeelsleden in.');return;}
   const allSoortIds=[...new Set(Object.values(formTruckSoorten).flat())];
@@ -3451,12 +3589,29 @@ async function saveKlusIntern(){
       :new Set();
 
     const schrijfKoppelingen=async id=>{
+      // Shifts eerst: personeel en losse krachten verwijzen ernaar.
+      const shiftIdVanSleutel={};
+      if(formShifts.length){
+        const rijen=formShifts.map((sh,i)=>({
+          klus_id:id,
+          naam:(sh.naam||'').trim()||('Shift '+(i+1)),
+          start_tijd:tijdToDb(sh.start),
+          eind_tijd:tijdToDb(sh.eind),
+          personeel_nodig:Math.max(0,parseInt(sh.nodig)||0),
+          volgorde:i,
+        }));
+        const{data:nieuweShifts,error}=await sb.from('klus_shifts').insert(rijen).select('id');
+        if(error)throw new Error('Shifts opslaan mislukt: '+error.message);
+        (nieuweShifts||[]).forEach((r,i)=>{if(formShifts[i])shiftIdVanSleutel[formShifts[i].sleutel]=r.id;});
+      }
       if(formTrucks.length){
         const{error}=await sb.from('klus_trucks').insert(formTrucks.map(tid=>({klus_id:id,truck_id:tid})));
         if(error)throw new Error('Trucks koppelen mislukt: '+error.message);
       }
       if(formPers.length){
-        const{error}=await sb.from('klus_gebruikers').insert(formPers.map(gid=>({klus_id:id,gebruiker_id:gid})));
+        const{error}=await sb.from('klus_gebruikers').insert(formPers.map(gid=>({
+          klus_id:id,gebruiker_id:gid,shift_id:shiftIdVanSleutel[formPersShift[gid]]||null
+        })));
         if(error)throw new Error('Personeel koppelen mislukt: '+error.message);
       }
       if(allSoortIds.length){
@@ -3472,7 +3627,8 @@ async function saveKlusIntern(){
 
       if(formLos.length){
         const{error}=await sb.from('klus_losse_personen')
-          .insert(formLos.map(l=>({klus_id:id,naam:l.naam,telefoon:l.telefoon||null})));
+          .insert(formLos.map((l,i)=>({klus_id:id,naam:l.naam,telefoon:l.telefoon||null,
+            shift_id:shiftIdVanSleutel[formLosShift[i]]||null})));
         if(error)throw new Error('Losse krachten opslaan mislukt: '+error.message);
       }
 
@@ -3493,6 +3649,7 @@ async function saveKlusIntern(){
       await sb.from('klus_soorten').delete().eq('klus_id',editId);
       await sb.from('klus_truck_soorten').delete().eq('klus_id',editId);
       await sb.from('klus_losse_personen').delete().eq('klus_id',editId);
+      await sb.from('klus_shifts').delete().eq('klus_id',editId);
       await schrijfKoppelingen(editId);
       const removedPdfs=KLUSSEN.find(k=>k.id===editId)?.pdfs.filter(p=>!existingPdfs.find(e=>e.id===p.id))||[];
       for(const p of removedPdfs){
@@ -3568,7 +3725,8 @@ function openDetail(id){
   const ds=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const dsEind=k.datum_eind?parseDate(k.datum_eind).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
   const datumStr=dsEind&&dsEind!==ds?`${ds} – ${dsEind}`:ds;
-  document.getElementById('detailNaam').textContent=k.naam||k.food||'Klus';
+  document.getElementById('detailNaam').innerHTML=(k.naam||k.food||'Klus')
+    +(k.is_optie?' <span class="bdg" style="background:#EEF2FF;color:#3730A3;border:1px dashed #A5B4FC;vertical-align:middle">Optie</span>':'');
   document.getElementById('detailTijden').innerHTML=tijdLines.map(t=>`<div style="font-size:14px;font-weight:600;color:var(--text)">${t}</div>`).join('');
   document.getElementById('detailDatum').textContent=datumStr;
   document.getElementById('detailTrucks').innerHTML=k.trucks.map(t=>`<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${t.label}</span>`).join('');
@@ -3588,26 +3746,68 @@ function openDetail(id){
   document.getElementById('detailContact').textContent=k.contactpersoon||'';
   const tel=document.getElementById('detailTelefoon');tel.style.display=k.telefoon?'':'none';
   tel.innerHTML=k.telefoon?`<a href="tel:${k.telefoon}" style="color:#2563EB;text-decoration:none;font-size:13px">${k.telefoon}</a>`:'';
-  const namen=k.personeel.map(p=>p.naam).concat((k.losse||[]).map(l=>l.naam+' (los)'));
-  const ps=document.getElementById('detailPersSection');ps.style.display=namen.length?'':'none';
-  document.getElementById('detailPers').textContent=namen.join(', ');
+  // Heeft de klus shifts, dan zetten we de mensen per shift onder elkaar; dat
+  // leest een stuk prettiger dan een rij namen zonder tijden.
+  const alleNamen=k.personeel.map(p=>p.naam).concat((k.losse||[]).map(l=>l.naam+' (los)'));
+  const ps=document.getElementById('detailPersSection');
+  ps.style.display=(alleNamen.length||(k.shifts||[]).length)?'':'none';
+  const persEl=document.getElementById('detailPers');
+  if((k.shifts||[]).length){
+    const blokken=k.shifts.map(sh=>{
+      const wie=k.personeel.filter(p=>p.shift_id===sh.id).map(p=>p.naam)
+        .concat((k.losse||[]).filter(l=>l.shift_id===sh.id).map(l=>l.naam+' (los)'));
+      const tijd=[tijdFromDb(sh.start_tijd),tijdFromDb(sh.eind_tijd)].filter(Boolean).join(' – ');
+      const tekort=Math.max(0,(sh.personeel_nodig||0)-wie.length);
+      return`<div style="margin-bottom:7px">
+        <div style="font-size:12px;font-weight:600;color:var(--text)">${sh.naam||'Shift'}${tijd?` <span style="font-weight:400;color:var(--muted)">${tijd}</span>`:''}</div>
+        <div style="font-size:13px">${wie.length?wie.join(', '):'<span style="color:var(--muted);font-style:italic">nog niemand</span>'}${tekort?` <span style="color:#B45309;font-size:11px;font-weight:600">· nog ${tekort} nodig</span>`:''}</div>
+      </div>`;
+    }).join('');
+    const rest=k.personeel.filter(p=>!p.shift_id).map(p=>p.naam)
+      .concat((k.losse||[]).filter(l=>!l.shift_id).map(l=>l.naam+' (los)'));
+    persEl.innerHTML=blokken+(rest.length?`<div style="font-size:13px;padding-top:5px;border-top:1px solid var(--border)"><span style="color:var(--muted);font-size:11px">Hele klus:</span> ${rest.join(', ')}</div>`:'');
+  }else{
+    persEl.textContent=alleNamen.join(', ');
+  }
   const ns=document.getElementById('detailNotitieSection');ns.style.display=k.notitie?'':'none';document.getElementById('detailNotitie').textContent=k.notitie;
   const pdfs=document.getElementById('detailPdfSection');pdfs.style.display=k.pdfs&&k.pdfs.length?'':'none';
   document.getElementById('detailPdfs').innerHTML=k.pdfs?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${p.url}\`,\`${p.naam}\`)">${p.naam}</span>`).join(''):'';
   document.getElementById('detailEditBtn').style.display=CURRENT_ROL==='beheerder'?'':'none';
   document.getElementById('detailEditBtn').onclick=()=>{closeDetail();editKlus(id);};
+  const bev=document.getElementById('detailBevestigBtn');
+  if(bev){
+    bev.style.display=(CURRENT_ROL==='beheerder'&&k.is_optie)?'':'none';
+    bev.onclick=()=>bevestigOptie(id);
+  }
   document.getElementById('detailOverlay').classList.add('open');
 }
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('open');}
 
 // ── MEDEDELINGEN ──
+// Verjaardagen komen automatisch tussen de mededelingen te staan. Ze staan
+// nergens opgeslagen — we rekenen ze uit uit de geboortedatums en zetten ze als
+// regel in de week. De database geeft bewust alleen dag en maand vrij, dus
+// iemands leeftijd blijft binnen de personeelsadministratie.
+function verjaardagenInWeek(dagen){
+  const uit=[];
+  (PERSONEEL||[]).forEach(p=>{
+    if(!p.geboortedag||!p.geboortemaand)return;
+    dagen.forEach(d=>{
+      if(d.getDate()===p.geboortedag&&(d.getMonth()+1)===p.geboortemaand){
+        uit.push({id:'jarig-'+p.id,datum:fmt(d),titel:'🎂 '+p.naam+' is jarig',beschrijving:'',verjaardag:true});
+      }
+    });
+  });
+  return uit;
+}
+
 function renderMededelingen(meds){
   allMededelingen=meds||[];
   const days=getMedWeekDates();
   const first=days[0],last=days[6],opts={day:'numeric',month:'short'};
   const wl=document.getElementById('medWeekLabel');
   if(wl)wl.textContent=`${first.toLocaleDateString('nl-NL',opts)} – ${last.toLocaleDateString('nl-NL',opts)}`;
-  const medsMetDatum=allMededelingen.filter(m=>m.datum);
+  const medsMetDatum=allMededelingen.filter(m=>m.datum).concat(verjaardagenInWeek(days));
   const medsZonderDatum=allMededelingen.filter(m=>!m.datum);
   const dagNamen=['Ma','Di','Wo','Do','Vr','Za','Zo'];
   const isBeheerder=CURRENT_ROL==='beheerder';
@@ -3627,12 +3827,12 @@ function renderMededelingen(meds){
           <div class="med-dag-mob-date${isToday?' med-dag-mob-vandaag':''}">${dagLabel}</div>
           <span class="med-dag-mob-count">${dagMeds.length}</span>
         </div>
-        <div class="med-dag-mob-items">${dagMeds.map(m=>`<div class="med-dag-mob-item" onclick="${isBeheerder?`openMedModal('${m.id}')`:`openMedDetail('${m.id}')`}">
+        <div class="med-dag-mob-items">${dagMeds.map(m=>`<div class="med-dag-mob-item"${m.verjaardag?' style="cursor:default"':` onclick="${isBeheerder?`openMedModal('${m.id}')`:`openMedDetail('${m.id}')`}"`}>
           <div style="flex:1;min-width:0">
             <div class="med-dag-mob-titel">${m.titel}</div>
             ${m.beschrijving?`<div class="med-dag-mob-beschr">${m.beschrijving}</div>`:''}
           </div>
-          ${isBeheerder?`<button class="med-pill-del" style="font-size:18px;color:var(--muted);padding:4px 8px" onclick="event.stopPropagation();deleteMed('${m.id}')">×</button>`:`<span class="med-dag-mob-chevron">›</span>`}
+          ${m.verjaardag?'':isBeheerder?`<button class="med-pill-del" style="font-size:18px;color:var(--muted);padding:4px 8px" onclick="event.stopPropagation();deleteMed('${m.id}')">×</button>`:`<span class="med-dag-mob-chevron">›</span>`}
         </div>`).join('')}</div>
       </div>`;
     }).filter(Boolean).join('');
@@ -3648,7 +3848,7 @@ function renderMededelingen(meds){
       const ds=fmt(d);const isToday=ds===todayStr;const isPast=ds<todayStr;
       const dagMeds=medsMetDatum.filter(m=>m.datum===ds);
       return`<div class="med-dag${isToday?' vandaag-dag':''}${isPast?' verleden':''}"><div class="med-dag-hdr${isToday?' vandaag':''}"><div class="med-dag-naam">${dagNamen[i]}</div><div class="med-dag-num">${d.getDate()}</div></div>
-        <div class="med-dag-items">${dagMeds.length?dagMeds.map(m=>`<div class="med-pill" onclick="${isBeheerder?`openMedModal('${m.id}')`:`openMedDetail('${m.id}')`}"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.titel}</span>${isBeheerder?`<button class="med-pill-del" onclick="event.stopPropagation();deleteMed('${m.id}')">×</button>`:''}</div>`).join(''):'<div class="med-geen">–</div>'}</div>
+        <div class="med-dag-items">${dagMeds.length?dagMeds.map(m=>`<div class="med-pill"${m.verjaardag?' style="cursor:default;background:#FFF7ED"':` onclick="${isBeheerder?`openMedModal('${m.id}')`:`openMedDetail('${m.id}')`}"`}><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.titel}</span>${(!m.verjaardag&&isBeheerder)?`<button class="med-pill-del" onclick="event.stopPropagation();deleteMed('${m.id}')">×</button>`:''}</div>`).join(''):'<div class="med-geen">–</div>'}</div>
       </div>`;
     }).join('');
     html=`<div class="med-week">${weekGrid}</div>`;
@@ -5551,6 +5751,65 @@ async function keurBeschikbaarheid(id,status){
   loadAlleBeschikbaarheid();
 }
 
+// ── OPTIE-KLUS ────────────────────────────────────────────────────────────
+// Een klus die vrijwel zeker doorgaat maar nog niet rond is. Hij staat wel in de
+// agenda, zodat de datum bezet is, maar met een streepjeslijn en het label
+// "Optie". Part-timers zien hem niet — dat wordt in de database afgedwongen via
+// mag_klus_zien(), niet alleen hier in het scherm.
+function openOptie(){
+  if(CURRENT_ROL!=='beheerder')return;
+  document.getElementById('optieNaam').value='';
+  document.getElementById('optieDatum').value=selDate||todayStr;
+  document.getElementById('optieDatumEind').value='';
+  document.getElementById('optieNotitie').value='';
+  document.getElementById('optieWarn').className='warn-box';
+  document.getElementById('optieOverlay').classList.add('open');
+  setTimeout(()=>document.getElementById('optieNaam').focus(),80);
+}
+function sluitOptie(){document.getElementById('optieOverlay').classList.remove('open');}
+
+async function bewaarOptie(){
+  const wb=document.getElementById('optieWarn');
+  const naam=document.getElementById('optieNaam').value.trim();
+  const datum=document.getElementById('optieDatum').value;
+  const datumEind=document.getElementById('optieDatumEind').value||null;
+  const notitie=document.getElementById('optieNotitie').value.trim();
+  if(!naam){wb.textContent='Vul een naam in.';wb.className='warn-box show';return;}
+  if(!datum){wb.textContent='Vul een datum in.';wb.className='warn-box show';return;}
+  if(datumEind&&datumEind<datum){wb.textContent='De einddatum ligt vóór de startdatum.';wb.className='warn-box show';return;}
+
+  if(!slotPak('optie'))return;
+  const knop=document.getElementById('optieOpslaanKnop');
+  if(knop)knop.disabled=true;
+  document.getElementById('optieBezig').style.display='inline';
+  const{error}=await sb.from('klussen').insert({
+    naam,datum,datum_eind:datumEind,notitie,
+    personen:0,personeel_nodig:0,food:'',adres:'',contactpersoon:'',telefoon:'',
+    categorie:'klus',is_optie:true,
+  });
+  document.getElementById('optieBezig').style.display='none';
+  slotLos('optie');
+  if(knop)knop.disabled=false;
+  if(error){wb.textContent='Opslaan mislukt: '+error.message;wb.className='warn-box show';return;}
+
+  sluitOptie();
+  toast('Optie in de agenda gezet');
+  await loadAll();
+}
+
+// Van optie naar echte klus. De rest van de gegevens vul je daarna gewoon in
+// via Bewerk.
+async function bevestigOptie(id){
+  const k=(KLUSSEN||[]).find(x=>x.id===id);
+  if(!k)return;
+  if(!confirm('"'+(k.naam||'Deze klus')+'" bevestigen? Hij wordt dan een gewone klus en is voor iedereen zichtbaar.'))return;
+  const{error}=await sb.from('klussen').update({is_optie:false}).eq('id',id);
+  if(error){toast('Bevestigen mislukt: '+error.message,'fout');return;}
+  toast('Klus bevestigd');
+  closeDetail();
+  await loadAll();
+}
+
 // ── VRIJ OF VAKANTIE INVOEREN VOOR ANDEREN ────────────────────────────────
 // Niet iedereen geeft het zelf door. Een beheerder kan het daarom voor een of
 // meer mensen tegelijk invullen. Het staat er meteen goedgekeurd in, want wie
@@ -5742,7 +6001,12 @@ function renderOpenKlussen(){
 
     const namen=(k.ingedeeld||[]);
     const nodig=k.personeel_nodig||0;
-    const plekVrij=nodig?Math.max(0,nodig-k.ingedeeld_aantal):null;
+    // Losse krachten staan ook op de klus en tellen dus mee; anders leek een
+    // volle klus hier nog plek te hebben.
+    const bezet=(k.bezet_aantal!=null)?k.bezet_aantal:(k.ingedeeld_aantal||0);
+    const losse=k.losse_aantal||0;
+    const plekVrij=nodig?Math.max(0,nodig-bezet):null;
+    const shifts=Array.isArray(k.shifts)?k.shifts:[];
 
     let knop='';
     if(k.ben_ingedeeld){
@@ -5754,6 +6018,19 @@ function renderOpenKlussen(){
       </div>`;
     }else if(k.mijn_status==='afgewezen'){
       knop=`<span style="font-size:12px;font-weight:600;color:#DC2626">Niet ingedeeld voor deze klus</span>`;
+    }else if(shifts.length){
+      // Bij shifts meld je je aan voor een shift, niet voor de hele dag.
+      knop=shifts.map(sh=>{
+        const tijd=[tijdFromDb(sh.start_tijd),tijdFromDb(sh.eind_tijd)].filter(Boolean).join(' – ');
+        const vol=(sh.personeel_nodig||0)>0&&(sh.bezet||0)>=(sh.personeel_nodig||0);
+        return`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <span style="font-size:12px">${sh.naam||'Shift'}${tijd?` <span style="color:var(--muted)">${tijd}</span>`:''}
+            <span style="color:var(--muted)">· ${sh.bezet||0}/${sh.personeel_nodig||0}</span></span>
+          ${vol
+            ?'<span style="font-size:11px;color:var(--muted)">vol</span>'
+            :`<button class="btn-sm" style="font-size:11px;padding:6px 12px;flex-shrink:0" onclick="meldAan('${k.id}','${sh.id}')">Ik wil deze</button>`}
+        </div>`;
+      }).join('');
     }else{
       knop=`<button class="btn-sm" style="font-size:12px;padding:8px 16px" onclick="meldAan('${k.id}')">Ik wil deze klus</button>`;
     }
@@ -5765,7 +6042,7 @@ function renderOpenKlussen(){
       ${k.adres?`<div style="font-size:12px;color:var(--muted);margin-top:3px">📍 ${k.adres}</div>`:''}
       <div style="font-size:12px;color:var(--text);margin-top:8px">
         <span style="color:var(--muted)">Al ingedeeld:</span>
-        ${namen.length?namen.join(', '):'nog niemand'}
+        ${namen.length?namen.join(', '):'nog niemand'}${losse?`<span style="color:var(--muted)"> + ${losse} losse ${losse===1?'kracht':'krachten'}</span>`:''}
         ${plekVrij!==null?`<span style="color:var(--muted)"> · ${plekVrij} van de ${nodig} plekken vrij</span>`:''}
       </div>
       <div style="margin-top:12px">${knop}</div>
@@ -5792,9 +6069,9 @@ function renderOpenKlussen(){
   el.innerHTML=html;
 }
 
-async function meldAan(klusId){
+async function meldAan(klusId,shiftId){
   const{error}=await sb.from('klus_aanmeldingen')
-    .insert({klus_id:klusId,gebruiker_id:CURRENT_USER.id,status:'aangemeld'});
+    .insert({klus_id:klusId,gebruiker_id:CURRENT_USER.id,status:'aangemeld',shift_id:shiftId||null});
   if(error){toast('Aanmelden mislukt: '+error.message,'fout');return;}
   toast('Je aanmelding is doorgegeven');
   loadOpenKlussen();
@@ -5860,7 +6137,7 @@ async function beslisAanmelding(id,status){
 
   if(status==='geaccepteerd'){
     const{error:koppelFout}=await sb.from('klus_gebruikers')
-      .upsert({klus_id:rij.klus_id,gebruiker_id:rij.gebruiker_id},{onConflict:'klus_id,gebruiker_id'});
+      .upsert({klus_id:rij.klus_id,gebruiker_id:rij.gebruiker_id,shift_id:rij.shift_id||null},{onConflict:'klus_id,gebruiker_id'});
     if(koppelFout){toast('Indelen mislukt: '+koppelFout.message,'fout');return;}
 
     // Wie zich aanmeldt en wordt ingedeeld, is die dag dus beschikbaar.
@@ -5917,14 +6194,45 @@ function pbFmt(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,
 function pbGetKlussenVoorDag(d){const ds=pbFmt(d);return KLUSSEN.filter(k=>{const start=k.datum;const end=k.datum_eind||k.datum;return ds>=start&&ds<=end;});}
 function pbGetShifts(k){
   // Losse krachten staan óók op de klus, dus die tellen gewoon mee in de bezetting.
+  const team=(k.trucks&&k.trucks.length)
+    ?k.trucks.map(t=>t.label).join(', ')
+    :(k.categorie==='franklins'?'Snackbar':'Onbekend');
+
+  // Heeft de klus echte shifts, dan is elke shift een blok op het bord.
+  const echt=k.shifts||[];
+  if(echt.length){
+    const rijen=echt.map(sh=>{
+      const wie=(k.personeel||[]).filter(p=>p.shift_id===sh.id);
+      const los=(k.losse||[]).filter(l=>l.shift_id===sh.id);
+      const bezet=wie.length+los.length;
+      const t1=tijdFromDb(sh.start_tijd)||'?';
+      const t2=tijdFromDb(sh.eind_tijd)||'?';
+      return{
+        id:sh.id,
+        tijd:(t1!=='?'||t2!=='?')?`${t1} → ${t2}`:'Hele dag',
+        team:sh.naam||team,
+        bezet,
+        totaal:Math.max(sh.personeel_nodig||0,bezet),
+        namen:wie.map(p=>p.naam).concat(los.map(l=>l.naam+' (los)')),
+      };
+    });
+    // Wie op de klus staat zonder shift krijgt een eigen regel, anders zou je
+    // hem nergens terugzien.
+    const zonder=(k.personeel||[]).filter(p=>!p.shift_id);
+    const zonderLos=(k.losse||[]).filter(l=>!l.shift_id);
+    if(zonder.length||zonderLos.length){
+      rijen.push({id:'shift-'+k.id,tijd:'Hele klus',team,
+        bezet:zonder.length+zonderLos.length,totaal:zonder.length+zonderLos.length,
+        namen:zonder.map(p=>p.naam).concat(zonderLos.map(l=>l.naam+' (los)'))});
+    }
+    return rijen;
+  }
+
   const bezet=(k.personeel?k.personeel.length:0)+(k.losse?k.losse.length:0);
   const nodig=k.personeel_nodig||0;
   if(nodig===0&&bezet===0)return[];
   const t1=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd)||tijdFromDb(k.start_opbouw)||'?';
   const t2=tijdFromDb(k.einde_klus)||tijdFromDb(k.einde_feest)||'?';
-  const team=(k.trucks&&k.trucks.length)
-    ?k.trucks.map(t=>t.label).join(', ')
-    :(k.categorie==='franklins'?'Snackbar':'Onbekend');
   return[{id:'shift-'+k.id,tijd:t1!=='?'||t2!=='?'?`${t1} → ${t2}`:'Hele dag',team,bezet,totaal:Math.max(nodig,bezet),namen:k.personeel?k.personeel.map(p=>p.naam):[]}];
 }
 function pbGetStatus(k){
@@ -5956,9 +6264,19 @@ function pbWijsToe(klusId,mwId){
     if(!c.ok){toast(mw.naam+' '+c.reden,'fout');return;}
   }
 
-  klus.personeel.push({id:mw.id,naam:mw.naam});pbOpenDrop=null;
+  // Heeft de klus shifts, dan komt hij in de eerste shift die nog plek heeft.
+  // Wil je hem ergens anders, dan verzet je dat in het klusformulier.
+  let shiftId=null;
+  (klus.shifts||[]).some(sh=>{
+    const vol=(klus.personeel||[]).filter(p=>p.shift_id===sh.id).length
+             +((klus.losse||[]).filter(l=>l.shift_id===sh.id).length);
+    if(vol<(sh.personeel_nodig||0)){shiftId=sh.id;return true;}
+    return false;
+  });
+
+  klus.personeel.push({id:mw.id,naam:mw.naam,shift_id:shiftId});pbOpenDrop=null;
   pbShowToast('toe',mw.naam,klus.naam);
-  sb.from('klus_gebruikers').insert({klus_id:klusId,gebruiker_id:mwId}).then(()=>{});
+  sb.from('klus_gebruikers').insert({klus_id:klusId,gebruiker_id:mwId,shift_id:shiftId}).then(()=>{});
   if(heeftGemeld){
     sb.from('klus_aanmeldingen').update({status:'geaccepteerd'})
       .eq('klus_id',klusId).eq('gebruiker_id',mwId).then(()=>{
