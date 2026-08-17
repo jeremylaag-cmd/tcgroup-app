@@ -354,6 +354,11 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
     grid-template-columns:1fr !important;
   }
 }
+/* Verzoeken staan in een raster, zodat de breedte gebruikt wordt in plaats van
+   één hele lange kolom. Onder ongeveer 320 px valt het vanzelf terug naar één
+   kolom per rij. */
+.besch-lijst{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;align-items:start}
+.besch-item{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:10px;padding:10px 12px}
 .besch-item.wacht{border-left-color:#F59E0B}
 .besch-item.goedgekeurd{border-left-color:#059669}
 .besch-item.afgewezen{border-left-color:#DC2626;opacity:.7}
@@ -5600,7 +5605,7 @@ async function loadMijnBeschikbaarheid(){
       :'Geen onbeschikbaarheid ingevoerd — je staat overal op beschikbaar')+'</div>';
     return;
   }
-  el.innerHTML=data.map(b=>{
+  el.innerHTML='<div class="besch-lijst">'+data.map(b=>{
     const wel=b.soort==='beschikbaar';
     const statusTekst=wel?'Doorgegeven':(b.status==='wacht'?'In afwachting':b.status==='goedgekeurd'?'Goedgekeurd':'Afgewezen');
     return`<div class="besch-item ${b.status}" style="${wel?'border-left:3px solid #059669':''}">
@@ -5613,7 +5618,7 @@ async function loadMijnBeschikbaarheid(){
       ${(wel||b.status==='wacht')?`<button class="btn-edit" onclick="openBeschModal('${b.id}')">Bewerk</button>`:''}
       <button class="btn-danger-sm" onclick="deleteBeschikbaarheid('${b.id}')">×</button>
     </div>
-  </div>`;}).join('');
+  </div>`;}).join('')+'</div>';
 }
 
 let beschWeekOffset=0;
@@ -5714,19 +5719,21 @@ async function loadAlleBeschikbaarheid(){
     </div>`;
   }
 
+  const raster=rijen=>`<div class="besch-lijst">${rijen}</div>`;
+
   let html='';
   if(wacht.length){
-    html+=`<div class="slabel" style="margin-bottom:.625rem">⏳ Openstaand (${wacht.length})</div>${wacht.map(b=>renderVerzoek(b,true)).join('')}`;
+    html+=`<div class="slabel" style="margin-bottom:.625rem">⏳ Openstaand (${wacht.length})</div>`+raster(wacht.map(b=>renderVerzoek(b,true)).join(''));
   }else{
     html+='<div class="empty" style="padding:.75rem 0;font-size:12px">Geen openstaande verzoeken</div>';
   }
   // De doorgegeven beschikbaarheid staat al in de agenda hierboven. Als lijst
   // met verwijderknoppen erbij was het alleen maar ruis, dus die is eruit.
   if(goed.length){
-    html+=`<div class="slabel" style="margin:1rem 0 .625rem">✓ Goedgekeurd vrij (${goed.length})</div>${goed.map(b=>renderVerzoek(b,false)).join('')}`;
+    html+=`<div class="slabel" style="margin:1rem 0 .625rem">✓ Goedgekeurd vrij (${goed.length})</div>`+raster(goed.map(b=>renderVerzoek(b,false)).join(''));
   }
   if(afgewezen.length){
-    html+=`<div class="slabel" style="margin:1rem 0 .625rem">✗ Afgewezen (${afgewezen.length})</div>${afgewezen.map(b=>renderVerzoek(b,false)).join('')}`;
+    html+=`<div class="slabel" style="margin:1rem 0 .625rem">✗ Afgewezen (${afgewezen.length})</div>`+raster(afgewezen.map(b=>renderVerzoek(b,false)).join(''));
   }
   lijstEl.innerHTML=html;
 }
@@ -6162,12 +6169,27 @@ function renderOpenKlussen(){
   const el=document.getElementById('okLijst');
   if(!el)return;
   const zoek=(document.getElementById('okZoek')?.value||'').trim().toLowerCase();
+
+  // Een klus die al vol zit heeft hier niets te zoeken — je kunt je er toch niet
+  // meer voor aanmelden. Klussen waar je zelf al bij betrokken bent blijven wel
+  // staan, anders zou je je eigen aanmelding niet meer terugvinden.
+  const heeftPlek=k=>{
+    if(k.ben_ingedeeld||k.mijn_status)return true;
+    const shifts=Array.isArray(k.shifts)?k.shifts:[];
+    if(shifts.length)return shifts.some(sh=>(sh.personeel_nodig||0)>0&&(sh.bezet||0)<(sh.personeel_nodig||0));
+    const nodig=k.personeel_nodig||0;
+    if(nodig<=0)return false;
+    const bezet=(k.bezet_aantal!=null)?k.bezet_aantal:(k.ingedeeld_aantal||0);
+    return bezet<nodig;
+  };
+
+  const metPlek=OPEN_KLUSSEN.filter(heeftPlek);
   const lijst=zoek
-    ?OPEN_KLUSSEN.filter(k=>((k.naam||'')+' '+(k.adres||'')).toLowerCase().includes(zoek))
-    :OPEN_KLUSSEN;
+    ?metPlek.filter(k=>((k.naam||'')+' '+(k.adres||'')).toLowerCase().includes(zoek))
+    :metPlek;
 
   if(!lijst.length){
-    el.innerHTML='<div class="empty">'+(zoek?'Niets gevonden':'Er staan op dit moment geen komende klussen')+'</div>';
+    el.innerHTML='<div class="empty">'+(zoek?'Niets gevonden':'Er staan op dit moment geen klussen open — alles is bemenst')+'</div>';
     return;
   }
 
@@ -6294,7 +6316,7 @@ async function loadAanmeldingen(){
     return;
   }
 
-  el.innerHTML=open.map(a=>{
+  el.innerHTML='<div class="besch-lijst">'+open.map(a=>{
     const k=(KLUSSEN||[]).find(x=>x.id===a.klus_id);
     const datum=k?parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}):'';
     return`<div class="besch-item wacht">
@@ -6308,7 +6330,7 @@ async function loadAanmeldingen(){
         <button class="btn-danger-sm" style="padding:6px 12px;font-size:12px" onclick="beslisAanmelding('${a.id}','afgewezen')">✗ Nee</button>
       </div>
     </div>`;
-  }).join('');
+  }).join('')+'</div>';
 }
 
 async function beslisAanmelding(id,status){
