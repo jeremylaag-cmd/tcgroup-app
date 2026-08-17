@@ -5254,12 +5254,16 @@ async function doeExport(){
       perPersoon[naam]=(perPersoon[naam]||0)+min;
       const tijd=d=>d?d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'';
 
-      const ploeg=(ploegen[ploegKey(r)]||[]).filter(x=>x.gebruiker_id!==r.gebruiker_id);
+      const helePloeg=ploegen[ploegKey(r)]||[];
+      const ploeg=helePloeg.filter(x=>x.gebruiker_id!==r.gebruiker_id);
       const samenMet=ploeg.map(x=>naamVan[x.gebruiker_id]||'Onbekend').join(', ');
       const urenCollegas=ploeg.map(x=>minToStr(x.totaal_minuten||0)).join(', ');
       let verschil='';
       if(ploeg.length){
-        const ref=mediaan(ploeg.map(x=>x.totaal_minuten||0));
+        // Vergelijken met de mediaan van de héle ploeg, jezelf meegerekend.
+        // Anders trekt één uitschieter de rest mee en krijgen ook de mensen die
+        // het wél goed hebben ingevuld een melding.
+        const ref=mediaan(helePloeg.map(x=>x.totaal_minuten||0));
         const d=min-ref;
         if(Math.abs(d)>AFWIJKING_MIN){
           verschil=(d>0?'+':'-')+minToStr(Math.abs(d))+' t.o.v. de rest';
