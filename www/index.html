@@ -56,17 +56,18 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .sidebar{background:var(--surface);border-right:1px solid var(--border);padding:1.25rem;overflow-y:auto}
 .main{padding:1.5rem;overflow-y:auto}
 .slabel{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
-.wh{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px}
+.wh{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-bottom:3px}
 .wh span{font-size:9px;color:var(--muted);text-align:center;font-weight:500}
-.cg{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
-.cd{border-radius:8px;padding:4px 2px;text-align:center;border:1px solid transparent;background:var(--bg);min-height:34px;cursor:pointer}
+.cg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
+.cd{border-radius:8px;padding:4px 2px;text-align:center;border:1px solid transparent;background:var(--bg);min-height:34px;cursor:pointer;min-width:0;overflow:hidden}
 .cd:hover{border-color:var(--border)}
 .cd.today{background:#EFF6FF;border-color:#BFDBFE}.cd.today .dn{color:#1E40AF;font-weight:700}
 .cd.past{background:#F4F3F1;cursor:default}.cd.past .dn{color:#B0ABA5}.cd.past .dot{opacity:.4}
 .cd.sel{border-color:var(--text);background:#fff;opacity:1}
-.cd.has-klus .dr{display:flex;justify-content:center;gap:2px;margin-top:2px}
+.cd.has-klus .dr{display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;gap:2px;margin-top:2px;max-width:100%}
 .dn{font-size:11px;color:var(--text)}
-.dot{width:6px;height:6px;border-radius:50%}
+.dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto}
+.dmeer{font-size:8px;font-weight:700;color:var(--muted);line-height:6px;align-self:center}
 .wdiv{grid-column:1/-1;border-top:1px solid var(--border);margin:4px 0}
 .lgd{margin-top:1rem;display:flex;flex-direction:column;gap:3px}
 .lgr-btn{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer;padding:6px 8px;border-radius:7px;background:transparent;border:none;text-align:left;width:100%;font-family:var(--font)}
@@ -3036,6 +3037,9 @@ function toonEerderBalk(){
 
 function renderAll(){
   const days=getWeekDates();
+  // Op een drukke dag passen niet alle truckkleuren naast elkaar. Meer dan dit
+  // aantal stippen wordt "+n", anders rekt zo'n dag de hele kalenderkolom op.
+  const MAX_STIPPEN=6;
   const busyMap={};
   KLUSSEN.forEach(k=>klusDagen(k).forEach(ds=>{if(!busyMap[ds])busyMap[ds]=new Set();k.trucks.forEach(t=>busyMap[ds].add(t.id));}));
   const first=days[0],last=days[13],opts={day:'numeric',month:'short'};
@@ -3061,7 +3065,7 @@ function renderAll(){
     return(i===7?'<div class="wdiv"></div>':'')+
       `<div class="cd${ds===todayStr?' today':''}${isPast?' past':''}${ds===selDate?' sel':''}${dots.length?' has-klus':''}" onclick="${isPast?'':'toggleDate(\''+ds+'\');closeDrawer()'}">
         <div class="dn">${d.getDate()}</div>
-        ${dots.length?`<div class="dr">${dots.map(tid=>{const t=TRUCKS.find(x=>x.id===tid);return t?`<div class="dot" style="background:${t.color}"></div>`:''}).join('')}</div>`:''}
+        ${dots.length?`<div class="dr">${dots.slice(0,MAX_STIPPEN).map(tid=>{const t=TRUCKS.find(x=>x.id===tid);return t?`<div class="dot" style="background:${t.color}"></div>`:''}).join('')}${dots.length>MAX_STIPPEN?`<span class="dmeer">+${dots.length-MAX_STIPPEN}</span>`:''}</div>`:''}
       </div>`;
   }).join('');
   document.getElementById('calGrid').innerHTML=calHTML;
