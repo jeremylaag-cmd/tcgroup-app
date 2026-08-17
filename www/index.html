@@ -633,18 +633,27 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 .pb-dow{font-size:9px;color:var(--muted);text-align:center;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding:3px 0}
 .pb-cal-days{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
 .pb-day{text-align:center;padding:4px 1px;border-radius:6px;cursor:pointer;font-size:11px;min-height:34px;display:flex;flex-direction:column;align-items:center;gap:2px;color:var(--text);transition:background .1s}
-.pb-day:hover{background:var(--bg)}
+.pb-day:hover{filter:brightness(.96)}
+/* De hele dag krijgt de kleur van de bezetting; stippen waren op een drukke
+   maand niet meer te lezen. Rood wint van oranje, oranje van groen: één klus
+   die nog leeg staat moet je meteen zien. */
+.pb-day.dag-leeg{background:#FEE2E2;color:#991B1B;font-weight:600}
+.pb-day.dag-deel{background:#FDE9C8;color:#92400E;font-weight:600}
+.pb-day.dag-vol{background:#CFF3E2;color:#065F46;font-weight:600}
+.pb-day.dag-verleden{background:#EDEBE7;color:#9A958E}
 .pb-day.pb-past{color:var(--muted);background:#F4F3F1;opacity:.65}
 .pb-day.pb-past:hover{opacity:.85}
 .pb-day.pb-today{font-weight:700}
 .pb-day.pb-today .pb-dn{background:#1E40AF;color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:10px}
-.pb-day.pb-sel{background:#EFF6FF}
-.pb-day.pb-sel .pb-dn{color:#1E40AF;font-weight:700}
+.pb-day.pb-sel{box-shadow:inset 0 0 0 2px var(--text)}
+.pb-day.pb-sel .pb-dn{font-weight:700}
+.pb-day.pb-sel:not(.dag-leeg):not(.dag-deel):not(.dag-vol):not(.dag-verleden){background:#EFF6FF}
 .pb-day.pb-other{opacity:.2;pointer-events:none}
 .pb-dn{font-size:11px;line-height:1.2}
 .pb-dot-row{display:flex;gap:2px;justify-content:center}
 .pb-dot{width:4px;height:4px;border-radius:50%}
 .pb-dot.leeg{background:#DC2626}.pb-dot.deel{background:#D97706}.pb-dot.vol{background:#059669}.pb-dot.grijs{background:#B0ABA5}
+.pb-daantal{font-size:9px;font-weight:600;opacity:.75;line-height:1}
 .pb-legenda{display:flex;flex-direction:column;gap:5px}
 .pb-lgr{display:flex;align-items:center;gap:7px;font-size:11px;color:var(--muted)}
 .pb-ls{width:8px;height:8px;border-radius:50%;flex-shrink:0}
@@ -716,11 +725,15 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
   padding:6px 2px;border-radius:8px;cursor:pointer;
   transition:background .1s;
 }
-.pb-mob-day:hover{background:var(--bg)}
+.pb-mob-day:hover{filter:brightness(.96)}
+.pb-mob-day.dag-leeg{background:#FEE2E2;color:#991B1B}
+.pb-mob-day.dag-deel{background:#FDE9C8;color:#92400E}
+.pb-mob-day.dag-vol{background:#CFF3E2;color:#065F46}
+.pb-mob-day.dag-verleden{background:#EDEBE7;color:#9A958E}
 .pb-mob-day.pb-mob-past{opacity:.4}
 .pb-mob-day.pb-mob-today .pb-mob-dn{background:var(--text);color:#fff;border-radius:50%;width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:12px}
-.pb-mob-day.pb-mob-sel{background:#EFF6FF;border-radius:8px}
-.pb-mob-day.pb-mob-sel .pb-mob-dn{color:#1E40AF;font-weight:700}
+.pb-mob-day.pb-mob-sel{box-shadow:inset 0 0 0 2px var(--text);border-radius:8px}
+.pb-mob-day.pb-mob-sel .pb-mob-dn{font-weight:700}
 .pb-mob-dow{font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em}
 .pb-mob-dn{font-size:14px;color:var(--text);line-height:1;font-weight:500}
 .pb-mob-dots{display:flex;gap:2px;justify-content:center;min-height:5px;margin-top:1px}
@@ -935,10 +948,10 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         </div>
         <div class="pb-legenda">
           <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Legenda</div>
-          <div class="pb-lgr"><div class="pb-ls" style="background:#DC2626"></div>Shift(s) leeg</div>
-          <div class="pb-lgr"><div class="pb-ls" style="background:#D97706"></div>Deels ingevuld</div>
-          <div class="pb-lgr"><div class="pb-ls" style="background:#059669"></div>Volledig bezet</div>
-          <div class="pb-lgr"><div class="pb-ls" style="background:#B0ABA5"></div>Verleden dag</div>
+          <div class="pb-lgr"><div class="pb-ls" style="background:#FEE2E2;border:1px solid #FCA5A5"></div>Nog iemand nodig</div>
+          <div class="pb-lgr"><div class="pb-ls" style="background:#FDE9C8;border:1px solid #FCD34D"></div>Deels ingevuld</div>
+          <div class="pb-lgr"><div class="pb-ls" style="background:#CFF3E2;border:1px solid #6EE7B7"></div>Helemaal rond</div>
+          <div class="pb-lgr"><div class="pb-ls" style="background:#EDEBE7;border:1px solid #DAD6D0"></div>Verleden dag</div>
         </div>
       </aside>
       <!-- Mobiele kalender (weekweergave) -->
@@ -1304,6 +1317,36 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="mfooter" style="margin-top:1rem">
         <button class="btn-ghost" onclick="sluitHandmatig()">Annuleren</button>
         <button class="btn-sm" onclick="bewaarHandmatig()">Toevoegen</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KLUS KOPIËREN NAAR EEN ANDERE DATUM -->
+  <div class="modal-overlay" id="kopieerOverlay" onclick="if(event.target===this)sluitKopieer()">
+    <div class="modal" style="max-width:440px">
+      <div class="modal-title">Klus kopiëren</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:1rem" id="kopieerUitleg"></div>
+      <div class="fr"><span class="fl">Naar welke datum <span style="color:#DC2626">*</span></span>
+        <input type="date" id="kopieerDatum">
+      </div>
+      <div class="fr">
+        <span class="fl">Wat gaat er mee</span>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:6px;cursor:pointer">
+          <input type="checkbox" id="kopieerPersoneel"> Ook het ingedeelde personeel
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="checkbox" id="kopieerBijlagen" checked> Ook de bijlagen
+        </label>
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:6px">
+          Trucks, food, tijden, shifts, losse krachten, adres en notitie gaan altijd mee.
+          Uren en aanmeldingen niet.
+        </div>
+      </div>
+      <div class="warn-box" id="kopieerWarn"></div>
+      <div class="mfooter" style="margin-top:1rem">
+        <span class="saving-msg" id="kopieerBezig" style="display:none">Kopiëren...</span>
+        <button class="btn-ghost" onclick="sluitKopieer()">Annuleren</button>
+        <button class="btn-sm" id="kopieerKnop" onclick="bewaarKopie()">Kopieer</button>
       </div>
     </div>
   </div>
@@ -1686,6 +1729,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div class="detail-footer">
       <button class="btn-ghost" onclick="closeDetail()">Sluiten</button>
       <button class="btn-sm" id="detailBevestigBtn" style="display:none">Klus bevestigen</button>
+      <button class="btn-edit" id="detailKopieerBtn" style="display:none">Kopieer</button>
       <button class="btn-edit" id="detailEditBtn" style="display:none">Bewerk</button>
     </div>
   </div>
@@ -3783,6 +3827,11 @@ function openDetail(id){
     bev.style.display=(CURRENT_ROL==='beheerder'&&k.is_optie)?'':'none';
     bev.onclick=()=>bevestigOptie(id);
   }
+  const kop=document.getElementById('detailKopieerBtn');
+  if(kop){
+    kop.style.display=CURRENT_ROL==='beheerder'?'':'none';
+    kop.onclick=()=>openKopieer(id);
+  }
   document.getElementById('detailOverlay').classList.add('open');
 }
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('open');}
@@ -5755,6 +5804,136 @@ async function keurBeschikbaarheid(id,status){
   loadAlleBeschikbaarheid();
 }
 
+// ── KLUS KOPIËREN NAAR EEN ANDERE DATUM ───────────────────────────────────
+// Veel klussen lijken op elkaar: dezelfde trucks, hetzelfde food, dezelfde
+// tijden, alleen een andere dag. Dit maakt daar een kopie van, inclusief shifts
+// en losse krachten. Uren en aanmeldingen horen bij de oorspronkelijke klus en
+// gaan dus níet mee.
+let kopieerKlusId=null;
+
+function openKopieer(id){
+  if(CURRENT_ROL!=='beheerder')return;
+  const k=(KLUSSEN||[]).find(x=>x.id===id);
+  if(!k)return;
+  kopieerKlusId=id;
+  const volgendeWeek=new Date(parseDate(k.datum));
+  volgendeWeek.setDate(volgendeWeek.getDate()+7);
+  document.getElementById('kopieerUitleg').textContent=
+    `"${k.naam||k.food||'Klus'}" van ${parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})} kopiëren.`;
+  document.getElementById('kopieerDatum').value=fmt(volgendeWeek);
+  document.getElementById('kopieerPersoneel').checked=false;
+  document.getElementById('kopieerBijlagen').checked=true;
+  document.getElementById('kopieerWarn').className='warn-box';
+  closeDetail();
+  document.getElementById('kopieerOverlay').classList.add('open');
+}
+
+function sluitKopieer(){document.getElementById('kopieerOverlay').classList.remove('open');}
+
+async function bewaarKopie(){
+  const wb=document.getElementById('kopieerWarn');
+  const k=(KLUSSEN||[]).find(x=>x.id===kopieerKlusId);
+  if(!k){wb.textContent='Klus niet gevonden.';wb.className='warn-box show';return;}
+  const nieuweDatum=document.getElementById('kopieerDatum').value;
+  if(!nieuweDatum){wb.textContent='Kies een datum.';wb.className='warn-box show';return;}
+  const metPersoneel=document.getElementById('kopieerPersoneel').checked;
+  const metBijlagen=document.getElementById('kopieerBijlagen').checked;
+
+  // Duurt de klus meerdere dagen, dan schuift de einddatum net zo ver mee op.
+  let nieuwEind=null;
+  if(k.datum_eind&&k.datum_eind!==k.datum){
+    const dagen=Math.round((parseDate(k.datum_eind)-parseDate(k.datum))/86400000);
+    const e=parseDate(nieuweDatum);e.setDate(e.getDate()+dagen);
+    nieuwEind=fmt(e);
+  }
+
+  if(!slotPak('kopieer'))return;
+  const knop=document.getElementById('kopieerKnop');
+  if(knop)knop.disabled=true;
+  document.getElementById('kopieerBezig').style.display='inline';
+
+  try{
+    const{data:nieuw,error}=await sb.from('klussen').insert({
+      naam:k.naam||'',datum:nieuweDatum,datum_eind:nieuwEind,
+      start_tijd:k.start_tijd,vertrek_tijd:k.vertrek_tijd,start_opbouw:k.start_opbouw,
+      start_feest:k.start_feest,einde_feest:k.einde_feest,einde_klus:k.einde_klus,
+      personen:k.personen||0,personeel_nodig:k.personeel_nodig||0,food:k.food||'',
+      notitie:k.notitie||'',adres:k.adres||'',milieuzone:!!k.milieuzone,
+      contactpersoon:k.contactpersoon||'',telefoon:k.telefoon||'',
+      categorie:k.categorie==='franklins'?'klus':k.categorie,   // een kopie is geen vaste dienst
+      is_optie:!!k.is_optie,
+    }).select('id');
+    if(error||!nieuw||!nieuw.length)throw new Error(error?.message||'Kopiëren mislukt');
+    const nieuwId=nieuw[0].id;
+
+    // Shifts eerst; het personeel verwijst ernaar.
+    const shiftVertaling={};
+    if((k.shifts||[]).length){
+      const rijen=k.shifts.map((sh,i)=>({klus_id:nieuwId,naam:sh.naam||('Shift '+(i+1)),
+        start_tijd:sh.start_tijd,eind_tijd:sh.eind_tijd,
+        personeel_nodig:sh.personeel_nodig||0,volgorde:sh.volgorde??i}));
+      const{data:nieuweShifts,error:e2}=await sb.from('klus_shifts').insert(rijen).select('id');
+      if(e2)throw new Error('Shifts kopiëren mislukt: '+e2.message);
+      (nieuweShifts||[]).forEach((r,i)=>{if(k.shifts[i])shiftVertaling[k.shifts[i].id]=r.id;});
+    }
+
+    if((k.trucks||[]).length){
+      const{error:e3}=await sb.from('klus_trucks').insert(k.trucks.map(t=>({klus_id:nieuwId,truck_id:t.id})));
+      if(e3)throw new Error('Trucks kopiëren mislukt: '+e3.message);
+    }
+    if((k.soorten||[]).length){
+      const{error:e4}=await sb.from('klus_soorten').insert(k.soorten.map(so=>({klus_id:nieuwId,soort_id:so.id})));
+      if(e4)throw new Error('Food kopiëren mislukt: '+e4.message);
+    }
+    if((k.truckSoorten||[]).length){
+      const{error:e5}=await sb.from('klus_truck_soorten').insert(
+        k.truckSoorten.map(ts=>({klus_id:nieuwId,truck_id:ts.truck.id,soort_id:ts.soort.id})));
+      if(e5)throw new Error('Food per truck kopiëren mislukt: '+e5.message);
+    }
+    if((k.losse||[]).length){
+      const{error:e6}=await sb.from('klus_losse_personen').insert(
+        k.losse.map(l=>({klus_id:nieuwId,naam:l.naam,telefoon:l.telefoon||null,
+          shift_id:shiftVertaling[l.shift_id]||null})));
+      if(e6)throw new Error('Losse krachten kopiëren mislukt: '+e6.message);
+    }
+    if(metBijlagen&&(k.pdfs||[]).length){
+      // Het bestand zelf blijft staan; de kopie wijst naar hetzelfde bestand.
+      const{error:e7}=await sb.from('klus_pdfs').insert(k.pdfs.map(pd=>({klus_id:nieuwId,naam:pd.naam,url:pd.url})));
+      if(e7)throw new Error('Bijlagen kopiëren mislukt: '+e7.message);
+    }
+
+    let overgeslagen=[];
+    if(metPersoneel&&(k.personeel||[]).length){
+      // Wie op de nieuwe datum vrij is of zich niet beschikbaar heeft gemeld,
+      // slaan we over. Anders zet je iemand in die er niet kan zijn.
+      const mee=[],rest=[];
+      k.personeel.forEach(p=>{
+        const check=magIngepland(p.id,nieuweDatum,p.rol);
+        if(check.ok)mee.push(p);else rest.push(p.naam);
+      });
+      overgeslagen=rest;
+      if(mee.length){
+        const{error:e8}=await sb.from('klus_gebruikers').insert(
+          mee.map(p=>({klus_id:nieuwId,gebruiker_id:p.id,shift_id:shiftVertaling[p.shift_id]||null})));
+        if(e8)throw new Error('Personeel kopiëren mislukt: '+e8.message);
+      }
+    }
+
+    sluitKopieer();
+    const dl=parseDate(nieuweDatum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
+    toast(overgeslagen.length
+      ? `Gekopieerd naar ${dl}. Niet meegenomen: ${overgeslagen.join(', ')} (niet beschikbaar).`
+      : `Gekopieerd naar ${dl}.`);
+    await loadAll();
+  }catch(e){
+    wb.textContent=e.message;wb.className='warn-box show';
+  }finally{
+    slotLos('kopieer');
+    document.getElementById('kopieerBezig').style.display='none';
+    if(knop)knop.disabled=false;
+  }
+}
+
 // ── OPTIE-KLUS ────────────────────────────────────────────────────────────
 // Een klus die vrijwel zeker doorgaat maar nog niet rond is. Hij staat wel in de
 // agenda, zodat de datum bezet is, maar met een streepjeslijn en het label
@@ -6366,16 +6545,26 @@ function pbRenderMobKal(){
     const past=pbIsPast(dt),tod=pbIsToday(dt),sel=pbSameDay(dt,pbSelDate);
     const dagK=pbGetKlussenVoorDag(dt);
     const sts=[...new Set(dagK.map(k=>pbGetStatus(k)))];
-    let cls='pb-mob-day'+(past&&!tod?' pb-mob-past':'')+(tod?' pb-mob-today':'')+(sel?' pb-mob-sel':'');
-    const dots=sts.length?sts.map(s=>`<div class="pb-mob-dot ${past&&!tod?'grijs':s}"></div>`).join(''):'';
+    const kleur=pbDagKleur(sts,past&&!tod);
+    let cls='pb-mob-day'+(past&&!tod&&!kleur?' pb-mob-past':'')+(tod?' pb-mob-today':'')+(sel?' pb-mob-sel':'')+(kleur?' '+kleur:'');
     const y=dt.getFullYear(),m=dt.getMonth(),d=dt.getDate();
     html+=`<div class="${cls}" onclick="pbSelectDay(${y},${m},${d})">
       <span class="pb-mob-dow">${DAGEN_MOB[i]}</span>
       <span class="pb-mob-dn">${d}</span>
-      <div class="pb-mob-dots">${dots}</div>
+      <div class="pb-mob-dots">${dagK.length?`<span class="pb-daantal">${dagK.length}</span>`:''}</div>
     </div>`;
   }
   mobEl.innerHTML=html;
+}
+
+// Eén kleur voor een hele dag. Staat er ook maar één klus helemaal leeg, dan is
+// de dag rood; is alles bezet, dan groen; daartussenin oranje.
+function pbDagKleur(statussen,verleden){
+  if(!statussen||!statussen.length)return '';
+  if(verleden)return 'dag-verleden';
+  if(statussen.includes('leeg'))return 'dag-leeg';
+  if(statussen.includes('deel'))return 'dag-deel';
+  return 'dag-vol';
 }
 
 function pbRenderKal(){
@@ -6392,7 +6581,7 @@ function pbRenderKal(){
     const dt=new Date(pbViewYear,pbViewMonth,d);
     const dagK=pbGetKlussenVoorDag(dt).filter(k=>
       pbFilter==='franklins'?k.categorie==='franklins':k.categorie!=='franklins');
-    if(dagK.length)dm[d]=[...new Set(dagK.map(k=>pbGetStatus(k)))];
+    if(dagK.length){dm[d]=[...new Set(dagK.map(k=>pbGetStatus(k)))];dm[d+'_n']=dagK.length;}
   }
 
   let html='';
@@ -6400,10 +6589,11 @@ function pbRenderKal(){
   for(let d=1;d<=dim;d++){
     const dt=new Date(pbViewYear,pbViewMonth,d);
     const past=pbIsPast(dt),tod=pbIsToday(dt),sel=pbSameDay(dt,pbSelDate);
-    let cls='pb-day'+(past&&!tod?' pb-past':'')+(tod?' pb-today':'')+(sel?' pb-sel':'');
     const sts=dm[d]||[];
-    const dots=sts.length?`<div class="pb-dot-row">${sts.map(s=>`<div class="pb-dot ${past&&!tod?'grijs':s}"></div>`).join('')}</div>`:'';
-    html+=`<div class="${cls}" onclick="pbSelectDay(${pbViewYear},${pbViewMonth},${d})"><span class="pb-dn">${d}</span>${dots}</div>`;
+    const kleur=pbDagKleur(sts,past&&!tod);
+    let cls='pb-day'+(past&&!tod&&!kleur?' pb-past':'')+(tod?' pb-today':'')+(sel?' pb-sel':'')+(kleur?' '+kleur:'');
+    const aantal=sts.length?`<span class="pb-daantal">${(dm[d+'_n']||0)}</span>`:'';
+    html+=`<div class="${cls}" onclick="pbSelectDay(${pbViewYear},${pbViewMonth},${d})"><span class="pb-dn">${d}</span>${aantal}</div>`;
   }
   const trail=(sd+dim)%7===0?0:7-(sd+dim)%7;
   for(let i=1;i<=trail;i++)html+=`<div class="pb-day pb-other"><span class="pb-dn">${i}</span></div>`;
