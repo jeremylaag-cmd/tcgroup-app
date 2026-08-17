@@ -1354,7 +1354,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="mfooter" style="margin-top:1rem">
         <span class="saving-msg" id="afwBezig" style="display:none">Opslaan...</span>
         <button class="btn-ghost" onclick="sluitAfwezig()">Annuleren</button>
-        <button class="btn-sm" onclick="bewaarAfwezig()">Opslaan</button>
+        <button class="btn-sm" id="afwOpslaanKnop" onclick="bewaarAfwezig()">Opslaan</button>
       </div>
     </div>
   </div>
@@ -1571,7 +1571,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div class="mfooter">
       <span class="saving-msg" id="savingMsg" style="display:none">Opslaan...</span>
       <button class="btn-ghost" onclick="closeModal()">Annuleren</button>
-      <button class="btn-sm" onclick="saveKlus()">Opslaan</button>
+      <button class="btn-sm" id="klusOpslaanKnop" onclick="saveKlus()">Opslaan</button>
     </div>
   </div>
 </div>
@@ -3383,7 +3383,29 @@ async function openPdf(url,naam){
   }
 }
 
+// Voorkomt dat dezelfde opslagactie twee keer tegelijk loopt. Bij een klus met
+// herhaling worden tientallen klussen na elkaar aangemaakt; dat duurt een paar
+// seconden. Drukte je in die tijd nog een keer op Opslaan — en dat doe je
+// natuurlijk als er niets lijkt te gebeuren — dan liep de hele reeks een tweede
+// keer en stond alles dubbel in de planning.
+const BEZIG=new Set();
+function slotPak(naam){if(BEZIG.has(naam))return false;BEZIG.add(naam);return true;}
+function slotLos(naam){BEZIG.delete(naam);}
+
 async function saveKlus(){
+  if(!slotPak('klus'))return;
+  const knop=document.getElementById('klusOpslaanKnop');
+  const oudeTekst=knop?knop.textContent:'';
+  if(knop){knop.disabled=true;knop.textContent='Bezig...';}
+  try{
+    await saveKlusIntern();
+  }finally{
+    slotLos('klus');
+    if(knop){knop.disabled=false;knop.textContent=oudeTekst||'Opslaan';}
+  }
+}
+
+async function saveKlusIntern(){
   const naam=document.getElementById('fNaam').value.trim();
   const datum=document.getElementById('fDatum').value;
   const datum_eind=document.getElementById('fDatumEind').value||null;
@@ -3482,8 +3504,12 @@ async function saveKlus(){
       }
     }else{
       // Maak klussen aan voor alle datums (herhaling)
+      const melder=document.getElementById('savingMsg');
       for(let i=0;i<allDatums.length;i++){
         const klusDatum=allDatums[i];
+        if(melder)melder.textContent=allDatums.length>1
+          ? `Klus ${i+1} van ${allDatums.length} aanmaken...`
+          : 'Opslaan...';
         const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon}).select('id');
         if(error||!data||!data.length)throw new Error(error?.message||'Insert mislukt');
         const thisKlusId=data[0].id;
@@ -3523,7 +3549,8 @@ async function saveKlus(){
     }
     closeModal();await loadAll();
   }catch(e){showWarn('Fout bij opslaan: '+e.message);}
-  document.getElementById('savingMsg').style.display='none';
+  const melderEind=document.getElementById('savingMsg');
+  if(melderEind){melderEind.style.display='none';melderEind.textContent='Opslaan...';}
 }
 async function editKlus(id){openModal(id);}
 async function deleteKlus(id){
@@ -5639,9 +5666,16 @@ async function bewaarAfwezig(){
     soort:'onbeschikbaar',status:'goedgekeurd'
   }));
 
+  // Zelfde beveiliging als bij het opslaan van een klus: twee keer drukken
+  // mag niet twee keer wegschrijven.
+  if(!slotPak('afwezig'))return;
+  const knop=document.getElementById('afwOpslaanKnop');
+  if(knop)knop.disabled=true;
   document.getElementById('afwBezig').style.display='inline';
   const{error}=await sb.from('beschikbaarheid').insert(rijen);
   document.getElementById('afwBezig').style.display='none';
+  slotLos('afwezig');
+  if(knop)knop.disabled=false;
   if(error){wb.textContent='Opslaan mislukt: '+error.message;wb.className='warn-box show';return;}
 
   // De planning kijkt naar BESCHIKBAARHEID; die moet dus meteen bij zijn,
