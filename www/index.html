@@ -1173,6 +1173,10 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <div class="bt" style="margin-bottom:0">Personeelsaccounts</div>
           <button class="btn-sm" onclick="exportPersoneel()" style="font-size:11px;padding:5px 14px">Exporteren</button>
         </div>
+        <div class="zoek-wrap"><span class="zoek-icon">&#128269;</span>
+          <input type="search" id="accZoek" placeholder="Zoek op naam, rol, telefoon of skill..." oninput="renderAccounts()" autocomplete="off">
+        </div>
+        <div id="accTeller" style="font-size:11px;color:var(--muted);margin:2px 0 .5rem"></div>
         <div class="acc-list" id="accList"><div class="spin">Laden...</div></div>
       </div>
     </div>
@@ -1256,6 +1260,10 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       </div>
       <div class="fr"><span class="fl">Of vul zelf in (minuten)</span>
         <input type="number" id="pauzeVeld" min="0" max="600" step="5" inputmode="numeric" oninput="pauzeMarkeer(this.value);pauzeControleer()" style="max-width:120px;font-size:15px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+      </div>
+      <div class="fr"><span class="fl">Notitie <span style="color:var(--muted);font-weight:400">(optioneel)</span></span>
+        <textarea id="pauzeNotitie" rows="2" placeholder="bv. later begonnen, extra opgeruimd, materiaal kapot..." style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);resize:vertical"></textarea>
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px">Je beheerder ziet dit bij het accorderen van je uren.</div>
       </div>
       <div id="pauzeWaarschuwing" class="warn-box show" style="display:none"></div>
       <div class="mfooter" style="margin-top:1rem">
@@ -2490,15 +2498,48 @@ async function deleteSkill(id){
 }
 
 // ── ACCOUNTS (uitgebreid) ──
+let ACCOUNTS=[];
+
 async function loadAccounts(){
   const[{data},{data:skillsData}]=await Promise.all([
     sb.from('gebruikers').select('*').order('naam'),
     sb.from('skills').select('*').order('naam'),
   ]);
   SKILLS=skillsData||[];
+  ACCOUNTS=data||[];
+  renderAccounts();
+}
+
+// Zoeken kijkt naar naam, rol, telefoon, e-mail, plaats, shirtmaat, rijbewijs
+// en skills — zo vind je ook "iemand met BE-rijbewijs" of "iedereen uit Utrecht".
+function renderAccounts(){
   const acc=document.getElementById('accList');
-  if(!data||!data.length){acc.innerHTML='<div class="empty">Geen accounts gevonden</div>';return;}
+  if(!acc)return;
   const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','personeel':'Personeel'};
+  const zoek=(document.getElementById('accZoek')?.value||'').trim().toLowerCase();
+
+  const skillNamenVan=u=>{
+    let ids=[];
+    try{ids=u.skills?JSON.parse(typeof u.skills==='string'?u.skills:'[]'):[];}catch(e){}
+    return ids.map(sid=>{const sk=SKILLS.find(x=>x.id===sid);return sk?sk.naam:null;}).filter(Boolean);
+  };
+
+  const data=(ACCOUNTS||[]).filter(u=>{
+    if(!zoek)return true;
+    const hooiberg=[u.naam,rolLabels[u.rol]||u.rol,u.telefoon,u.email,u.plaats,u.straat,
+      u.shirtmaat,u.rijbewijs,u.contractvorm,...skillNamenVan(u)]
+      .filter(Boolean).join(' ').toLowerCase();
+    return zoek.split(/\s+/).every(woord=>hooiberg.includes(woord));
+  });
+
+  const teller=document.getElementById('accTeller');
+  if(teller)teller.textContent=zoek
+    ?`${data.length} van de ${ACCOUNTS.length} accounts`
+    :`${ACCOUNTS.length} accounts`;
+
+  if(!ACCOUNTS.length){acc.innerHTML='<div class="empty">Geen accounts gevonden</div>';return;}
+  if(!data.length){acc.innerHTML='<div class="empty">Niemand gevonden voor "'+zoek+'"</div>';return;}
+
   acc.innerHTML=data.map(u=>{
     let userSkills=[];
     try{userSkills=u.skills?JSON.parse(typeof u.skills==='string'?u.skills:'[]'):[];}catch(e){}
@@ -4558,6 +4599,8 @@ function vraagPauze(regId){
     :'Bij deze lengte hoort geen verplichte pauze.';
   document.getElementById('pauzeVeld').value=min;
   pauzeMarkeer(min);
+  const notEl=document.getElementById('pauzeNotitie');
+  if(notEl)notEl.value='';
   document.getElementById('pauzeWaarschuwing').style.display='none';
   ov.classList.add('open');
 }
@@ -4595,11 +4638,12 @@ function sluitPauze(){
 
 async function bevestigPauze(){
   const pauze=Math.max(0,parseInt(document.getElementById('pauzeVeld').value)||0);
+  const notitie=(document.getElementById('pauzeNotitie')?.value||'').trim();
   sluitPauze();
-  await doUitklokken(pauzeRegId,pauze);
+  await doUitklokken(pauzeRegId,pauze,notitie);
 }
 
-async function doUitklokken(regId,pauze_minuten=0){
+async function doUitklokken(regId,pauze_minuten=0,notitie=''){
   const btn=document.querySelector('.uur-btn-out');
   const herstel=melding=>{
     if(btn){btn.disabled=false;btn.textContent='Uitklokken';}
@@ -4622,13 +4666,17 @@ async function doUitklokken(regId,pauze_minuten=0){
     const geklokt=reg?Math.round((Date.now()-new Date(reg.ingeklokt_op).getTime())/60000):0;
     // totaal_minuten is de gewerkte tijd, dus zonder de pauze.
     const totaal_minuten=Math.max(0,geklokt-(pauze_minuten||0));
-    const{error}=await sb.from('urenregistraties').update({
+    const velden={
       uitgeklokt_op:new Date().toISOString(),
       locatie_uit:locatie,
       pauze_minuten:pauze_minuten||0,
       totaal_minuten,
       status:'wacht'
-    }).eq('id',regId);
+    };
+    // Alleen overschrijven als er echt iets is getypt, anders wist een lege
+    // notitie wat er eerder al bij stond.
+    if(notitie)velden.notitie_pers=notitie;
+    const{error}=await sb.from('urenregistraties').update(velden).eq('id',regId);
     if(error){
       console.error('Uitklokken mislukt:',error);
       herstel('Uitklokken mislukt: '+error.message+'. Probeer het opnieuw.');
@@ -5154,15 +5202,18 @@ async function doeExport(){
 
   knop.disabled=true; knop.textContent='Bezig...';
   try{
+    // We halen altijd de hele periode op, ook als je één persoon exporteert.
+    // Die extra regels gebruiken we alleen om te kunnen laten zien met wie
+    // iemand op een klus stond en of hun uren een beetje overeenkomen.
     let q=sb.from('urenregistraties').select('*')
       .gte('ingeklokt_op',grenzen.van.toISOString())
       .lt('ingeklokt_op',grenzen.tot.toISOString())
       .order('ingeklokt_op',{ascending:true});
-    if(persoonId)q=q.eq('gebruiker_id',persoonId);
     if(alleenGoed)q=q.eq('status','goedgekeurd');
 
-    const{data:regs,error}=await q;
+    const{data:alleRegs,error}=await q;
     if(error)throw new Error(error.message);
+    const regs=persoonId?(alleRegs||[]).filter(r=>r.gebruiker_id===persoonId):(alleRegs||[]);
     if(!regs||!regs.length){
       toast(alleenGoed?'Geen goedgekeurde uren in deze periode':'Geen uren gevonden in deze periode','fout');
       return;
@@ -5172,9 +5223,27 @@ async function doeExport(){
     const naamVan=Object.fromEntries((mensen||[]).map(m=>[m.id,m.naam]));
     const klusVan=Object.fromEntries((KLUSSEN||[]).map(k=>[k.id,k.naam||k.food||'']));
 
-    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Pauze (min)','Duur','Uren (decimaal)','Klus','Status','Handmatig','Locatie inklokken','Locatie uitklokken','Notitie medewerker','Notitie beheer']];
+    // Per klus én per dag bij elkaar zetten wie er stond en hoe lang. Zo kun je
+    // in één oogopslag zien of iemand er veel naast zit.
+    const AFWIJKING_MIN=30;
+    const ploegKey=r=>r.klus_id?r.klus_id+'|'+fmt(new Date(r.ingeklokt_op)):null;
+    const ploegen={};
+    (alleRegs||[]).forEach(r=>{
+      const sleutel=ploegKey(r);
+      if(!sleutel)return;
+      (ploegen[sleutel]=ploegen[sleutel]||[]).push(r);
+    });
+    const mediaan=lijst=>{
+      const g=lijst.slice().sort((a,b)=>a-b);
+      if(!g.length)return 0;
+      const m=Math.floor(g.length/2);
+      return g.length%2?g[m]:Math.round((g[m-1]+g[m])/2);
+    };
+
+    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Pauze (min)','Duur','Uren (decimaal)','Klus','Samen met','Uren collega\'s','Verschil','Status','Handmatig','Locatie inklokken','Locatie uitklokken','Notitie medewerker','Notitie beheer']];
     let totaalMin=0;
     const perPersoon={};
+    let afwijkers=0;
 
     regs.forEach(r=>{
       const inD=new Date(r.ingeklokt_op);
@@ -5184,6 +5253,20 @@ async function doeExport(){
       const naam=naamVan[r.gebruiker_id]||'Onbekend';
       perPersoon[naam]=(perPersoon[naam]||0)+min;
       const tijd=d=>d?d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'';
+
+      const ploeg=(ploegen[ploegKey(r)]||[]).filter(x=>x.gebruiker_id!==r.gebruiker_id);
+      const samenMet=ploeg.map(x=>naamVan[x.gebruiker_id]||'Onbekend').join(', ');
+      const urenCollegas=ploeg.map(x=>minToStr(x.totaal_minuten||0)).join(', ');
+      let verschil='';
+      if(ploeg.length){
+        const ref=mediaan(ploeg.map(x=>x.totaal_minuten||0));
+        const d=min-ref;
+        if(Math.abs(d)>AFWIJKING_MIN){
+          verschil=(d>0?'+':'-')+minToStr(Math.abs(d))+' t.o.v. de rest';
+          afwijkers++;
+        }
+      }
+
       rijen.push([
         naam,
         inD.toLocaleDateString('nl-NL'),
@@ -5193,6 +5276,9 @@ async function doeExport(){
         minToStr(min),
         (min/60).toFixed(2).replace('.',','),
         klusVan[r.klus_id]||'',
+        samenMet,
+        urenCollegas,
+        verschil,
         r.status||'',
         r.handmatig?'ja':'',
         r.locatie_in||'',
@@ -5203,6 +5289,10 @@ async function doeExport(){
     });
 
     rijen.push([]);
+    if(afwijkers){
+      rijen.push([`Let op: ${afwijkers} ${afwijkers===1?'registratie wijkt':'registraties wijken'} meer dan ${AFWIJKING_MIN} minuten af van de rest van de ploeg (kolom Verschil).`]);
+      rijen.push([]);
+    }
     rijen.push(['Totaal per persoon']);
     Object.keys(perPersoon).sort().forEach(n=>{
       rijen.push([n,'','','','',minToStr(perPersoon[n]),(perPersoon[n]/60).toFixed(2).replace('.',',')]);
@@ -5219,7 +5309,9 @@ async function doeExport(){
 
     const gelukt=await bewaarCsv(bestand,csv);
     if(gelukt){
-      toast(regs.length+' registraties geëxporteerd');
+      toast(afwijkers
+        ?`${regs.length} registraties geëxporteerd — ${afwijkers} wijken af van de ploeg`
+        :`${regs.length} registraties geëxporteerd`);
       sluitExport();
     }
   }catch(e){
