@@ -1296,6 +1296,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <div class="pd-tabs">
             <button class="pd-tab on" onclick="pdToon('algemeen',this)">Algemeen</button>
             <button class="pd-tab" onclick="pdToon('agenda',this)">Agenda</button>
+            <button class="pd-tab" id="pdTabVerlof" onclick="pdToon('verlof',this)">Verlof</button>
             <button class="pd-tab" onclick="pdToon('skills',this)">Vaardigheden</button>
             <button class="pd-tab" onclick="pdToon('gegevens',this)">Gegevens</button>
             <button class="btn-ghost" onclick="closePersDetail()" style="padding:5px 10px;margin-left:auto;align-self:center">&#x2715;</button>
@@ -1303,6 +1304,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <div class="pd-body">
             <div id="pdVak-algemeen"></div>
             <div id="pdVak-agenda" style="display:none"></div>
+            <div id="pdVak-verlof" style="display:none"></div>
             <div id="pdVak-skills" style="display:none"></div>
             <div id="pdVak-gegevens" style="display:none"></div>
           </div>
@@ -1436,6 +1438,18 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       </div>
 
       <div class="fr">
+        <span class="fl">Soort <span style="color:#DC2626">*</span></span>
+        <select id="afwSoort" onchange="afwSoortGekozen()" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+          <option value="vakantie">Vakantie — gaat van het saldo af</option>
+          <option value="ziek">Ziek — kost geen vakantie-uren</option>
+          <option value="bijzonder">Bijzonder verlof — kost geen vakantie-uren</option>
+          <option value="onbetaald">Onbetaald verlof</option>
+          <option value="geen">Alleen vrij, telt nergens in mee</option>
+        </select>
+        <div style="font-size:11px;color:var(--muted);margin-top:5px" id="afwUrenUitleg"></div>
+      </div>
+
+      <div class="fr">
         <span class="fl">Reden <span style="color:#DC2626">*</span></span>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
           <button class="chip" onclick="afwKiesReden('Vakantie')">Vakantie</button>
@@ -1532,6 +1546,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <div class="st">Wie is er niet — vrij, vakantie of ziek</div>
           <div class="week-nav">
             <button class="btn-sm" onclick="openAfwezig()" style="font-size:11px;padding:6px 12px">+ Vrij invoeren</button>
+            <button class="btn-edit" onclick="exportVerlof()" style="font-size:11px;padding:6px 12px">Verlof exporteren</button>
             <button class="btn-nav" onclick="changeBeschWeek(-1)">&#8592;</button>
             <span class="week-nav-label" id="beschWeekLabel" style="min-width:140px"></span>
             <button class="btn-nav" onclick="changeBeschWeek(0)" style="font-size:11px">Deze maand</button>
@@ -2727,6 +2742,7 @@ async function openPersDetail(uid){
   pdRenderZij();
   pdRenderAlgemeen();
   pdRenderAgenda();
+  pdRenderVerlof();
   pdRenderSkills();
   pdRenderGegevens();
   pdToon('algemeen',document.querySelectorAll('.pd-tab')[0]);
@@ -2734,7 +2750,7 @@ async function openPersDetail(uid){
 }
 
 function pdToon(vak,btn){
-  ['algemeen','agenda','skills','gegevens'].forEach(v=>{
+  ['algemeen','agenda','verlof','skills','gegevens'].forEach(v=>{
     const el=document.getElementById('pdVak-'+v);
     if(el)el.style.display=v===vak?'':'none';
   });
@@ -3028,6 +3044,17 @@ function pdRenderGegevens(){
          <input type="number" id="pdUurloon" value="${u.uurloon!=null?u.uurloon:''}" min="0" max="999" step="0.01" inputmode="decimal" placeholder="15.00" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
        </div>
      </div>
+     <div class="two">
+       <div class="fr"><span class="fl">Contracturen per week</span>
+         <input type="number" id="pdContractUren" value="${u.contract_uren_per_week!=null?u.contract_uren_per_week:''}" min="0" max="60" step="0.5" inputmode="decimal" placeholder="40" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       </div>
+       <div class="fr"><span class="fl">In dienst sinds</span>
+         <input type="date" id="pdInDienst" value="${u.in_dienst_op||''}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       </div>
+     </div>
+     <div class="fr"><span class="fl">Uit dienst per <span style="color:var(--muted);font-weight:400">(leeg laten als hij nog werkt)</span></span>
+       <input type="date" id="pdUitDienst" value="${u.uit_dienst_op||''}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+     </div>
      <div class="warn-box" id="pdWarn"></div>
      <div class="mfooter" style="margin-top:1rem">
        <button class="btn-ghost" onclick="closePersDetail()">Annuleren</button>
@@ -3051,12 +3078,17 @@ async function savePersDetail(){
   const contractvorm=document.getElementById('pdContract').value||null;
   const uurloonRuw=document.getElementById('pdUurloon').value;
   const uurloon=uurloonRuw===''?null:Number(uurloonRuw);
+  const curRuw=document.getElementById('pdContractUren').value;
+  const contract_uren_per_week=curRuw===''?null:Number(curRuw);
+  const in_dienst_op=document.getElementById('pdInDienst').value||null;
+  const uit_dienst_op=document.getElementById('pdUitDienst').value||null;
   const wb=document.getElementById('pdWarn');
   if(!naam){wb.textContent='Naam is verplicht.';wb.className='warn-box show';return;}
   if(uurloon!==null&&(isNaN(uurloon)||uurloon<0)){wb.textContent='Uurloon klopt niet.';wb.className='warn-box show';return;}
   wb.className='warn-box';
   const{error}=await sb.from('gebruikers')
     .update({naam,rol,email,telefoon,straat,postcode,plaats,shirtmaat,rijbewijs,
+      contract_uren_per_week,in_dienst_op,uit_dienst_op,
              geslacht,geboortedatum,contractvorm,uurloon}).eq('id',uid);
   if(error){wb.textContent='Opslaan mislukt: '+error.message;wb.className='warn-box show';return;}
   closePersDetail();
@@ -6074,6 +6106,8 @@ async function loadAlleBeschikbaarheid(){
   if(!agendaEl||!lijstEl)return;
 
   const{data:beschData}=await sb.from('beschikbaarheid').select('*').order('datum_start',{ascending:true});
+  ALLE_BESCH=beschData||[];
+  await laadVerlofCijfers();
   // Iedereen erbij, ook beheerders — die kunnen zelf ook vrij zijn. Stond de
   // rolfilter er nog in, dan verscheen hun naam als "Onbekend".
   const{data:gebruikers}=await sb.from('personeel_publiek').select('id,naam');
@@ -6130,6 +6164,7 @@ async function loadAlleBeschikbaarheid(){
         <div class="besch-naam">${g?.naam||'Onbekend'}</div>
         <div class="besch-reden">${wel?'Kan werken':(b.reden||'Onbeschikbaar')}${wel&&b.reden?' — '+b.reden:''}</div>
         <div class="besch-datum">${ds}${de}${tijdStr}</div>
+        ${wel?'':verlofRegelHtml(b)}
       </div>
       <div class="besch-actions">
         ${toonKnoppen?`
@@ -6228,9 +6263,433 @@ async function deleteBeschikbaarheid(id){
   else loadMijnBeschikbaarheid();
 }
 
-async function keurBeschikbaarheid(id,status){
-  await sb.from('beschikbaarheid').update({status}).eq('id',id);
+// Het blokje onder een verzoek: welke soort, hoeveel uur, en wat het met het
+// saldo doet. Zo hoef je niet naar een ander scherm om te weten of het kan.
+function verlofRegelHtml(b){
+  const c=verlofVan(b.gebruiker_id);
+  const perDag=c?Number(c.uren_per_dag||8):8;
+  const uren=Number(b.uren||0);
+
+  const keuze=`<select onchange="vsoortGewijzigd('${b.id}',this.value)"
+      style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:var(--font)">
+      ${Object.entries(VERLOFSOORTEN).map(([w,l])=>`<option value="${w}"${b.verlofsoort===w?' selected':''}>${l}</option>`).join('')}
+    </select>
+    <input type="number" step="0.5" min="0" value="${uren}" onchange="zetVerlofVeld('${b.id}','uren',this.value)"
+      style="width:62px;font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:var(--font)">
+    <span style="font-size:11px;color:var(--muted)">uur${perDag?' = '+uur1(uren/perDag)+' d':''}</span>`;
+
+  let saldo='';
+  if(!c){
+    saldo='<span style="font-size:11px;color:var(--muted)">Bouwt geen verlof op</span>';
+  }else if(b.verlofsoort==='vakantie'){
+    const nu=Number(c.saldo);
+    if(b.status==='goedgekeurd'){
+      saldo=`<span style="font-size:11px;color:${nu<0?'#B91C1C':'var(--muted)'}">Saldo <strong>${urenTekst(nu,perDag)}</strong> — deze telt al mee</span>`;
+    }else if(b.status==='wacht'){
+      const na=nu-uren;
+      const kl=na<0?'#B91C1C':na<perDag?'#B45309':'#059669';
+      saldo=`<span style="font-size:11px;color:var(--muted)">Saldo nu <strong style="color:var(--text)">${urenTekst(nu,perDag)}</strong>
+        · na goedkeuren <strong style="color:${kl}">${urenTekst(na,perDag)}</strong></span>`;
+    }else{
+      saldo=`<span style="font-size:11px;color:var(--muted)">Saldo ${urenTekst(nu,perDag)}</span>`;
+    }
+  }else if(b.verlofsoort==='geen'){
+    saldo='<span style="font-size:11px;color:#B45309">Nog geen soort gekozen — telt nergens in mee</span>';
+  }else{
+    saldo=`<span style="font-size:11px;color:var(--muted)">Kost geen vakantie-uren · saldo ${urenTekst(c.saldo,perDag)}</span>`;
+  }
+
+  return`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px dashed var(--border)">
+    ${keuze}</div><div style="margin-top:4px">${saldo}</div>`;
+}
+
+// ── VERLOF, ZIEKTE EN PLUS/MIN-UREN ───────────────────────────────────────
+// Alles wordt in uren bijgehouden en overal ook in dagen getoond. Alleen vaste
+// krachten (hal, full-timer, beheerder) bouwen verlof op; het jaarrecht is
+// standaard vier keer de contracturen — bij 40 uur per week dus 160 uur — en is
+// per persoon aan te passen. De opbouw loopt naar rato mee met de maanden dat
+// iemand in dienst is. Rekenen doet de database (verlof_cijfers en
+// plusmin_cijfers), zodat de app en de export nooit uit elkaar kunnen lopen.
+const VERLOFSOORTEN={
+  geen:'Nog in te delen',
+  vakantie:'Vakantie',
+  ziek:'Ziek',
+  bijzonder:'Bijzonder verlof',
+  onbetaald:'Onbetaald verlof',
+};
+const MAAND_KORT=['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+
+let VERLOF_JAAR=new Date().getFullYear();
+let ALLE_BESCH=[];
+let VERLOF_CIJFERS=[];
+let PLUSMIN=[];
+
+function isVasteKracht(rol){return rol==='hal'||rol==='full-timer'||rol==='beheerder';}
+function uur1(n){return (Math.round(Number(n||0)*10)/10).toFixed(1).replace('.',',');}
+
+// "84,0 u (10,5 d)"
+function urenTekst(u,perDag){
+  const n=Number(u||0);
+  const d=(perDag&&perDag>0)?(' ('+uur1(n/perDag)+' d)'):'';
+  return uur1(n)+' u'+d;
+}
+
+// Maandag t/m vrijdag tussen twee datums, als voorstel voor het aantal uren.
+function werkdagenTussen(van,tot){
+  if(!van)return 0;
+  let n=0;
+  const e=parseDate(tot||van);
+  for(let x=parseDate(van);x<=e;x.setDate(x.getDate()+1)){
+    const w=x.getDay();
+    if(w>=1&&w<=5)n++;
+  }
+  return n;
+}
+function voorstelUren(b,perDag){
+  return Math.round(werkdagenTussen(b.datum_start,b.datum_eind)*(perDag||8)*100)/100;
+}
+
+async function laadVerlofCijfers(jaar){
+  if(CURRENT_ROL!=='beheerder')return;
+  if(jaar)VERLOF_JAAR=jaar;
+  const[{data:v,error:e1},{data:pm,error:e2}]=await Promise.all([
+    sb.rpc('verlof_cijfers',{p_jaar:VERLOF_JAAR}),
+    sb.rpc('plusmin_cijfers',{p_jaar:VERLOF_JAAR}),
+  ]);
+  if(e1)console.warn('Verlofcijfers ophalen mislukt:',e1);
+  if(e2)console.warn('Plus/min ophalen mislukt:',e2);
+  VERLOF_CIJFERS=v||[];
+  PLUSMIN=pm||[];
+}
+function verlofVan(uid){return VERLOF_CIJFERS.find(x=>x.gebruiker_id===uid)||null;}
+function urenPerDagVan(uid){const c=verlofVan(uid);return c?Number(c.uren_per_dag||8):8;}
+
+// Soort en uren van een aanvraag aanpassen. Slaat meteen op; dat scheelt een
+// extra knop en je ziet het saldo direct meebewegen.
+async function zetVerlofVeld(id,veld,waarde){
+  const patch={};
+  patch[veld]= veld==='uren' ? (Number(String(waarde).replace(',','.'))||0) : waarde;
+  const{error}=await sb.from('beschikbaarheid').update(patch).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  await laadVerlofCijfers();
   loadAlleBeschikbaarheid();
+}
+
+// Kies je een soort en staat het aantal uren nog op nul, dan vullen we meteen
+// een voorstel in: het aantal werkdagen in de periode maal de uren per dag.
+async function vsoortGewijzigd(id,waarde){
+  const rij=(ALLE_BESCH||[]).find(b=>b.id===id);
+  const patch={verlofsoort:waarde};
+  if(rij&&Number(rij.uren||0)===0&&waarde!=='geen'){
+    patch.uren=voorstelUren(rij,urenPerDagVan(rij.gebruiker_id));
+  }
+  const{error}=await sb.from('beschikbaarheid').update(patch).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  await laadVerlofCijfers();
+  loadAlleBeschikbaarheid();
+}
+
+// Goed- of afkeuren. Wordt het saldo negatief, dan vragen we het eerst even na —
+// tegenhouden doen we niet, net als bij het inplannen.
+async function keurBeschikbaarheid(id,status){
+  const soortEl=document.getElementById('vsoort-'+id);
+  const urenEl=document.getElementById('vuren-'+id);
+  const patch={status};
+  if(soortEl)patch.verlofsoort=soortEl.value;
+  if(urenEl)patch.uren=Number(String(urenEl.value).replace(',','.'))||0;
+
+  if(status==='goedgekeurd'&&patch.verlofsoort==='vakantie'){
+    const rij=(ALLE_BESCH||[]).find(b=>b.id===id);
+    const c=rij?verlofVan(rij.gebruiker_id):null;
+    if(c){
+      const na=Number(c.saldo)-Number(patch.uren||0);
+      if(na<0){
+        const perDag=Number(c.uren_per_dag||8);
+        const ok=await vraagBevestiging('Toch goedkeuren?',
+          '<div style="margin-bottom:8px;color:#B91C1C;font-weight:500">⚠ '+veiligTekst(c.naam)
+          +' komt hiermee op '+urenTekst(na,perDag)+' te staan.</div>'
+          +'<div style="color:var(--muted)">Saldo nu '+urenTekst(c.saldo,perDag)
+          +', deze aanvraag '+urenTekst(patch.uren,perDag)
+          +'. Je mag het gewoon goedkeuren, maar dan staat hij dus rood.</div>',
+          'Ja, toch goedkeuren');
+        if(!ok)return;
+      }
+    }
+  }
+
+  const{error}=await sb.from('beschikbaarheid').update(patch).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  await laadVerlofCijfers();
+  loadAlleBeschikbaarheid();
+}
+
+// ── HET TABBLAD VERLOF OP EEN PROFIEL ────────────────────────────────────
+let pdVerlofJaar=new Date().getFullYear();
+
+async function pdRenderVerlof(){
+  const vak=document.getElementById('pdVak-verlof');
+  if(!vak||!PD||!PD.u)return;
+  const u=PD.u;
+
+  if(CURRENT_ROL!=='beheerder'){vak.innerHTML='';return;}
+  if(!isVasteKracht(u.rol)){
+    vak.innerHTML='<div style="font-size:13px;color:var(--muted);line-height:1.6">'
+      +'Verlof wordt alleen bijgehouden voor hal-medewerkers, full-timers en beheerders. '
+      +'Een part-timer bouwt in dit systeem geen vakantie-uren op.</div>';
+    return;
+  }
+
+  vak.innerHTML='<div class="spin">Laden...</div>';
+  // Eigen ophaalslag met een eigen jaartal, zodat het terugbladeren hier de
+  // cijfers op de beschikbaarheidspagina niet omgooit.
+  const[{data:cijfers},{data:pmAlles},{data:mut},{data:saldoRij}]=await Promise.all([
+    sb.rpc('verlof_cijfers',{p_jaar:pdVerlofJaar}),
+    sb.rpc('plusmin_cijfers',{p_jaar:pdVerlofJaar}),
+    sb.from('saldo_mutaties').select('*').eq('gebruiker_id',u.id).eq('jaar',pdVerlofJaar).order('aangemaakt_op'),
+    sb.from('verlof_saldo').select('*').eq('gebruiker_id',u.id).eq('jaar',pdVerlofJaar).maybeSingle(),
+  ]);
+  const c=(cijfers||[]).find(x=>x.gebruiker_id===u.id)||null;
+
+  if(!c){vak.innerHTML='<div class="pers-leeg">Geen gegevens gevonden.</div>';return;}
+  const perDag=Number(c.uren_per_dag||8);
+  const kleur=Number(c.saldo)<0?'#B91C1C':Number(c.saldo)<perDag?'#B45309':'#059669';
+
+  const kaart=(label,waarde,extra,kl)=>
+    `<div style="flex:1;min-width:130px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+      <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">${label}</div>
+      <div style="font-size:17px;font-weight:700;margin-top:3px;color:${kl||'var(--text)'}">${waarde}</div>
+      ${extra?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${extra}</div>`:''}
+    </div>`;
+
+  // Verlofregels van dit jaar uit het profiel zelf.
+  const regels=(PD.besch||[])
+    .filter(b=>b.soort!=='beschikbaar'&&String(b.datum_start).slice(0,4)===String(pdVerlofJaar))
+    .sort((a,b)=>String(a.datum_start).localeCompare(String(b.datum_start)));
+
+  const regelHtml=regels.length?regels.map(b=>{
+    const van=parseDate(b.datum_start).toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+    const tot=b.datum_eind&&b.datum_eind!==b.datum_start
+      ?' – '+parseDate(b.datum_eind).toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):'';
+    const st=b.status==='goedgekeurd'?'✓':b.status==='afgewezen'?'✗':'…';
+    return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <span style="width:14px;color:var(--muted)">${st}</span>
+      <span style="flex:1;min-width:0">${van}${tot} <span style="color:var(--muted)">${veiligTekst(b.reden||'')}</span></span>
+      <select onchange="pdZetRegel('${b.id}','verlofsoort',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:var(--font)">
+        ${Object.entries(VERLOFSOORTEN).map(([w,l])=>`<option value="${w}"${b.verlofsoort===w?' selected':''}>${l}</option>`).join('')}
+      </select>
+      <input type="number" step="0.5" min="0" value="${Number(b.uren||0)}" onchange="pdZetRegel('${b.id}','uren',this.value)"
+        style="width:64px;font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:var(--font)">
+      <span style="color:var(--muted);font-size:11px">u</span>
+    </div>`;
+  }).join(''):'<div class="pers-leeg">Nog niets dit jaar.</div>';
+
+  const mutHtml=(mut||[]).length?(mut||[]).map(m=>
+    `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+      <span style="font-weight:600;width:70px;color:${Number(m.uren)<0?'#B91C1C':'#059669'}">${Number(m.uren)>0?'+':''}${uur1(m.uren)} u</span>
+      <span style="flex:1;min-width:0">${veiligTekst(m.reden||'')} <span style="color:var(--muted)">· ${m.soort==='plusmin'?'plus/min':'verlof'}</span></span>
+      <button class="btn-danger-sm" onclick="pdWisMutatie('${m.id}')">×</button>
+    </div>`).join(''):'<div class="pers-leeg">Geen correcties.</div>';
+
+  const pm=(pmAlles||[]).filter(x=>x.gebruiker_id===u.id);
+  let loop=0;
+  const pmHtml=pm.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">
+      <tr style="color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em">
+        <th style="text-align:left;padding:4px 6px">Maand</th><th style="text-align:right;padding:4px 6px">Norm</th>
+        <th style="text-align:right;padding:4px 6px">Gewerkt</th><th style="text-align:right;padding:4px 6px">Verlof</th>
+        <th style="text-align:right;padding:4px 6px">Maand</th><th style="text-align:right;padding:4px 6px">Totaal</th></tr>
+      ${pm.map(m=>{loop+=Number(m.saldo);
+        const k=Number(m.saldo)<0?'#B91C1C':'#059669';
+        return`<tr style="border-top:1px solid var(--border)">
+          <td style="padding:5px 6px">${MAAND_KORT[m.maand-1]}${m.loopt_nog?' <span style="color:var(--muted);font-size:10px">loopt nog</span>':''}</td>
+          <td style="text-align:right;padding:5px 6px;color:var(--muted)">${uur1(m.norm)}</td>
+          <td style="text-align:right;padding:5px 6px">${uur1(m.gewerkt)}</td>
+          <td style="text-align:right;padding:5px 6px;color:var(--muted)">${uur1(m.verlof)}</td>
+          <td style="text-align:right;padding:5px 6px;font-weight:600;color:${k}">${Number(m.saldo)>0?'+':''}${uur1(m.saldo)}</td>
+          <td style="text-align:right;padding:5px 6px;color:${loop<0?'#B91C1C':'#059669'}">${loop>0?'+':''}${uur1(loop)}</td>
+        </tr>`;}).join('')}
+    </table></div>`
+    :'<div class="pers-leeg">Nog geen contracturen ingevuld, dus geen norm om mee te vergelijken.</div>';
+
+  const veld=(id,label,waarde,plaats)=>
+    `<div class="fr" style="margin-bottom:0"><span class="fl">${label}</span>
+      <input type="number" step="0.5" id="${id}" value="${waarde}" placeholder="${plaats||''}"
+        style="font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%"></div>`;
+
+  vak.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem">
+      <div class="st" style="margin-bottom:0">Verlof ${pdVerlofJaar}</div>
+      <div style="display:flex;gap:4px">
+        <button class="btn-nav" onclick="pdVerlofWissel(-1)">&#8592;</button>
+        <button class="btn-nav" onclick="pdVerlofWissel(1)">&#8594;</button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:1rem">
+      ${kaart('Opgebouwd',urenTekst(c.opgebouwd,perDag),'van '+urenTekst(c.jaarrecht,perDag)+' per jaar')}
+      ${kaart('Opgenomen',urenTekst(c.opgenomen,perDag),Number(c.aangevraagd)>0?urenTekst(c.aangevraagd,perDag)+' aangevraagd':'')}
+      ${kaart('Saldo',urenTekst(c.saldo,perDag),Number(c.aangevraagd)>0?'na alle aanvragen '+urenTekst(Number(c.saldo)-Number(c.aangevraagd),perDag):'',kleur)}
+      ${kaart('Ziek',uur1(Number(c.ziek_uren)/perDag)+' d',c.ziek_meldingen+' ziekmelding'+(c.ziek_meldingen===1?'':'en'))}
+    </div>
+
+    ${Number(c.nog_in_te_delen)>0?`<div class="warn-box show" style="margin-bottom:1rem">Er ${Number(c.nog_in_te_delen)===1?'staat 1 regel':'staan '+c.nog_in_te_delen+' regels'} nog op "nog in te delen". Kies hieronder de soort, anders telt hij nergens in mee.</div>`:''}
+
+    <div class="st" style="margin:1.25rem 0 .5rem">Instellingen</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:.625rem">
+      Jaarrecht leeg laten betekent automatisch: contracturen × 4 (bij 40 uur dus 160 uur).
+      Opbouw t/m deze maand: ${Math.round(Number(c.opbouw_factor)*100)}% van het jaar.
+    </div>
+    <div class="two">
+      ${veld('vlRecht','Jaarrecht in uren',c.jaarrecht!=null&&saldoRij&&saldoRij.jaarrecht_uren!=null?saldoRij.jaarrecht_uren:'',uur1(Number(c.contract_uren||0)*4))}
+      ${veld('vlPerDag','Uren per dag',perDag,'8')}
+    </div>
+    <div class="two" style="margin-top:.625rem">
+      ${veld('vlBegin','Beginsaldo uit vorig jaar',saldoRij?saldoRij.beginsaldo_uren:0,'0')}
+      <div class="fr" style="margin-bottom:0;display:flex;align-items:flex-end">
+        <button class="btn-sm" style="width:100%" onclick="pdBewaarVerlofInstellingen()">Opslaan</button>
+      </div>
+    </div>
+
+    <div class="st" style="margin:1.25rem 0 .5rem">Vrij, vakantie en ziek in ${pdVerlofJaar}</div>
+    ${regelHtml}
+
+    <div class="st" style="margin:1.25rem 0 .5rem">Plus- en minuren per maand</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:.625rem">
+      Norm is contracturen × 52 ÷ 12${c.contract_uren?' — dat is '+uur1(Number(c.contract_uren)*52/12)+' uur per maand':''}.
+      Goedgekeurde uren tellen mee, en vakantie, ziekte en bijzonder verlof gelden als gewerkt.
+    </div>
+    ${pmHtml}
+
+    <div class="st" style="margin:1.25rem 0 .5rem">Handmatige correcties</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:.625rem">
+      <select id="vlMutSoort" style="font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:var(--font)">
+        <option value="verlof">Verlofuren</option>
+        <option value="plusmin">Plus/min-uren</option>
+      </select>
+      <input type="number" step="0.5" id="vlMutUren" placeholder="+8 of -8" style="width:100px;font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:var(--font)">
+      <input type="text" id="vlMutReden" placeholder="Reden, bv. uitbetaald in juli" style="flex:1;min-width:150px;font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:var(--font)">
+      <button class="btn-sm" onclick="pdVoegMutatieToe()">Toevoegen</button>
+    </div>
+    ${mutHtml}`;
+}
+
+function pdVerlofWissel(richting){
+  pdVerlofJaar+=richting;
+  pdRenderVerlof();
+}
+
+async function pdZetRegel(id,veld,waarde){
+  const patch={};
+  patch[veld]= veld==='uren' ? (Number(String(waarde).replace(',','.'))||0) : waarde;
+  const{error}=await sb.from('beschikbaarheid').update(patch).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  const r=(PD.besch||[]).find(b=>b.id===id);
+  if(r)r[veld]=patch[veld];
+  toast('Opgeslagen');
+  pdRenderVerlof();
+}
+
+async function pdBewaarVerlofInstellingen(){
+  if(!PD||!PD.u)return;
+  const lees=id=>{const v=document.getElementById(id);return v&&v.value!==''?Number(String(v.value).replace(',','.')):null;};
+  const rij={
+    gebruiker_id:PD.u.id, jaar:pdVerlofJaar,
+    jaarrecht_uren:lees('vlRecht'),
+    uren_per_dag:lees('vlPerDag')||8,
+    beginsaldo_uren:lees('vlBegin')||0,
+    bijgewerkt_op:new Date().toISOString(),
+  };
+  const{error}=await sb.from('verlof_saldo').upsert(rij,{onConflict:'gebruiker_id,jaar'});
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  toast('Instellingen opgeslagen');
+  pdRenderVerlof();
+}
+
+async function pdVoegMutatieToe(){
+  if(!PD||!PD.u)return;
+  const urenEl=document.getElementById('vlMutUren');
+  const redenEl=document.getElementById('vlMutReden');
+  const uren=Number(String(urenEl.value).replace(',','.'));
+  if(!uren){toast('Vul een aantal uren in, plus of min.','fout');urenEl.focus();return;}
+  if(!redenEl.value.trim()){toast('Vul een reden in.','fout');redenEl.focus();return;}
+  const{error}=await sb.from('saldo_mutaties').insert({
+    gebruiker_id:PD.u.id, jaar:pdVerlofJaar,
+    soort:document.getElementById('vlMutSoort').value,
+    uren, reden:redenEl.value.trim(),
+    door:CURRENT_USER?CURRENT_USER.id:null,
+  });
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  toast('Correctie toegevoegd');
+  pdRenderVerlof();
+}
+
+async function pdWisMutatie(id){
+  const ok=await vraagBevestiging('Correctie weghalen?',
+    '<div style="color:var(--muted)">De correctie verdwijnt uit het saldo. Dit kun je niet terugdraaien.</div>',
+    'Ja, weghalen');
+  if(!ok)return;
+  const{error}=await sb.from('saldo_mutaties').delete().eq('id',id);
+  if(error){toast('Verwijderen mislukt: '+error.message,'fout');return;}
+  pdRenderVerlof();
+}
+
+// ── EXPORT ───────────────────────────────────────────────────────────────
+async function exportVerlof(){
+  if(CURRENT_ROL!=='beheerder')return;
+  await laadVerlofCijfers();
+  const{data:regels}=await sb.from('beschikbaarheid').select('*')
+    .neq('soort','beschikbaar').order('datum_start');
+  const{data:mensen}=await sb.from('personeel_publiek').select('id,naam,rol');
+  const{data:muts}=await sb.from('saldo_mutaties').select('*').eq('jaar',VERLOF_JAAR).order('aangemaakt_op');
+  const naamVan=Object.fromEntries((mensen||[]).map(m=>[m.id,m.naam]));
+
+  const nl=n=>String(Math.round(Number(n||0)*100)/100).replace('.',',');
+  const rijen=[];
+  rijen.push(['Verlofoverzicht '+VERLOF_JAAR]);
+  rijen.push([]);
+  rijen.push(['Naam','Rol','Contracturen p/w','In dienst','Uit dienst','Uren per dag',
+    'Beginsaldo (u)','Jaarrecht (u)','Opbouw t/m nu (%)','Opgebouwd (u)','Correcties (u)',
+    'Opgenomen (u)','Aangevraagd (u)','Saldo (u)','Saldo (dagen)','Ziek (u)','Ziek (dagen)',
+    'Ziekmeldingen','Nog in te delen']);
+  VERLOF_CIJFERS.forEach(c=>{
+    const pd=Number(c.uren_per_dag||8);
+    rijen.push([c.naam,PD_ROLLABEL[c.rol]||c.rol,nl(c.contract_uren),c.in_dienst||'',c.uit_dienst||'',
+      nl(pd),nl(c.beginsaldo),nl(c.jaarrecht),Math.round(Number(c.opbouw_factor)*100),
+      nl(c.opgebouwd),nl(c.correcties),nl(c.opgenomen),nl(c.aangevraagd),nl(c.saldo),
+      nl(Number(c.saldo)/pd),nl(c.ziek_uren),nl(Number(c.ziek_uren)/pd),c.ziek_meldingen,c.nog_in_te_delen]);
+  });
+
+  rijen.push([]);rijen.push([]);
+  rijen.push(['Alle vrij-, vakantie- en ziekmeldingen '+VERLOF_JAAR]);
+  rijen.push([]);
+  rijen.push(['Naam','Soort','Van','Tot en met','Uren','Status','Reden']);
+  (regels||[]).filter(b=>String(b.datum_start).slice(0,4)===String(VERLOF_JAAR)).forEach(b=>{
+    rijen.push([naamVan[b.gebruiker_id]||'Onbekend',VERLOFSOORTEN[b.verlofsoort]||b.verlofsoort,
+      b.datum_start,b.datum_eind||b.datum_start,nl(b.uren),b.status,b.reden||'']);
+  });
+
+  rijen.push([]);rijen.push([]);
+  rijen.push(['Plus- en minuren per maand '+VERLOF_JAAR]);
+  rijen.push([]);
+  rijen.push(['Naam','Maand','Norm (u)','Gewerkt (u)','Verlof telt mee (u)','Saldo maand (u)','Cumulatief (u)']);
+  const loop={};
+  PLUSMIN.forEach(m=>{
+    loop[m.gebruiker_id]=(loop[m.gebruiker_id]||0)+Number(m.saldo);
+    rijen.push([m.naam,MAAND_KORT[m.maand-1]+(m.loopt_nog?' (loopt nog)':''),
+      nl(m.norm),nl(m.gewerkt),nl(m.verlof),nl(m.saldo),nl(loop[m.gebruiker_id])]);
+  });
+
+  if((muts||[]).length){
+    rijen.push([]);rijen.push([]);
+    rijen.push(['Handmatige correcties '+VERLOF_JAAR]);
+    rijen.push([]);
+    rijen.push(['Naam','Soort','Uren','Reden','Ingevoerd op']);
+    (muts||[]).forEach(m=>rijen.push([naamVan[m.gebruiker_id]||'Onbekend',
+      m.soort==='plusmin'?'Plus/min':'Verlof',nl(m.uren),m.reden||'',
+      String(m.aangemaakt_op||'').slice(0,10)]));
+  }
+
+  const csv='﻿'+rijen.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+  await bewaarCsv('verlof_'+VERLOF_JAAR+'_'+fmt(new Date())+'.csv',csv);
 }
 
 // ── KLUS KOPIËREN NAAR EEN ANDERE DATUM ───────────────────────────────────
@@ -6441,6 +6900,10 @@ function openAfwezig(vastId=null){
   document.getElementById('afwTijdEind').value='';
   document.getElementById('afwWarn').className='warn-box';
   document.getElementById('afwConflict').className='warn-box';
+  const soortEl=document.getElementById('afwSoort');
+  if(soortEl)soortEl.value='vakantie';
+  afwSoortGekozen();
+  laadVerlofCijfers();
   afwRenderLijst();
   document.getElementById('afwezigOverlay').classList.add('open');
 }
@@ -6519,6 +6982,26 @@ function afwCheck(){
   }
 }
 
+function afwSoortGekozen(){
+  const soort=document.getElementById('afwSoort').value;
+  const reden=document.getElementById('afwReden');
+  const uitleg=document.getElementById('afwUrenUitleg');
+  const standaard={vakantie:'Vakantie',ziek:'Ziek',bijzonder:'Bijzonder verlof',onbetaald:'Onbetaald verlof',geen:'Vrij'};
+  // Reden alleen invullen als er nog niets staat of als het nog een van onze
+  // eigen standaardteksten is; wat jij zelf typt laten we met rust.
+  if(reden&&(!reden.value.trim()||Object.values(standaard).includes(reden.value.trim())))
+    reden.value=standaard[soort]||'';
+  if(uitleg){
+    uitleg.textContent=soort==='vakantie'
+      ?'De uren worden per persoon berekend: werkdagen in de periode × zijn uren per dag.'
+      :soort==='ziek'
+      ?'Wordt geregistreerd als ziekte en kost geen vakantie-uren. Leg hier geen medische gegevens vast.'
+      :soort==='geen'
+      ?'Telt niet mee in het verlofsaldo en ook niet in de plus/min-uren.'
+      :'Kost geen vakantie-uren, maar telt wel mee als gewerkt bij de plus/min-uren.';
+  }
+}
+
 async function bewaarAfwezig(){
   const wb=document.getElementById('afwWarn');
   const reden=document.getElementById('afwReden').value.trim();
@@ -6532,9 +7015,14 @@ async function bewaarAfwezig(){
   if(!datum_start){wb.textContent='Vul een startdatum in.';wb.className='warn-box show';return;}
   if(datum_eind<datum_start){wb.textContent='De einddatum ligt vóór de startdatum.';wb.className='warn-box show';return;}
 
+  const verlofsoort=(document.getElementById('afwSoort')||{value:'geen'}).value;
+  const werkdagen=werkdagenTussen(datum_start,datum_eind);
   const rijen=[...AFW_GEKOZEN].map(id=>({
     gebruiker_id:id,reden,datum_start,datum_eind,tijd_start,tijd_eind,
-    soort:'onbeschikbaar',status:'goedgekeurd'
+    soort:'onbeschikbaar',status:'goedgekeurd',
+    verlofsoort,
+    // Halve dag? Dan rekenen we met de opgegeven tijden in plaats van hele dagen.
+    uren:verlofsoort==='geen'?0:Math.round(werkdagen*urenPerDagVan(id)*100)/100,
   }));
 
   // Zelfde beveiliging als bij het opslaan van een klus: twee keer drukken
