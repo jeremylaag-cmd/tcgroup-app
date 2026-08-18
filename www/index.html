@@ -706,6 +706,8 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 .pb-mwnaam{flex:1;font-weight:500}
 .pb-mwrol{font-size:10px;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:20px}
 .pb-empty{text-align:center;padding:2.5rem;color:var(--muted);font-size:13px}
+.pb-tijdveld{font-size:11px;font-family:var(--font);padding:4px 7px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)}
+.pb-tijdveld:disabled{opacity:.55}
 #pb-toast{position:fixed;top:66px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:6px;z-index:999;pointer-events:none}
 .pb-toast{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:9px 14px;display:flex;align-items:center;gap:9px;font-size:12px;color:var(--text);max-width:380px;animation:pbIn .2s ease}
 .pb-toast-icon{width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
@@ -1545,6 +1547,8 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
            hierheen verplaatst als je beheerder bent, zodat alle bestaande
            knoppen en de timer blijven werken. -->
       <div id="urenBehEigen" style="margin-bottom:1.25rem"></div>
+      <!-- Wie staat er op dit moment ingeklokt -->
+      <div class="sc" id="nuIngeklokCard" style="margin-bottom:1.25rem;display:none"></div>
       <div id="urenBeheerGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
         <div class="sc">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.875rem;flex-wrap:wrap">
@@ -3229,6 +3233,8 @@ function renderAll(){
     const vastBadge=(k.is_optie?'<span class="bdg" style="background:#EEF2FF;color:#3730A3;border:1px dashed #A5B4FC">Optie</span>':'')
       +(k.categorie==='franklins'
       ?'<span class="bdg" style="background:#FFFBEB;color:#B45309">Franklins</span>':'')
+      +(k.categorie==='intern'
+      ?'<span class="bdg" style="background:#EEF2FF;color:#3730A3">Intern</span>':'')
       +(k.milieuzone?'<span class="bdg" style="background:#ECFDF5;color:#065F46">Milieuzone</span>':'');
     const soortBadges=vastBadge+(k.truckSoorten&&k.truckSoorten.length
       ?[...new Set(k.truckSoorten.map(ts=>ts.soort.titel))].map(t=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${t}</span>`).join('')
@@ -4715,6 +4721,77 @@ async function doUitklokken(regId,pauze_minuten=0,notitie=''){
 // ── UREN BEHEER ──
 function changeUrenMaand(dir){urenMaandOffset+=dir;loadUrenBeheer();}
 
+// ── WIE STAAT ER NU INGEKLOKT ─────────────────────────────────────────────
+// Een lopende registratie heeft status 'lopend'. Deze kaart ververst zichzelf
+// elke seconde, zodat je de tellers echt ziet lopen.
+let nuIngeklokTimer=null;
+let NU_INGEKLOKT=[];
+
+async function laadNuIngeklokt(){
+  const kaart=document.getElementById('nuIngeklokCard');
+  if(!kaart||CURRENT_ROL!=='beheerder')return;
+
+  const[{data:lopend},{data:mensen}]=await Promise.all([
+    sb.from('urenregistraties').select('*').eq('status','lopend').order('ingeklokt_op'),
+    sb.from('personeel_publiek').select('id,naam'),
+  ]);
+  const naamVan=Object.fromEntries((mensen||[]).map(m=>[m.id,m.naam]));
+  NU_INGEKLOKT=(lopend||[]).map(r=>({...r,naam:naamVan[r.gebruiker_id]||'Onbekend'}));
+  tekenNuIngeklokt();
+
+  if(nuIngeklokTimer)clearInterval(nuIngeklokTimer);
+  if(NU_INGEKLOKT.length)nuIngeklokTimer=setInterval(tekenNuIngeklokt,1000);
+}
+
+function tekenNuIngeklokt(){
+  const kaart=document.getElementById('nuIngeklokCard');
+  if(!kaart)return;
+
+  // Staat de pagina niet meer open, dan hoeft de teller ook niet te lopen.
+  const pagina=document.getElementById('page-uren-beheer');
+  if(pagina&&!pagina.classList.contains('active')){
+    if(nuIngeklokTimer){clearInterval(nuIngeklokTimer);nuIngeklokTimer=null;}
+    return;
+  }
+
+  if(!NU_INGEKLOKT.length){
+    kaart.style.display='none';
+    if(nuIngeklokTimer){clearInterval(nuIngeklokTimer);nuIngeklokTimer=null;}
+    return;
+  }
+  kaart.style.display='';
+
+  const rijen=NU_INGEKLOKT.map(r=>{
+    const sinds=new Date(r.ingeklokt_op);
+    const sec=Math.max(0,Math.floor((Date.now()-sinds.getTime())/1000));
+    const uu=String(Math.floor(sec/3600)).padStart(2,'0');
+    const mm=String(Math.floor((sec%3600)/60)).padStart(2,'0');
+    const ss=String(sec%60).padStart(2,'0');
+    const k=(KLUSSEN||[]).find(x=>x.id===r.klus_id);
+    const plek=r.locatie_in&&!r.locatie_in.includes('niet')&&!r.locatie_in.includes('geweigerd')?r.locatie_in:'';
+    // Langer dan 12 uur ingeklokt is bijna altijd vergeten uit te klokken.
+    const langBezig=sec>12*3600;
+    return`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--surface);border:1px solid var(--border);border-left:3px solid #059669;border-radius:10px;padding:10px 12px">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:var(--text)">${veiligTekst(r.naam)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">
+          sinds ${sinds.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}${k?' · '+veiligTekst(k.naam||k.food||'Klus'):''}
+        </div>
+        ${plek?`<div style="font-size:11px;color:var(--muted);margin-top:2px">${veiligTekst(plek)}</div>`:''}
+        ${langBezig?'<div style="font-size:11px;color:#B45309;font-weight:600;margin-top:3px">Al meer dan 12 uur ingeklokt — vergeten uit te klokken?</div>':''}
+      </div>
+      <div style="font-variant-numeric:tabular-nums;font-size:17px;font-weight:700;color:#059669;flex-shrink:0">${uu}:${mm}:${ss}</div>
+    </div>`;
+  }).join('');
+
+  kaart.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:.875rem">
+      <span style="width:9px;height:9px;border-radius:50%;background:#059669;display:inline-block"></span>
+      <div class="st" style="margin-bottom:0">Nu ingeklokt</div>
+      <span style="font-size:11px;background:#F0FDF4;color:#166534;border-radius:20px;padding:2px 8px;font-weight:600">${NU_INGEKLOKT.length}</span>
+    </div>
+    <div class="besch-lijst">${rijen}</div>`;
+}
+
 // Vrije tekst die iemand zelf heeft ingetypt mag de pagina niet slopen. Een
 // aanhalingsteken of een punthaak in een notitie zou anders de opmaak breken.
 function veiligTekst(t){
@@ -4725,7 +4802,7 @@ function veiligTekst(t){
 
 async function loadUrenBeheer(){
   // Beheerders klokken op dit tabblad ook zelf in en uit.
-  if(CURRENT_ROL==='beheerder')loadUrenPersoneel();
+  if(CURRENT_ROL==='beheerder'){loadUrenPersoneel();laadNuIngeklokt();}
 
   const accordEl=document.getElementById('urenAccordeerList');
   const maandEl=document.getElementById('urenMaandList');
@@ -6526,7 +6603,7 @@ function pbSameDay(a,b){return a.getFullYear()===b.getFullYear()&&a.getMonth()==
 function pbIsPast(d){const t=new Date();t.setHours(0,0,0,0);const x=new Date(d);x.setHours(0,0,0,0);return x<t;}
 function pbIsToday(d){const t=new Date();t.setHours(0,0,0,0);const x=new Date(d);x.setHours(0,0,0,0);return x.getTime()===t.getTime();}
 function pbFmt(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
-function pbGetKlussenVoorDag(d){const ds=pbFmt(d);return KLUSSEN.filter(k=>{const start=k.datum;const end=k.datum_eind||k.datum;return ds>=start&&ds<=end;});}
+function pbGetKlussenVoorDag(d){const ds=pbFmt(d);return KLUSSEN.filter(k=>{if(k.categorie==='intern')return false;const start=k.datum;const end=k.datum_eind||k.datum;return ds>=start&&ds<=end;});}
 function pbGetShifts(k){
   // Losse krachten staan óók op de klus, dus die tellen gewoon mee in de bezetting.
   const team=(k.trucks&&k.trucks.length)
@@ -6754,6 +6831,141 @@ function pbRenderKal(){
   // Mobiele weekkalender ook bijwerken
   pbRenderMobKal();
 }
+// ── HAL EN KANTOOR: INTERNE KLUSSEN ───────────────────────────────────────
+// Onder elke dag op het planningsbord staan twee vaste regels: Hal en Kantoor.
+// Ze worden pas een echte klus op het moment dat je er iemand op zet. Daardoor
+// slingeren er geen lege klussen rond, kleuren ze een dag nooit rood, tellen ze
+// niet mee in de teller en staan ze niet tussen de open klussen — aanmelden kan
+// er dus ook niet voor. Wie erop staat ziet hem gewoon in zijn eigen rooster.
+const INTERN_NAMEN=['Hal','Kantoor'];
+const INTERN_START='08:00',INTERN_EIND='17:00';
+// Alleen deze rollen mogen erop; een part-timer zou hem daarna niet eens zien.
+const INTERN_ROLLEN=['beheerder','full-timer','hal'];
+
+function pbInternKlus(naam,d){
+  const ds=pbFmt(d);
+  return KLUSSEN.find(k=>k.categorie==='intern'&&k.naam===naam&&k.datum===ds)||null;
+}
+
+// Maakt de klus pas aan als dat nodig is.
+async function pbInternZorgKlus(naam){
+  const ds=pbFmt(pbSelDate);
+  const bestaand=pbInternKlus(naam,pbSelDate);
+  if(bestaand)return bestaand;
+  const{data,error}=await sb.from('klussen').insert({
+    naam,datum:ds,categorie:'intern',
+    personen:0,personeel_nodig:0,food:'',adres:'',contactpersoon:'',telefoon:'',
+    start_tijd:INTERN_START+':00',einde_klus:INTERN_EIND+':00',
+  }).select('*').single();
+  if(error){toast('Aanmaken mislukt: '+error.message,'fout');return null;}
+  const k={...data,trucks:[],personeel:[],shifts:[],pdfs:[],losse:[],soorten:[],truckSoorten:[]};
+  KLUSSEN.push(k);
+  return k;
+}
+
+// Blijft er niemand over, dan halen we de klus weer weg. Zo staat er nooit een
+// lege Hal- of Kantoorklus in het rooster.
+async function pbInternOpruimen(k){
+  if(!k||(k.personeel||[]).length||(k.losse||[]).length)return;
+  const{error}=await sb.from('klussen').delete().eq('id',k.id);
+  if(error)return;
+  KLUSSEN=KLUSSEN.filter(x=>x.id!==k.id);
+}
+
+async function pbInternWijsToe(naam,mwId){
+  const mw=PERSONEEL.find(p=>p.id===mwId);
+  if(!mw)return;
+  const ds=pbFmt(pbSelDate);
+  const c=magIngepland(mwId,ds,mw.rol);
+  if(!c.ok){toast(mw.naam+' '+c.reden,'fout');return;}
+  const k=await pbInternZorgKlus(naam);
+  if(!k)return;
+  if((k.personeel||[]).some(p=>p.id===mwId)){pbOpenDrop=null;pbRenderContent();return;}
+  const{error}=await sb.from('klus_gebruikers').insert({klus_id:k.id,gebruiker_id:mwId});
+  if(error){toast('Toewijzen mislukt: '+error.message,'fout');await pbInternOpruimen(k);return;}
+  if(!k.personeel)k.personeel=[];
+  k.personeel.push({...mw,shift_id:null});
+  pbOpenDrop=null;
+  pbShowToast('toe',mw.naam,naam);
+  sendPushNotificatie(mwId,'Je bent ingepland!','Je staat op '+naam+' op '+ds+'.');
+  pbRenderContent();
+}
+
+async function pbInternVerwijder(klusId,mwId,mwNaam){
+  const k=KLUSSEN.find(x=>x.id===klusId);
+  if(!k)return;
+  const{error}=await sb.from('klus_gebruikers').delete().eq('klus_id',klusId).eq('gebruiker_id',mwId);
+  if(error){toast('Verwijderen mislukt: '+error.message,'fout');return;}
+  k.personeel=(k.personeel||[]).filter(p=>p.id!==mwId);
+  pbShowToast('af',mwNaam,k.naam);
+  await pbInternOpruimen(k);
+  pbRenderContent();
+}
+
+// De tijden staan standaard op 08.00–17.00 en zijn per dag aan te passen,
+// zodra er iemand op de klus staat.
+async function pbInternTijd(naam,welke,waarde){
+  const k=pbInternKlus(naam,pbSelDate);
+  if(!k)return;
+  const veld=welke==='start'?'start_tijd':'einde_klus';
+  const nieuw=waarde?waarde+':00':null;
+  const{error}=await sb.from('klussen').update({[veld]:nieuw}).eq('id',k.id);
+  if(error){toast('Tijd opslaan mislukt: '+error.message,'fout');pbRenderContent();return;}
+  k[veld]=nieuw;
+  toast('Tijd aangepast');
+  pbRenderContent();
+}
+
+function pbInternHtml(){
+  if(CURRENT_ROL!=='beheerder'||pbFilter!=='alle')return '';
+  const ds=pbFmt(pbSelDate);
+  let html='<div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)">'
+    +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Intern</div>'
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:.625rem">Hal en kantoor staan er elke dag bij. Zet je er niemand op, dan gebeurt er niets: ze tellen niet mee, kleuren de dag niet en staan niet bij de open klussen.</div>';
+
+  INTERN_NAMEN.forEach(naam=>{
+    const k=pbInternKlus(naam,pbSelDate);
+    const wie=k?(k.personeel||[]):[];
+    const t1=(k&&k.start_tijd?String(k.start_tijd).slice(0,5):INTERN_START);
+    const t2=(k&&k.einde_klus?String(k.einde_klus).slice(0,5):INTERN_EIND);
+    const isOpen=pbOpenDrop==='intern-'+naam;
+    const kanWel=[],kanNiet=[];
+    PERSONEEL.filter(p=>INTERN_ROLLEN.indexOf(p.rol)>=0&&!wie.some(w=>w.id===p.id)).forEach(p=>{
+      const c=magIngepland(p.id,ds,p.rol);
+      (c.ok?kanWel:kanNiet).push({...p,reden:c.reden});
+    });
+
+    html+='<div class="pb-klus" style="border-left-color:#6366F1">'
+      +'<div class="pb-klus-hdr"><div><div class="pb-knaam">'+naam+'</div>'
+      +'<div class="pb-kloc">'+(wie.length?wie.length+(wie.length===1?' persoon ingedeeld':' mensen ingedeeld'):'Niemand ingedeeld')+'</div></div>'
+      +'<span class="pb-badge" style="background:#EEF2FF;color:#3730A3;border:1px solid #C7D2FE">Intern</span></div>'
+      +'<div class="pb-shift">'
+      +'<input type="time" class="pb-tijdveld" value="'+t1+'"'+(k?'':' disabled title="Zet er eerst iemand op"')+' onchange="pbInternTijd(\''+naam+'\',\'start\',this.value)">'
+      +'<span style="font-size:11px;color:var(--muted)">tot</span>'
+      +'<input type="time" class="pb-tijdveld" value="'+t2+'"'+(k?'':' disabled title="Zet er eerst iemand op"')+' onchange="pbInternTijd(\''+naam+'\',\'eind\',this.value)">'
+      +'<div class="pb-sright"><button class="pb-wijs'+(isOpen?' open':'')+'" onclick="pbToggleDrop(\'intern-'+naam+'\')">'+(isOpen?'&#x2715; Sluiten':'+ Toewijzen')+'</button></div></div>';
+
+    if(wie.length)html+='<div class="pb-namen">'+wie.map(p=>
+      '<span class="pb-naam-pill">'+p.naam+'<button class="pb-remove" onclick="pbInternVerwijder(\''+k.id+'\',\''+p.id+'\',\''+p.naam.replace(/'/g,"\\'")+'\')" title="Verwijder">&#x2715;</button></span>').join('')+'</div>';
+
+    if(isOpen){
+      const initialen=n=>n.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+      html+='<div class="pb-dd">';
+      if(kanWel.length)html+=kanWel.map(mw=>
+        '<div class="pb-mw" onclick="pbInternWijsToe(\''+naam+'\',\''+mw.id+'\')"><div class="pb-av" style="background:#EEF2FF;color:#4338CA">'+initialen(mw.naam)+'</div><span class="pb-mwnaam">'+mw.naam+'</span><span class="pb-mwrol">'+mw.rol+'</span></div>').join('');
+      else html+='<div class="pb-mw" style="color:var(--muted);cursor:default">Niemand beschikbaar op deze dag</div>';
+      if(kanNiet.length){
+        html+='<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px 4px">Niet beschikbaar</div>';
+        html+=kanNiet.map(mw=>
+          '<div class="pb-mw" style="opacity:.5;cursor:not-allowed" title="'+mw.naam+' '+mw.reden+'"><div class="pb-av" style="background:#F3F4F6;color:#9CA3AF">'+initialen(mw.naam)+'</div><span class="pb-mwnaam">'+mw.naam+'</span><span class="pb-mwrol" style="color:#DC2626">'+mw.reden+'</span></div>').join('');
+      }
+      html+='</div>';
+    }
+    html+='</div>';
+  });
+  return html+'</div>';
+}
+
 function pbRenderContent(){
   const dagK=pbGetKlussenVoorDag(pbSelDate).map(k=>({...k,_status:pbGetStatus(k)}));
   const leeg=dagK.filter(k=>k._status==='leeg').length,deel=dagK.filter(k=>k._status==='deel').length,vol=dagK.filter(k=>k._status==='vol').length;
@@ -6775,7 +6987,8 @@ function pbRenderContent(){
   filtered.forEach(k=>{const sh=pbGetShifts(k);totBezet+=sh.reduce((s,x)=>s+x.bezet,0);totNodig+=sh.reduce((s,x)=>s+x.totaal,0);});
   if(statsEl)statsEl.textContent=`${totBezet}/${totNodig} shifts ingevuld`;
   const listEl=document.getElementById('pbKlusList');if(!listEl)return;
-  if(!filtered.length){listEl.innerHTML=`<div class="pb-empty">Geen klussen${pbFilter!=='alle'?' voor dit filter':''} op deze dag.</div>`;return;}
+  const internHtml=pbInternHtml();
+  if(!filtered.length){listEl.innerHTML=`<div class="pb-empty">Geen klussen${pbFilter!=='alle'?' voor dit filter':''} op deze dag.</div>`+internHtml;return;}
   let html='';
   filtered.forEach(k=>{
     const st=k._status,stLabel=st==='leeg'?'Leeg':st==='vol'?'Vol':'Deels';
@@ -6830,7 +7043,7 @@ function pbRenderContent(){
     }
     html+=`</div>`;
   });
-  listEl.innerHTML=html;
+  listEl.innerHTML=html+internHtml;
 }
 // ── PUSH NOTIFICATIES ──
 // Het toestel geeft zijn token vaak al door voordat je ingelogd bent. We houden
