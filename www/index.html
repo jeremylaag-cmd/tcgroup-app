@@ -6276,7 +6276,8 @@ function verlofRegelHtml(b){
     </select>
     <input type="number" step="0.5" min="0" value="${uren}" onchange="zetVerlofVeld('${b.id}','uren',this.value)"
       style="width:62px;font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:var(--font)">
-    <span style="font-size:11px;color:var(--muted)">uur${perDag?' = '+uur1(uren/perDag)+' d':''}</span>`;
+    <span style="font-size:11px;color:var(--muted)">uur${perDag?' = '+uur1(uren/perDag)+' d':''}</span>
+    <button class="btn-nav" style="font-size:11px;padding:2px 7px" title="Opnieuw uitrekenen: ${werkdagenTussen(b.datum_start,b.datum_eind)} werkdagen × ${uur1(perDag)} uur" onclick="herberekenVerzoekUren('${b.id}')">&#8635;</button>`;
 
   let saldo='';
   if(!c){
@@ -6375,16 +6376,19 @@ async function zetVerlofVeld(id,veld,waarde){
   loadAlleBeschikbaarheid();
 }
 
-// Kies je een soort en staat het aantal uren nog op nul, dan vullen we meteen
-// een voorstel in: het aantal werkdagen in de periode maal de uren per dag.
 async function vsoortGewijzigd(id,waarde){
-  const rij=(ALLE_BESCH||[]).find(b=>b.id===id);
-  const patch={verlofsoort:waarde};
-  if(rij&&Number(rij.uren||0)===0&&waarde!=='geen'){
-    patch.uren=voorstelUren(rij,urenPerDagVan(rij.gebruiker_id));
-  }
-  const{error}=await sb.from('beschikbaarheid').update(patch).eq('id',id);
+  // De uren vult de database zelf aan zodra er een soort staat en het aantal
+  // nog op nul staat: werkdagen (ma t/m vr) × de uren per dag van die persoon,
+  // of het verschil tussen begin- en eindtijd bij één dag.
+  const{error}=await sb.from('beschikbaarheid').update({verlofsoort:waarde}).eq('id',id);
   if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  await laadVerlofCijfers();
+  loadAlleBeschikbaarheid();
+}
+
+async function herberekenVerzoekUren(id){
+  const{error}=await sb.from('beschikbaarheid').update({uren:0}).eq('id',id);
+  if(error){toast('Herberekenen mislukt: '+error.message,'fout');return;}
   await laadVerlofCijfers();
   loadAlleBeschikbaarheid();
 }
@@ -6467,19 +6471,21 @@ async function pdRenderVerlof(){
     .sort((a,b)=>String(a.datum_start).localeCompare(String(b.datum_start)));
 
   const regelHtml=regels.length?regels.map(b=>{
+    const dagen=werkdagenTussen(b.datum_start,b.datum_eind);
     const van=parseDate(b.datum_start).toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
     const tot=b.datum_eind&&b.datum_eind!==b.datum_start
       ?' – '+parseDate(b.datum_eind).toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):'';
     const st=b.status==='goedgekeurd'?'✓':b.status==='afgewezen'?'✗':'…';
     return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px">
       <span style="width:14px;color:var(--muted)">${st}</span>
-      <span style="flex:1;min-width:0">${van}${tot} <span style="color:var(--muted)">${veiligTekst(b.reden||'')}</span></span>
+      <span style="flex:1;min-width:0">${van}${tot} <span style="color:var(--muted)">${veiligTekst(b.reden||'')} · ${dagen} werkdag${dagen===1?'':'en'}</span></span>
       <select onchange="pdZetRegel('${b.id}','verlofsoort',this.value)" style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:var(--font)">
         ${Object.entries(VERLOFSOORTEN).map(([w,l])=>`<option value="${w}"${b.verlofsoort===w?' selected':''}>${l}</option>`).join('')}
       </select>
       <input type="number" step="0.5" min="0" value="${Number(b.uren||0)}" onchange="pdZetRegel('${b.id}','uren',this.value)"
         style="width:64px;font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:var(--font)">
-      <span style="color:var(--muted);font-size:11px">u</span>
+      <span style="color:var(--muted);font-size:11px;white-space:nowrap">u = ${uur1(Number(b.uren||0)/perDag)} d</span>
+      <button class="btn-nav" style="font-size:11px;padding:2px 7px" title="Opnieuw uitrekenen: werkdagen × ${uur1(perDag)} uur" onclick="pdHerberekenUren('${b.id}')">&#8635;</button>
     </div>`;
   }).join(''):'<div class="pers-leeg">Nog niets dit jaar.</div>';
 
@@ -6585,6 +6591,18 @@ async function pdZetRegel(id,veld,waarde){
   const r=(PD.besch||[]).find(b=>b.id===id);
   if(r)r[veld]=patch[veld];
   toast('Opgeslagen');
+  pdRenderVerlof();
+}
+
+// Zet de uren terug op nul; de database vult er meteen het verse voorstel in.
+// Handig als je de datums hebt aangepast nadat de uren al vaststonden.
+async function pdHerberekenUren(id){
+  const{error}=await sb.from('beschikbaarheid').update({uren:0}).eq('id',id);
+  if(error){toast('Herberekenen mislukt: '+error.message,'fout');return;}
+  const{data}=await sb.from('beschikbaarheid').select('uren').eq('id',id).maybeSingle();
+  const r=(PD.besch||[]).find(b=>b.id===id);
+  if(r&&data)r.uren=data.uren;
+  toast('Uren opnieuw uitgerekend');
   pdRenderVerlof();
 }
 
@@ -7016,13 +7034,11 @@ async function bewaarAfwezig(){
   if(datum_eind<datum_start){wb.textContent='De einddatum ligt vóór de startdatum.';wb.className='warn-box show';return;}
 
   const verlofsoort=(document.getElementById('afwSoort')||{value:'geen'}).value;
-  const werkdagen=werkdagenTussen(datum_start,datum_eind);
+  // uren laten we leeg: de database rekent ze per persoon uit (werkdagen × zijn
+  // uren per dag, of de opgegeven tijden bij één dag).
   const rijen=[...AFW_GEKOZEN].map(id=>({
     gebruiker_id:id,reden,datum_start,datum_eind,tijd_start,tijd_eind,
-    soort:'onbeschikbaar',status:'goedgekeurd',
-    verlofsoort,
-    // Halve dag? Dan rekenen we met de opgegeven tijden in plaats van hele dagen.
-    uren:verlofsoort==='geen'?0:Math.round(werkdagen*urenPerDagVan(id)*100)/100,
+    soort:'onbeschikbaar',status:'goedgekeurd',verlofsoort,
   }));
 
   // Zelfde beveiliging als bij het opslaan van een klus: twee keer drukken
