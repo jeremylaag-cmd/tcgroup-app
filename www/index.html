@@ -4715,6 +4715,14 @@ async function doUitklokken(regId,pauze_minuten=0,notitie=''){
 // ── UREN BEHEER ──
 function changeUrenMaand(dir){urenMaandOffset+=dir;loadUrenBeheer();}
 
+// Vrije tekst die iemand zelf heeft ingetypt mag de pagina niet slopen. Een
+// aanhalingsteken of een punthaak in een notitie zou anders de opmaak breken.
+function veiligTekst(t){
+  return String(t==null?'':t)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
 async function loadUrenBeheer(){
   // Beheerders klokken op dit tabblad ook zelf in en uit.
   if(CURRENT_ROL==='beheerder')loadUrenPersoneel();
@@ -4752,6 +4760,8 @@ async function loadUrenBeheer(){
           <div class="uur-item-sub" style="margin-top:2px;${teWeinig?'color:#B45309;font-weight:600':''}">
             Pauze: ${pauze} min${teWeinig?` — normaal ${nodig} min bij deze lengte`:''}
           </div>
+          ${r.notitie_pers?`<div class="uur-item-sub" style="margin-top:4px;color:var(--text);font-weight:700">📝 ${veiligTekst(r.notitie_pers)}</div>`:''}
+          ${r.notitie_beh?`<div class="uur-item-sub" style="margin-top:2px;font-style:italic">${veiligTekst(r.notitie_beh)}</div>`:''}
           ${r.locatie_in&&!r.locatie_in.includes('niet')&&!r.locatie_in.includes('geweigerd')?`<div class="uur-item-sub" style="margin-top:2px">In: ${r.locatie_in}${r.locatie_uit&&!r.locatie_uit.includes('niet')?' · Uit: '+r.locatie_uit:''}</div>`:''}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
