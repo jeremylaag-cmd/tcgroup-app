@@ -214,6 +214,16 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px}
 .chip{font-size:11px;padding:5px 12px;border-radius:20px;border:1px solid var(--border);cursor:pointer;background:var(--bg);color:var(--text);font-family:var(--font)}
 .chip.on{border-color:var(--text);background:var(--text);color:#fff}
+.chip.niet{border-color:#FECACA;background:#FEF2F2;color:#991B1B}
+.chip.niet.on{border-color:#B91C1C;background:#B91C1C;color:#fff}
+.pers-knop{width:100%;text-align:left;font-size:12px;font-family:var(--font);padding:9px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--text);cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px}
+.pers-knop:hover{border-color:var(--text)}
+.pers-paneel{display:none;margin-top:6px;border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:9px;max-height:300px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.pers-paneel.open{display:block}
+.pers-zoek{width:100%;font-size:12px;font-family:var(--font);padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);margin-bottom:8px}
+.pers-zoek:focus{outline:none;border-color:var(--text)}
+.pers-kop{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:8px 2px 5px}
+.pers-leeg{font-size:11px;color:var(--muted);font-style:italic;margin:2px}
 .chip.warn{border-color:#F59E0B;background:#FFFBEB;color:#92400E}
 .chip-warn{font-size:11px;color:#DC2626;margin-top:5px;display:none}
 .chip-warn.show{display:block}
@@ -1367,6 +1377,19 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
   </div>
 
   <!-- OPTIE-KLUS: snel een datum vastleggen die nog niet zeker is -->
+  <!-- Algemeen "weet je het zeker?"-venster. Ligt bewust boven alle andere
+       vensters, want het komt meestal vanuit een formulier dat al openstaat. -->
+  <div class="modal-overlay" id="bevestigOverlay" style="z-index:500" onclick="if(event.target===this)bevestigAntwoord(false)">
+    <div class="modal" style="max-width:400px">
+      <div class="modal-title" id="bevestigTitel">Weet je het zeker?</div>
+      <div id="bevestigTekst" style="font-size:13px;line-height:1.55;color:var(--text);margin-bottom:1.25rem"></div>
+      <div class="mfooter">
+        <button class="btn-ghost" onclick="bevestigAntwoord(false)">Annuleren</button>
+        <button class="btn-sm" id="bevestigJaKnop" onclick="bevestigAntwoord(true)">Ja, toch doen</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="optieOverlay" onclick="if(event.target===this)sluitOptie()">
     <div class="modal" style="max-width:420px">
       <div class="modal-title">Optie in de agenda</div>
@@ -1631,7 +1654,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin:1rem 0 .75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)">Optionele velden</div>
     <div class="fr"><span class="fl">Food per truck</span><div id="truckSoortBlocks"></div></div>
     <div class="fr"><span class="fl">Gasten (totaal)</span><input type="number" id="fPersonen" min="1" placeholder="bv. 200" style="max-width:120px"></div>
-    <div class="fr"><span class="fl">Personeel (meerdere mogelijk)</span><div class="chips" id="persChips"></div><div class="chip-warn" id="persWarn"></div>
+    <div class="fr"><span class="fl">Personeel (meerdere mogelijk)</span><div id="persChips"></div><div class="chip-warn" id="persWarn"></div>
       <div id="persShiftKeuze" style="margin-top:8px"></div>
     </div>
     <div class="fr"><span class="fl">Losse krachten <span style="color:var(--muted);font-weight:400">(eenmalig, zonder account)</span></span>
@@ -2130,11 +2153,27 @@ async function doRegister(){
   switchAuthTab('login');
 }
 
+// Bij een beheerder verhuizen de twee klokkaarten naar zijn eigen urentabblad.
+// Logt daarna iemand anders in zonder de app te herstarten, dan stonden ze daar
+// nog — en miste die persoon zijn Inklokken-knop. Dit zet ze terug.
+function zetKlokkaartenTerug(){
+  const weekK=document.getElementById('uurWeekCard');
+  const klusK=document.getElementById('uurKlusCard');
+  const regK=document.getElementById('uurRegistratieCard');
+  if(!weekK||!klusK||!regK||!weekK.parentNode)return;
+  if(weekK.parentNode.contains(klusK)&&weekK.parentNode.contains(regK))return;
+  weekK.insertAdjacentElement('afterend',klusK);
+  klusK.insertAdjacentElement('afterend',regK);
+}
+
 async function doLogout(){
   await sb.auth.signOut();
   CURRENT_USER=null;CURRENT_ROL=null;
   document.getElementById('appWrap').style.display='none';
   document.getElementById('authWrap').style.display='flex';
+  // Alles schoon voor de volgende die inlogt: anders blijven lijsten, timers en
+  // verplaatste kaarten van de vorige rol achter.
+  setTimeout(()=>location.reload(),80);
 }
 
 function openVerwijderAccount(){
@@ -2286,11 +2325,13 @@ async function initApp(user){
     const optieBtn=document.getElementById('addOptieBtnTop');if(optieBtn)optieBtn.style.display='';
     document.getElementById('addMedBtn').style.display='';
   }else if(isHal){
+    zetKlokkaartenTerug();
     tabs.innerHTML=`
       <button class="htab active" onclick="showPage('uren',this)">Uren</button>
       <button class="htab" onclick="showPage('rooster',this)">Rooster</button>`;
     ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   }else{
+    zetKlokkaartenTerug();
     const extraTab=isFullTimer
       ?`<button class="htab" onclick="showPage('rooster',this)">Rooster</button>`
       :'';
@@ -3307,20 +3348,86 @@ function renderTruckChips(bezette){
   tc.innerHTML=TRUCKS.map(t=>{const on=formTrucks.includes(t.id);const warn=bezette.includes(t.id)&&!on;
     return`<div class="chip${on?' on':''}${warn?' warn':''}" onclick="toggleTruck('${t.id}')">${t.label}${warn?' ⚠':''}</div>`;}).join('');
 }
+// ── PERSONEEL KIEZEN ──────────────────────────────────────────────────────
+// Iedereen mag op een klus, ook wie zich nog niet beschikbaar heeft gemeld —
+// je krijgt dan wel eerst een waarschuwing te zien. De lijst zit in een
+// uitklapmenu met een zoekveld en staat gesorteerd op beschikbaar en niet
+// beschikbaar, want anders is hij met dertig namen niet te overzien.
+let persOpen=false;
+let persZoek='';
+let persLaatsteBezet=[];
+
+function persToggleLijst(){
+  persOpen=!persOpen;
+  renderPersChips(persLaatsteBezet);
+  if(persOpen){const z=document.getElementById('persZoekVeld');if(z)setTimeout(()=>z.focus(),60);}
+}
+
 function renderPersChips(bezette){
   const pc=document.getElementById('persChips');if(!pc)return;
+  persLaatsteBezet=bezette||[];
+  if(!document.getElementById('persPaneel')){
+    pc.innerHTML=`<div class="chips" id="persGekozen"></div>
+      <button type="button" class="pers-knop" id="persKnop" onclick="persToggleLijst()"></button>
+      <div class="pers-paneel" id="persPaneel">
+        <input type="text" id="persZoekVeld" class="pers-zoek" placeholder="Zoek op naam of rol..."
+               oninput="persZoek=this.value;renderPersLijsten()"
+               onkeydown="if(event.key==='Enter')event.preventDefault()">
+        <div id="persLijsten"></div>
+      </div>`;
+  }
   const datum=document.getElementById('fDatum')?.value||'';
-  pc.innerHTML=PERSONEEL.map(p=>{
-    const on=formPers.includes(p.id);
-    const warn=bezette.includes(p.id)&&!on;
-    // Vergelijk datums als strings YYYY-MM-DD
-    const check=magIngepland(p.id,datum,p.rol);
-    if(!check.ok&&!on){
-      return`<div class="chip" style="opacity:.45;cursor:not-allowed;border-color:#FECACA;background:#FEF2F2;color:#991B1B" title="${p.naam} ${check.reden}">${p.naam} 🚫</div>`;
-    }
-    const cls='chip'+(on?' on':'')+(warn?' warn':'');
-    return`<div class="${cls}" onclick="togglePers('${p.id}')" title="${warn?'Al ingepland op deze dag':''}">${p.naam}${warn?' ⚠':''}</div>`;
-  }).join('');
+  const gekozen=PERSONEEL.filter(p=>formPers.includes(p.id));
+  const gEl=document.getElementById('persGekozen');
+  gEl.innerHTML=gekozen.length
+    ?gekozen.map(p=>{
+      const check=magIngepland(p.id,datum,p.rol);
+      const dubbel=persLaatsteBezet.includes(p.id);
+      const let_=!check.ok?' 🚫':dubbel?' ⚠':'';
+      const titel=!check.ok?p.naam+' '+check.reden:dubbel?'Staat die dag al op een andere klus':'';
+      return`<div class="chip on${!check.ok?' niet':''}" onclick="togglePers('${p.id}')" title="${titel}">${p.naam}${let_} ✕</div>`;
+    }).join('')
+    :'<div class="pers-leeg">Nog niemand gekozen</div>';
+
+  let vrij=0,niet=0;
+  PERSONEEL.filter(p=>!formPers.includes(p.id)).forEach(p=>{
+    magIngepland(p.id,datum,p.rol).ok?vrij++:niet++;
+  });
+  const knop=document.getElementById('persKnop');
+  knop.innerHTML=`<span>${persOpen?'Lijst sluiten':'Personeel toevoegen'}
+      <span style="color:var(--muted)">&middot; ${vrij} beschikbaar, ${niet} niet</span></span>
+    <span style="color:var(--muted)">${persOpen?'&#9650;':'&#9660;'}</span>`;
+
+  const paneel=document.getElementById('persPaneel');
+  paneel.className='pers-paneel'+(persOpen?' open':'');
+  const zv=document.getElementById('persZoekVeld');
+  if(zv&&zv.value!==persZoek)zv.value=persZoek;
+  renderPersLijsten();
+}
+
+function renderPersLijsten(){
+  const el=document.getElementById('persLijsten');if(!el)return;
+  const datum=document.getElementById('fDatum')?.value||'';
+  const zoek=(persZoek||'').trim().toLowerCase();
+  const kanWel=[],kanNiet=[];
+  PERSONEEL.filter(p=>!formPers.includes(p.id)).forEach(p=>{
+    const c=magIngepland(p.id,datum,p.rol);
+    (c.ok?kanWel:kanNiet).push({...p,reden:c.reden});
+  });
+  const past=p=>!zoek||(p.naam||'').toLowerCase().includes(zoek)||(p.rol||'').toLowerCase().includes(zoek);
+  const wel=kanWel.filter(past),niet=kanNiet.filter(past);
+  const chip=(p,vrij)=>{
+    const dubbel=persLaatsteBezet.includes(p.id);
+    const titel=vrij?(dubbel?'Staat die dag al op een andere klus':''):p.naam+' '+p.reden;
+    return`<div class="chip${vrij?(dubbel?' warn':''):' niet'}" onclick="togglePers('${p.id}')" title="${titel}">${p.naam}${vrij?(dubbel?' ⚠':''):' 🚫'}</div>`;
+  };
+  el.innerHTML=
+    `<div class="pers-kop">Beschikbaar (${wel.length})</div>`
+    +(wel.length?`<div class="chips">${wel.map(p=>chip(p,true)).join('')}</div>`
+                :`<div class="pers-leeg">${zoek?'Geen naam gevonden':'Iedereen staat er al op'}</div>`)
+    +`<div class="pers-kop">Niet beschikbaar (${niet.length})</div>`
+    +(niet.length?`<div class="chips">${niet.map(p=>chip(p,false)).join('')}</div>`
+                 :`<div class="pers-leeg">${zoek?'Geen naam gevonden':'Niemand'}</div>`);
 }
 function renderTruckSoortBlocks(){
   const el=document.getElementById('truckSoortBlocks');if(!el)return;
@@ -3352,19 +3459,64 @@ function toggleTruck(id){
   renderTruckChips(trucks);renderTruckSoortBlocks();
   document.getElementById('warnBox').className='warn-box';
 }
-function togglePers(id){
+async function togglePers(id){
   const datum=document.getElementById('fDatum')?.value||'';
-  const{trucks,pers}=getBezette(datum);
-  // Blokkeer als iemand niet inzetbaar is op deze dag
+  const{pers}=getBezette(datum);
   const persoon=PERSONEEL.find(p=>p.id===id);
-  const check=magIngepland(id,datum,persoon?.rol);
-  if(!check.ok&&!formPers.includes(id)){showWarn(`⚠ ${persoon?.naam||'Deze medewerker'} ${check.reden}.`);return;}
-  if(!formPers.includes(id)&&pers.includes(id)){showWarn(`⚠ ${PERSONEEL.find(p=>p.id===id)?.naam} staat al ingepland op deze dag.`);return;}
-  formPers=formPers.includes(id)?formPers.filter(x=>x!==id):[...formPers,id];
-  if(!formPers.includes(id))delete formPersShift[id];
+  const staatErAl=formPers.includes(id);
+
+  // Niemand wordt meer geweigerd; wie niet beschikbaar is mag er wel op, maar
+  // dan eerst even bevestigen dat je het hebt afgestemd.
+  if(!staatErAl){
+    const check=magIngepland(id,datum,persoon?.rol);
+    const dubbel=pers.includes(id);
+    if(!check.ok||dubbel){
+      const ok=await vraagOverleg(persoon?.naam||'Deze medewerker',
+        check.ok?'':check.reden, dubbel, '');
+      if(!ok)return;
+    }
+  }
+
+  formPers=staatErAl?formPers.filter(x=>x!==id):[...formPers,id];
+  if(staatErAl)delete formPersShift[id];
   renderPersChips(pers);renderPersShiftKeuze();
   document.getElementById('warnBox').className='warn-box';
 }
+// ── "WEET JE HET ZEKER?" ──────────────────────────────────────────────────
+// Eén venster dat overal gebruikt wordt en een ja of nee teruggeeft.
+let bevestigResolve=null;
+
+function vraagBevestiging(titel,tekstHtml,jaLabel){
+  return new Promise(res=>{
+    // Stond er al een vraag open, dan tellen we die als "nee".
+    if(bevestigResolve)bevestigResolve(false);
+    bevestigResolve=res;
+    document.getElementById('bevestigTitel').textContent=titel;
+    document.getElementById('bevestigTekst').innerHTML=tekstHtml;
+    document.getElementById('bevestigJaKnop').textContent=jaLabel||'Ja, toch doen';
+    document.getElementById('bevestigOverlay').classList.add('open');
+  });
+}
+
+function bevestigAntwoord(ja){
+  document.getElementById('bevestigOverlay').classList.remove('open');
+  const r=bevestigResolve;bevestigResolve=null;
+  if(r)r(!!ja);
+}
+
+// De vraag die je krijgt als je iemand inplant die er eigenlijk niet is.
+function vraagOverleg(naam,reden,dubbel,klusnaam){
+  const regels=[];
+  if(reden)regels.push('⚠ '+veiligTekst(naam)+' '+veiligTekst(reden)+'.');
+  if(dubbel)regels.push('⚠ '+veiligTekst(naam)+' staat die dag al op een andere klus.');
+  const waar=klusnaam?' op <strong>'+veiligTekst(klusnaam)+'</strong>':'';
+  return vraagBevestiging('Toch inplannen?',
+    regels.map(r=>'<div style="margin-bottom:8px;color:#B91C1C;font-weight:500">'+r+'</div>').join('')
+    +'<div style="color:var(--muted)">Er is hiervoor geen akkoord via de app. Weet je zeker dat je '
+    +veiligTekst(naam)+waar+' wilt inplannen? Stem het dan even zelf af.</div>',
+    'Ja, toch inplannen');
+}
+
 // ── SHIFTS IN EEN KLUS ────────────────────────────────────────────────────
 // Soms begint een deel van de ploeg eerder en een deel later. Met shifts zet je
 // die tijden apart neer en kies je per persoon in welke shift hij staat. Laat je
@@ -3536,6 +3688,7 @@ function openModal(id=null){
   document.getElementById('warnBox').className='warn-box';
   const tw=document.getElementById('truckWarn');const pw=document.getElementById('persWarn');
   if(tw)tw.className='chip-warn';if(pw)pw.className='chip-warn';
+  persOpen=false;persZoek='';
   renderTruckChips([]);renderPersChips([]);renderTruckSoortBlocks();renderPdfList();renderLosseKrachten();
   renderShiftRijen();renderPersShiftKeuze();
   document.getElementById('modalOverlay').classList.add('open');
@@ -6662,18 +6815,22 @@ function pbSelectDay(y,m,d){
 }
 function pbSetFilter(f,btn){pbFilter=f;document.querySelectorAll('.pb-fbtn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');pbRenderKal();pbRenderContent();}
 function pbToggleDrop(id){pbOpenDrop=pbOpenDrop===id?null:id;pbRenderContent();}
-function pbWijsToe(klusId,mwId){
+async function pbWijsToe(klusId,mwId){
   const klus=KLUSSEN.find(k=>k.id===klusId);const mw=PERSONEEL.find(p=>p.id===mwId);
   if(!klus||!mw)return;if(!klus.personeel)klus.personeel=[];
   if(klus.personeel.find(p=>p.id===mwId))return;
   const alBezet=klus.personeel.length+((klus.losse||[]).length);
   if(alBezet>=(klus.personeel_nodig||0)&&(klus.personeel_nodig||0)>0)return;
 
-  // Wie zich heeft aangemeld mag altijd; anders moet de dag vrij zijn.
+  // Wie zich heeft aangemeld mag altijd. Is iemand niet beschikbaar, dan kan
+  // het nog steeds — je bevestigt dan alleen even dat je het hebt afgestemd.
   const heeftGemeld=AANMELDINGEN.some(a=>a.klus_id===klusId&&a.gebruiker_id===mwId&&a.status!=='afgewezen');
   if(!heeftGemeld){
     const c=magIngepland(mwId,klus.datum,mw.rol);
-    if(!c.ok){toast(mw.naam+' '+c.reden,'fout');return;}
+    if(!c.ok){
+      const ok=await vraagOverleg(mw.naam,c.reden,false,klus.naam);
+      if(!ok)return;
+    }
   }
 
   // Heeft de klus shifts, dan komt hij in de eerste shift die nog plek heeft.
@@ -6877,7 +7034,10 @@ async function pbInternWijsToe(naam,mwId){
   if(!mw)return;
   const ds=pbFmt(pbSelDate);
   const c=magIngepland(mwId,ds,mw.rol);
-  if(!c.ok){toast(mw.naam+' '+c.reden,'fout');return;}
+  if(!c.ok){
+    const ok=await vraagOverleg(mw.naam,c.reden,false,naam);
+    if(!ok)return;
+  }
   const k=await pbInternZorgKlus(naam);
   if(!k)return;
   if((k.personeel||[]).some(p=>p.id===mwId)){pbOpenDrop=null;pbRenderContent();return;}
@@ -6955,9 +7115,9 @@ function pbInternHtml(){
         '<div class="pb-mw" onclick="pbInternWijsToe(\''+naam+'\',\''+mw.id+'\')"><div class="pb-av" style="background:#EEF2FF;color:#4338CA">'+initialen(mw.naam)+'</div><span class="pb-mwnaam">'+mw.naam+'</span><span class="pb-mwrol">'+mw.rol+'</span></div>').join('');
       else html+='<div class="pb-mw" style="color:var(--muted);cursor:default">Niemand beschikbaar op deze dag</div>';
       if(kanNiet.length){
-        html+='<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px 4px">Niet beschikbaar</div>';
+        html+='<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px 4px">Niet beschikbaar &mdash; vraagt om bevestiging</div>';
         html+=kanNiet.map(mw=>
-          '<div class="pb-mw" style="opacity:.5;cursor:not-allowed" title="'+mw.naam+' '+mw.reden+'"><div class="pb-av" style="background:#F3F4F6;color:#9CA3AF">'+initialen(mw.naam)+'</div><span class="pb-mwnaam">'+mw.naam+'</span><span class="pb-mwrol" style="color:#DC2626">'+mw.reden+'</span></div>').join('');
+          '<div class="pb-mw" onclick="pbInternWijsToe(\''+naam+'\',\''+mw.id+'\')" title="'+mw.naam+' '+mw.reden+'"><div class="pb-av" style="background:#FEF2F2;color:#B91C1C">'+initialen(mw.naam)+'</div><span class="pb-mwnaam">'+mw.naam+'</span><span class="pb-mwrol" style="color:#DC2626">'+mw.reden+'</span></div>').join('');
       }
       html+='</div>';
     }
@@ -7033,10 +7193,12 @@ function pbRenderContent(){
       if(!beschikbaar.length)html+=`<div class="pb-mw" style="color:var(--muted);cursor:default">Niemand beschikbaar op deze dag</div>`;
 
       if(kanNiet.length){
-        html+=kopje('Niet beschikbaar');
+        // Ook deze zijn aan te klikken: je krijgt dan eerst de vraag of je het
+        // hebt afgestemd.
+        html+=kopje('Niet beschikbaar — vraagt om bevestiging');
         html+=kanNiet.map(mw=>{
           const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-          return`<div class="pb-mw" style="opacity:.5;cursor:not-allowed" title="${mw.naam} ${mw.reden}"><div class="pb-av" style="background:#F3F4F6;color:#9CA3AF">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol" style="color:#DC2626">${mw.reden}</span></div>`;
+          return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}')" title="${mw.naam} ${mw.reden}"><div class="pb-av" style="background:#FEF2F2;color:#B91C1C">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol" style="color:#DC2626">${mw.reden}</span></div>`;
         }).join('');
       }
       html+=`</div>`;
