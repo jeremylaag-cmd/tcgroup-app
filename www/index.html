@@ -1767,6 +1767,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="detail-section" id="detailAdresSection"><div class="detail-label">Adres</div><div class="detail-value" id="detailAdres"></div></div>
       <div class="detail-section" id="detailContactSection"><div class="detail-label">Contactpersoon</div><div class="detail-value" id="detailContact"></div><div id="detailTelefoon" style="margin-top:3px"></div></div>
       <div class="detail-section" id="detailPersSection"><div class="detail-label">Personeel</div><div class="detail-value" id="detailPers"></div></div>
+      <div class="detail-section" id="detailTelSection" style="display:none"><div class="detail-label">Bellen met je collega's</div><div id="detailCollegaTel"></div></div>
       <div class="detail-section" id="detailNotitieSection"><div class="detail-label">Notities</div><div style="font-size:13px;color:var(--muted);font-style:italic;line-height:1.6" id="detailNotitie"></div></div>
       <div class="detail-section" id="detailPdfSection"><div class="detail-label">Bijlagen</div><div id="detailPdfs"></div></div>
     </div>
@@ -3348,6 +3349,30 @@ function renderTruckChips(bezette){
   tc.innerHTML=TRUCKS.map(t=>{const on=formTrucks.includes(t.id);const warn=bezette.includes(t.id)&&!on;
     return`<div class="chip${on?' on':''}${warn?' warn':''}" onclick="toggleTruck('${t.id}')">${t.label}${warn?' ⚠':''}</div>`;}).join('');
 }
+// Op welke andere klus van dezelfde dag staat deze persoon al? Geeft de naam
+// van die klus terug, of een lege tekst als hij nog nergens staat.
+function anderKlusOpDag(persoonId,datum,negeerKlusId){
+  if(!datum)return '';
+  const k=(KLUSSEN||[]).find(x=>x.id!==negeerKlusId
+    && klusDagen(x).includes(datum)
+    && (x.personeel||[]).some(p=>p.id===persoonId));
+  return k?(k.naam||k.food||'een andere klus'):'';
+}
+
+// Verdeelt een lijst mensen in drie groepen. Niemand wordt geweigerd; het is
+// alleen om te zien wie je zonder nadenken kunt pakken.
+function deelPersoneelIn(mensen,datum,negeerKlusId){
+  const vrij=[],ingepland=[],niet=[];
+  (mensen||[]).forEach(p=>{
+    const c=magIngepland(p.id,datum,p.rol);
+    if(!c.ok){niet.push({...p,reden:c.reden});return;}
+    const ander=anderKlusOpDag(p.id,datum,negeerKlusId);
+    if(ander){ingepland.push({...p,reden:'staat al op '+ander});return;}
+    vrij.push({...p,reden:''});
+  });
+  return{vrij,ingepland,niet};
+}
+
 // ── PERSONEEL KIEZEN ──────────────────────────────────────────────────────
 // Iedereen mag op een klus, ook wie zich nog niet beschikbaar heeft gemeld —
 // je krijgt dan wel eerst een waarschuwing te zien. De lijst zit in een
@@ -3389,13 +3414,10 @@ function renderPersChips(bezette){
     }).join('')
     :'<div class="pers-leeg">Nog niemand gekozen</div>';
 
-  let vrij=0,niet=0;
-  PERSONEEL.filter(p=>!formPers.includes(p.id)).forEach(p=>{
-    magIngepland(p.id,datum,p.rol).ok?vrij++:niet++;
-  });
+  const tel=deelPersoneelIn(PERSONEEL.filter(p=>!formPers.includes(p.id)),datum,editId);
   const knop=document.getElementById('persKnop');
   knop.innerHTML=`<span>${persOpen?'Lijst sluiten':'Personeel toevoegen'}
-      <span style="color:var(--muted)">&middot; ${vrij} beschikbaar, ${niet} niet</span></span>
+      <span style="color:var(--muted)">&middot; ${tel.vrij.length} beschikbaar, ${tel.ingepland.length} al ingepland, ${tel.niet.length} niet</span></span>
     <span style="color:var(--muted)">${persOpen?'&#9650;':'&#9660;'}</span>`;
 
   const paneel=document.getElementById('persPaneel');
@@ -3409,25 +3431,21 @@ function renderPersLijsten(){
   const el=document.getElementById('persLijsten');if(!el)return;
   const datum=document.getElementById('fDatum')?.value||'';
   const zoek=(persZoek||'').trim().toLowerCase();
-  const kanWel=[],kanNiet=[];
-  PERSONEEL.filter(p=>!formPers.includes(p.id)).forEach(p=>{
-    const c=magIngepland(p.id,datum,p.rol);
-    (c.ok?kanWel:kanNiet).push({...p,reden:c.reden});
-  });
+  const groepen=deelPersoneelIn(PERSONEEL.filter(p=>!formPers.includes(p.id)),datum,editId);
   const past=p=>!zoek||(p.naam||'').toLowerCase().includes(zoek)||(p.rol||'').toLowerCase().includes(zoek);
-  const wel=kanWel.filter(past),niet=kanNiet.filter(past);
-  const chip=(p,vrij)=>{
-    const dubbel=persLaatsteBezet.includes(p.id);
-    const titel=vrij?(dubbel?'Staat die dag al op een andere klus':''):p.naam+' '+p.reden;
-    return`<div class="chip${vrij?(dubbel?' warn':''):' niet'}" onclick="togglePers('${p.id}')" title="${titel}">${p.naam}${vrij?(dubbel?' ⚠':''):' 🚫'}</div>`;
+  const wel=groepen.vrij.filter(past),bezig=groepen.ingepland.filter(past),niet=groepen.niet.filter(past);
+  const chip=(p,soort)=>{
+    const merk=soort==='vrij'?'':soort==='bezig'?' ⚠':' 🚫';
+    const cls=soort==='vrij'?'chip':soort==='bezig'?'chip warn':'chip niet';
+    return`<div class="${cls}" onclick="togglePers('${p.id}')" title="${p.reden?p.naam+' '+p.reden:''}">${p.naam}${merk}</div>`;
   };
-  el.innerHTML=
-    `<div class="pers-kop">Beschikbaar (${wel.length})</div>`
-    +(wel.length?`<div class="chips">${wel.map(p=>chip(p,true)).join('')}</div>`
-                :`<div class="pers-leeg">${zoek?'Geen naam gevonden':'Iedereen staat er al op'}</div>`)
-    +`<div class="pers-kop">Niet beschikbaar (${niet.length})</div>`
-    +(niet.length?`<div class="chips">${niet.map(p=>chip(p,false)).join('')}</div>`
-                 :`<div class="pers-leeg">${zoek?'Geen naam gevonden':'Niemand'}</div>`);
+  const groep=(titel,lijst,soort,leegTekst)=>
+    `<div class="pers-kop">${titel} (${lijst.length})</div>`
+    +(lijst.length?`<div class="chips">${lijst.map(p=>chip(p,soort)).join('')}</div>`
+                  :`<div class="pers-leeg">${zoek?'Geen naam gevonden':leegTekst}</div>`);
+  el.innerHTML=groep('Beschikbaar',wel,'vrij','Iedereen staat er al op')
+    +groep('Staat al ingepland',bezig,'bezig','Niemand')
+    +groep('Niet beschikbaar',niet,'niet','Niemand');
 }
 function renderTruckSoortBlocks(){
   const el=document.getElementById('truckSoortBlocks');if(!el)return;
@@ -3469,10 +3487,10 @@ async function togglePers(id){
   // dan eerst even bevestigen dat je het hebt afgestemd.
   if(!staatErAl){
     const check=magIngepland(id,datum,persoon?.rol);
-    const dubbel=pers.includes(id);
-    if(!check.ok||dubbel){
+    const ander=anderKlusOpDag(id,datum,editId);
+    if(!check.ok||ander){
       const ok=await vraagOverleg(persoon?.naam||'Deze medewerker',
-        check.ok?'':check.reden, dubbel, '');
+        check.ok?'':check.reden, ander?('staat die dag al op '+ander):'', '');
       if(!ok)return;
     }
   }
@@ -3505,10 +3523,10 @@ function bevestigAntwoord(ja){
 }
 
 // De vraag die je krijgt als je iemand inplant die er eigenlijk niet is.
-function vraagOverleg(naam,reden,dubbel,klusnaam){
+function vraagOverleg(naam,reden,dubbelTekst,klusnaam){
   const regels=[];
   if(reden)regels.push('⚠ '+veiligTekst(naam)+' '+veiligTekst(reden)+'.');
-  if(dubbel)regels.push('⚠ '+veiligTekst(naam)+' staat die dag al op een andere klus.');
+  if(dubbelTekst)regels.push('⚠ '+veiligTekst(naam)+' '+veiligTekst(dubbelTekst)+'.');
   const waar=klusnaam?' op <strong>'+veiligTekst(klusnaam)+'</strong>':'';
   return vraagBevestiging('Toch inplannen?',
     regels.map(r=>'<div style="margin-bottom:8px;color:#B91C1C;font-weight:500">'+r+'</div>').join('')
@@ -4038,6 +4056,7 @@ function openDetail(id){
   }else{
     persEl.textContent=alleNamen.join(', ');
   }
+  laadCollegaTelefoons(k);
   const ns=document.getElementById('detailNotitieSection');ns.style.display=k.notitie?'':'none';document.getElementById('detailNotitie').textContent=k.notitie;
   const pdfs=document.getElementById('detailPdfSection');pdfs.style.display=k.pdfs&&k.pdfs.length?'':'none';
   document.getElementById('detailPdfs').innerHTML=k.pdfs?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${p.url}\`,\`${p.naam}\`)">${p.naam}</span>`).join(''):'';
@@ -4056,6 +4075,49 @@ function openDetail(id){
   document.getElementById('detailOverlay').classList.add('open');
 }
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('open');}
+
+// ── TELEFOONNUMMERS VAN JE COLLEGA'S ──────────────────────────────────────
+// Sta je samen op een klus, dan mag je elkaars nummer zien. De database
+// bewaakt dat: collega_telefoons() geeft alleen iets terug als je zelf op die
+// klus staat (of beheerder bent). Buiten de klus om zie je niemands nummer.
+let detailTelKlus=null;
+
+function telSchoon(t){return String(t||'').replace(/[^0-9+]/g,'');}
+
+async function laadCollegaTelefoons(k){
+  const vak=document.getElementById('detailTelSection');
+  const lijst=document.getElementById('detailCollegaTel');
+  if(!vak||!lijst)return;
+  detailTelKlus=k.id;
+  vak.style.display='none';
+  lijst.innerHTML='';
+
+  const{data,error}=await sb.rpc('collega_telefoons',{k:k.id});
+  // Ondertussen een andere klus geopend? Dan hoort dit antwoord er niet meer bij.
+  if(detailTelKlus!==k.id)return;
+  if(error){console.warn('Telefoonnummers ophalen mislukt:',error);return;}
+
+  const mij=CURRENT_USER?CURRENT_USER.id:null;
+  const rijen=(data||[])
+    .filter(p=>p.id!==mij)
+    .map(p=>({naam:p.naam,rol:PD_ROLLABEL[p.rol]||p.rol||'',telefoon:p.telefoon}))
+    .concat((k.losse||[]).filter(l=>l.telefoon).map(l=>({naam:l.naam,rol:'Losse kracht',telefoon:l.telefoon})));
+
+  if(!rijen.length)return;
+  vak.style.display='';
+  lijst.innerHTML=rijen.map(p=>{
+    const nr=telSchoon(p.telefoon);
+    return`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:500;color:var(--text)">${veiligTekst(p.naam)}</div>
+        <div style="font-size:11px;color:var(--muted)">${veiligTekst(p.rol)}</div>
+      </div>
+      ${nr
+        ?`<a href="tel:${nr}" style="flex-shrink:0;font-size:13px;color:#2563EB;text-decoration:none;font-weight:500">${veiligTekst(p.telefoon)}</a>`
+        :'<span style="flex-shrink:0;font-size:11px;color:var(--muted);font-style:italic">geen nummer bekend</span>'}
+    </div>`;
+  }).join('');
+}
 
 // ── MEDEDELINGEN ──
 // Verjaardagen komen automatisch tussen de mededelingen te staan. Ze staan
@@ -6827,8 +6889,10 @@ async function pbWijsToe(klusId,mwId){
   const heeftGemeld=AANMELDINGEN.some(a=>a.klus_id===klusId&&a.gebruiker_id===mwId&&a.status!=='afgewezen');
   if(!heeftGemeld){
     const c=magIngepland(mwId,klus.datum,mw.rol);
-    if(!c.ok){
-      const ok=await vraagOverleg(mw.naam,c.reden,false,klus.naam);
+    const ander=anderKlusOpDag(mwId,klus.datum,klusId);
+    if(!c.ok||ander){
+      const ok=await vraagOverleg(mw.naam,c.ok?'':c.reden,
+        ander?('staat die dag al op '+ander):'',klus.naam);
       if(!ok)return;
     }
   }
@@ -7034,8 +7098,11 @@ async function pbInternWijsToe(naam,mwId){
   if(!mw)return;
   const ds=pbFmt(pbSelDate);
   const c=magIngepland(mwId,ds,mw.rol);
-  if(!c.ok){
-    const ok=await vraagOverleg(mw.naam,c.reden,false,naam);
+  const bestaandeKlus=pbInternKlus(naam,pbSelDate);
+  const ander=anderKlusOpDag(mwId,ds,bestaandeKlus?bestaandeKlus.id:null);
+  if(!c.ok||ander){
+    const ok=await vraagOverleg(mw.naam,c.ok?'':c.reden,
+      ander?('staat die dag al op '+ander):'',naam);
     if(!ok)return;
   }
   const k=await pbInternZorgKlus(naam);
@@ -7089,11 +7156,10 @@ function pbInternHtml(){
     const t1=(k&&k.start_tijd?String(k.start_tijd).slice(0,5):INTERN_START);
     const t2=(k&&k.einde_klus?String(k.einde_klus).slice(0,5):INTERN_EIND);
     const isOpen=pbOpenDrop==='intern-'+naam;
-    const kanWel=[],kanNiet=[];
-    PERSONEEL.filter(p=>INTERN_ROLLEN.indexOf(p.rol)>=0&&!wie.some(w=>w.id===p.id)).forEach(p=>{
-      const c=magIngepland(p.id,ds,p.rol);
-      (c.ok?kanWel:kanNiet).push({...p,reden:c.reden});
-    });
+    const g=deelPersoneelIn(
+      PERSONEEL.filter(p=>INTERN_ROLLEN.indexOf(p.rol)>=0&&!wie.some(w=>w.id===p.id)),
+      ds, k?k.id:null);
+    const kanWel=g.vrij, alIngepland=g.ingepland, kanNiet=g.niet;
 
     html+='<div class="pb-klus" style="border-left-color:#6366F1">'
       +'<div class="pb-klus-hdr"><div><div class="pb-knaam">'+naam+'</div>'
@@ -7113,7 +7179,12 @@ function pbInternHtml(){
       html+='<div class="pb-dd">';
       if(kanWel.length)html+=kanWel.map(mw=>
         '<div class="pb-mw" onclick="pbInternWijsToe(\''+naam+'\',\''+mw.id+'\')"><div class="pb-av" style="background:#EEF2FF;color:#4338CA">'+initialen(mw.naam)+'</div><span class="pb-mwnaam">'+mw.naam+'</span><span class="pb-mwrol">'+mw.rol+'</span></div>').join('');
-      else html+='<div class="pb-mw" style="color:var(--muted);cursor:default">Niemand beschikbaar op deze dag</div>';
+      else html+='<div class="pb-mw" style="color:var(--muted);cursor:default">Niemand vrij op deze dag</div>';
+      if(alIngepland.length){
+        html+='<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px 4px">Staat al ingepland &mdash; vraagt om bevestiging</div>';
+        html+=alIngepland.map(mw=>
+          '<div class="pb-mw" onclick="pbInternWijsToe(\''+naam+'\',\''+mw.id+'\')" title="'+mw.naam+' '+mw.reden+'"><div class="pb-av" style="background:#FFFBEB;color:#B45309">'+initialen(mw.naam)+'</div><span class="pb-mwnaam">'+mw.naam+'</span><span class="pb-mwrol" style="color:#B45309">'+mw.reden+'</span></div>').join('');
+      }
       if(kanNiet.length){
         html+='<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px 4px">Niet beschikbaar &mdash; vraagt om bevestiging</div>';
         html+=kanNiet.map(mw=>
@@ -7159,12 +7230,11 @@ function pbRenderContent(){
     const aangemeldIds=new Set(AANMELDINGEN
       .filter(a=>a.klus_id===k.id&&a.status!=='afgewezen')
       .map(a=>a.gebruiker_id));
-    const gemeld=[], kanWel=[], kanNiet=[];
-    nogNiet.forEach(p=>{
-      if(aangemeldIds.has(p.id)){gemeld.push(p);return;}
-      const c=magIngepland(p.id,k.datum,p.rol);
-      (c.ok?kanWel:kanNiet).push({...p,reden:c.reden});
-    });
+    const gemeld=[];
+    const rest=[];
+    nogNiet.forEach(p=>aangemeldIds.has(p.id)?gemeld.push(p):rest.push(p));
+    const g=deelPersoneelIn(rest,k.datum,k.id);
+    const kanWel=g.vrij, alIngepland=g.ingepland, kanNiet=g.niet;
     const beschikbaar=gemeld.concat(kanWel);
     const isOpen=pbOpenDrop===k.id;const truckKleur=(k.trucks&&k.trucks.length)?k.trucks[0].color:'#6366F1';
     html+=`<div class="pb-klus ${st}"><div class="pb-klus-hdr"><div><div class="pb-knaam">${k.naam}${k.milieuzone?' <span class="bdg" style="background:#ECFDF5;color:#065F46;font-size:9px">Milieuzone</span>':''}</div><div class="pb-kloc">${k.adres||'Locatie onbekend'}</div></div><span class="pb-badge ${st}"><span class="pb-bdot"></span>${stLabel}</span></div>`;
@@ -7191,6 +7261,14 @@ function pbRenderContent(){
       if(gemeld.length)html+=kopje('Heeft zich aangemeld')+gemeld.map(mw=>regel(mw,'aangemeld ✋')).join('');
       if(kanWel.length)html+=kopje(gemeld.length?'Verder beschikbaar':'Beschikbaar')+kanWel.map(mw=>regel(mw)).join('');
       if(!beschikbaar.length)html+=`<div class="pb-mw" style="color:var(--muted);cursor:default">Niemand beschikbaar op deze dag</div>`;
+
+      if(alIngepland.length){
+        html+=kopje('Staat al ingepland — vraagt om bevestiging');
+        html+=alIngepland.map(mw=>{
+          const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+          return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}')" title="${mw.naam} ${mw.reden}"><div class="pb-av" style="background:#FFFBEB;color:#B45309">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol" style="color:#B45309">${mw.reden}</span></div>`;
+        }).join('');
+      }
 
       if(kanNiet.length){
         // Ook deze zijn aan te klikken: je krijgt dan eerst de vraag of je het
