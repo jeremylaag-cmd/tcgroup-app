@@ -56,6 +56,14 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .sidebar{background:var(--surface);border-right:1px solid var(--border);padding:1.25rem;overflow-y:auto}
 .main{padding:1.5rem;overflow-y:auto}
 .slabel{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.6rem}
+.klus-zoek{position:relative;margin-bottom:.875rem}
+.klus-zoek input{width:100%;font-size:13px;padding:9px 30px 9px 32px;border:1px solid var(--border);border-radius:9px;font-family:var(--font);background:var(--surface);color:var(--text);-webkit-appearance:none}
+.klus-zoek input:focus{outline:none;border-color:var(--text)}
+.klus-zoek input::-webkit-search-cancel-button,.klus-zoek input::-webkit-search-decoration{-webkit-appearance:none;appearance:none}
+.klus-zoek .kz-ico{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;pointer-events:none}
+.klus-zoek .kz-wis{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;color:var(--muted);font-size:15px;cursor:pointer;padding:2px 6px;line-height:1;display:none}
+.klus-zoek.aan .kz-wis{display:block}
+.klus-zoek-tel{font-size:11px;color:var(--muted);margin:-.5rem 0 .875rem}
 .wh{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-bottom:3px}
 .wh span{font-size:9px;color:var(--muted);text-align:center;font-weight:500}
 .cg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
@@ -882,6 +890,14 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         <button class="drawer-close" onclick="closeDrawer()">&#x2715;</button>
       </div>
       <div class="drawer-body">
+        <div class="klus-zoek" id="klusZoekVakMob">
+          <span class="kz-ico">&#128269;</span>
+          <input type="search" id="klusZoekMob" placeholder="Zoek een klus..." autocomplete="off"
+                 oninput="zetKlusZoek(this.value)"
+                 onkeydown="if(event.key==='Enter'){event.preventDefault();closeDrawer();}">
+          <button class="kz-wis" onclick="wisKlusZoek()" title="Wissen">&#x2715;</button>
+        </div>
+        <div class="klus-zoek-tel" id="klusZoekTelMob" style="display:none"></div>
         <div class="slabel">Agenda</div>
         <div class="wh"><span>Ma</span><span>Di</span><span>Wo</span><span>Do</span><span>Vr</span><span>Za</span><span>Zo</span></div>
         <div class="cg" id="calGrid"></div>
@@ -893,6 +909,13 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div class="layout">
       <!-- DESKTOP SIDEBAR (verborgen op mobiel) -->
       <div class="sidebar desk-only">
+        <div class="klus-zoek" id="klusZoekVakDesk">
+          <span class="kz-ico">&#128269;</span>
+          <input type="search" id="klusZoekDesk" placeholder="Zoek een klus..." autocomplete="off"
+                 oninput="zetKlusZoek(this.value)">
+          <button class="kz-wis" onclick="wisKlusZoek()" title="Wissen">&#x2715;</button>
+        </div>
+        <div class="klus-zoek-tel" id="klusZoekTelDesk" style="display:none"></div>
         <div class="slabel">Agenda</div>
         <div class="wh"><span>Ma</span><span>Di</span><span>Wo</span><span>Do</span><span>Vr</span><span>Za</span><span>Zo</span></div>
         <div class="cg" id="calGridDesk"></div>
@@ -2443,6 +2466,69 @@ function getMedWeekDates(){
   const s=new Date(today);s.setDate(s.getDate()-s.getDay()+1+(medWeekOffset*7));
   return Array.from({length:7},(_,i)=>{const d=new Date(s);d.setDate(s.getDate()+i);return d});
 }
+// ── ZOEKEN IN DE KLUSSEN ──────────────────────────────────────────────────
+// Zoekt door alles wat op een klus staat: naam, adres, contactpersoon, food,
+// trucks, notitie, wie erop staat en de datum (ook uitgeschreven, dus "12
+// september" of "zaterdag" werkt). Meerdere woorden gelden als "en".
+// Tijdens het zoeken tellen de gewone filters niet: je vindt ook klussen van
+// vroeger en Franklins-diensten, anders zoek je langs je antwoord heen.
+let KLUS_ZOEK='';
+
+function klusZoekTekst(k){
+  const d=parseDate(k.datum);
+  return [
+    k.naam,k.food,k.adres,k.contactpersoon,k.telefoon,k.notitie,
+    (k.trucks||[]).map(t=>t.label).join(' '),
+    (k.soorten||[]).map(x=>x.titel).join(' '),
+    (k.truckSoorten||[]).map(x=>x.soort&&x.soort.titel).join(' '),
+    (k.shifts||[]).map(x=>x.naam).join(' '),
+    (k.personeel||[]).map(x=>x.naam).join(' '),
+    (k.losse||[]).map(x=>x.naam).join(' '),
+    k.categorie==='franklins'?'franklins':'',
+    k.categorie==='intern'?'intern hal kantoor':'',
+    k.is_optie?'optie':'',
+    k.milieuzone?'milieuzone':'',
+    k.datum,k.datum_eind,
+    d?d.toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'',
+  ].filter(Boolean).join(' ').toLowerCase();
+}
+
+function klusVoldoetAanZoek(k,woorden){
+  const t=klusZoekTekst(k);
+  return woorden.every(w=>t.includes(w));
+}
+
+function zetKlusZoek(waarde){
+  KLUS_ZOEK=waarde||'';
+  // Een dagfilter en een zoekterm bijten elkaar; zoeken wint.
+  if(KLUS_ZOEK.trim())selDate=null;
+  ['klusZoekDesk','klusZoekMob'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el&&el.value!==KLUS_ZOEK)el.value=KLUS_ZOEK;
+  });
+  renderAll();
+}
+
+function wisKlusZoek(){
+  zetKlusZoek('');
+  const el=document.getElementById('klusZoekDesk');
+  if(el)el.focus();
+}
+
+function toonZoekTeller(aantal){
+  const zoekt=!!KLUS_ZOEK.trim();
+  [['klusZoekVakDesk','klusZoekTelDesk'],['klusZoekVakMob','klusZoekTelMob']].forEach(([vakId,telId])=>{
+    const vak=document.getElementById(vakId),tel=document.getElementById(telId);
+    if(vak)vak.className='klus-zoek'+(zoekt?' aan':'');
+    if(tel){
+      tel.style.display=zoekt?'':'none';
+      tel.textContent=zoekt
+        ?(aantal===0?'Geen klus gevonden':aantal===1?'1 klus gevonden':aantal+' klussen gevonden')
+        :'';
+    }
+  });
+}
+
 function changeWeek(dir){weekOffset=dir===0?0:weekOffset+dir;selDate=null;renderAll();}
 function changeMedWeek(dir){medWeekOffset=dir===0?0:medWeekOffset+dir;renderMededelingen(allMededelingen);}
 function toggleDate(ds){selDate=ds===selDate?null:ds;renderAll();}
@@ -3210,7 +3296,7 @@ function toonEerderBalk(){
   const vandaag=fmt(new Date());
   const aantal=KLUSSEN.filter(k=>k.categorie!=='franklins'&&(k.datum_eind||k.datum)<vandaag).length;
   const fAantal=KLUSSEN.filter(k=>k.categorie==='franklins'&&(k.datum_eind||k.datum)>=vandaag).length;
-  if(selDate){balk.innerHTML='';return;}
+  if(selDate||KLUS_ZOEK.trim()){balk.innerHTML='';return;}
 
   const knop=(tekst,fn)=>`<div onclick="${fn}" style="flex:1;cursor:pointer;text-align:center;font-size:12px;font-weight:500;color:var(--muted);background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:9px">${tekst}</div>`;
   let html='';
@@ -3284,20 +3370,26 @@ function renderAll(){
   const vandaagStr=fmt(new Date());
   // Franklins draait elke dag; die diensten zouden de kluslijst overspoelen.
   // Ze staan er alleen tussen als je erom vraagt, of als je een dag aanklikt.
+  const zoekWoorden=KLUS_ZOEK.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const zonderVast=KLUSSEN.filter(k=>toonFranklins||k.categorie!=='franklins');
   const basis=(!selDate&&!toonEerdereKlussen)
     ?zonderVast.filter(k=>(k.datum_eind||k.datum)>=vandaagStr)
     :zonderVast;
-  const filtered=selDate?KLUSSEN.filter(k=>klusDagen(k).includes(selDate)):basis;
-  document.getElementById('mainTitle').textContent=selDate
+  const filtered=zoekWoorden.length
+    ?KLUSSEN.filter(k=>klusVoldoetAanZoek(k,zoekWoorden))
+    :(selDate?KLUSSEN.filter(k=>klusDagen(k).includes(selDate)):basis);
+  toonZoekTeller(filtered.length);
+  document.getElementById('mainTitle').textContent=zoekWoorden.length
+    ?'Gevonden: '+KLUS_ZOEK.trim()
+    :selDate
     ?new Date(selDate).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})
     :(toonEerdereKlussen?'Alle klussen':'Klussen vanaf vandaag');
-  document.getElementById('btnClear').style.display=selDate?'':'none';
+  document.getElementById('btnClear').style.display=(selDate&&!zoekWoorden.length)?'':'none';
   const sorted=[...filtered].sort((a,b)=>a.datum.localeCompare(b.datum));
   const isBeheerder=CURRENT_ROL==='beheerder';
   toonEerderBalk();
 
-  document.getElementById('klusList').innerHTML=sorted.length===0?'<div class="empty">Geen klussen gepland</div>':sorted.map(k=>{
+  document.getElementById('klusList').innerHTML=sorted.length===0?`<div class="empty">${KLUS_ZOEK.trim()?'Geen klus gevonden voor "'+veiligTekst(KLUS_ZOEK.trim())+'"':'Geen klussen gepland'}</div>`:sorted.map(k=>{
     const ds=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
     const dsEind=k.datum_eind?parseDate(k.datum_eind).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}):'';
     const datumStr=dsEind&&dsEind!==ds?`${ds} – ${dsEind}`:ds;
