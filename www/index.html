@@ -5047,6 +5047,51 @@ function veiligTekst(t){
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// ── GEPLANDE TIJD BIJ EEN URENREGISTRATIE ────────────────────────────────
+// Om te kunnen zien of iemand langer of korter heeft gewerkt dan afgesproken.
+// Stond hij in een shift, dan gelden de tijden van die shift; anders die van de
+// klus zelf. Zonder tijden op de klus valt er niets te vergelijken.
+function geplandVoor(reg){
+  const k=(KLUSSEN||[]).find(x=>x.id===reg.klus_id);
+  if(!k)return null;
+  let van=null,tot=null,bron='';
+  const mij=(k.personeel||[]).find(p=>p.id===reg.gebruiker_id);
+  const sh=(mij&&mij.shift_id)?(k.shifts||[]).find(x=>x.id===mij.shift_id):null;
+  if(sh){van=sh.start_tijd;tot=sh.eind_tijd;bron=sh.naam||'shift';}
+  else{
+    van=k.start_tijd||k.vertrek_tijd||k.start_opbouw;
+    tot=k.einde_klus||k.einde_feest;
+    bron='klus';
+  }
+  if(!van||!tot)return null;
+  const naarMin=t=>{const d=String(t).split(':');return Number(d[0])*60+Number(d[1]||0);};
+  let duur=naarMin(tot)-naarMin(van);
+  if(duur<0)duur+=24*60;              // klus loopt door na middernacht
+  if(duur<=0)return null;
+  return{van:String(van).slice(0,5),tot:String(tot).slice(0,5),minuten:duur,bron};
+}
+
+// De geklokte tijd van deur tot deur: gewerkt plus pauze. Dat is wat je met het
+// geplande blok kunt vergelijken, want daar zit de pauze ook in.
+function geklokteMinuten(reg){
+  return (reg.totaal_minuten||0)+(reg.pauze_minuten||0);
+}
+
+// Onder een kwartier verschil noemen we het gelijk; dat is gewoon opruimen.
+const PLAN_MARGE=15;
+function planVerschil(reg){
+  const g=geplandVoor(reg);
+  if(!g)return null;
+  const d=geklokteMinuten(reg)-g.minuten;
+  return{
+    gepland:g,
+    verschil:d,
+    tekst: Math.abs(d)<=PLAN_MARGE ? 'zoals gepland'
+         : (d>0?'+':'−')+minToStr(Math.abs(d))+(d>0?' langer':' korter'),
+    afwijking: Math.abs(d)>PLAN_MARGE,
+  };
+}
+
 async function loadUrenBeheer(){
   // Beheerders klokken op dit tabblad ook zelf in en uit.
   if(CURRENT_ROL==='beheerder'){loadUrenPersoneel();laadNuIngeklokt();}
@@ -5077,6 +5122,7 @@ async function loadUrenBeheer(){
       // Gewerkte tijd is exclusief pauze; de klokkentijd is dus de som.
       const nodig=minimumPauze((r.totaal_minuten||0)+pauze);
       const teWeinig=pauze<nodig;
+      const pv=planVerschil(r);
       return`<div class="uur-item" id="uur-${r.id}">
         <div class="uur-item-info">
           <div class="uur-item-naam">${gMap[r.gebruiker_id]||'Onbekend'}${r.handmatig?' <span style="font-size:10px;font-weight:500;color:var(--muted)">(handmatig)</span>':''}</div>
@@ -5084,6 +5130,13 @@ async function loadUrenBeheer(){
           <div class="uur-item-sub" style="margin-top:2px;${teWeinig?'color:#B45309;font-weight:600':''}">
             Pauze: ${pauze} min${teWeinig?` — normaal ${nodig} min bij deze lengte`:''}
           </div>
+          ${pv
+            ?`<div class="uur-item-sub" style="margin-top:2px">
+                Gepland ${pv.gepland.van}–${pv.gepland.tot} · ${minToStr(pv.gepland.minuten)}
+                · geklokt ${minToStr(geklokteMinuten(r))}
+                <span style="font-weight:600;color:${pv.afwijking?(pv.verschil>0?'#B45309':'#B91C1C'):'#059669'}">${pv.tekst}</span>
+              </div>`
+            :`<div class="uur-item-sub" style="margin-top:2px;color:var(--muted)">Geen geplande tijd bekend</div>`}
           ${r.notitie_pers?`<div class="uur-item-sub" style="margin-top:4px;color:var(--text);font-weight:700">📝 ${veiligTekst(r.notitie_pers)}</div>`:''}
           ${r.notitie_beh?`<div class="uur-item-sub" style="margin-top:2px;font-style:italic">${veiligTekst(r.notitie_beh)}</div>`:''}
           ${r.locatie_in&&!r.locatie_in.includes('niet')&&!r.locatie_in.includes('geweigerd')?`<div class="uur-item-sub" style="margin-top:2px">In: ${r.locatie_in}${r.locatie_uit&&!r.locatie_uit.includes('niet')?' · Uit: '+r.locatie_uit:''}</div>`:''}
@@ -5598,7 +5651,7 @@ async function doeExport(){
       return g.length%2?g[m]:Math.round((g[m-1]+g[m])/2);
     };
 
-    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Pauze (min)','Duur','Uren (decimaal)','Klus','Samen met','Uren collega\'s','Verschil','Status','Handmatig','Locatie inklokken','Locatie uitklokken','Notitie medewerker','Notitie beheer']];
+    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Pauze (min)','Duur','Uren (decimaal)','Klus','Gepland','Gepland (duur)','Verschil met planning','Samen met','Uren collega\'s','Verschil','Status','Handmatig','Locatie inklokken','Locatie uitklokken','Notitie medewerker','Notitie beheer']];
     let totaalMin=0;
     const perPersoon={};
     let afwijkers=0;
@@ -5638,6 +5691,9 @@ async function doeExport(){
         minToStr(min),
         (min/60).toFixed(2).replace('.',','),
         klusVan[r.klus_id]||'',
+        (()=>{const pv=planVerschil(r);return pv?pv.gepland.van+'–'+pv.gepland.tot:'';})(),
+        (()=>{const pv=planVerschil(r);return pv?minToStr(pv.gepland.minuten):'';})(),
+        (()=>{const pv=planVerschil(r);return pv?(pv.afwijking?pv.tekst:'zoals gepland'):'';})(),
         samenMet,
         urenCollegas,
         verschil,
