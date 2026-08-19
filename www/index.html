@@ -846,11 +846,12 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         <label class="auth-label">Rijbewijs <span style="color:#DC2626">*</span> <span style="color:var(--muted);font-weight:400">(meerdere mogelijk)</span></label>
         <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px" id="regRijbewijsWrap">
           <button type="button" class="chip" data-rb="Geen" onclick="toggleRijbewijs(this)">Geen</button>
-          <button type="button" class="chip" data-rb="Scooter" onclick="toggleRijbewijs(this)">Scooter</button>
-          <button type="button" class="chip" data-rb="Auto" onclick="toggleRijbewijs(this)">Auto</button>
-          <button type="button" class="chip" data-rb="Aanhanger" onclick="toggleRijbewijs(this)">Aanhanger</button>
-          <button type="button" class="chip" data-rb="Vrachtwagen" onclick="toggleRijbewijs(this)">Vrachtwagen</button>
-          <button type="button" class="chip" data-rb="Vrachtwagen met aanhanger" onclick="toggleRijbewijs(this)">Vrachtwagen met aanhanger</button>
+          <button type="button" class="chip" data-rb="AM" onclick="toggleRijbewijs(this)">AM &middot; Scooter</button>
+          <button type="button" class="chip" data-rb="B" onclick="toggleRijbewijs(this)">B &middot; Auto</button>
+          <button type="button" class="chip" data-rb="BE" onclick="toggleRijbewijs(this)">BE &middot; Auto met aanhanger</button>
+          <button type="button" class="chip" data-rb="C1" onclick="toggleRijbewijs(this)">C1 &middot; Lichte vrachtwagen</button>
+          <button type="button" class="chip" data-rb="C" onclick="toggleRijbewijs(this)">C &middot; Vrachtwagen</button>
+          <button type="button" class="chip" data-rb="CE" onclick="toggleRijbewijs(this)">CE &middot; Vrachtwagen met aanhanger</button>
         </div>
         <input type="hidden" id="regRijbewijs">
       </div>
@@ -1446,7 +1447,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
   </div>
 
   <!-- Rijschema van een klus -->
-  <div class="modal-overlay" id="rijschemaOverlay" onclick="if(event.target===this)sluitRijschema()">
+  <div class="modal-overlay" id="rijschemaOverlay" style="z-index:420" onclick="if(event.target===this)sluitRijschema()">
     <div class="modal" style="max-width:600px">
       <div class="modal-title" id="rsTitel">Rijschema</div>
       <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:1rem">
@@ -2294,7 +2295,8 @@ async function doRegister(){
   const email=document.getElementById('regEmail').value.trim();
   const pw=document.getElementById('regPw').value;
   const maat=document.getElementById('regMaat').value;
-  const rijbewijs=document.getElementById('regRijbewijs').value;
+  const rijbewijsRuw=document.getElementById('regRijbewijs').value;
+  const rijbewijs=rijbewijsRuw==='Geen'?'':rijbewijsRuw;
   const err=document.getElementById('authErr');
   const msg=document.getElementById('authMsg');
   err.style.display='none';msg.style.display='none';
@@ -2303,7 +2305,7 @@ async function doRegister(){
   if(!email){err.textContent='Vul je e-mailadres in.';err.style.display='block';return;}
   if(pw.length<6){err.textContent='Wachtwoord moet minimaal 6 tekens zijn.';err.style.display='block';return;}
   if(!maat){err.textContent='Selecteer je shirtmaat.';err.style.display='block';return;}
-  if(!rijbewijs){err.textContent='Selecteer je rijbewijs (kies "Geen" als je geen rijbewijs hebt).';err.style.display='block';return;}
+  if(!rijbewijsRuw){err.textContent='Selecteer je rijbewijs (kies "Geen" als je geen rijbewijs hebt).';err.style.display='block';return;}
   const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{naam}}});
   if(error){err.textContent=error.message;err.style.display='block';return;}
   if(data.user){
@@ -2819,7 +2821,10 @@ function toggleRijbewijs(btn){
     if(regRijbewijsSet.has(val)){regRijbewijsSet.delete(val);btn.classList.remove('on');}
     else{regRijbewijsSet.add(val);btn.classList.add('on');}
   }
-  document.getElementById('regRijbewijs').value=[...regRijbewijsSet].join(', ');
+  // "Geen" is wel een antwoord, maar wordt straks leeg opgeslagen.
+  const codes=[...regRijbewijsSet].filter(x=>x!=='Geen');
+  document.getElementById('regRijbewijs').value=regRijbewijsSet.has('Geen')
+    ?'Geen':rijbewijsSorteer(codes).join(', ');
 }
 
 // ── SKILLS BEHEER ──
@@ -2854,6 +2859,32 @@ async function deleteSkill(id){
   await sb.from('skills').delete().eq('id',id);
   await loadSkills();
 }
+
+// ── RIJBEWIJZEN ───────────────────────────────────────────────────────────
+// Vroeger typte iedereen zelf iets als "Auto" of "vrachtwagen + aanhanger".
+// Bij een truck leggen we de categorie vast (B, BE, C…), dus die twee kwamen
+// nooit bij elkaar. Nu kies je uit deze lijst en matcht het rijschema wel.
+const RIJBEWIJZEN={
+  AM:'Scooter', B:'Auto', BE:'Auto met aanhanger',
+  C1:'Lichte vrachtwagen', C1E:'Lichte vrachtwagen met aanhanger',
+  C:'Vrachtwagen', CE:'Vrachtwagen met aanhanger',
+};
+const RIJBEWIJS_VOLGORDE=['AM','B','BE','C1','C1E','C','CE'];
+
+function rijbewijsSorteer(codes){
+  return RIJBEWIJS_VOLGORDE.filter(c=>codes.includes(c))
+    .concat(codes.filter(c=>!RIJBEWIJS_VOLGORDE.includes(c)));
+}
+function rijbewijsLijst(tekst){
+  return String(tekst||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean);
+}
+// "B, BE" wordt "B (auto), BE (auto met aanhanger)"
+function rijbewijsTekst(tekst){
+  const l=rijbewijsSorteer(rijbewijsLijst(tekst));
+  if(!l.length)return '';
+  return l.map(c=>RIJBEWIJZEN[c]?c+' ('+RIJBEWIJZEN[c].toLowerCase()+')':c).join(', ');
+}
+function rijbewijsKort(tekst){return rijbewijsSorteer(rijbewijsLijst(tekst)).join(', ');}
 
 // ── ACCOUNTS (uitgebreid) ──
 let ACCOUNTS=[];
@@ -2966,7 +2997,7 @@ function renderAccounts(){
   const zoektPast=u=>{
     if(!zoek)return true;
     const hooiberg=[u.naam,rolLabels[u.rol]||u.rol,u.telefoon,u.email,u.plaats,u.straat,
-      u.shirtmaat,u.rijbewijs,u.contractvorm,...skillNamenVan(u)]
+      u.shirtmaat,u.rijbewijs,rijbewijsTekst(u.rijbewijs),u.contractvorm,...skillNamenVan(u)]
       .filter(Boolean).join(' ').toLowerCase();
     return zoek.split(/\s+/).every(woord=>hooiberg.includes(woord));
   };
@@ -3003,7 +3034,7 @@ function renderAccounts(){
             <span>${rolLabels[u.rol]||u.rol}</span>
             ${u.telefoon?`<span>${u.telefoon}</span>`:''}
             ${u.shirtmaat?`<span>👕 ${u.shirtmaat}</span>`:''}
-            ${u.rijbewijs?`<span>🚗 ${u.rijbewijs}</span>`:''}
+            ${u.rijbewijs?`<span title="${veiligTekst(rijbewijsTekst(u.rijbewijs))}">🚗 ${veiligTekst(rijbewijsKort(u.rijbewijs))}</span>`:''}
           </div>
           ${skillNames.length?`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">${skillNames.map(n=>`<span style="font-size:10px;background:#F0FDF4;color:#166534;border:1px solid #BBF7D0;border-radius:20px;padding:1px 7px;font-weight:500">${n}</span>`).join('')}</div>`:''}
         </div>
@@ -3064,7 +3095,7 @@ async function exportPersoneel(){
         contractLabel[u.contractvorm]||'',
         u.uurloon!=null?Number(u.uurloon).toFixed(2).replace('.',','):'',
         u.shirtmaat||'',
-        u.rijbewijs||'',
+        rijbewijsTekst(u.rijbewijs),
         ids.map(id=>skillNaam[id]).filter(Boolean).join(', ')
       ]);
     });
@@ -3169,7 +3200,7 @@ function pdRenderZij(){
      ${rij('&#9742;',u.telefoon?`<a href="tel:${u.telefoon}">${u.telefoon}</a>`:'')}
      ${rij('&#9873;',adres)}
      ${rij('&#128085;',u.shirtmaat)}
-     ${rij('&#128663;',u.rijbewijs)}
+     ${rij('&#128663;',rijbewijsTekst(u.rijbewijs))}
      ${namen.length?`<div style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:4px">${namen.map(n=>`<span style="font-size:10px;background:#F0FDF4;color:#166534;border:1px solid #BBF7D0;border-radius:20px;padding:2px 8px;font-weight:500">${n}</span>`).join('')}</div>`:''}
      <button class="btn-ghost" style="width:100%;margin-top:1.25rem;justify-content:center" onclick="pdToon('gegevens',document.querySelectorAll('.pd-tab')[3])">Gegevens bewerken</button>`;
 }
@@ -3402,8 +3433,13 @@ function pdRenderGegevens(){
            ${['XS','S','M','L','XL','XXL','XXXL','XXXXL'].map(m=>`<option value="${m}"${u.shirtmaat===m?' selected':''}>${m}</option>`).join('')}
          </select>
        </div>
-       <div class="fr"><span class="fl">Rijbewijs</span>
-         <input type="text" id="pdRijbewijs" value="${(u.rijbewijs||'').replace(/"/g,'&quot;')}" placeholder="bv. B, BE" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       <div class="fr"><span class="fl">Rijbewijs <span style="color:var(--muted);font-weight:400">(meerdere mogelijk)</span></span>
+         <div class="chips" id="pdRijbewijsWrap">
+           ${RIJBEWIJS_VOLGORDE.map(c=>{
+             const aan=rijbewijsLijst(u.rijbewijs).includes(c);
+             return`<div class="chip${aan?' on':''}" data-pdrb="${c}" onclick="pdToggleRijbewijs(this)">${c} &middot; ${RIJBEWIJZEN[c]}</div>`;
+           }).join('')}
+         </div>
        </div>
      </div>
      <div class="two">
@@ -3446,6 +3482,8 @@ function pdRenderGegevens(){
      </div>`;
 }
 
+function pdToggleRijbewijs(el){el.classList.toggle('on');}
+
 async function savePersDetail(){
   const uid=persDetailId;if(!uid)return;
   const naam=document.getElementById('pdNaam').value.trim();
@@ -3456,7 +3494,8 @@ async function savePersDetail(){
   const postcode=document.getElementById('pdPostcode').value.trim();
   const plaats=document.getElementById('pdPlaats').value.trim();
   const shirtmaat=document.getElementById('pdMaat').value;
-  const rijbewijs=document.getElementById('pdRijbewijs').value.trim();
+  const rijbewijs=rijbewijsSorteer(
+    [...document.querySelectorAll('#pdRijbewijsWrap .chip.on')].map(el=>el.dataset.pdrb)).join(', ');
   const geslacht=document.getElementById('pdGeslacht').value||null;
   const geboortedatum=document.getElementById('pdGeboortedatum').value||null;
   const contractvorm=document.getElementById('pdContract').value||null;
