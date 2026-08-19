@@ -1445,6 +1445,94 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     </div>
   </div>
 
+  <!-- Truck of aanhanger bewerken -->
+  <div class="modal-overlay" id="truckOverlay" onclick="if(event.target===this)sluitTruck()">
+    <div class="modal" style="max-width:560px">
+      <div class="modal-title" id="truckTitel">Truck bewerken</div>
+
+      <div style="display:flex;gap:10px;align-items:flex-end;margin-bottom:.875rem">
+        <div class="fr" style="margin-bottom:0;flex:1"><span class="fl">Naam <span style="color:#DC2626">*</span></span>
+          <input type="text" id="trNaam" placeholder="bv. Cr&ecirc;pe 1"></div>
+        <div class="fr" style="margin-bottom:0"><span class="fl">Kleur</span>
+          <input type="color" id="trKleur" style="width:46px;height:38px;padding:2px;border:1px solid var(--border);border-radius:8px;cursor:pointer"></div>
+      </div>
+
+      <div class="two">
+        <div class="fr"><span class="fl">Soort</span>
+          <select id="trSoort" onchange="truckSoortGewijzigd()">
+            <option value="voertuig">Voertuig &mdash; rijdt zelf</option>
+            <option value="aanhanger">Aanhanger &mdash; heeft een auto ervoor nodig</option>
+          </select>
+        </div>
+        <div class="fr"><span class="fl">Kenteken</span>
+          <input type="text" id="trKenteken" placeholder="bv. 12-ABC-3" style="text-transform:uppercase"></div>
+      </div>
+
+      <div class="two">
+        <div class="fr"><span class="fl">Rijbewijs nodig</span>
+          <select id="trRijbewijs">
+            <option value="">&mdash;</option>
+            <option value="B">B</option>
+            <option value="BE">BE</option>
+            <option value="C1">C1</option>
+            <option value="C1E">C1E</option>
+            <option value="C">C</option>
+            <option value="CE">CE</option>
+          </select>
+        </div>
+        <div class="fr" id="trZitRij"><span class="fl">Zitplaatsen</span>
+          <input type="number" id="trZit" min="0" max="20" inputmode="numeric" placeholder="bv. 3"></div>
+      </div>
+
+      <div class="two">
+        <div class="fr" id="trBrandstofRij"><span class="fl">Brandstof</span>
+          <select id="trBrandstof">
+            <option value="">&mdash;</option>
+            <option value="benzine">Benzine</option>
+            <option value="diesel">Diesel</option>
+            <option value="elektrisch">Elektrisch</option>
+            <option value="hybride">Hybride</option>
+            <option value="lpg">LPG</option>
+            <option value="geen">Geen (rijdt niet zelf)</option>
+          </select>
+        </div>
+        <div class="fr"><span class="fl">Afmetingen in cm <span style="color:var(--muted);font-weight:400">(l &times; b &times; h)</span></span>
+          <div style="display:flex;gap:6px">
+            <input type="number" id="trLengte" min="0" max="2000" inputmode="numeric" placeholder="520" style="flex:1;min-width:0">
+            <input type="number" id="trBreedte" min="0" max="500" inputmode="numeric" placeholder="210" style="flex:1;min-width:0">
+            <input type="number" id="trHoogte" min="0" max="500" inputmode="numeric" placeholder="280" style="flex:1;min-width:0">
+          </div>
+        </div>
+      </div>
+
+      <div class="fr">
+        <span class="fl">Vinkjes</span>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;cursor:pointer">
+          <input type="checkbox" id="trMilieuzone" style="width:16px;height:16px"> Mag een milieuzone in
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;cursor:pointer" id="trHeffingRij">
+          <input type="checkbox" id="trHeffing" style="width:16px;height:16px"> Kilometerheffing van toepassing
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;padding:5px 0;cursor:pointer">
+          <input type="checkbox" id="trTrekhaak" style="width:16px;height:16px"> Heeft een trekhaak
+        </label>
+      </div>
+
+      <div class="fr" id="trMzNoteRij" style="display:none"><span class="fl">Waarom niet de milieuzone in?</span>
+        <input type="text" id="trMzNote" placeholder="bv. diesel euro 4, geen ontheffing"></div>
+
+      <div class="fr"><span class="fl">Notitie</span>
+        <input type="text" id="trNotitie" placeholder="bv. banden vervangen in maart"></div>
+
+      <div class="warn-box" id="trWarn"></div>
+      <div class="mfooter" style="margin-top:1rem">
+        <button class="btn-danger-sm" id="trVerwijderKnop" onclick="verwijderTruckUitVenster()">Verwijderen</button>
+        <button class="btn-ghost" onclick="sluitTruck()">Annuleren</button>
+        <button class="btn-sm" id="trOpslaanKnop" onclick="bewaarTruck()">Opslaan</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-overlay" id="optieOverlay" onclick="if(event.target===this)sluitOptie()">
     <div class="modal" style="max-width:420px">
       <div class="modal-title">Optie in de agenda</div>
@@ -1694,7 +1782,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         Kijk dan even welke truck er naar binnen mag voordat je hem hieronder koppelt.
       </div>
     </div>
-    <div class="fr"><span class="fl">Trucks <span style="color:var(--muted);font-weight:400">(optioneel)</span></span><div class="chips" id="truckChips"></div><div class="chip-warn" id="truckWarn"></div></div>
+    <div class="fr"><span class="fl">Trucks <span style="color:var(--muted);font-weight:400">(optioneel)</span></span><div class="chips" id="truckChips"></div><div class="chip-warn" id="truckWarn"></div><div id="truckInfo" style="font-size:11px;color:var(--muted);margin-top:6px"></div></div>
     <div class="fr"><span class="fl">Tijden <span style="color:#DC2626">*</span></span>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px">
         Starttijd en einde klus vormen samen de dienst — daarmee rekent de app de ingeplande uren uit.
@@ -3659,8 +3747,51 @@ function getBezette(datum){
 }
 function renderTruckChips(bezette){
   const tc=document.getElementById('truckChips');if(!tc)return;
-  tc.innerHTML=TRUCKS.map(t=>{const on=formTrucks.includes(t.id);const warn=bezette.includes(t.id)&&!on;
-    return`<div class="chip${on?' on':''}${warn?' warn':''}" onclick="toggleTruck('${t.id}')">${t.label}${warn?' ⚠':''}</div>`;}).join('');
+  bezette=bezette||[];
+  tc.innerHTML=TRUCKS.map(t=>{
+    const on=formTrucks.includes(t.id);
+    const warn=bezette.includes(t.id)&&!on;
+    const merk=(isAanhanger(t)?' 🛒':'')+(t.rijbewijs&&t.rijbewijs!=='B'?' '+t.rijbewijs:'');
+    const titel=[isAanhanger(t)?'Aanhanger — heeft een auto met trekhaak nodig':'',
+      t.kenteken?'Kenteken '+t.kenteken:'',
+      t.zitplaatsen!=null&&!isAanhanger(t)?t.zitplaatsen+' zitplaatsen':'',
+      t.rijbewijs?'Rijbewijs '+t.rijbewijs:'',
+      t.milieuzone_ok===false?'Mag de milieuzone niet in':'',
+      warn?'Al ingepland op deze dag':''].filter(Boolean).join(' · ');
+    return`<div class="chip${on?' on':''}${warn?' warn':''}" title="${titel}" onclick="toggleTruck('${t.id}')">${t.label}${merk}${warn?' ⚠':''}</div>`;
+  }).join('');
+  renderTruckInfo();
+}
+
+// Een aanhanger rijdt niet zelf. Kies je er een zonder auto met trekhaak, dan
+// zeggen we dat — tegenhouden doen we niet, want misschien haal je er een.
+function renderTruckInfo(){
+  const el=document.getElementById('truckInfo');
+  if(!el)return;
+  const gekozen=(TRUCKS||[]).filter(t=>formTrucks.includes(t.id));
+  if(!gekozen.length){el.innerHTML='';return;}
+
+  const aanhangers=gekozen.filter(isAanhanger);
+  const trekkers=gekozen.filter(t=>!isAanhanger(t)&&t.trekhaak);
+  const zitplaatsen=gekozen.filter(t=>!isAanhanger(t))
+    .reduce((n,t)=>n+(Number(t.zitplaatsen)||0),0);
+  const geenMz=gekozen.filter(t=>t.milieuzone_ok===false);
+  const zwaarsteRijbewijs=['CE','C','C1E','C1','BE','B']
+    .find(r=>gekozen.some(t=>t.rijbewijs===r));
+
+  let uit=[];
+  if(zitplaatsen)uit.push(zitplaatsen+' zitplaats'+(zitplaatsen===1?'':'en'));
+  if(zwaarsteRijbewijs)uit.push('rijbewijs '+zwaarsteRijbewijs+' nodig');
+  let html=uit.length?`<div>${uit.join(' · ')}</div>`:'';
+
+  if(aanhangers.length&&aanhangers.length>trekkers.length){
+    html+=`<div style="color:#B45309;font-weight:600;margin-top:3px">⚠ ${aanhangers.length===1?'De aanhanger':aanhangers.length+' aanhangers'} ${aanhangers.length===1?'heeft':'hebben'} een auto met trekhaak nodig`
+      +(trekkers.length?` — er ${trekkers.length===1?'staat er 1':'staan er '+trekkers.length} gekozen`:' — je hebt er nog geen gekozen')+'.</div>';
+  }
+  if(geenMz.length){
+    html+=`<div style="color:#B45309;margin-top:3px">${geenMz.map(t=>veiligTekst(t.label)).join(', ')} mag de milieuzone niet in.</div>`;
+  }
+  el.innerHTML=html;
 }
 // Op welke andere klus van dezelfde dag staat deze persoon al? Geeft de naam
 // van die klus terug, of een lege tekst als hij nog nergens staat.
@@ -3787,7 +3918,7 @@ function toggleTruck(id){
   if(!formTrucks.includes(id)&&trucks.includes(id)){showWarn(`⚠ ${TRUCKS.find(t=>t.id===id)?.label} staat al ingepland.`);return;}
   formTrucks=formTrucks.includes(id)?formTrucks.filter(x=>x!==id):[...formTrucks,id];
   if(!formTrucks.includes(id))delete formTruckSoorten[id];
-  renderTruckChips(trucks);renderTruckSoortBlocks();
+  renderTruckChips(trucks);renderTruckSoortBlocks();renderTruckInfo();
   document.getElementById('warnBox').className='warn-box';
 }
 async function togglePers(id){
@@ -4329,7 +4460,9 @@ function openDetail(id){
     +(k.is_optie?' <span class="bdg" style="background:#EEF2FF;color:#3730A3;border:1px dashed #A5B4FC;vertical-align:middle">Optie</span>':'');
   document.getElementById('detailTijden').innerHTML=tijdLines.map(t=>`<div style="font-size:14px;font-weight:600;color:var(--text)">${t}</div>`).join('');
   document.getElementById('detailDatum').textContent=datumStr;
-  document.getElementById('detailTrucks').innerHTML=k.trucks.map(t=>`<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${t.label}</span>`).join('');
+  document.getElementById('detailTrucks').innerHTML=k.trucks.map(t=>
+    `<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${veiligTekst(t.label)}</span>`).join('')
+    +(k.trucks.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">${k.trucks.map(t=>truckBadges(t,true)).join('')}</div>`:'');
   const soortEl=document.getElementById('detailSoort');
   if(k.truckSoorten&&k.truckSoorten.length){
     const byTruck={};k.truckSoorten.forEach(ts=>{if(!byTruck[ts.truck.id])byTruck[ts.truck.id]={truck:ts.truck,soorten:[]};byTruck[ts.truck.id].soorten.push(ts.soort.titel);});
@@ -4557,7 +4690,16 @@ async function deleteMed(id){
 
 // ── BEHEER ──
 function renderBeheer(){
-  document.getElementById('truckBeheer').innerHTML=TRUCKS.map(t=>`<div class="bi" id="tb-${t.id}"><div class="bi-left"><div class="bi-name"><div class="cswatch" style="background:${t.color}"></div>${t.label}</div></div><div class="bi-actions"><button class="btn-edit" onclick="startEditTruck('${t.id}')">Bewerk</button><button class="btn-danger-sm" onclick="deleteTruck('${t.id}')">×</button></div></div>`).join('');
+  document.getElementById('truckBeheer').innerHTML=TRUCKS.map(t=>
+    `<div class="bi" id="tb-${t.id}">
+      <div class="bi-left">
+        <div class="bi-name"><div class="cswatch" style="background:${t.color}"></div>${veiligTekst(t.label)}</div>
+        <div class="bi-desc" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:4px">${truckBadges(t)}</div>
+      </div>
+      <div class="bi-actions">
+        <button class="btn-edit" onclick="openTruck('${t.id}')">Bewerk</button>
+      </div>
+    </div>`).join('');
   document.getElementById('soortenBeheer').innerHTML=SOORTEN.map(s=>`<div class="bi" id="sb-${s.id}"><div class="bi-left"><div class="bi-name">${s.titel}</div>${s.beschrijving?`<div class="bi-desc">${s.beschrijving}</div>`:''}</div><div class="bi-actions"><button class="btn-edit" onclick="startEditSoort('${s.id}')">Bewerk</button><button class="btn-danger-sm" onclick="deleteSoort('${s.id}')">×</button></div></div>`).join('');
   loadSkills();
   renderVasteDiensten();
@@ -4743,13 +4885,164 @@ function franklinsUitslagHtml(u,vooraf){
   </div>`;
 }
 
-function startEditTruck(id){
-  const t=TRUCKS.find(x=>x.id===id);
-  document.getElementById('tb-'+id).innerHTML=`<div style="flex:1"><div class="bi-edit-form"><div style="display:flex;gap:6px;align-items:center"><input type="color" id="ec-${id}" value="${t.color}" style="width:32px;height:32px;border:1px solid var(--border);border-radius:5px;cursor:pointer;padding:1px"><input type="text" id="en-${id}" value="${t.label}" style="flex:1;font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:var(--font)"></div><div class="bi-edit-row"><button class="btn-danger-sm" onclick="renderBeheer()">Annuleer</button><button class="btn-sm" onclick="saveTruck('${id}')">Opslaan</button></div></div></div>`;
+// ── TRUCKS EN AANHANGERS ─────────────────────────────────────────────────
+// Een aanhanger rijdt niet zelf en heeft dus altijd een auto met trekhaak
+// ervoor nodig. Dat onderscheid zit in het veld soort.
+const TRUCK_BRANDSTOF={benzine:'Benzine',diesel:'Diesel',elektrisch:'Elektrisch',
+  hybride:'Hybride',lpg:'LPG',geen:'Rijdt niet zelf'};
+
+function isAanhanger(t){return t&&t.soort==='aanhanger';}
+
+function truckMaten(t){
+  const m=n=>(Number(n)/100).toFixed(2).replace('.',',');
+  if(!t.lengte_cm&&!t.breedte_cm&&!t.hoogte_cm)return '';
+  return [t.lengte_cm,t.breedte_cm,t.hoogte_cm].map(n=>n?m(n):'?').join(' × ')+' m';
 }
-async function saveTruck(id){const label=document.getElementById('en-'+id).value.trim();const color=document.getElementById('ec-'+id).value;if(!label)return;await sb.from('trucks').update({label,color}).eq('id',id);await loadAll();renderBeheer();}
-async function addTruck(){const label=document.getElementById('newTruckName').value.trim();const color=document.getElementById('newTruckColor').value;if(!label)return;await sb.from('trucks').insert({label,color,volgorde:TRUCKS.length+1});document.getElementById('newTruckName').value='';await loadAll();renderBeheer();}
-async function deleteTruck(id){if(!confirm('Truck verwijderen?'))return;await sb.from('klus_trucks').delete().eq('truck_id',id);await sb.from('klus_truck_soorten').delete().eq('truck_id',id);await sb.from('trucks').delete().eq('id',id);await loadAll();renderBeheer();}
+
+// De regels onder de naam in Beheer, en dezelfde blokjes bij het kiezen van
+// trucks op een klus.
+function truckBadges(t,kort){
+  const b=(tekst,bg,kl,titel)=>`<span class="bdg" style="background:${bg};color:${kl}"${titel?` title="${titel}"`:''}>${tekst}</span>`;
+  let uit='';
+  if(isAanhanger(t))uit+=b('Aanhanger','#FFFBEB','#B45309','Heeft een auto met trekhaak nodig');
+  if(t.kenteken)uit+=b(veiligTekst(String(t.kenteken).toUpperCase()),'#F3F4F6','#374151');
+  if(t.rijbewijs)uit+=b('Rijbewijs '+veiligTekst(t.rijbewijs),'#EEF2FF','#3730A3');
+  if(t.zitplaatsen!=null&&!isAanhanger(t))uit+=b(t.zitplaatsen+' zitplaats'+(t.zitplaatsen===1?'':'en'),'#F0FDF4','#166534');
+  if(kort)return uit;
+  if(t.brandstof&&TRUCK_BRANDSTOF[t.brandstof])uit+=b(TRUCK_BRANDSTOF[t.brandstof],'#F3F4F6','#374151');
+  if(!t.milieuzone_ok)uit+=b('Geen milieuzone','#FEF2F2','#991B1B',t.milieuzone_note||'Mag de milieuzone niet in');
+  if(t.kilometerheffing)uit+=b('Kilometerheffing','#FFFBEB','#B45309');
+  if(t.trekhaak)uit+=b('Trekhaak','#F0FDF4','#166534');
+  const maten=truckMaten(t);
+  if(maten)uit+=b(maten,'#F3F4F6','#374151','Lengte × breedte × hoogte');
+  if(t.notitie)uit+=b('📝','#F3F4F6','#374151',veiligTekst(t.notitie));
+  return uit;
+}
+
+let truckBewerktId=null;
+
+function truckSoortGewijzigd(){
+  const aanhanger=document.getElementById('trSoort').value==='aanhanger';
+  ['trZitRij','trBrandstofRij','trHeffingRij'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.style.display=aanhanger?'none':'';
+  });
+  const mz=document.getElementById('trMilieuzone');
+  const note=document.getElementById('trMzNoteRij');
+  if(mz&&note)note.style.display=mz.checked?'none':'';
+}
+
+function openTruck(id){
+  if(CURRENT_ROL!=='beheerder')return;
+  const t=id?TRUCKS.find(x=>x.id===id):null;
+  truckBewerktId=id||null;
+  const zet=(veld,waarde)=>{const el=document.getElementById(veld);if(el)el.value=waarde==null?'':waarde;};
+  const vink=(veld,aan)=>{const el=document.getElementById(veld);if(el)el.checked=!!aan;};
+
+  document.getElementById('truckTitel').textContent=t?(t.label||'Truck')+' bewerken':'Nieuwe truck of aanhanger';
+  zet('trNaam',t?t.label:'');
+  zet('trKleur',t&&t.color?t.color:'#6366F1');
+  zet('trSoort',t?(t.soort||'voertuig'):'voertuig');
+  zet('trKenteken',t?t.kenteken:'');
+  zet('trRijbewijs',t?t.rijbewijs:'');
+  zet('trZit',t&&t.zitplaatsen!=null?t.zitplaatsen:'');
+  zet('trBrandstof',t?t.brandstof:'');
+  zet('trLengte',t?t.lengte_cm:'');
+  zet('trBreedte',t?t.breedte_cm:'');
+  zet('trHoogte',t?t.hoogte_cm:'');
+  zet('trMzNote',t?t.milieuzone_note:'');
+  zet('trNotitie',t?t.notitie:'');
+  vink('trMilieuzone',t?t.milieuzone_ok!==false:true);
+  vink('trHeffing',t?t.kilometerheffing:false);
+  vink('trTrekhaak',t?t.trekhaak:false);
+
+  const mz=document.getElementById('trMilieuzone');
+  if(mz)mz.onchange=truckSoortGewijzigd;
+  document.getElementById('trVerwijderKnop').style.display=t?'':'none';
+  document.getElementById('trWarn').className='warn-box';
+  truckSoortGewijzigd();
+  document.getElementById('truckOverlay').classList.add('open');
+  setTimeout(()=>{const n=document.getElementById('trNaam');if(n&&!t)n.focus();},80);
+}
+
+function sluitTruck(){document.getElementById('truckOverlay').classList.remove('open');truckBewerktId=null;}
+
+async function bewaarTruck(){
+  const wb=document.getElementById('trWarn');
+  const getal=id=>{const v=document.getElementById(id).value;return v===''?null:Number(v);};
+  const label=document.getElementById('trNaam').value.trim();
+  if(!label){wb.textContent='Vul een naam in.';wb.className='warn-box show';return;}
+
+  const rij={
+    label,
+    color:document.getElementById('trKleur').value,
+    soort:document.getElementById('trSoort').value,
+    kenteken:document.getElementById('trKenteken').value.trim().toUpperCase(),
+    rijbewijs:document.getElementById('trRijbewijs').value,
+    zitplaatsen:getal('trZit'),
+    brandstof:document.getElementById('trBrandstof').value,
+    milieuzone_ok:document.getElementById('trMilieuzone').checked,
+    milieuzone_note:document.getElementById('trMzNote').value.trim(),
+    kilometerheffing:document.getElementById('trHeffing').checked,
+    trekhaak:document.getElementById('trTrekhaak').checked,
+    lengte_cm:getal('trLengte'),
+    breedte_cm:getal('trBreedte'),
+    hoogte_cm:getal('trHoogte'),
+    notitie:document.getElementById('trNotitie').value.trim(),
+  };
+
+  if(!slotPak('truck'))return;
+  const knop=document.getElementById('trOpslaanKnop');
+  if(knop)knop.disabled=true;
+  const{error}=truckBewerktId
+    ?await sb.from('trucks').update(rij).eq('id',truckBewerktId)
+    :await sb.from('trucks').insert({...rij,volgorde:(TRUCKS||[]).length+1});
+  slotLos('truck');
+  if(knop)knop.disabled=false;
+  if(error){wb.textContent='Opslaan mislukt: '+error.message;wb.className='warn-box show';return;}
+
+  sluitTruck();
+  toast('Opgeslagen');
+  await loadAll();
+  renderBeheer();
+  renderAll();
+}
+
+async function verwijderTruckUitVenster(){
+  if(!truckBewerktId)return;
+  const t=TRUCKS.find(x=>x.id===truckBewerktId);
+  const inGebruik=(KLUSSEN||[]).filter(k=>(k.trucks||[]).some(x=>x.id===truckBewerktId)).length;
+  const ok=await vraagBevestiging('Verwijderen?',
+    '<div style="margin-bottom:8px">'+veiligTekst(t?t.label:'Deze truck')+' wordt weggehaald.</div>'
+    +(inGebruik?`<div style="color:#B91C1C;font-weight:500">Let op: hij staat op ${inGebruik} klus${inGebruik===1?'':'sen'}; daar verdwijnt hij dan ook van.</div>`
+               :'<div style="color:var(--muted)">Hij staat op dit moment op geen enkele klus.</div>'),
+    'Ja, verwijderen');
+  if(!ok)return;
+  await sb.from('klus_trucks').delete().eq('truck_id',truckBewerktId);
+  await sb.from('klus_truck_soorten').delete().eq('truck_id',truckBewerktId);
+  const{error}=await sb.from('trucks').delete().eq('id',truckBewerktId);
+  if(error){toast('Verwijderen mislukt: '+error.message,'fout');return;}
+  sluitTruck();
+  toast('Verwijderd');
+  await loadAll();
+  renderBeheer();
+  renderAll();
+}
+
+// De snelle toevoegregel maakt hem aan en zet meteen het venster open, zodat je
+// de rest van de gegevens erbij kunt zetten.
+async function addTruck(){
+  const label=document.getElementById('newTruckName').value.trim();
+  const color=document.getElementById('newTruckColor').value;
+  if(!label){openTruck(null);return;}
+  const{data,error}=await sb.from('trucks')
+    .insert({label,color,volgorde:(TRUCKS||[]).length+1}).select('*').single();
+  if(error){toast('Toevoegen mislukt: '+error.message,'fout');return;}
+  document.getElementById('newTruckName').value='';
+  await loadAll();
+  renderBeheer();
+  if(data)openTruck(data.id);
+}
 function startEditPers(id){
   const p=PERSONEEL.find(x=>x.id===id);
   document.getElementById('pb-'+id).innerHTML=`<div style="flex:1"><div class="bi-edit-form"><input type="text" id="ep-${id}" value="${p.naam}" style="font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:var(--font)"><div class="bi-edit-row"><button class="btn-danger-sm" onclick="renderBeheer()">Annuleer</button><button class="btn-sm" onclick="savePers('${id}')">Opslaan</button></div></div></div>`;
