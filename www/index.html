@@ -7558,7 +7558,8 @@ function pbGetShifts(k){
         team:sh.naam||team,
         bezet,
         totaal:Math.max(sh.personeel_nodig||0,bezet),
-        namen:wie.map(p=>p.naam).concat(los.map(l=>l.naam+' (los)')),
+        leden:wie.map(p=>({soort:'pers',id:p.id,naam:p.naam}))
+          .concat(los.map(l=>({soort:'los',id:l.id,naam:l.naam}))),
       };
     });
     // Wie op de klus staat zonder shift krijgt een eigen regel, anders zou je
@@ -7568,7 +7569,8 @@ function pbGetShifts(k){
     if(zonder.length||zonderLos.length){
       rijen.push({id:'shift-'+k.id,tijd:'Hele klus',team,
         bezet:zonder.length+zonderLos.length,totaal:zonder.length+zonderLos.length,
-        namen:zonder.map(p=>p.naam).concat(zonderLos.map(l=>l.naam+' (los)'))});
+        leden:zonder.map(p=>({soort:'pers',id:p.id,naam:p.naam}))
+          .concat(zonderLos.map(l=>({soort:'los',id:l.id,naam:l.naam})))});
     }
     return rijen;
   }
@@ -7578,7 +7580,9 @@ function pbGetShifts(k){
   if(nodig===0&&bezet===0)return[];
   const t1=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd)||tijdFromDb(k.start_opbouw)||'?';
   const t2=tijdFromDb(k.einde_klus)||tijdFromDb(k.einde_feest)||'?';
-  return[{id:'shift-'+k.id,tijd:t1!=='?'||t2!=='?'?`${t1} → ${t2}`:'Hele dag',team,bezet,totaal:Math.max(nodig,bezet),namen:k.personeel?k.personeel.map(p=>p.naam):[]}];
+  return[{id:'shift-'+k.id,tijd:t1!=='?'||t2!=='?'?`${t1} → ${t2}`:'Hele dag',team,bezet,totaal:Math.max(nodig,bezet),
+    leden:(k.personeel||[]).map(p=>({soort:'pers',id:p.id,naam:p.naam}))
+      .concat((k.losse||[]).map(l=>({soort:'los',id:l.id,naam:l.naam})))}];
 }
 function pbGetStatus(k){
   const shifts=pbGetShifts(k);
@@ -7645,12 +7649,16 @@ async function pbVoegLosToe(klusId){
   const naam=(veld.value||'').trim();
   if(!naam){veld.focus();return;}
   const klus=KLUSSEN.find(k=>k.id===klusId);
-  if(klus&&(klus.losse||[]).some(l=>l.naam.toLowerCase()===naam.toLowerCase())){
+  const gekozenShift=(document.getElementById('pbLosShift-'+klusId)||{value:''}).value||null;
+  if(klus&&(klus.losse||[]).some(l=>l.naam.toLowerCase()===naam.toLowerCase()
+      &&(l.shift_id||null)===gekozenShift)){
     pbShowToast('af',naam,'staat er al bij');
     veld.value='';return;
   }
+  const shiftEl=document.getElementById('pbLosShift-'+klusId);
+  const shift_id=shiftEl?(shiftEl.value||null):null;
   const{data,error}=await sb.from('klus_losse_personen')
-    .insert({klus_id:klusId,naam}).select('*').single();
+    .insert({klus_id:klusId,naam,shift_id}).select('*').single();
   if(error){toast('Toevoegen mislukt: '+error.message,'fout');return;}
   if(klus){if(!klus.losse)klus.losse=[];klus.losse.push(data);}
   veld.value='';
@@ -7959,13 +7967,25 @@ function pbRenderContent(){
     shifts.forEach(sh=>{
       const shSt=sh.bezet>=sh.totaal?'vol':sh.bezet===0?'leeg':'deel';
       html+=`<div class="pb-shift"><span class="pb-stijd">${sh.tijd}</span><span class="pb-steam">${sh.team}</span><div class="pb-sright"><span class="pb-badge ${shSt}">${sh.bezet}/${sh.totaal}</span>${openSlots>0?`<button class="pb-wijs${isOpen?' open':''}" onclick="pbToggleDrop('${k.id}')">${isOpen?'&#x2715; Sluiten':'+ Toewijzen'}</button>`:''}</div></div>`;
-      const losPills=(k.losse||[]).map(l=>`<span class="pb-naam-pill" style="background:#FFFBEB;color:#92400E" title="Losse kracht${l.telefoon?' · '+l.telefoon:''}">${l.naam} (los)<button class="pb-remove" onclick="pbVerwijderLos('${l.id}','${l.naam}')" title="Verwijder">&#x2715;</button></span>`).join('');
-      if((sh.namen&&sh.namen.length)||losPills)html+=`<div class="pb-namen">${(sh.namen||[]).map(naam=>{const mwObj=PERSONEEL.find(p=>p.naam===naam);const mwId=mwObj?mwObj.id:'';return`<span class="pb-naam-pill">${naam}<button class="pb-remove" onclick="pbVerwijder('${k.id}','${mwId}','${naam}')" title="Verwijder">&#x2715;</button></span>`;}).join('')}${losPills}</div>`;
+      const leden=sh.leden||[];
+      if(leden.length)html+=`<div class="pb-namen">${leden.map(m=>m.soort==='los'
+        ?`<span class="pb-naam-pill" style="background:#FFFBEB;color:#92400E;border-color:#FDE68A" title="Losse kracht">${m.naam} (los)<button class="pb-remove" style="color:#92400E" onclick="pbVerwijderLos('${m.id}','${String(m.naam).replace(/'/g,"\\'")}')" title="Verwijder">&#x2715;</button></span>`
+        :`<span class="pb-naam-pill">${m.naam}<button class="pb-remove" onclick="pbVerwijder('${k.id}','${m.id}','${String(m.naam).replace(/'/g,"\\'")}')" title="Verwijder">&#x2715;</button></span>`
+      ).join('')}</div>`;
     });
 
     // Losse kracht er direct bij zetten, zonder de klus te hoeven bewerken.
+    // Heeft de klus shifts, dan moet je erbij kiezen wélke; anders komt hij
+    // nergens goed te staan.
+    const shiftKeuze=(k.shifts&&k.shifts.length)
+      ?`<select id="pbLosShift-${k.id}" style="flex-shrink:0;font-size:11px;font-family:var(--font);padding:5px 8px;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--text)">
+          ${k.shifts.map(sh=>`<option value="${sh.id}">${sh.naam||'Shift'}${tijdFromDb(sh.start_tijd)?' '+tijdFromDb(sh.start_tijd):''}</option>`).join('')}
+          <option value="">Hele klus</option>
+        </select>`
+      :'';
     html+=`<div class="pb-losregel">
       <input type="text" id="pbLos-${k.id}" placeholder="Losse kracht (naam)" onkeydown="if(event.key==='Enter')pbVoegLosToe('${k.id}')">
+      ${shiftKeuze}
       <button class="pb-wijs" onclick="pbVoegLosToe('${k.id}')">+ Los</button>
     </div>`;
     if(isOpen){
