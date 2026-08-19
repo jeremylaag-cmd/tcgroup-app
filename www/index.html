@@ -1067,9 +1067,27 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           onder het filter <b>Franklins</b>.
         </div>
         <div id="vasteBeheer"><div class="spin">Laden...</div></div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
-          <button class="btn-sm" onclick="genereerVasteDiensten()">Diensten 8 weken vooruit aanmaken</button>
-          <span id="vasteInfo" style="font-size:12px;color:var(--muted)"></span>
+        <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+          <div class="slabel" style="margin-bottom:.5rem">Diensten klaarzetten</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.75rem">
+            Kies een periode. Je krijgt eerst te zien wat er zou gebeuren; pas als je daarna op
+            <b>Klaarzetten</b> drukt wordt er iets aangemaakt. Dagen die al goed staan blijven
+            met rust, dus je kunt dit gerust twee keer doen.
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end">
+            <div class="fr" style="margin-bottom:0"><span class="fl">Van</span>
+              <input type="date" id="frVan" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font)"></div>
+            <div class="fr" style="margin-bottom:0"><span class="fl">Tot en met</span>
+              <input type="date" id="frTot" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font)"></div>
+            <button class="btn-sm" id="frKijkKnop" onclick="franklinsKijken()">Kijk wat er gebeurt</button>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:.625rem">
+            <button class="chip" onclick="franklinsPeriode('verder')">Verder vanaf waar het ophoudt</button>
+            <button class="chip" onclick="franklinsPeriode('maand')">Volgende maand</button>
+            <button class="chip" onclick="franklinsPeriode('8weken')">8 weken vooruit</button>
+          </div>
+          <div id="frUitslag" style="margin-top:.875rem"></div>
+          <div id="vasteInfo" style="font-size:12px;color:var(--muted);margin-top:.625rem"></div>
         </div>
       </div>
     </div>
@@ -4472,6 +4490,7 @@ function renderVasteDiensten(){
     </div>`;
   }).join('');
 
+  if(document.getElementById('frVan')&&!document.getElementById('frVan').value)franklinsPeriode('verder');
   const info=document.getElementById('vasteInfo');
   const vandaag=fmt(new Date());
   if(info){
@@ -4514,16 +4533,109 @@ async function verwijderVasteDienst(id){
   renderVasteDiensten();
 }
 
-async function genereerVasteDiensten(){
-  const knop=document.querySelector('[onclick="genereerVasteDiensten()"]');
+// ── FRANKLINS KLAARZETTEN ────────────────────────────────────────────────
+// Je kiest zelf een periode en krijgt eerst een voorbeeld te zien. Het rekenen
+// gebeurt in de database (franklins_klaarzetten), met precies dezelfde code
+// voor kijken en doen — dus wat je ziet is wat er gebeurt.
+function laatsteFranklinsDag(){
+  let laatste='';
+  (KLUSSEN||[]).forEach(k=>{
+    if(k.categorie==='franklins'&&k.datum>laatste)laatste=k.datum;
+  });
+  return laatste;
+}
+
+function franklinsPeriode(welke){
+  const vandaag=new Date();
+  let van,tot;
+  if(welke==='maand'){
+    van=new Date(vandaag.getFullYear(),vandaag.getMonth()+1,1);
+    tot=new Date(vandaag.getFullYear(),vandaag.getMonth()+2,0);
+  }else if(welke==='8weken'){
+    van=new Date(vandaag);
+    tot=new Date(vandaag);tot.setDate(tot.getDate()+8*7-1);
+  }else{
+    const laatste=laatsteFranklinsDag();
+    van=laatste?parseDate(laatste):new Date(vandaag);
+    if(laatste)van.setDate(van.getDate()+1);
+    if(van<vandaag)van=new Date(vandaag);
+    tot=new Date(vandaag);tot.setDate(tot.getDate()+8*7-1);
+    if(tot<van){tot=new Date(van);tot.setDate(tot.getDate()+27);}
+  }
+  document.getElementById('frVan').value=fmt(van);
+  document.getElementById('frTot').value=fmt(tot);
+  document.getElementById('frUitslag').innerHTML='';
+}
+
+function franklinsDatums(){
+  const van=document.getElementById('frVan').value;
+  const tot=document.getElementById('frTot').value;
+  if(!van||!tot){toast('Vul een begin- en einddatum in','fout');return null;}
+  if(tot<van){toast('De einddatum ligt voor de begindatum','fout');return null;}
+  return{van,tot};
+}
+
+async function franklinsKijken(){
+  const d=franklinsDatums();if(!d)return;
+  const knop=document.getElementById('frKijkKnop');
+  const vak=document.getElementById('frUitslag');
   if(knop){knop.disabled=true;knop.textContent='Bezig...';}
-  const{data,error}=await sb.rpc('genereer_vaste_diensten',{p_weken:8});
-  if(knop){knop.disabled=false;knop.textContent='Diensten 8 weken vooruit aanmaken';}
-  if(error){toast('Aanmaken mislukt: '+error.message,'fout');return;}
-  toast(data?data+' nieuwe diensten aangemaakt':'Alles stond al klaar');
+  vak.innerHTML='<div class="spin">Even kijken...</div>';
+  const{data,error}=await sb.rpc('franklins_klaarzetten',
+    {p_van:d.van,p_tot:d.tot,p_alleen_kijken:true});
+  if(knop){knop.disabled=false;knop.textContent='Kijk wat er gebeurt';}
+  if(error){vak.innerHTML='';toast('Kijken mislukt: '+error.message,'fout');return;}
+  vak.innerHTML=franklinsUitslagHtml(data,true);
+}
+
+async function franklinsDoen(){
+  const d=franklinsDatums();if(!d)return;
+  const vak=document.getElementById('frUitslag');
+  const knop=document.getElementById('frDoeKnop');
+  if(knop){knop.disabled=true;knop.textContent='Bezig...';}
+  const{data,error}=await sb.rpc('franklins_klaarzetten',
+    {p_van:d.van,p_tot:d.tot,p_alleen_kijken:false});
+  if(error){
+    if(knop){knop.disabled=false;knop.textContent='Klaarzetten';}
+    toast('Klaarzetten mislukt: '+error.message,'fout');return;
+  }
   await loadAll();
   renderVasteDiensten();
   renderAll();
+  vak.innerHTML=franklinsUitslagHtml(data,false);
+  const gedaan=(data.nieuw||0)+(data.bijgewerkt||0)+(data.verwijderd||0)+(data.dubbel||0);
+  toast(gedaan?'Klaargezet':'Alles stond al goed');
+}
+
+function franklinsUitslagHtml(u,vooraf){
+  if(!u)return '';
+  const regel=(aantal,tekst,kleur)=>aantal
+    ?`<div style="display:flex;gap:8px;align-items:baseline;padding:3px 0">
+        <span style="font-weight:700;min-width:34px;text-align:right;color:${kleur||'var(--text)'}">${aantal}</span>
+        <span style="font-size:13px">${tekst}</span></div>`
+    :'';
+  const niets=!u.nieuw&&!u.bijgewerkt&&!u.verwijderd&&!u.dubbel;
+  const waarsch=(u.waarschuwingen||[]).map(w=>
+    `<div style="font-size:12px;color:#B45309;padding:2px 0">⚠ ${veiligTekst(w.datum)} — ${veiligTekst(w.tekst)}</div>`).join('');
+
+  return`<div class="sc" style="padding:1rem;background:var(--bg)">
+    <div style="font-size:13px;font-weight:600;margin-bottom:.5rem">
+      ${veiligTekst(u.van)} t/m ${veiligTekst(u.tot)} — ${u.dagen} ${u.dagen===1?'dag':'dagen'} dat Franklins draait
+    </div>
+    ${regel(u.al_goed,'dagen staan al goed, daar verandert niets','var(--muted)')}
+    ${regel(u.nieuw,vooraf?'diensten komen erbij':'diensten aangemaakt','#059669')
+      +(u.nieuwe_dagen?`<div style="font-size:11px;color:var(--muted);margin:-2px 0 3px 42px">op ${u.nieuwe_dagen} ${u.nieuwe_dagen===1?'dag':'dagen'} die er nog helemaal niet stond</div>`:'')}
+    ${regel(u.bijgewerkt,vooraf?'diensten krijgen de tijden uit het weekschema':'diensten bijgewerkt','#B45309')}
+    ${regel(u.verwijderd,vooraf?'diensten gaan weg — die staan niet meer in het weekschema en er staat niemand op':'diensten weggehaald','#B91C1C')}
+    ${regel(u.overgenomen,'diensten stonden er al en worden aan het weekschema gekoppeld','var(--muted)')}
+    ${regel(u.dubbel,vooraf?'dubbele diensten worden samengevoegd':'dubbele diensten samengevoegd','#B91C1C')}
+    ${niets?'<div style="font-size:13px;color:var(--muted)">Er valt niets te doen: alles staat al goed.</div>':''}
+    ${waarsch?`<div style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid var(--border)">${waarsch}</div>`:''}
+    ${vooraf&&!niets
+      ?`<div style="margin-top:.75rem"><button class="btn-sm" id="frDoeKnop" onclick="franklinsDoen()">Klaarzetten</button></div>`
+      :''}
+    ${!vooraf?'<div style="font-size:12px;color:#059669;font-weight:600;margin-top:.5rem">✓ Klaar</div>':''}
+  </div>`;
 }
 
 function startEditTruck(id){
