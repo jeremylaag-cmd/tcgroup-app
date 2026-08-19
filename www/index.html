@@ -1599,7 +1599,8 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <div class="st">Wie is er niet — vrij, vakantie of ziek</div>
           <div class="week-nav">
             <button class="btn-sm" onclick="openAfwezig()" style="font-size:11px;padding:6px 12px">+ Vrij invoeren</button>
-            <button class="btn-edit" onclick="exportVerlof()" style="font-size:11px;padding:6px 12px">Verlof exporteren</button>
+            <select id="verlofExportJaar" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:var(--font)"></select>
+            <button class="btn-edit" onclick="exportVerlof(document.getElementById('verlofExportJaar').value)" style="font-size:11px;padding:6px 12px">Verlof exporteren</button>
             <button class="btn-nav" onclick="changeBeschWeek(-1)">&#8592;</button>
             <span class="week-nav-label" id="beschWeekLabel" style="min-width:140px"></span>
             <button class="btn-nav" onclick="changeBeschWeek(0)" style="font-size:11px">Deze maand</button>
@@ -6537,6 +6538,7 @@ async function loadAlleBeschikbaarheid(){
 
   const{data:beschData}=await sb.from('beschikbaarheid').select('*').order('datum_start',{ascending:true});
   ALLE_BESCH=beschData||[];
+  vulVerlofExportJaren();
   await laadVerlofCijfers();
   // Iedereen erbij, ook beheerders — die kunnen zelf ook vrij zijn. Stond de
   // rolfilter er nog in, dan verscheen hun naam als "Onbekend".
@@ -6952,9 +6954,10 @@ async function pdRenderVerlof(){
         style="font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%"></div>`;
 
   vak.innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:.875rem">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:.875rem">
       <div class="st" style="margin-bottom:0">Verlof ${pdVerlofJaar}</div>
-      <div style="display:flex;gap:4px">
+      <div style="display:flex;gap:4px;align-items:center">
+        <button class="btn-edit" style="font-size:11px;padding:5px 11px" onclick="exportVerlof(${pdVerlofJaar},'${u.id}')">Exporteren</button>
         <button class="btn-nav" onclick="pdVerlofWissel(-1)">&#8592;</button>
         <button class="btn-nav" onclick="pdVerlofWissel(1)">&#8594;</button>
       </div>
@@ -7081,24 +7084,53 @@ async function pdWisMutatie(id){
 }
 
 // ── EXPORT ───────────────────────────────────────────────────────────────
-async function exportVerlof(){
-  if(CURRENT_ROL!=='beheerder')return;
-  await laadVerlofCijfers();
-  const{data:regels}=await sb.from('beschikbaarheid').select('*')
-    .neq('soort','beschikbaar').order('datum_start');
-  const{data:mensen}=await sb.from('personeel_publiek').select('id,naam,rol');
-  const{data:muts}=await sb.from('saldo_mutaties').select('*').eq('jaar',VERLOF_JAAR).order('aangemaakt_op');
-  const naamVan=Object.fromEntries((mensen||[]).map(m=>[m.id,m.naam]));
+// Vult het jaarlijstje bij de exportknop: dit jaar en de twee jaren ervoor.
+function vulVerlofExportJaren(){
+  const sel=document.getElementById('verlofExportJaar');
+  if(!sel||sel.options.length)return;
+  const nu=new Date().getFullYear();
+  sel.innerHTML=[nu+1,nu,nu-1,nu-2].map(j=>`<option value="${j}"${j===nu?' selected':''}>${j}</option>`).join('');
+}
 
+// Exporteert het verlofoverzicht. Zonder gebruikerId krijg je iedereen die
+// verlof opbouwt; met een gebruikerId alleen die ene persoon.
+async function exportVerlof(jaar,gebruikerId,knopTekst){
+  if(CURRENT_ROL!=='beheerder')return;
+  jaar=Number(jaar)||VERLOF_JAAR;
+
+  const[{data:cijfers},{data:pmAlles},{data:regels},{data:mensen},{data:muts}]=await Promise.all([
+    sb.rpc('verlof_cijfers',{p_jaar:jaar}),
+    sb.rpc('plusmin_cijfers',{p_jaar:jaar}),
+    sb.from('beschikbaarheid').select('*').neq('soort','beschikbaar').order('datum_start'),
+    sb.from('personeel_publiek').select('id,naam,rol'),
+    sb.from('saldo_mutaties').select('*').eq('jaar',jaar).order('aangemaakt_op'),
+  ]);
+  const naamVan=Object.fromEntries((mensen||[]).map(m=>[m.id,m.naam]));
+  const hoort=id=>!gebruikerId||id===gebruikerId;
+
+  const CIJFERS=(cijfers||[]).filter(c=>hoort(c.gebruiker_id));
+  const PM=(pmAlles||[]).filter(m=>hoort(m.gebruiker_id));
+
+  if(gebruikerId&&!CIJFERS.length){
+    toast('Voor deze persoon wordt geen verlof bijgehouden','fout');
+    return;
+  }
+  if(!CIJFERS.length){
+    toast('Geen gegevens voor '+jaar,'fout');
+    return;
+  }
+
+  const wie=gebruikerId?(CIJFERS[0].naam||'medewerker'):'alle medewerkers';
   const nl=n=>String(Math.round(Number(n||0)*100)/100).replace('.',',');
   const rijen=[];
-  rijen.push(['Verlofoverzicht '+VERLOF_JAAR]);
+  rijen.push(['Verlofoverzicht '+jaar+' — '+wie]);
+  rijen.push(['Gemaakt op',new Date().toLocaleDateString('nl-NL')]);
   rijen.push([]);
   rijen.push(['Naam','Rol','Contracturen p/w','In dienst','Uit dienst','Uren per dag',
     'Beginsaldo (u)','Jaarrecht (u)','Opbouw t/m nu (%)','Opgebouwd (u)','Correcties (u)',
     'Opgenomen (u)','Aangevraagd (u)','Saldo (u)','Saldo (dagen)','Ziek (u)','Ziek (dagen)',
     'Ziekmeldingen','Nog in te delen']);
-  VERLOF_CIJFERS.forEach(c=>{
+  CIJFERS.forEach(c=>{
     const pd=Number(c.uren_per_dag||8);
     rijen.push([c.naam,PD_ROLLABEL[c.rol]||c.rol,nl(c.contract_uren),c.in_dienst||'',c.uit_dienst||'',
       nl(pd),nl(c.beginsaldo),nl(c.jaarrecht),Math.round(Number(c.opbouw_factor)*100),
@@ -7107,37 +7139,40 @@ async function exportVerlof(){
   });
 
   rijen.push([]);rijen.push([]);
-  rijen.push(['Alle vrij-, vakantie- en ziekmeldingen '+VERLOF_JAAR]);
+  rijen.push(['Alle vrij-, vakantie- en ziekmeldingen '+jaar]);
   rijen.push([]);
   rijen.push(['Naam','Soort','Van','Tot en met','Uren','Status','Reden']);
-  (regels||[]).filter(b=>String(b.datum_start).slice(0,4)===String(VERLOF_JAAR)).forEach(b=>{
+  (regels||[]).filter(b=>String(b.datum_start).slice(0,4)===String(jaar)&&hoort(b.gebruiker_id)).forEach(b=>{
     rijen.push([naamVan[b.gebruiker_id]||'Onbekend',VERLOFSOORTEN[b.verlofsoort]||b.verlofsoort,
       b.datum_start,b.datum_eind||b.datum_start,nl(b.uren),b.status,b.reden||'']);
   });
 
   rijen.push([]);rijen.push([]);
-  rijen.push(['Plus- en minuren per maand '+VERLOF_JAAR]);
+  rijen.push(['Plus- en minuren per maand '+jaar]);
   rijen.push([]);
   rijen.push(['Naam','Maand','Norm (u)','Gewerkt (u)','Verlof telt mee (u)','Saldo maand (u)','Cumulatief (u)']);
   const loop={};
-  PLUSMIN.forEach(m=>{
+  PM.forEach(m=>{
     loop[m.gebruiker_id]=(loop[m.gebruiker_id]||0)+Number(m.saldo);
     rijen.push([m.naam,MAAND_KORT[m.maand-1]+(m.loopt_nog?' (loopt nog)':''),
       nl(m.norm),nl(m.gewerkt),nl(m.verlof),nl(m.saldo),nl(loop[m.gebruiker_id])]);
   });
 
-  if((muts||[]).length){
+  const mijnMuts=(muts||[]).filter(m=>hoort(m.gebruiker_id));
+  if(mijnMuts.length){
     rijen.push([]);rijen.push([]);
-    rijen.push(['Handmatige correcties '+VERLOF_JAAR]);
+    rijen.push(['Handmatige correcties '+jaar]);
     rijen.push([]);
     rijen.push(['Naam','Soort','Uren','Reden','Ingevoerd op']);
-    (muts||[]).forEach(m=>rijen.push([naamVan[m.gebruiker_id]||'Onbekend',
+    mijnMuts.forEach(m=>rijen.push([naamVan[m.gebruiker_id]||'Onbekend',
       m.soort==='plusmin'?'Plus/min':'Verlof',nl(m.uren),m.reden||'',
       String(m.aangemaakt_op||'').slice(0,10)]));
   }
 
+  const veiligeNaam=String(wie).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^A-Za-z0-9]+/g,'_').replace(/^_|_$/g,'').toLowerCase();
   const csv='﻿'+rijen.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(';')).join('\r\n');
-  await bewaarCsv('verlof_'+VERLOF_JAAR+'_'+fmt(new Date())+'.csv',csv);
+  await bewaarCsv('verlof_'+jaar+'_'+veiligeNaam+'.csv',csv);
 }
 
 // ── KLUS KOPIËREN NAAR EEN ANDERE DATUM ───────────────────────────────────
