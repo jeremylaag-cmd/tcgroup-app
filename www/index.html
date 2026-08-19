@@ -63,7 +63,16 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .klus-zoek .kz-ico{position:absolute;left:11px;top:50%;transform:translateY(-50%);color:var(--muted);font-size:12px;pointer-events:none}
 .klus-zoek .kz-wis{position:absolute;right:6px;top:50%;transform:translateY(-50%);border:none;background:none;color:var(--muted);font-size:15px;cursor:pointer;padding:2px 6px;line-height:1;display:none}
 .klus-zoek.aan .kz-wis{display:block}
-.klus-zoek-tel{font-size:11px;color:var(--muted);margin:-.5rem 0 .875rem}
+.klus-zoek-tel{font-size:11px;color:var(--muted);margin:-.5rem 0 .5rem}
+.kz-res{display:none;margin-bottom:.875rem;border:1px solid var(--border);border-radius:10px;background:var(--surface);max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.kz-res.aan{display:block}
+.kz-item{padding:9px 11px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s}
+.kz-item:last-child{border-bottom:none}
+.kz-item:hover{background:var(--bg)}
+.kz-item:active{background:var(--bg)}
+.kz-naam{font-size:13px;font-weight:600;color:var(--text);line-height:1.3;word-break:break-word}
+.kz-sub{font-size:11px;color:var(--muted);margin-top:2px;line-height:1.4}
+.kz-merk{display:inline-block;font-size:9px;font-weight:600;padding:1px 5px;border-radius:20px;margin-left:5px;vertical-align:middle}
 .wh{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;margin-bottom:3px}
 .wh span{font-size:9px;color:var(--muted);text-align:center;font-weight:500}
 .cg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px}
@@ -898,6 +907,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <button class="kz-wis" onclick="wisKlusZoek()" title="Wissen">&#x2715;</button>
         </div>
         <div class="klus-zoek-tel" id="klusZoekTelMob" style="display:none"></div>
+        <div class="kz-res" id="klusZoekResMob"></div>
         <div class="slabel">Agenda</div>
         <div class="wh"><span>Ma</span><span>Di</span><span>Wo</span><span>Do</span><span>Vr</span><span>Za</span><span>Zo</span></div>
         <div class="cg" id="calGrid"></div>
@@ -916,6 +926,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <button class="kz-wis" onclick="wisKlusZoek()" title="Wissen">&#x2715;</button>
         </div>
         <div class="klus-zoek-tel" id="klusZoekTelDesk" style="display:none"></div>
+        <div class="kz-res" id="klusZoekResDesk"></div>
         <div class="slabel">Agenda</div>
         <div class="wh"><span>Ma</span><span>Di</span><span>Wo</span><span>Do</span><span>Vr</span><span>Za</span><span>Zo</span></div>
         <div class="cg" id="calGridDesk"></div>
@@ -2515,6 +2526,60 @@ function wisKlusZoek(){
   if(el)el.focus();
 }
 
+// De treffers komen meteen onder het zoekveld te staan; de volledige kaarten
+// staan verderop de pagina, maar daar scrolt niemand voor. Klik een regel aan
+// en het klusvenster gaat open.
+function zoekResultaatHtml(k){
+  const vandaag=fmt(new Date());
+  const verleden=(k.datum_eind||k.datum)<vandaag;
+  const d=parseDate(k.datum);
+  const ds=d?d.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short',year:'numeric'}):'';
+  const de=k.datum_eind&&k.datum_eind!==k.datum
+    ?' – '+parseDate(k.datum_eind).toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):'';
+  const t1=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd)||'';
+  const t2=tijdFromDb(k.einde_klus)||tijdFromDb(k.einde_feest)||'';
+  const tijd=t1||t2?' · '+[t1,t2].filter(Boolean).join('–'):'';
+  const merk=(tekst,bg,kl)=>`<span class="kz-merk" style="background:${bg};color:${kl}">${tekst}</span>`;
+  const merken=(verleden?merk('Geweest','#F3F4F6','#6B7280'):'')
+    +(k.categorie==='franklins'?merk('Franklins','#FFFBEB','#B45309'):'')
+    +(k.categorie==='intern'?merk('Intern','#EEF2FF','#3730A3'):'')
+    +(k.is_optie?merk('Optie','#EEF2FF','#3730A3'):'');
+  const wie=(k.personeel||[]).map(x=>x.naam).concat((k.losse||[]).map(x=>x.naam+' (los)'));
+  return`<div class="kz-item" onclick="zoekResultaatOpenen('${k.id}')">
+    <div class="kz-naam">${veiligTekst(k.naam||k.food||'Klus')}${merken}</div>
+    <div class="kz-sub">${ds}${de}${tijd}</div>
+    ${k.adres?`<div class="kz-sub">📍 ${veiligTekst(k.adres)}</div>`:''}
+    ${wie.length?`<div class="kz-sub">👤 ${veiligTekst(wie.join(', '))}</div>`:''}
+  </div>`;
+}
+
+function zoekResultaatOpenen(id){
+  if(typeof closeDrawer==='function')closeDrawer();
+  openDetail(id);
+}
+
+// Wat eraan komt eerst, van dichtbij naar ver; daarna wat geweest is, het meest
+// recente bovenaan.
+function zoekVolgorde(lijst){
+  const vandaag=fmt(new Date());
+  const komt=lijst.filter(k=>(k.datum_eind||k.datum)>=vandaag).sort((a,b)=>a.datum.localeCompare(b.datum));
+  const was=lijst.filter(k=>(k.datum_eind||k.datum)<vandaag).sort((a,b)=>b.datum.localeCompare(a.datum));
+  return komt.concat(was);
+}
+
+function toonZoekResultaten(lijst){
+  const zoekt=!!KLUS_ZOEK.trim();
+  const html=zoekt?zoekVolgorde(lijst).slice(0,60).map(zoekResultaatHtml).join(''):'';
+  const meer=zoekt&&lijst.length>60
+    ?`<div class="kz-sub" style="padding:9px 11px;font-style:italic">Alleen de eerste 60 staan hier; verfijn je zoekterm.</div>`:'';
+  ['klusZoekResDesk','klusZoekResMob'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    el.className='kz-res'+(zoekt&&lijst.length?' aan':'');
+    el.innerHTML=html+meer;
+  });
+}
+
 function toonZoekTeller(aantal){
   const zoekt=!!KLUS_ZOEK.trim();
   [['klusZoekVakDesk','klusZoekTelDesk'],['klusZoekVakMob','klusZoekTelMob']].forEach(([vakId,telId])=>{
@@ -3379,6 +3444,7 @@ function renderAll(){
     ?KLUSSEN.filter(k=>klusVoldoetAanZoek(k,zoekWoorden))
     :(selDate?KLUSSEN.filter(k=>klusDagen(k).includes(selDate)):basis);
   toonZoekTeller(filtered.length);
+  toonZoekResultaten(filtered);
   document.getElementById('mainTitle').textContent=zoekWoorden.length
     ?'Gevonden: '+KLUS_ZOEK.trim()
     :selDate
