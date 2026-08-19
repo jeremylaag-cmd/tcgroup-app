@@ -1238,8 +1238,9 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <button class="btn-sm" onclick="exportPersoneel()" style="font-size:11px;padding:5px 14px">Exporteren</button>
         </div>
         <div class="zoek-wrap"><span class="zoek-icon">&#128269;</span>
-          <input type="search" id="accZoek" placeholder="Zoek op naam, rol, telefoon of skill..." oninput="renderAccounts()" autocomplete="off">
+          <input type="search" id="accZoek" placeholder="Zoek op naam, telefoon, plaats..." oninput="renderAccounts()" autocomplete="off">
         </div>
+        <div id="accFilters" style="margin:.5rem 0 .25rem"></div>
         <div id="accTeller" style="font-size:11px;color:var(--muted);margin:2px 0 .5rem"></div>
         <div class="acc-list" id="accList"><div class="spin">Laden...</div></div>
       </div>
@@ -2756,8 +2757,89 @@ async function loadAccounts(){
   renderAccounts();
 }
 
+// Filteren op rol en op skills, naast het zoekveld. Bij de skills geldt "en":
+// vink je er twee aan, dan hou je alleen wie ze allebei heeft. Achter elke knop
+// staat hoeveel mensen er dan overblijven, gerekend mét de andere filters maar
+// zonder die knop zelf — anders zie je overal nullen staan.
+let accRol='';
+let accSkills=new Set();
+let ACCOUNTS_ZICHTBAAR=[];
+
+const ACC_ROLLEN=['beheerder','full-timer','hal','part-timer','personeel'];
+
+function accSkillIdsVan(u){
+  try{
+    const rauw=u.skills;
+    const ids=rauw?(typeof rauw==='string'?JSON.parse(rauw):rauw):[];
+    return Array.isArray(ids)?ids:[];
+  }catch(e){return [];}
+}
+
+function accZetRol(rol){
+  accRol=(accRol===rol)?'':rol;
+  renderAccounts();
+}
+
+function accWisselSkill(id){
+  if(accSkills.has(id))accSkills.delete(id); else accSkills.add(id);
+  renderAccounts();
+}
+
+function accWisFilters(){
+  accRol='';accSkills=new Set();
+  const z=document.getElementById('accZoek');
+  if(z)z.value='';
+  renderAccounts();
+}
+
 // Zoeken kijkt naar naam, rol, telefoon, e-mail, plaats, shirtmaat, rijbewijs
 // en skills — zo vind je ook "iemand met BE-rijbewijs" of "iedereen uit Utrecht".
+function renderAccountFilters(zoektPast,rolPast,skillsPassen,rolLabels,aantalNu){
+  const vak=document.getElementById('accFilters');
+  if(!vak)return;
+
+  // Alleen rollen die echt voorkomen, in een vaste volgorde.
+  const aanwezig=ACC_ROLLEN.filter(r=>(ACCOUNTS||[]).some(u=>u.rol===r));
+  const rolTelling=r=>(ACCOUNTS||[]).filter(u=>zoektPast(u)&&skillsPassen(u)&&u.rol===r).length;
+
+  // Alleen skills die iemand ook echt heeft (en wat je zelf hebt aangevinkt).
+  const inGebruik=(SKILLS||[]).filter(sk=>
+    accSkills.has(sk.id)||(ACCOUNTS||[]).some(u=>accSkillIdsVan(u).includes(sk.id)));
+  const skillTelling=id=>(ACCOUNTS||[]).filter(u=>{
+    if(!zoektPast(u)||!rolPast(u))return false;
+    const heeft=new Set(accSkillIdsVan(u));
+    if(!heeft.has(id))return false;
+    for(const s of accSkills){if(s!==id&&!heeft.has(s))return false;}
+    return true;
+  }).length;
+
+  const filtert=!!(document.getElementById('accZoek')?.value.trim())||!!accRol||accSkills.size>0;
+
+  let html='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +'<span class="pers-kop" style="margin:0">Rol</span>'
+    +(filtert?`<button class="btn-nav" style="font-size:11px;padding:3px 9px" onclick="accWisFilters()">Filters wissen</button>`:'')
+    +'</div><div class="chips">'
+    +aanwezig.map(r=>{
+      const n=rolTelling(r);
+      const flauw=(n===0&&accRol!==r)?'opacity:.45;':'';
+      return`<div class="chip${accRol===r?' on':''}" style="${flauw}" onclick="accZetRol('${r}')">${rolLabels[r]||r} <span style="opacity:.6">${n}</span></div>`;
+    }).join('')
+    +'</div>';
+
+  if(inGebruik.length){
+    html+='<div class="pers-kop" style="margin:10px 2px 5px">Vaardigheden</div><div class="chips">'
+      +inGebruik.map(sk=>{
+        const n=skillTelling(sk.id);
+        const flauw=(n===0&&!accSkills.has(sk.id))?'opacity:.45;':'';
+        return`<div class="chip${accSkills.has(sk.id)?' on':''}" style="${flauw}" onclick="accWisselSkill('${sk.id}')">${veiligTekst(sk.naam)} <span style="opacity:.6">${n}</span></div>`;
+      }).join('')
+      +'</div>';
+    if(accSkills.size>1)html+='<div style="font-size:11px;color:var(--muted);margin-top:5px">Toont alleen wie álle aangevinkte vaardigheden heeft.</div>';
+  }
+
+  vak.innerHTML=html;
+}
+
 function renderAccounts(){
   const acc=document.getElementById('accList');
   if(!acc)return;
@@ -2770,21 +2852,33 @@ function renderAccounts(){
     return ids.map(sid=>{const sk=SKILLS.find(x=>x.id===sid);return sk?sk.naam:null;}).filter(Boolean);
   };
 
-  const data=(ACCOUNTS||[]).filter(u=>{
+  const zoektPast=u=>{
     if(!zoek)return true;
     const hooiberg=[u.naam,rolLabels[u.rol]||u.rol,u.telefoon,u.email,u.plaats,u.straat,
       u.shirtmaat,u.rijbewijs,u.contractvorm,...skillNamenVan(u)]
       .filter(Boolean).join(' ').toLowerCase();
     return zoek.split(/\s+/).every(woord=>hooiberg.includes(woord));
-  });
+  };
+  const rolPast=u=>!accRol||u.rol===accRol;
+  const skillsPassen=u=>{
+    if(!accSkills.size)return true;
+    const heeft=new Set(accSkillIdsVan(u));
+    for(const id of accSkills){if(!heeft.has(id))return false;}
+    return true;
+  };
 
+  const data=(ACCOUNTS||[]).filter(u=>zoektPast(u)&&rolPast(u)&&skillsPassen(u));
+  ACCOUNTS_ZICHTBAAR=data;
+  renderAccountFilters(zoektPast,rolPast,skillsPassen,rolLabels,data.length);
+
+  const filtert=!!zoek||!!accRol||accSkills.size>0;
   const teller=document.getElementById('accTeller');
-  if(teller)teller.textContent=zoek
+  if(teller)teller.textContent=filtert
     ?`${data.length} van de ${ACCOUNTS.length} accounts`
     :`${ACCOUNTS.length} accounts`;
 
   if(!ACCOUNTS.length){acc.innerHTML='<div class="empty">Geen accounts gevonden</div>';return;}
-  if(!data.length){acc.innerHTML='<div class="empty">Niemand gevonden voor "'+zoek+'"</div>';return;}
+  if(!data.length){acc.innerHTML=`<div class="empty">Niemand gevonden${zoek?' voor "'+veiligTekst(zoek)+'"':''}${(accRol||accSkills.size)?' met deze filters':''}</div>`;return;}
 
   acc.innerHTML=data.map(u=>{
     let userSkills=[];
@@ -2824,6 +2918,15 @@ async function exportPersoneel(){
     if(error)throw new Error(error.message);
     if(!mensen||!mensen.length){toast('Geen accounts gevonden','fout');return;}
 
+    // Staat er een filter aan, dan exporteren we wat je op het scherm ziet.
+    const gefilterd=(accRol||accSkills.size||(document.getElementById('accZoek')?.value||'').trim());
+    let lijst=mensen;
+    if(gefilterd){
+      const zichtbaar=new Set((ACCOUNTS_ZICHTBAAR||[]).map(u=>u.id));
+      lijst=mensen.filter(u=>zichtbaar.has(u.id));
+      if(!lijst.length){toast('Met deze filters staat er niemand in de lijst','fout');return;}
+    }
+
     const skillNaam=Object.fromEntries((skillsData||[]).map(s=>[s.id,s.naam]));
     const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','personeel':'Personeel'};
 
@@ -2831,7 +2934,7 @@ async function exportPersoneel(){
     const contractLabel={'oproep':'Oproepkracht','bepaalde-tijd':'Bepaalde tijd','onbepaalde-tijd':'Onbepaalde tijd','stage':'Stage','zzp':'ZZP','vakantiekracht':'Vakantiekracht'};
 
     const rijen=[['Naam','Rol','E-mail','Telefoon','Straat','Postcode','Plaats','Geslacht','Geboortedatum','Leeftijd','Contractvorm','Uurloon','Shirtmaat','Rijbewijs','Skills']];
-    mensen.forEach(u=>{
+    lijst.forEach(u=>{
       let ids=[];
       try{ids=u.skills?(typeof u.skills==='string'?JSON.parse(u.skills):u.skills):[];}catch(e){ids=[];}
       if(!Array.isArray(ids))ids=[];
@@ -2855,11 +2958,12 @@ async function exportPersoneel(){
       ]);
     });
     rijen.push([]);
-    rijen.push(['Totaal aantal accounts',mensen.length]);
+    rijen.push(['Totaal aantal accounts',lijst.length]);
+    if(gefilterd)rijen.push(['Let op','dit is de gefilterde lijst; in totaal zijn er '+mensen.length+' accounts']);
 
     const csv='﻿'+rijen.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(';')).join('\r\n');
     const gelukt=await bewaarCsv('accounts_'+fmt(new Date())+'.csv',csv);
-    if(gelukt)toast(mensen.length+' accounts geëxporteerd');
+    if(gelukt)toast(lijst.length+' accounts geëxporteerd'+(gefilterd?' (gefilterd)':''));
   }catch(e){
     console.error('Export accounts mislukt:',e);
     toast('Export mislukt: '+(e&&e.message?e.message:'onbekende fout'),'fout');
