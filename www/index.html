@@ -1445,6 +1445,21 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     </div>
   </div>
 
+  <!-- Rijschema van een klus -->
+  <div class="modal-overlay" id="rijschemaOverlay" onclick="if(event.target===this)sluitRijschema()">
+    <div class="modal" style="max-width:600px">
+      <div class="modal-title" id="rsTitel">Rijschema</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:1rem">
+        Optioneel. Zet per voertuig wie er rijdt en wie er meerijden. Wat je hier invult
+        zien de mensen die op de klus staan in het klusvenster.
+      </div>
+      <div id="rsInhoud"></div>
+      <div class="mfooter" style="margin-top:1rem">
+        <button class="btn-sm" onclick="sluitRijschema()">Klaar</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Truck of aanhanger bewerken -->
   <div class="modal-overlay" id="truckOverlay" onclick="if(event.target===this)sluitTruck()">
     <div class="modal" style="max-width:560px">
@@ -1925,6 +1940,13 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="detail-section" id="detailContactSection"><div class="detail-label">Contactpersoon</div><div class="detail-value" id="detailContact"></div><div id="detailTelefoon" style="margin-top:3px"></div></div>
       <div class="detail-section" id="detailPersSection"><div class="detail-label">Personeel</div><div class="detail-value" id="detailPers"></div></div>
       <div class="detail-section" id="detailTelSection" style="display:none"><div class="detail-label">Bellen met je collega's</div><div id="detailCollegaTel"></div></div>
+      <div class="detail-section" id="detailRitSection" style="display:none">
+        <div class="detail-label" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+          <span>Rijschema</span>
+          <button class="btn-edit" id="detailRitBtn" style="display:none;font-size:11px;padding:4px 10px">Aanpassen</button>
+        </div>
+        <div id="detailRit"></div>
+      </div>
       <div class="detail-section" id="detailNotitieSection"><div class="detail-label">Notities</div><div style="font-size:13px;color:var(--muted);font-style:italic;line-height:1.6" id="detailNotitie"></div></div>
       <div class="detail-section" id="detailPdfSection"><div class="detail-label">Bijlagen</div><div id="detailPdfs"></div></div>
     </div>
@@ -3504,7 +3526,7 @@ async function loadAll(){
     {data:trucks},{data:personeel},{data:klussen},{data:klusTrucks},
     {data:klusGebruikers},{data:klusPdfs},{data:soorten},{data:meds},
     {data:klusSoorten},{data:klusTruckSoorten},{data:beschData},{data:aanmData},
-    {data:vasteData},{data:losData},{data:shiftData}
+    {data:vasteData},{data:losData},{data:shiftData},{data:ritData},{data:ritPersData}
   ]=await Promise.all([
     sb.from('trucks').select('*').order('volgorde'),
     // Iedereen kan op een klus worden gezet — ook beheerders en hal-medewerkers.
@@ -3522,6 +3544,8 @@ async function loadAll(){
     sb.from('vaste_diensten').select('*').order('weekdag').order('volgorde'),
     sb.from('klus_losse_personen').select('*').order('naam'),
     sb.from('klus_shifts').select('*').order('volgorde'),
+    sb.from('klus_ritten').select('*'),
+    sb.from('klus_rit_personen').select('*'),
   ]);
   TRUCKS=trucks||[];PERSONEEL=personeel||[];SOORTEN=soorten||[];
   BESCHIKBAARHEID=beschData||[];
@@ -3540,6 +3564,8 @@ async function loadAll(){
     shifts:(shiftData||[]).filter(x=>x.klus_id===k.id).sort((a,b)=>(a.volgorde-b.volgorde)||String(a.start_tijd||'').localeCompare(String(b.start_tijd||''))),
     pdfs:(klusPdfs||[]).filter(x=>x.klus_id===k.id),
     losse:(losData||[]).filter(x=>x.klus_id===k.id),
+    ritten:(ritData||[]).filter(x=>x.klus_id===k.id).map(r=>({
+      ...r, personen:(ritPersData||[]).filter(x=>x.rit_id===r.id)})),
     soorten:(klusSoorten||[]).filter(x=>x.klus_id===k.id).map(x=>sMap[x.soort_id]).filter(Boolean),
     truckSoorten:(klusTruckSoorten||[]).filter(x=>x.klus_id===k.id).map(x=>({truck:tMap[x.truck_id],soort:sMap[x.soort_id]})).filter(x=>x.truck&&x.soort),
   }));
@@ -4447,8 +4473,11 @@ async function deleteKlus(id){
 }
 
 // ── DETAIL ──
+let detailKlusId=null;
+
 function openDetail(id){
   const k=KLUSSEN.find(x=>x.id===id);if(!k)return;
+  detailKlusId=id;
   const t0=tijdFromDb(k.start_tijd),t1=tijdFromDb(k.vertrek_tijd),t2=tijdFromDb(k.start_opbouw),
         t3=tijdFromDb(k.start_feest),t4=tijdFromDb(k.einde_feest),t5=tijdFromDb(k.einde_klus);
   const tijdLines=[t0&&`Start: ${t0}`,t1&&`Vertrek: ${t1}`,t2&&`Opbouw: ${t2}`,
@@ -4503,6 +4532,7 @@ function openDetail(id){
     persEl.textContent=alleNamen.join(', ');
   }
   laadCollegaTelefoons(k);
+  tekenRijschema(k);
   const ns=document.getElementById('detailNotitieSection');ns.style.display=k.notitie?'':'none';document.getElementById('detailNotitie').textContent=k.notitie;
   const pdfs=document.getElementById('detailPdfSection');pdfs.style.display=k.pdfs&&k.pdfs.length?'':'none';
   document.getElementById('detailPdfs').innerHTML=k.pdfs?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${p.url}\`,\`${p.naam}\`)">${p.naam}</span>`).join(''):'';
@@ -4521,6 +4551,301 @@ function openDetail(id){
   document.getElementById('detailOverlay').classList.add('open');
 }
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('open');}
+
+// ── RIJSCHEMA ─────────────────────────────────────────────────────────────
+// Wie rijdt met wie mee. Eén rit per voertuig op de klus; een aanhanger hangt
+// aan een rit in plaats van er zelf een te zijn. Alles wordt meteen opgeslagen,
+// net als op het planningsbord.
+let RS_KLUS=null;
+let RS_RITTEN=[];
+let RS_RIJBEWIJZEN={};
+
+// "B, BE" wordt ['B','BE'] — anders zou 'B' ook als 'BE' tellen.
+function rijbewijsSet(tekst){
+  return new Set(String(tekst||'').toUpperCase().split(/[^A-Z0-9]+/).filter(Boolean));
+}
+function heeftRijbewijs(persoonId,nodig){
+  if(!nodig)return true;
+  return rijbewijsSet(RS_RIJBEWIJZEN[persoonId]).has(String(nodig).toUpperCase());
+}
+
+function rsVoertuigen(k){return (k.trucks||[]).filter(t=>!isAanhanger(t));}
+function rsAanhangers(k){return (k.trucks||[]).filter(isAanhanger);}
+
+// Iedereen die op de klus staat, personeel en losse krachten door elkaar.
+function rsMensen(k){
+  return (k.personeel||[]).map(p=>({sleutel:'p:'+p.id,soort:'pers',id:p.id,naam:p.naam}))
+    .concat((k.losse||[]).map(l=>({sleutel:'l:'+l.id,soort:'los',id:l.id,naam:l.naam+' (los)'})));
+}
+
+function rsWaarZit(mens){
+  for(const r of RS_RITTEN){
+    const gevonden=(r.personen||[]).find(x=>
+      mens.soort==='pers'?x.gebruiker_id===mens.id:x.los_id===mens.id);
+    if(gevonden)return{rit:r,regel:gevonden};
+  }
+  return null;
+}
+
+async function openRijschema(klusId){
+  if(CURRENT_ROL!=='beheerder')return;
+  RS_KLUS=klusId;
+  const{data:mensen}=await sb.from('gebruikers').select('id,rijbewijs');
+  RS_RIJBEWIJZEN=Object.fromEntries((mensen||[]).map(m=>[m.id,m.rijbewijs]));
+  await rsLaad();
+  document.getElementById('rijschemaOverlay').classList.add('open');
+}
+
+function sluitRijschema(){
+  document.getElementById('rijschemaOverlay').classList.remove('open');
+  RS_KLUS=null;
+  // Het klusvenster staat er nog achter; die even bijwerken.
+  loadAll().then(()=>{const k=(KLUSSEN||[]).find(x=>x.id===detailKlusId);if(k)tekenRijschema(k);});
+}
+
+async function rsLaad(){
+  if(!RS_KLUS)return;
+  const[{data:ritten},{data:personen}]=await Promise.all([
+    sb.from('klus_ritten').select('*').eq('klus_id',RS_KLUS),
+    sb.from('klus_rit_personen').select('*').eq('klus_id',RS_KLUS),
+  ]);
+  RS_RITTEN=(ritten||[]).map(r=>({...r,personen:(personen||[]).filter(x=>x.rit_id===r.id)}));
+  rsRender();
+}
+
+// De rit bestaat pas zodra je er iets in zet.
+async function rsZorgRit(truckId){
+  const bestaand=RS_RITTEN.find(r=>r.truck_id===truckId);
+  if(bestaand)return bestaand;
+  const{data,error}=await sb.from('klus_ritten')
+    .insert({klus_id:RS_KLUS,truck_id:truckId}).select('*').single();
+  if(error){toast('Aanmaken mislukt: '+error.message,'fout');return null;}
+  const rit={...data,personen:[]};
+  RS_RITTEN.push(rit);
+  return rit;
+}
+
+// Blijft er niemand en niets over, dan halen we de rit weer weg.
+async function rsRuimOp(rit){
+  if(!rit)return;
+  const vers=RS_RITTEN.find(r=>r.id===rit.id);
+  if(!vers)return;
+  if((vers.personen||[]).length||vers.aanhanger_id||vers.vertrek_tijd||vers.notitie)return;
+  await sb.from('klus_ritten').delete().eq('id',vers.id);
+  RS_RITTEN=RS_RITTEN.filter(r=>r.id!==vers.id);
+}
+
+async function rsZetIn(truckId,sleutel){
+  const k=(KLUSSEN||[]).find(x=>x.id===RS_KLUS);
+  const mens=rsMensen(k).find(m=>m.sleutel===sleutel);
+  if(!mens)return;
+
+  const huidig=rsWaarZit(mens);
+  // Staat hij al in dit voertuig? Dan haalt een klik hem eruit.
+  if(huidig&&huidig.rit.truck_id===truckId){
+    await sb.from('klus_rit_personen').delete().eq('id',huidig.regel.id);
+    await rsLaad();
+    const rit=RS_RITTEN.find(r=>r.truck_id===truckId);
+    await rsRuimOp(rit);
+    await rsLaad();
+    return;
+  }
+  // Zat hij in een ander voertuig, dan verhuist hij.
+  if(huidig)await sb.from('klus_rit_personen').delete().eq('id',huidig.regel.id);
+
+  const rit=await rsZorgRit(truckId);
+  if(!rit)return;
+  const rij={rit_id:rit.id,klus_id:RS_KLUS,bestuurder:false};
+  if(mens.soort==='pers')rij.gebruiker_id=mens.id; else rij.los_id=mens.id;
+  const{error}=await sb.from('klus_rit_personen').insert(rij);
+  if(error){toast('Toevoegen mislukt: '+error.message,'fout');}
+  await rsLaad();
+}
+
+async function rsZetBestuurder(ritId,persoonRegelId){
+  // Eerst de oude bestuurder van deze rit af, anders botst de unieke index.
+  await sb.from('klus_rit_personen').update({bestuurder:false}).eq('rit_id',ritId);
+  if(persoonRegelId){
+    const{error}=await sb.from('klus_rit_personen').update({bestuurder:true}).eq('id',persoonRegelId);
+    if(error){toast('Opslaan mislukt: '+error.message,'fout');}
+  }
+  await rsLaad();
+}
+
+async function rsZetAanhanger(truckId,aanhangerId){
+  const rit=aanhangerId?await rsZorgRit(truckId):RS_RITTEN.find(r=>r.truck_id===truckId);
+  if(!rit)return;
+  const{error}=await sb.from('klus_ritten')
+    .update({aanhanger_id:aanhangerId||null}).eq('id',rit.id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  await rsLaad();
+  await rsRuimOp(RS_RITTEN.find(r=>r.id===rit.id)||rit);
+  await rsLaad();
+}
+
+async function rsZetTijd(truckId,waarde){
+  const rit=waarde?await rsZorgRit(truckId):RS_RITTEN.find(r=>r.truck_id===truckId);
+  if(!rit)return;
+  const{error}=await sb.from('klus_ritten')
+    .update({vertrek_tijd:waarde?waarde+':00':null}).eq('id',rit.id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  await rsLaad();
+  await rsRuimOp(RS_RITTEN.find(r=>r.id===rit.id)||rit);
+  await rsLaad();
+}
+
+function rsRender(){
+  const vak=document.getElementById('rsInhoud');
+  const k=(KLUSSEN||[]).find(x=>x.id===RS_KLUS);
+  if(!vak||!k)return;
+  document.getElementById('rsTitel').textContent='Rijschema — '+(k.naam||k.food||'Klus');
+
+  const voertuigen=rsVoertuigen(k);
+  const aanhangers=rsAanhangers(k);
+  const mensen=rsMensen(k);
+
+  if(!voertuigen.length){
+    vak.innerHTML='<div class="pers-leeg">Er staat nog geen voertuig op deze klus. '
+      +'Kies er eerst een bij <b>Bewerk</b>; aanhangers alleen tellen niet, die moeten ergens achter.</div>';
+    return;
+  }
+
+  let html='';
+  voertuigen.forEach(t=>{
+    const rit=RS_RITTEN.find(r=>r.truck_id===t.id);
+    const inzittenden=(rit&&rit.personen)||[];
+    const plaatsen=Number(t.zitplaatsen)||0;
+    const vol=plaatsen>0&&inzittenden.length>=plaatsen;
+    const teVeel=plaatsen>0&&inzittenden.length>plaatsen;
+    const aanhanger=rit&&rit.aanhanger_id?(TRUCKS||[]).find(x=>x.id===rit.aanhanger_id):null;
+
+    const naamVan=r=>{
+      if(r.gebruiker_id){const p=(k.personeel||[]).find(x=>x.id===r.gebruiker_id);return p?p.naam:'Onbekend';}
+      const l=(k.losse||[]).find(x=>x.id===r.los_id);return l?l.naam+' (los)':'Onbekend';
+    };
+
+    html+=`<div class="pb-klus" style="border-left-color:${t.color||'#6366F1'}">
+      <div class="pb-klus-hdr">
+        <div><div class="pb-knaam">${veiligTekst(t.label)}${t.kenteken?` <span style="font-weight:400;color:var(--muted)">${veiligTekst(String(t.kenteken).toUpperCase())}</span>`:''}</div>
+          <div class="pb-kloc">${plaatsen?`${inzittenden.length} van de ${plaatsen} plaatsen bezet`:'geen zitplaatsen ingevuld'}${t.rijbewijs?` · rijbewijs ${veiligTekst(t.rijbewijs)}`:''}</div></div>
+        <span class="pb-badge ${teVeel?'leeg':vol?'vol':'deel'}">${inzittenden.length}${plaatsen?'/'+plaatsen:''}</span>
+      </div>
+
+      <div class="pb-shift">
+        <span class="pb-stijd">Vertrek</span>
+        <input type="time" class="pb-tijdveld" value="${rit&&rit.vertrek_tijd?String(rit.vertrek_tijd).slice(0,5):''}"
+          onchange="rsZetTijd('${t.id}',this.value)">
+        ${aanhangers.length?`<span style="font-size:11px;color:var(--muted)">Aanhanger</span>
+          <select class="pb-tijdveld" onchange="rsZetAanhanger('${t.id}',this.value)">
+            <option value="">geen</option>
+            ${aanhangers.map(a=>`<option value="${a.id}"${aanhanger&&aanhanger.id===a.id?' selected':''}>${veiligTekst(a.label)}</option>`).join('')}
+          </select>${aanhanger&&!t.trekhaak?'<span style="font-size:11px;color:#B45309;font-weight:600">⚠ geen trekhaak</span>':''}`:''}
+      </div>
+
+      ${inzittenden.length?`<div class="pb-namen">${inzittenden.map(r=>{
+        const naam=naamVan(r);
+        const magRijden=r.gebruiker_id?heeftRijbewijs(r.gebruiker_id,t.rijbewijs):true;
+        return`<span class="pb-naam-pill"${r.bestuurder?' style="background:#EEF2FF;color:#3730A3;border-color:#C7D2FE"':''}>
+          ${r.bestuurder?'🚗 ':''}${veiligTekst(naam)}${r.bestuurder&&!magRijden?' ⚠':''}
+          <button class="pb-remove" onclick="rsZetIn('${t.id}','${r.gebruiker_id?'p:'+r.gebruiker_id:'l:'+r.los_id}')" title="Eruit halen">&#x2715;</button>
+        </span>`;}).join('')}</div>`:''}
+
+      ${inzittenden.length?`<div class="pb-shift" style="border-top:none;padding-top:2px">
+        <span style="font-size:11px;color:var(--muted)">Bestuurder</span>
+        <select class="pb-tijdveld" onchange="rsZetBestuurder('${rit.id}',this.value)">
+          <option value="">nog niemand</option>
+          ${inzittenden.map(r=>{
+            // Van een losse kracht kennen we het rijbewijs niet; die mag wel rijden
+            // maar dan zonder controle.
+            const los=!r.gebruiker_id;
+            const magRijden=los?true:heeftRijbewijs(r.gebruiker_id,t.rijbewijs);
+            const staart=los?' — rijbewijs niet bekend':(magRijden?'':' — geen '+veiligTekst(t.rijbewijs));
+            return`<option value="${r.id}"${r.bestuurder?' selected':''}>${veiligTekst(naamVan(r))}${staart}</option>`;
+          }).join('')}
+        </select>
+      </div>`:''}
+
+      <div class="pb-dd" style="margin-top:6px;max-height:190px;overflow-y:auto">
+        ${mensen.map(m=>{
+          const waar=rsWaarZit(m);
+          const hier=waar&&waar.rit.truck_id===t.id;
+          const elders=waar&&!hier;
+          const anderNaam=elders?((TRUCKS||[]).find(x=>x.id===waar.rit.truck_id)||{}).label:'';
+          return`<div class="pb-mw" onclick="rsZetIn('${t.id}','${m.sleutel}')" style="${hier?'background:var(--bg);':''}${elders?'opacity:.6;':''}">
+            <div class="pb-av" style="background:${hier?'#EEF2FF':'#F3F4F6'};color:${hier?'#4338CA':'#9CA3AF'}">${veiligTekst(m.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase())}</div>
+            <span class="pb-mwnaam">${veiligTekst(m.naam)}</span>
+            <span class="pb-mwrol">${hier?'zit hier':elders?'zit in '+veiligTekst(anderNaam||'ander voertuig'):'toevoegen'}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  });
+
+  // Wie heeft er nog geen plek, en hangen alle aanhangers ergens achter?
+  const zonder=mensen.filter(m=>!rsWaarZit(m));
+  const gekoppeld=new Set(RS_RITTEN.map(r=>r.aanhanger_id).filter(Boolean));
+  const losseAanhangers=aanhangers.filter(a=>!gekoppeld.has(a.id));
+  if(zonder.length||losseAanhangers.length){
+    html+='<div class="sc" style="padding:.875rem;background:var(--bg);margin-top:.25rem">';
+    if(zonder.length)html+=`<div style="font-size:12px;color:#B45309"><b>Nog geen vervoer:</b> ${zonder.map(m=>veiligTekst(m.naam)).join(', ')}</div>`;
+    if(losseAanhangers.length)html+=`<div style="font-size:12px;color:#B45309;margin-top:4px"><b>Nog niet gekoppeld:</b> ${losseAanhangers.map(a=>veiligTekst(a.label)).join(', ')} — kies hierboven achter welk voertuig ${losseAanhangers.length===1?'hij':'ze'} ${losseAanhangers.length===1?'hangt':'hangen'}.</div>`;
+    html+='</div>';
+  }
+
+  vak.innerHTML=html;
+}
+
+// Het rijschema zoals iedereen op de klus het te zien krijgt.
+function tekenRijschema(k){
+  const vak=document.getElementById('detailRitSection');
+  const el=document.getElementById('detailRit');
+  const knop=document.getElementById('detailRitBtn');
+  if(!vak||!el)return;
+  const beheerder=CURRENT_ROL==='beheerder';
+  const ritten=(k.ritten||[]).filter(r=>(r.personen||[]).length||r.aanhanger_id||r.vertrek_tijd);
+
+  if(knop){
+    knop.style.display=beheerder?'':'none';
+    knop.onclick=()=>openRijschema(k.id);
+  }
+  // Voor een beheerder blijft het vak zichtbaar zodat hij er een kan maken.
+  vak.style.display=(ritten.length||beheerder)?'':'none';
+  if(!ritten.length){
+    el.innerHTML=beheerder
+      ?'<div style="font-size:12px;color:var(--muted);font-style:italic">Nog geen rijschema ingevuld.</div>'
+      :'';
+    return;
+  }
+
+  const naamVan=r=>{
+    if(r.gebruiker_id){const p=(k.personeel||[]).find(x=>x.id===r.gebruiker_id);return p?p.naam:'Onbekend';}
+    const l=(k.losse||[]).find(x=>x.id===r.los_id);return l?l.naam+' (los)':'Onbekend';
+  };
+  const inRijschema=new Set();
+  ritten.forEach(r=>(r.personen||[]).forEach(x=>inRijschema.add(x.gebruiker_id||x.los_id)));
+
+  el.innerHTML=ritten.map(r=>{
+    const t=(TRUCKS||[]).find(x=>x.id===r.truck_id)||{label:'Voertuig'};
+    const a=r.aanhanger_id?(TRUCKS||[]).find(x=>x.id===r.aanhanger_id):null;
+    const bestuurder=(r.personen||[]).find(x=>x.bestuurder);
+    const mee=(r.personen||[]).filter(x=>!x.bestuurder).map(naamVan);
+    return`<div style="padding:7px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:13px;font-weight:600;color:var(--text)">
+        ${veiligTekst(t.label)}${t.kenteken?` <span style="font-weight:400;color:var(--muted)">${veiligTekst(String(t.kenteken).toUpperCase())}</span>`:''}
+        ${r.vertrek_tijd?` <span style="font-weight:400;color:var(--muted)">· vertrek ${String(r.vertrek_tijd).slice(0,5).replace(':','.')}</span>`:''}
+      </div>
+      ${a?`<div style="font-size:11px;color:var(--muted)">met aanhanger ${veiligTekst(a.label)}</div>`:''}
+      <div style="font-size:13px;margin-top:2px">
+        ${bestuurder?`🚗 ${veiligTekst(naamVan(bestuurder))}`:'<span style="color:#B45309">nog geen bestuurder</span>'}
+        ${mee.length?` · met ${veiligTekst(mee.join(', '))}`:''}
+      </div>
+    </div>`;
+  }).join('')
+  +(()=>{
+    const zonder=rsMensen(k).filter(m=>!inRijschema.has(m.id));
+    return zonder.length?`<div style="font-size:11px;color:var(--muted);padding-top:6px">Niet in het rijschema: ${veiligTekst(zonder.map(m=>m.naam).join(', '))}</div>`:'';
+  })();
+}
 
 // ── TELEFOONNUMMERS VAN JE COLLEGA'S ──────────────────────────────────────
 // Sta je samen op een klus, dan mag je elkaars nummer zien. De database
