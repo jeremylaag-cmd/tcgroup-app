@@ -5718,23 +5718,36 @@ async function loadUrenPersoneel(){
   if(!klusCard||!regCard)return;
 
   const isHal=CURRENT_ROL==='hal';
-  // Hal-medewerkers hebben geen klussen en beheerders springen overal bij, dus
-  // die twee mogen altijd inklokken — ook op een dag zonder klus.
+  // Hal-medewerkers en beheerders mogen altijd inklokken, ook op een dag zonder
+  // klus. Maar ze kúnnen wel degelijk een klus hebben: sinds de interne klussen
+  // staat een hal-medewerker gewoon op "Hal" of "Kantoor" ingepland. Die zoeken
+  // we dus voor iedereen op, anders ziet hij zijn eigen dienst nergens terug en
+  // hangen zijn uren aan geen enkele klus.
   const altijdInklokken=isHal||CURRENT_ROL==='beheerder';
 
-  // Klus van vandaag (hal heeft die nooit)
-  let vandaagKlus=null;
-  if(!isHal){
-    const{data:kgData}=await sb.from('klus_gebruikers').select('klus_id').eq('gebruiker_id',CURRENT_USER.id);
-    const mijnKlusIds=(kgData||[]).map(x=>x.klus_id);
-    vandaagKlus=KLUSSEN.find(k=>mijnKlusIds.includes(k.id)&&klusDagen(k).includes(todayStr));
-  }
+  const{data:kgData}=await sb.from('klus_gebruikers').select('klus_id').eq('gebruiker_id',CURRENT_USER.id);
+  const mijnKlusIds=(kgData||[]).map(x=>x.klus_id);
+  const klussenVandaag=(KLUSSEN||[]).filter(k=>mijnKlusIds.includes(k.id)&&klusDagen(k).includes(todayStr));
+  const vandaagKlus=klussenVandaag[0]||null;
 
-  if(vandaagKlus){
-    klusCard.innerHTML=`<div class="slabel" style="margin-bottom:.5rem">Mijn klus vandaag</div>
-      <div style="font-size:16px;font-weight:600;color:var(--text)">${vandaagKlus.naam||vandaagKlus.food||'Klus'}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:3px">${parseDate(vandaagKlus.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})}</div>
-      ${vandaagKlus.trucks.map(t=>`<span class="bdg" style="background:${t.color}18;color:${t.color};margin-top:6px;display:inline-flex">${t.label}</span>`).join(' ')}`;
+  const klusRegel=k=>{
+    const t1=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd)||'';
+    const t2=tijdFromDb(k.einde_klus)||tijdFromDb(k.einde_feest)||'';
+    const tijd=(t1||t2)?`${t1}${t2?' – '+t2:''}`:'';
+    return`<div style="padding:6px 0;border-top:1px solid var(--border)">
+      <div style="font-size:16px;font-weight:600;color:var(--text)">${veiligTekst(k.naam||k.food||'Klus')}
+        ${k.categorie==='intern'?'<span class="bdg" style="background:#EEF2FF;color:#3730A3;vertical-align:middle">Intern</span>':''}
+        ${k.categorie==='franklins'?'<span class="bdg" style="background:#FFFBEB;color:#B45309;vertical-align:middle">Franklins</span>':''}</div>
+      ${tijd?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${tijd}</div>`:''}
+      ${k.adres?`<div style="font-size:12px;color:var(--muted);margin-top:2px">📍 ${veiligTekst(k.adres)}</div>`:''}
+      ${(k.trucks||[]).map(t=>`<span class="bdg" style="background:${t.color}18;color:${t.color};margin-top:6px;display:inline-flex">${veiligTekst(t.label)}</span>`).join(' ')}
+    </div>`;
+  };
+
+  if(klussenVandaag.length){
+    klusCard.innerHTML=`<div class="slabel" style="margin-bottom:.5rem">${klussenVandaag.length===1?'Mijn klus vandaag':'Mijn klussen vandaag'}</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:2px">${new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})}</div>
+      ${klussenVandaag.map(klusRegel).join('')}`;
   }else if(altijdInklokken){
     klusCard.innerHTML=`<div class="slabel" style="margin-bottom:.5rem">Vandaag</div>
       <div style="font-size:16px;font-weight:600;color:var(--text)">${new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})}</div>
@@ -5750,9 +5763,9 @@ async function loadUrenPersoneel(){
   // Check inklokken mogelijk
   const kanInklokken=altijdInklokken||(vandaagKlus!=null);
   if(lopend){
-    renderIngeklokt(lopend,vandaagKlus);
+    renderIngeklokt(lopend,(KLUSSEN||[]).find(k=>k.id===lopend.klus_id)||vandaagKlus);
   }else{
-    renderInklokken(vandaagKlus,regCard,kanInklokken);
+    renderInklokken(klussenVandaag,regCard,kanInklokken);
   }
 
   // Laad registratie geschiedenis
@@ -5783,14 +5796,28 @@ async function loadUrenPersoneel(){
   }).join('');
 }
 
-function renderInklokken(klus,container,kanInklokken){
+// Sta je op meer dan één klus vandaag, dan kies je waar je op inklokt. Anders
+// zouden je uren aan de verkeerde klus hangen.
+function renderInklokken(klussen,container,kanInklokken){
   if(!container)return;
   if(urenTimer){clearInterval(urenTimer);urenTimer=null;}
+  const lijst=Array.isArray(klussen)?klussen:(klussen?[klussen]:[]);
+  const meerdere=lijst.length>1;
+
+  const knoppen=meerdere
+    ? lijst.map(k=>`<button class="uur-btn uur-btn-in" style="margin-bottom:8px" onclick="doInklokken('${k.id}')">Inklokken op ${veiligTekst(k.naam||k.food||'klus')}</button>`).join('')
+      +((CURRENT_ROL==='hal'||CURRENT_ROL==='beheerder')
+        ?`<button class="uur-btn" style="background:var(--surface);color:var(--text);border:1px solid var(--border)" onclick="doInklokken('')">Inklokken zonder klus</button>`:'')
+    : (kanInklokken?`<button class="uur-btn uur-btn-in" onclick="doInklokken('${lijst[0]?lijst[0].id:''}')">Inklokken</button>`:'');
+
   container.innerHTML=`<div class="slabel" style="margin-bottom:.5rem">Urenregistratie</div>
     <div style="font-size:12px;color:var(--muted);margin-bottom:14px;line-height:1.5">
-      ${kanInklokken?'Klok in zodra je begint. Je locatie wordt opgeslagen als bewijs.':'Je kunt alleen inklokken op een dag dat je een klus hebt.'}
+      ${kanInklokken
+        ?(meerdere?'Je staat vandaag op meer dan één klus. Kies waar je op inklokt.'
+                  :'Klok in zodra je begint. Je locatie wordt opgeslagen als bewijs.')
+        :'Je kunt alleen inklokken op een dag dat je een klus hebt.'}
     </div>
-    ${kanInklokken?`<button class="uur-btn uur-btn-in" onclick="doInklokken('${klus?.id||''}')">Inklokken</button>`:''}`;
+    ${knoppen}`;
 }
 
 function renderIngeklokt(reg,klus){
