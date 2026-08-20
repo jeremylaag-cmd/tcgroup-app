@@ -8721,8 +8721,10 @@ function pbRenderKal(){
 // er dus ook niet voor. Wie erop staat ziet hem gewoon in zijn eigen rooster.
 const INTERN_NAMEN=['Hal','Kantoor'];
 const INTERN_START='08:00',INTERN_EIND='17:00';
-// Alleen deze rollen mogen erop; een part-timer zou hem daarna niet eens zien.
-const INTERN_ROLLEN=['beheerder','full-timer','hal'];
+// Iedereen mag op een interne klus. Wie erop staat ziet hem ook, ongeacht zijn
+// rol; een part-timer die er niet op staat ziet hem nergens. Dat regelt de
+// database (mag_klus_zien).
+const INTERN_ROLLEN=['beheerder','full-timer','hal','part-timer','personeel'];
 
 function pbInternKlus(naam,d){
   const ds=pbFmt(d);
@@ -8809,7 +8811,7 @@ function pbInternHtml(){
   const ds=pbFmt(pbSelDate);
   let html='<div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border)">'
     +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px">Intern</div>'
-    +'<div style="font-size:11px;color:var(--muted);margin-bottom:.625rem">Hal en kantoor staan er elke dag bij. Zet je er niemand op, dan gebeurt er niets: ze tellen niet mee, kleuren de dag niet en staan niet bij de open klussen.</div>';
+    +'<div style="font-size:11px;color:var(--muted);margin-bottom:.625rem">Hal en kantoor staan er elke dag bij. Zet je er niemand op, dan gebeurt er niets: ze tellen niet mee, kleuren de dag niet en staan niet bij de open klussen. Wie je erop zet ziet hem in zijn eigen rooster; de rest niet.</div>';
 
   INTERN_NAMEN.forEach(naam=>{
     const k=pbInternKlus(naam,pbSelDate);
