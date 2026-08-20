@@ -1056,6 +1056,32 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         <div class="bc"><div class="bt">Skills personeel</div><div class="bl" id="skillsBeheer"><div class="spin">Laden...</div></div>
           <div class="add-form"><input type="text" id="newSkillNaam" placeholder="bv. Bar ervaring, Poffers bakken"><button class="btn-sm" onclick="addSkill()">Toevoegen</button></div>
         </div>
+        <div class="bc"><div class="bt">Loonkosten &mdash; rekenregels</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
+            Hiermee rekent de app de loonkosten uit. Het uurloon per medewerker zet je bij
+            <b>Accounts</b>; hieronder staat wat daar bovenop komt en wat we rekenen voor een losse
+            kracht zonder eigen uurloon.
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div>
+              <div class="slabel" style="margin-bottom:4px">Werkgeverslasten</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="number" id="instWglasten" min="0" max="200" step="0.1" inputmode="decimal" placeholder="30" style="font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:90px">
+                <span style="font-size:12px;color:var(--muted)">% bovenop het brutoloon</span>
+              </div>
+            </div>
+            <div>
+              <div class="slabel" style="margin-bottom:4px">Standaard uurloon losse kracht</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:12px;color:var(--muted)">&euro;</span>
+                <input type="number" id="instLosLoon" min="0" max="999" step="0.01" inputmode="decimal" placeholder="15.00" style="font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:90px">
+                <span style="font-size:12px;color:var(--muted)">per uur</span>
+              </div>
+            </div>
+            <button class="btn-sm" onclick="bewaarInstellingen()" style="align-self:flex-start">Opslaan</button>
+            <div id="instInfo" style="font-size:11px;color:var(--muted)"></div>
+          </div>
+        </div>
       </div>
 
       <!-- Franklins: vast weekschema -->
@@ -1745,6 +1771,26 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div id="urenBehEigen" style="margin-bottom:1.25rem"></div>
       <!-- Wie staat er op dit moment ingeklokt -->
       <div class="sc" id="nuIngeklokCard" style="margin-bottom:1.25rem;display:none"></div>
+      <!-- Loonkosten: alleen voor beheerders -->
+      <div class="sc" id="loonkostenCard" style="margin-bottom:1.25rem;display:none">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.875rem;flex-wrap:wrap">
+          <div class="st">Loonkosten</div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <select id="lkPeriode" onchange="lkPeriodeGewijzigd()" style="font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+              <option value="maand">Deze maand</option>
+              <option value="vorige">Vorige maand</option>
+              <option value="jaar">Dit jaar</option>
+              <option value="vrij">Zelf kiezen</option>
+            </select>
+            <button class="btn-sm" onclick="laadLoonkosten()" style="font-size:11px;padding:5px 12px">Vernieuwen</button>
+          </div>
+        </div>
+        <div id="lkVrijVeld" style="display:none;gap:8px;margin-bottom:.875rem">
+          <input type="date" id="lkVan" onchange="laadLoonkosten()" style="font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);flex:1">
+          <input type="date" id="lkTot" onchange="laadLoonkosten()" style="font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);flex:1">
+        </div>
+        <div id="lkInhoud"><div class="spin">Laden...</div></div>
+      </div>
       <div id="urenBeheerGrid" style="display:grid;grid-template-columns:1fr 1fr;gap:1.25rem">
         <div class="sc">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.875rem;flex-wrap:wrap">
@@ -1833,10 +1879,12 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div class="fr"><span class="fl">Losse krachten <span style="color:var(--muted);font-weight:400">(eenmalig, zonder account)</span></span>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px">
         Iemand die één keer meeloopt en de app niet gebruikt. Staat gewoon op de klus en in het rooster;
-        uren zet je er zelf bij via Uren → Handmatig toevoegen.
+        uren zet je er zelf bij via Uren → Handmatig toevoegen. Laat het uurloon leeg om het
+        standaardbedrag uit Beheer te gebruiken.
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap">
         <input type="text" id="fLosNaam" placeholder="Naam" onkeydown="if(event.key==='Enter'){event.preventDefault();voegLosseKrachtToe();}" style="flex:2;min-width:120px;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+        <input type="number" id="fLosLoon" placeholder="Uurloon" min="0" max="999" step="0.01" inputmode="decimal" onkeydown="if(event.key==='Enter'){event.preventDefault();voegLosseKrachtToe();}" style="flex:1;min-width:90px;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
         <input type="tel" id="fLosTel" placeholder="Telefoon (optioneel)" onkeydown="if(event.key==='Enter'){event.preventDefault();voegLosseKrachtToe();}" style="flex:1;min-width:110px;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
         <button type="button" class="btn-sm" onclick="voegLosseKrachtToe()" style="flex-shrink:0;padding:8px 14px">Toevoegen</button>
       </div>
@@ -1947,6 +1995,10 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <button class="btn-edit" id="detailRitBtn" style="display:none;font-size:11px;padding:4px 10px">Aanpassen</button>
         </div>
         <div id="detailRit"></div>
+      </div>
+      <div class="detail-section" id="detailLoonSection" style="display:none">
+        <div class="detail-label">Loonkosten</div>
+        <div id="detailLoon"></div>
       </div>
       <div class="detail-section" id="detailNotitieSection"><div class="detail-label">Notities</div><div style="font-size:13px;color:var(--muted);font-style:italic;line-height:1.6" id="detailNotitie"></div></div>
       <div class="detail-section" id="detailPdfSection"><div class="detail-label">Bijlagen</div><div id="detailPdfs"></div></div>
@@ -4172,7 +4224,7 @@ function openModal(id=null){
   formTruckSoorten={};
   if(k?.truckSoorten)k.truckSoorten.forEach(ts=>{if(!formTruckSoorten[ts.truck.id])formTruckSoorten[ts.truck.id]=[];if(!formTruckSoorten[ts.truck.id].includes(ts.soort.id))formTruckSoorten[ts.truck.id].push(ts.soort.id);});
   formPdfs=[];existingPdfs=k?.pdfs?[...k.pdfs]:[];
-  formLos=k?.losse?k.losse.map(l=>({naam:l.naam,telefoon:l.telefoon||''})):[];
+  formLos=k?.losse?k.losse.map(l=>({naam:l.naam,telefoon:l.telefoon||'',uurloon:l.uurloon!=null?Number(l.uurloon):null})):[];
   // Shifts van deze klus terugzetten in het formulier. Elke shift krijgt een
   // eigen sleutel, zodat we personeel eraan kunnen koppelen voordat de shift
   // een nummer uit de database heeft.
@@ -4226,14 +4278,18 @@ function openModal(id=null){
 function voegLosseKrachtToe(){
   const naamEl=document.getElementById('fLosNaam');
   const telEl=document.getElementById('fLosTel');
+  const loonEl=document.getElementById('fLosLoon');
   const naam=(naamEl.value||'').trim();
   if(!naam){naamEl.focus();return;}
   if(formLos.some(l=>l.naam.toLowerCase()===naam.toLowerCase())){
     showWarn('⚠ '+naam+' staat er al bij.');
-    naamEl.value='';telEl.value='';return;
+    naamEl.value='';telEl.value='';if(loonEl)loonEl.value='';return;
   }
-  formLos.push({naam,telefoon:(telEl.value||'').trim()});
-  naamEl.value='';telEl.value='';naamEl.focus();
+  const loonRuw=loonEl?(loonEl.value||'').trim():'';
+  const loon=loonRuw===''?null:Number(loonRuw.replace(',','.'));
+  if(loon!==null&&(isNaN(loon)||loon<0)){showWarn('⚠ Dat uurloon klopt niet.');return;}
+  formLos.push({naam,telefoon:(telEl.value||'').trim(),uurloon:loon});
+  naamEl.value='';telEl.value='';if(loonEl)loonEl.value='';naamEl.focus();
   renderLosseKrachten();renderPersShiftKeuze();
 }
 
@@ -4247,7 +4303,7 @@ function renderLosseKrachten(){
   const el=document.getElementById('losseKrachtenLijst');
   if(!el)return;
   el.innerHTML=formLos.length
-    ?formLos.map((l,i)=>`<div class="chip on" style="cursor:default">${l.naam}${l.telefoon?' · '+l.telefoon:''}<span onclick="verwijderLosseKracht(${i})" style="margin-left:8px;cursor:pointer;font-weight:700" title="Verwijderen">×</span></div>`).join('')
+    ?formLos.map((l,i)=>`<div class="chip on" style="cursor:default">${l.naam}${l.telefoon?' · '+l.telefoon:''}${l.uurloon!=null?' · € '+Number(l.uurloon).toFixed(2).replace('.',','):''}<span onclick="verwijderLosseKracht(${i})" style="margin-left:8px;cursor:pointer;font-weight:700" title="Verwijderen">×</span></div>`).join('')
     :'<span style="font-size:12px;color:var(--muted);font-style:italic">Nog geen losse krachten</span>';
 }
 function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
@@ -4424,6 +4480,7 @@ async function saveKlusIntern(){
       if(formLos.length){
         const{error}=await sb.from('klus_losse_personen')
           .insert(formLos.map((l,i)=>({klus_id:id,naam:l.naam,telefoon:l.telefoon||null,
+            uurloon:l.uurloon!=null?l.uurloon:null,
             shift_id:shiftIdVanSleutel[formLosShift[i]]||null})));
         if(error)throw new Error('Losse krachten opslaan mislukt: '+error.message);
       }
@@ -4572,6 +4629,7 @@ function openDetail(id){
   }
   laadCollegaTelefoons(k);
   tekenRijschema(k);
+  tekenKlusLoon(k);
   const ns=document.getElementById('detailNotitieSection');ns.style.display=k.notitie?'':'none';document.getElementById('detailNotitie').textContent=k.notitie;
   const pdfs=document.getElementById('detailPdfSection');pdfs.style.display=k.pdfs&&k.pdfs.length?'':'none';
   document.getElementById('detailPdfs').innerHTML=k.pdfs?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${p.url}\`,\`${p.naam}\`)">${p.naam}</span>`).join(''):'';
@@ -5067,6 +5125,7 @@ function renderBeheer(){
   document.getElementById('soortenBeheer').innerHTML=SOORTEN.map(s=>`<div class="bi" id="sb-${s.id}"><div class="bi-left"><div class="bi-name">${s.titel}</div>${s.beschrijving?`<div class="bi-desc">${s.beschrijving}</div>`:''}</div><div class="bi-actions"><button class="btn-edit" onclick="startEditSoort('${s.id}')">Bewerk</button><button class="btn-danger-sm" onclick="deleteSoort('${s.id}')">×</button></div></div>`).join('');
   loadSkills();
   renderVasteDiensten();
+  laadInstellingen();
 }
 
 // ── FRANKLINS: vast weekschema ──────────────────────────────────────────
@@ -6153,7 +6212,7 @@ function planVerschil(reg){
 
 async function loadUrenBeheer(){
   // Beheerders klokken op dit tabblad ook zelf in en uit.
-  if(CURRENT_ROL==='beheerder'){loadUrenPersoneel();laadNuIngeklokt();}
+  if(CURRENT_ROL==='beheerder'){loadUrenPersoneel();laadNuIngeklokt();laadLoonkosten();}
 
   const accordEl=document.getElementById('urenAccordeerList');
   const maandEl=document.getElementById('urenMaandList');
@@ -6693,6 +6752,29 @@ async function doeExport(){
     const naamVan=Object.fromEntries((mensen||[]).map(m=>[m.id,m.naam]));
     const klusVan=Object.fromEntries((KLUSSEN||[]).map(k=>[k.id,k.naam||k.food||'']));
 
+    // Loonkosten mee-exporteren. Alleen een beheerder krijgt de uurlonen te
+    // zien; voor iedereen anders blijven die kolommen gewoon leeg.
+    let loonVan={}, opslag=1, metLoon=false;
+    if(CURRENT_ROL==='beheerder'){
+      const[{data:lonen},{data:inst}]=await Promise.all([
+        sb.from('gebruikers').select('id,uurloon'),
+        sb.from('instellingen').select('sleutel,waarde')
+      ]);
+      if(lonen){
+        loonVan=Object.fromEntries(lonen.filter(g=>g.uurloon!=null).map(g=>[g.id,Number(g.uurloon)]));
+        metLoon=true;
+      }
+      const pct=(inst||[]).find(r=>r.sleutel==='werkgeverslasten_pct');
+      const pctGetal=pct?Number(String(pct.waarde).replace(',','.')):30;
+      opslag=1+((isNaN(pctGetal)?30:pctGetal)/100);
+    }
+    const kostenVan=r=>{
+      const l=loonVan[r.gebruiker_id];
+      if(l==null)return null;
+      return (r.totaal_minuten||0)/60*l*opslag;
+    };
+    const geld=v=>v==null?'':v.toFixed(2).replace('.',',');
+
     // Per klus én per dag bij elkaar zetten wie er stond en hoe lang. Zo kun je
     // in één oogopslag zien of iemand er veel naast zit.
     const AFWIJKING_MIN=30;
@@ -6710,9 +6792,9 @@ async function doeExport(){
       return g.length%2?g[m]:Math.round((g[m-1]+g[m])/2);
     };
 
-    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Pauze (min)','Duur','Uren (decimaal)','Klus','Gepland','Gepland (duur)','Verschil met planning','Samen met','Uren collega\'s','Verschil','Status','Handmatig','Locatie inklokken','Locatie uitklokken','Notitie medewerker','Notitie beheer']];
-    let totaalMin=0;
-    const perPersoon={};
+    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Pauze (min)','Duur','Uren (decimaal)','Klus','Gepland','Gepland (duur)','Verschil met planning','Samen met','Uren collega\'s','Verschil','Uurloon','Loonkosten (incl. werkgeverslasten)','Status','Handmatig','Locatie inklokken','Locatie uitklokken','Notitie medewerker','Notitie beheer']];
+    let totaalMin=0, totaalKosten=0, zonderLoon=0;
+    const perPersoon={}, kostenPerPersoon={};
     let afwijkers=0;
 
     regs.forEach(r=>{
@@ -6722,6 +6804,9 @@ async function doeExport(){
       totaalMin+=min;
       const naam=naamVan[r.gebruiker_id]||'Onbekend';
       perPersoon[naam]=(perPersoon[naam]||0)+min;
+      const kost=kostenVan(r);
+      if(kost==null){if(metLoon)zonderLoon++;}
+      else{totaalKosten+=kost;kostenPerPersoon[naam]=(kostenPerPersoon[naam]||0)+kost;}
       const tijd=d=>d?d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'';
 
       const helePloeg=ploegen[ploegKey(r)]||[];
@@ -6756,6 +6841,8 @@ async function doeExport(){
         samenMet,
         urenCollegas,
         verschil,
+        geld(loonVan[r.gebruiker_id]!=null?loonVan[r.gebruiker_id]:null),
+        geld(kostenVan(r)),
         r.status||'',
         r.handmatig?'ja':'',
         r.locatie_in||'',
@@ -6770,12 +6857,22 @@ async function doeExport(){
       rijen.push([`Let op: ${afwijkers} ${afwijkers===1?'registratie wijkt':'registraties wijken'} meer dan ${AFWIJKING_MIN} minuten af van de rest van de ploeg (kolom Verschil).`]);
       rijen.push([]);
     }
+    if(metLoon&&zonderLoon){
+      rijen.push([zonderLoon===1
+        ?'Let op: bij 1 registratie is er geen uurloon bekend. Die telt niet mee in de loonkosten.'
+        :`Let op: bij ${zonderLoon} registraties is er geen uurloon bekend. Die tellen niet mee in de loonkosten.`]);
+      rijen.push([]);
+    }
     rijen.push(['Totaal per persoon']);
     Object.keys(perPersoon).sort().forEach(n=>{
-      rijen.push([n,'','','','',minToStr(perPersoon[n]),(perPersoon[n]/60).toFixed(2).replace('.',',')]);
+      const rij=[n,'','','','',minToStr(perPersoon[n]),(perPersoon[n]/60).toFixed(2).replace('.',',')];
+      if(metLoon){while(rij.length<15)rij.push('');rij.push(geld(kostenPerPersoon[n]!=null?kostenPerPersoon[n]:null));}
+      rijen.push(rij);
     });
     rijen.push([]);
-    rijen.push(['Totaal','','','','',minToStr(totaalMin),(totaalMin/60).toFixed(2).replace('.',',')]);
+    const totaalRij=['Totaal','','','','',minToStr(totaalMin),(totaalMin/60).toFixed(2).replace('.',',')];
+    if(metLoon){while(totaalRij.length<15)totaalRij.push('');totaalRij.push(geld(totaalKosten));}
+    rijen.push(totaalRij);
 
     // Puntkomma als scheidingsteken, dat opent goed in Nederlandse Excel.
     // De losse tekens vooraan zorgen dat Excel het als UTF-8 leest.
@@ -6797,6 +6894,279 @@ async function doeExport(){
   }finally{
     knop.disabled=false; knop.textContent='Exporteren';
   }
+}
+
+
+// ── LOONKOSTEN ──────────────────────────────────────────────────────────
+// Alles wat hier staat is alleen voor beheerders. De database rekent het uit
+// (functies loonkosten en loonkosten_per_persoon); die geven een lege lijst
+// terug als je geen beheerder bent, dus er lekt niets weg.
+let LK_KLUSRIJEN=[], LK_PERSRIJEN=[], LK_WEERGAVE='klus', LK_BEZIG=false, LK_ZONDERLOON=null;
+
+function lkEuro(n){
+  const v=Number(n||0);
+  return '€ '+v.toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function lkEuroKort(n){
+  const v=Math.round(Number(n||0));
+  return '€ '+v.toLocaleString('nl-NL');
+}
+function lkUren(n){
+  const v=Number(n||0);
+  return v.toLocaleString('nl-NL',{minimumFractionDigits:0,maximumFractionDigits:2})+' u';
+}
+
+// Begin en eind van de gekozen periode, allebei meegerekend.
+function lkGrenzen(){
+  const el=document.getElementById('lkPeriode');
+  const soort=el?el.value:'maand';
+  const nu=new Date();
+  if(soort==='maand')return{van:fmt(new Date(nu.getFullYear(),nu.getMonth(),1)),
+                            tot:fmt(new Date(nu.getFullYear(),nu.getMonth()+1,0))};
+  if(soort==='vorige')return{van:fmt(new Date(nu.getFullYear(),nu.getMonth()-1,1)),
+                             tot:fmt(new Date(nu.getFullYear(),nu.getMonth(),0))};
+  if(soort==='jaar')return{van:fmt(new Date(nu.getFullYear(),0,1)),
+                           tot:fmt(new Date(nu.getFullYear(),11,31))};
+  const v=(document.getElementById('lkVan')||{}).value;
+  const t=(document.getElementById('lkTot')||{}).value;
+  if(!v||!t||t<v)return null;
+  return{van:v,tot:t};
+}
+
+function lkPeriodeGewijzigd(){
+  const el=document.getElementById('lkPeriode');
+  const vak=document.getElementById('lkVrijVeld');
+  const vrij=el&&el.value==='vrij';
+  if(vak)vak.style.display=vrij?'flex':'none';
+  if(vrij){
+    const van=document.getElementById('lkVan'), tot=document.getElementById('lkTot');
+    if(van&&!van.value){
+      const nu=new Date();
+      van.value=fmt(new Date(nu.getFullYear(),nu.getMonth(),1));
+      tot.value=fmt(nu);
+    }
+  }
+  laadLoonkosten();
+}
+
+function lkWeergave(w){LK_WEERGAVE=w;tekenLoonkosten();}
+
+async function laadLoonkosten(){
+  const kaart=document.getElementById('loonkostenCard');
+  if(!kaart)return;
+  if(CURRENT_ROL!=='beheerder'){kaart.style.display='none';return;}
+  kaart.style.display='';
+  const vak=document.getElementById('lkInhoud');
+  if(!vak)return;
+  const g=lkGrenzen();
+  if(!g){vak.innerHTML='<div class="empty" style="padding:.75rem 0;font-size:12px">Kies eerst een begin- en einddatum.</div>';return;}
+  if(LK_BEZIG)return;
+  LK_BEZIG=true;
+  vak.innerHTML='<div class="spin">Laden...</div>';
+  try{
+    const[a,b,c]=await Promise.all([
+      sb.rpc('loonkosten',{p_van:g.van,p_tot:g.tot}),
+      sb.rpc('loonkosten_per_persoon',{p_van:g.van,p_tot:g.tot}),
+      sb.from('gebruikers').select('id',{count:'exact',head:true}).is('uurloon',null)
+    ]);
+    if(a.error)throw new Error(a.error.message);
+    LK_KLUSRIJEN=a.data||[];
+    LK_PERSRIJEN=(b&&b.data)||[];
+    LK_ZONDERLOON=(c&&typeof c.count==='number')?c.count:null;
+    tekenLoonkosten();
+  }catch(e){
+    console.error('Loonkosten ophalen mislukt:',e);
+    vak.innerHTML='<div class="empty" style="padding:.75rem 0;font-size:12px">Ophalen mislukt: '+veiligTekst(e&&e.message||'onbekende fout')+'</div>';
+  }finally{
+    LK_BEZIG=false;
+  }
+}
+
+function lkTegel(titel,bedrag,uren,kleur,uitleg){
+  return`<div style="flex:1;min-width:150px;border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:var(--surface)">
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">${titel}</div>
+    <div style="font-size:20px;font-weight:700;color:${kleur};margin-top:3px">${lkEuroKort(bedrag)}</div>
+    <div style="font-size:11px;color:var(--muted);margin-top:2px">${lkUren(uren)}${uitleg?' · '+uitleg:''}</div>
+  </div>`;
+}
+
+function lkMaandLabel(datum){
+  const d=parseDate(datum);
+  return d.toLocaleDateString('nl-NL',{month:'long',year:'numeric'});
+}
+function lkWeekLabel(datum){
+  const d=parseDate(datum);
+  const dag=(d.getDay()+6)%7;
+  const ma=new Date(d); ma.setDate(d.getDate()-dag);
+  return 'Week van '+ma.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+}
+function lkWeekSleutel(datum){
+  const d=parseDate(datum);
+  const dag=(d.getDay()+6)%7;
+  const ma=new Date(d); ma.setDate(d.getDate()-dag);
+  return fmt(ma);
+}
+
+function lkTabel(kop,rijen){
+  if(!rijen.length)return'<div class="empty" style="padding:.75rem 0;font-size:12px">Geen regels in deze periode.</div>';
+  const th='text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap';
+  const thR=th+';text-align:right';
+  return`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;min-width:520px">
+      <thead><tr>${kop.map((c,i)=>`<th style="${i?thR:th}">${c}</th>`).join('')}</tr></thead>
+      <tbody>${rijen.join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+function tekenLoonkosten(){
+  const vak=document.getElementById('lkInhoud');
+  if(!vak)return;
+  const rijen=LK_KLUSRIJEN||[];
+  const som=v=>rijen.reduce((t,r)=>t+Number(r[v]||0),0);
+  const kGoed=som('kosten_goedgekeurd'), uGoed=som('uren_goedgekeurd');
+  const kWacht=som('kosten_wacht'),      uWacht=som('uren_wacht');
+  const kPlan=som('kosten_gepland'),     uPlan=som('uren_gepland');
+
+  const td='padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top';
+  const tdR=td+';text-align:right;white-space:nowrap';
+
+  const knop=(w,tekst)=>`<button class="chip${LK_WEERGAVE===w?' on':''}" onclick="lkWeergave('${w}')" style="font-size:11px;padding:5px 12px">${tekst}</button>`;
+
+  let tabel='';
+  if(LK_WEERGAVE==='klus'){
+    const lijst=rijen.slice().sort((a,b)=>
+      (Number(b.kosten_goedgekeurd)+Number(b.kosten_wacht)+Number(b.kosten_gepland))
+      -(Number(a.kosten_goedgekeurd)+Number(a.kosten_wacht)+Number(a.kosten_gepland)));
+    tabel=lkTabel(['Klus','Mensen','Gepland','Goedgekeurd','Te accorderen'],
+      lijst.map(r=>`<tr${r.klus_id?` style="cursor:pointer" onclick="openDetail('${r.klus_id}')"`:''}>
+        <td style="${td}">
+          <div style="font-weight:600;color:var(--text)">${veiligTekst(r.klus||'Klus')}</div>
+          <div style="font-size:11px;color:var(--muted)">${parseDate(r.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'})}${r.categorie?' · '+veiligTekst(r.categorie):''}${r.zonder_uurloon?` · <span style="color:#B45309">${r.zonder_uurloon} zonder uurloon</span>`:''}</div>
+        </td>
+        <td style="${tdR}">${r.aantal_mensen||0}</td>
+        <td style="${tdR}">${lkEuroKort(r.kosten_gepland)}<div style="font-size:11px;color:var(--muted)">${lkUren(r.uren_gepland)}</div></td>
+        <td style="${tdR}">${lkEuroKort(r.kosten_goedgekeurd)}<div style="font-size:11px;color:var(--muted)">${lkUren(r.uren_goedgekeurd)}</div></td>
+        <td style="${tdR}">${lkEuroKort(r.kosten_wacht)}<div style="font-size:11px;color:var(--muted)">${lkUren(r.uren_wacht)}</div></td>
+      </tr>`));
+  }else if(LK_WEERGAVE==='maand'||LK_WEERGAVE==='week'){
+    const perWeek=LK_WEERGAVE==='week';
+    const groepen={};
+    rijen.forEach(r=>{
+      if(!r.datum)return;
+      const sleutel=perWeek?lkWeekSleutel(r.datum):r.datum.slice(0,7);
+      const g=groepen[sleutel]=groepen[sleutel]||{label:perWeek?lkWeekLabel(r.datum):lkMaandLabel(r.datum),
+        kg:0,ug:0,kw:0,uw:0,kp:0,up:0,n:0};
+      g.kg+=Number(r.kosten_goedgekeurd||0); g.ug+=Number(r.uren_goedgekeurd||0);
+      g.kw+=Number(r.kosten_wacht||0);       g.uw+=Number(r.uren_wacht||0);
+      g.kp+=Number(r.kosten_gepland||0);     g.up+=Number(r.uren_gepland||0);
+      g.n++;
+    });
+    const sleutels=Object.keys(groepen).sort();
+    tabel=lkTabel([perWeek?'Week':'Maand','Klussen','Gepland','Goedgekeurd','Te accorderen'],
+      sleutels.map(k=>{const g=groepen[k];return`<tr>
+        <td style="${td}"><div style="font-weight:600;color:var(--text);text-transform:capitalize">${g.label}</div></td>
+        <td style="${tdR}">${g.n}</td>
+        <td style="${tdR}">${lkEuroKort(g.kp)}<div style="font-size:11px;color:var(--muted)">${lkUren(g.up)}</div></td>
+        <td style="${tdR}">${lkEuroKort(g.kg)}<div style="font-size:11px;color:var(--muted)">${lkUren(g.ug)}</div></td>
+        <td style="${tdR}">${lkEuroKort(g.kw)}<div style="font-size:11px;color:var(--muted)">${lkUren(g.uw)}</div></td>
+      </tr>`;}));
+  }else{
+    tabel=lkTabel(['Medewerker','Uurloon','Klussen','Goedgekeurd','Te accorderen','Kosten'],
+      (LK_PERSRIJEN||[]).map(r=>`<tr>
+        <td style="${td}">
+          <div style="font-weight:600;color:var(--text)">${veiligTekst(r.naam||'Onbekend')}</div>
+          <div style="font-size:11px;color:var(--muted)">${veiligTekst(r.rol||'')}</div>
+        </td>
+        <td style="${tdR}">${r.uurloon!=null?lkEuro(r.uurloon):'<span style="color:#B45309">niet ingevuld</span>'}</td>
+        <td style="${tdR}">${r.aantal_klussen||0}</td>
+        <td style="${tdR}">${lkUren(r.uren_goedgekeurd)}</td>
+        <td style="${tdR}">${lkUren(r.uren_wacht)}</td>
+        <td style="${tdR}">${lkEuroKort(r.kosten)}</td>
+      </tr>`));
+  }
+
+  const waarschuwing=LK_ZONDERLOON
+    ?`<div style="font-size:12px;color:#B45309;background:#FFFBEB;border:1px solid #FDE68A;border-radius:9px;padding:8px 10px;margin-bottom:.875rem;line-height:1.5">
+        Bij <b>${LK_ZONDERLOON}</b> ${LK_ZONDERLOON===1?'account':'accounts'} staat nog geen uurloon.
+        Die ${LK_ZONDERLOON===1?'telt':'tellen'} hieronder voor € 0 mee. Vul het in bij <b>Accounts</b> &rarr; het account &rarr; Uurloon.
+      </div>`:'';
+
+  vak.innerHTML=`
+    ${waarschuwing}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.875rem">
+      ${lkTegel('Goedgekeurd',kGoed,uGoed,'var(--text)','betaald werk')}
+      ${lkTegel('Nog te accorderen',kWacht,uWacht,'#B45309','wacht op jou')}
+      ${lkTegel('Gepland',kPlan,uPlan,'#1D4ED8','volgens rooster')}
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:.75rem;line-height:1.5">
+      Bedragen zijn inclusief werkgeverslasten. Dat percentage en het standaard uurloon voor
+      losse krachten pas je aan bij <b>Beheer</b>.
+    </div>
+    <div class="chips" style="margin-bottom:.875rem">
+      ${knop('klus','Per klus')}${knop('maand','Per maand')}${knop('week','Per week')}${knop('persoon','Per persoon')}
+    </div>
+    ${tabel}`;
+}
+
+// De regel in het klusvenster. Haalt alleen die ene dag op, dat scheelt werk.
+async function tekenKlusLoon(k){
+  const vak=document.getElementById('detailLoonSection');
+  const el=document.getElementById('detailLoon');
+  if(!vak||!el)return;
+  if(CURRENT_ROL!=='beheerder'||!k){vak.style.display='none';return;}
+  vak.style.display='';
+  el.innerHTML='<div style="font-size:12px;color:var(--muted)">Bezig met rekenen...</div>';
+  const dag=k.datum, tot=k.datum_eind||k.datum;
+  const{data,error}=await sb.rpc('loonkosten',{p_van:dag,p_tot:tot});
+  if(detailKlusId!==k.id)return;              // venster is intussen gewisseld
+  if(error){el.innerHTML='<div style="font-size:12px;color:var(--muted)">Kon de loonkosten niet ophalen.</div>';return;}
+  const r=(data||[]).find(x=>x.klus_id===k.id);
+  if(!r){el.innerHTML='<div style="font-size:12px;color:var(--muted);font-style:italic">Nog niemand ingedeeld, dus nog geen loonkosten.</div>';return;}
+  const geklokt=Number(r.kosten_goedgekeurd||0)+Number(r.kosten_wacht||0);
+  const uGeklokt=Number(r.uren_goedgekeurd||0)+Number(r.uren_wacht||0);
+  el.innerHTML=`
+    <div style="font-size:14px;font-weight:600;color:var(--text)">
+      ${lkEuroKort(r.kosten_gepland)} gepland
+      <span style="font-weight:400;color:var(--muted)">— ${r.aantal_mensen||0} ${r.aantal_mensen===1?'persoon':'mensen'}, ${lkUren(r.uren_gepland)}</span>
+    </div>
+    ${uGeklokt?`<div style="font-size:12px;color:var(--muted);margin-top:3px">
+        Geklokt tot nu toe: ${lkEuroKort(geklokt)} over ${lkUren(uGeklokt)}${r.uren_wacht>0?` (waarvan ${lkUren(r.uren_wacht)} nog te accorderen)`:''}
+      </div>`:'<div style="font-size:12px;color:var(--muted);margin-top:3px">Er is nog niet ingeklokt op deze klus.</div>'}
+    ${r.zonder_uurloon?`<div style="font-size:12px;color:#B45309;margin-top:3px">${r.zonder_uurloon===1?'Van één persoon is nog geen uurloon bekend, die telt':`Van ${r.zonder_uurloon} mensen is nog geen uurloon bekend, die tellen`} voor € 0 mee.</div>`:''}
+    <div style="font-size:11px;color:var(--muted);margin-top:4px">Inclusief werkgeverslasten.</div>`;
+}
+
+// ── INSTELLINGEN (beheer) ───────────────────────────────────────────────
+let INSTELLINGEN={};
+
+async function laadInstellingen(){
+  if(CURRENT_ROL!=='beheerder')return;
+  const a=document.getElementById('instWglasten');
+  const b=document.getElementById('instLosLoon');
+  if(!a||!b)return;
+  const{data,error}=await sb.from('instellingen').select('sleutel,waarde');
+  if(error){const i=document.getElementById('instInfo');if(i)i.textContent='Ophalen mislukt: '+error.message;return;}
+  INSTELLINGEN=Object.fromEntries((data||[]).map(r=>[r.sleutel,r.waarde]));
+  a.value=INSTELLINGEN.werkgeverslasten_pct!=null?String(INSTELLINGEN.werkgeverslasten_pct).replace(',','.'):'30';
+  b.value=INSTELLINGEN.los_uurloon_standaard!=null?String(INSTELLINGEN.los_uurloon_standaard).replace(',','.'):'15';
+}
+
+async function bewaarInstellingen(){
+  const info=document.getElementById('instInfo');
+  const pct=(document.getElementById('instWglasten').value||'').trim().replace(',','.');
+  const los=(document.getElementById('instLosLoon').value||'').trim().replace(',','.');
+  if(pct===''||isNaN(Number(pct))||Number(pct)<0){if(info)info.textContent='Het percentage klopt niet.';return;}
+  if(los===''||isNaN(Number(los))||Number(los)<0){if(info)info.textContent='Het uurloon klopt niet.';return;}
+  if(info)info.textContent='Bezig met opslaan...';
+  const{error}=await sb.from('instellingen').upsert([
+    {sleutel:'werkgeverslasten_pct',waarde:pct,omschrijving:'Percentage bovenop het brutoloon'},
+    {sleutel:'los_uurloon_standaard',waarde:los,omschrijving:'Uurloon voor een losse kracht zonder eigen bedrag'}
+  ],{onConflict:'sleutel'});
+  if(error){if(info)info.textContent='Opslaan mislukt: '+error.message;return;}
+  if(info)info.textContent='Opgeslagen.';
+  toast('Rekenregels opgeslagen');
+  if(document.getElementById('loonkostenCard'))laadLoonkosten();
 }
 
 // ── BESCHIKBAARHEID ──
@@ -7948,6 +8318,7 @@ async function bewaarKopie(){
     if((k.losse||[]).length){
       const{error:e6}=await sb.from('klus_losse_personen').insert(
         k.losse.map(l=>({klus_id:nieuwId,naam:l.naam,telefoon:l.telefoon||null,
+          uurloon:l.uurloon!=null?l.uurloon:null,
           shift_id:shiftVertaling[l.shift_id]||null})));
       if(e6)throw new Error('Losse krachten kopiëren mislukt: '+e6.message);
     }
