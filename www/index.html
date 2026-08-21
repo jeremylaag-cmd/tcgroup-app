@@ -4669,6 +4669,30 @@ function heeftRijbewijs(persoonId,nodig){
 function rsVoertuigen(k){return (k.trucks||[]).filter(t=>!isAanhanger(t));}
 function rsAanhangers(k){return (k.trucks||[]).filter(isAanhanger);}
 
+// Alleen een auto met trekhaak kan een aanhanger trekken. Een aanhanger zelf
+// natuurlijk niet, die staat sowieso niet in de lijst met voertuigen.
+function magTrekken(t){return !!(t&&!isAanhanger(t)&&t.trekhaak);}
+
+// Een aanhanger kan maar achter één auto tegelijk. Voor de keuzelijst van deze
+// auto laten we dus alleen de vrije aanhangers zien, plus die van hemzelf.
+function rsVrijeAanhangers(k,truckId){
+  const bezet=new Set(RS_RITTEN.filter(r=>r.truck_id!==truckId&&r.aanhanger_id).map(r=>r.aanhanger_id));
+  return rsAanhangers(k).filter(a=>!bezet.has(a.id));
+}
+
+// Met een aanhanger erachter heb je een zwaarder rijbewijs nodig dan voor de
+// auto alleen: B wordt BE, C wordt CE. We pakken de zwaarste van de twee.
+function rsZwaarste(codes){
+  const bekend=(codes||[]).map(c=>String(c||'').toUpperCase())
+    .filter(c=>RIJBEWIJS_VOLGORDE.includes(c));
+  if(!bekend.length)return '';
+  return bekend.sort((a,b)=>RIJBEWIJS_VOLGORDE.indexOf(a)-RIJBEWIJS_VOLGORDE.indexOf(b)).pop();
+}
+function rsNodigRijbewijs(t,aanhanger){
+  const zwaarste=rsZwaarste([t&&t.rijbewijs,aanhanger&&aanhanger.rijbewijs]);
+  return zwaarste||String((t&&t.rijbewijs)||'').toUpperCase();
+}
+
 // Iedereen die op de klus staat, personeel en losse krachten door elkaar.
 function rsMensen(k){
   return (k.personeel||[]).map(p=>({sleutel:'p:'+p.id,soort:'pers',id:p.id,naam:p.naam}))
@@ -4770,6 +4794,12 @@ async function rsZetBestuurder(ritId,persoonRegelId){
 }
 
 async function rsZetAanhanger(truckId,aanhangerId){
+  const t=(TRUCKS||[]).find(x=>x.id===truckId);
+  if(aanhangerId&&!magTrekken(t)){
+    toast((t?t.label:'Dit voertuig')+' heeft geen trekhaak, daar kan geen aanhanger achter.','fout');
+    rsRender();
+    return;
+  }
   const rit=aanhangerId?await rsZorgRit(truckId):RS_RITTEN.find(r=>r.truck_id===truckId);
   if(!rit)return;
   const{error}=await sb.from('klus_ritten')
@@ -4815,6 +4845,7 @@ function rsRender(){
     const vol=plaatsen>0&&inzittenden.length>=plaatsen;
     const teVeel=plaatsen>0&&inzittenden.length>plaatsen;
     const aanhanger=rit&&rit.aanhanger_id?(TRUCKS||[]).find(x=>x.id===rit.aanhanger_id):null;
+    const nodigRb=rsNodigRijbewijs(t,aanhanger);
 
     const naamVan=r=>{
       if(r.gebruiker_id){const p=(k.personeel||[]).find(x=>x.id===r.gebruiker_id);return p?p.naam:'Onbekend';}
@@ -4824,7 +4855,7 @@ function rsRender(){
     html+=`<div class="pb-klus" style="border-left-color:${t.color||'#6366F1'}">
       <div class="pb-klus-hdr">
         <div><div class="pb-knaam">${veiligTekst(t.label)}${t.kenteken?` <span style="font-weight:400;color:var(--muted)">${veiligTekst(String(t.kenteken).toUpperCase())}</span>`:''}</div>
-          <div class="pb-kloc">${plaatsen?`${inzittenden.length} van de ${plaatsen} plaatsen bezet`:'geen zitplaatsen ingevuld'}${t.rijbewijs?` · rijbewijs ${veiligTekst(t.rijbewijs)}`:''}</div></div>
+          <div class="pb-kloc">${plaatsen?`${inzittenden.length} van de ${plaatsen} plaatsen bezet`:'geen zitplaatsen ingevuld'}${nodigRb?` · rijbewijs ${veiligTekst(nodigRb)}${aanhanger&&nodigRb!==String(t.rijbewijs||'').toUpperCase()?' (met aanhanger)':''}`:''}</div></div>
         <span class="pb-badge ${teVeel?'leeg':vol?'vol':'deel'}">${inzittenden.length}${plaatsen?'/'+plaatsen:''}</span>
       </div>
 
@@ -4832,16 +4863,21 @@ function rsRender(){
         <span class="pb-stijd">Vertrek</span>
         <input type="time" class="pb-tijdveld" value="${rit&&rit.vertrek_tijd?String(rit.vertrek_tijd).slice(0,5):''}"
           onchange="rsZetTijd('${t.id}',this.value)">
-        ${aanhangers.length?`<span style="font-size:11px;color:var(--muted)">Aanhanger</span>
-          <select class="pb-tijdveld" onchange="rsZetAanhanger('${t.id}',this.value)">
-            <option value="">geen</option>
-            ${aanhangers.map(a=>`<option value="${a.id}"${aanhanger&&aanhanger.id===a.id?' selected':''}>${veiligTekst(a.label)}</option>`).join('')}
-          </select>${aanhanger&&!t.trekhaak?'<span style="font-size:11px;color:#B45309;font-weight:600">⚠ geen trekhaak</span>':''}`:''}
+        ${!aanhangers.length?'':magTrekken(t)
+          ?`<span style="font-size:11px;color:var(--muted)">Aanhanger</span>
+            <select class="pb-tijdveld" onchange="rsZetAanhanger('${t.id}',this.value)">
+              <option value="">geen</option>
+              ${rsVrijeAanhangers(k,t.id).map(a=>`<option value="${a.id}"${aanhanger&&aanhanger.id===a.id?' selected':''}>${veiligTekst(a.label)}</option>`).join('')}
+            </select>`
+          :aanhanger
+            ?`<span style="font-size:11px;color:#B91C1C;font-weight:600">⚠ ${veiligTekst(aanhanger.label)} hangt er nog achter, maar ${veiligTekst(t.label)} heeft geen trekhaak</span>
+              <button class="pb-wijs" onclick="rsZetAanhanger('${t.id}','')">Haal eraf</button>`
+            :`<span style="font-size:11px;color:var(--muted)">Geen trekhaak &mdash; hier kan geen aanhanger achter</span>`}
       </div>
 
       ${inzittenden.length?`<div class="pb-namen">${inzittenden.map(r=>{
         const naam=naamVan(r);
-        const magRijden=r.gebruiker_id?heeftRijbewijs(r.gebruiker_id,t.rijbewijs):true;
+        const magRijden=r.gebruiker_id?heeftRijbewijs(r.gebruiker_id,nodigRb):true;
         return`<span class="pb-naam-pill"${r.bestuurder?' style="background:#EEF2FF;color:#3730A3;border-color:#C7D2FE"':''}>
           ${r.bestuurder?'🚗 ':''}${veiligTekst(naam)}${r.bestuurder&&!magRijden?' ⚠':''}
           <button class="pb-remove" onclick="rsZetIn('${t.id}','${r.gebruiker_id?'p:'+r.gebruiker_id:'l:'+r.los_id}')" title="Eruit halen">&#x2715;</button>
@@ -4855,8 +4891,8 @@ function rsRender(){
             // Van een losse kracht kennen we het rijbewijs niet; die mag wel rijden
             // maar dan zonder controle.
             const los=!r.gebruiker_id;
-            const magRijden=los?true:heeftRijbewijs(r.gebruiker_id,t.rijbewijs);
-            const staart=los?' — rijbewijs niet bekend':(magRijden?'':' — geen '+veiligTekst(t.rijbewijs));
+            const magRijden=los?true:heeftRijbewijs(r.gebruiker_id,nodigRb);
+            const staart=los?' — rijbewijs niet bekend':(magRijden?'':' — geen '+veiligTekst(nodigRb));
             return`<option value="${r.id}"${r.bestuurder?' selected':''}>${veiligTekst(naamVan(r))}${staart}</option>`;
           }).join('')}
         </select>
