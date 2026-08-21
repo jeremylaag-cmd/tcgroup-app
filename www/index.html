@@ -4587,9 +4587,11 @@ function openDetail(id){
     +(k.is_optie?' <span class="bdg" style="background:#EEF2FF;color:#3730A3;border:1px dashed #A5B4FC;vertical-align:middle">Optie</span>':'');
   document.getElementById('detailTijden').innerHTML=tijdLines.map(t=>`<div style="font-size:14px;font-weight:600;color:var(--text)">${t}</div>`).join('');
   document.getElementById('detailDatum').textContent=datumStr;
+  // Alleen de namen van de trucks. De gegevens per truck (rijbewijs,
+  // zitplaatsen, aanhanger) stonden hier als een muur van labels; die horen
+  // thuis bij Beheer en in het rijschema, waar je er iets aan hebt.
   document.getElementById('detailTrucks').innerHTML=k.trucks.map(t=>
-    `<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${veiligTekst(t.label)}</span>`).join('')
-    +(k.trucks.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">${k.trucks.map(t=>truckBadges(t,true)).join('')}</div>`:'');
+    `<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${veiligTekst(t.label)}</span>`).join('');
   const soortEl=document.getElementById('detailSoort');
   if(k.truckSoorten&&k.truckSoorten.length){
     const byTruck={};k.truckSoorten.forEach(ts=>{if(!byTruck[ts.truck.id])byTruck[ts.truck.id]={truck:ts.truck,soorten:[]};byTruck[ts.truck.id].soorten.push(ts.soort.titel);});
