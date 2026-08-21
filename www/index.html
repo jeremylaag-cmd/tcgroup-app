@@ -850,6 +850,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <button type="button" class="chip" data-rb="B" onclick="toggleRijbewijs(this)">B &middot; Auto</button>
           <button type="button" class="chip" data-rb="BE" onclick="toggleRijbewijs(this)">BE &middot; Auto met aanhanger</button>
           <button type="button" class="chip" data-rb="C1" onclick="toggleRijbewijs(this)">C1 &middot; Lichte vrachtwagen</button>
+          <button type="button" class="chip" data-rb="C1E" onclick="toggleRijbewijs(this)">C1E &middot; Lichte vrachtwagen met aanhanger</button>
           <button type="button" class="chip" data-rb="C" onclick="toggleRijbewijs(this)">C &middot; Vrachtwagen</button>
           <button type="button" class="chip" data-rb="CE" onclick="toggleRijbewijs(this)">CE &middot; Vrachtwagen met aanhanger</button>
         </div>
@@ -1202,10 +1203,10 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
                   <option value="">Kies —</option>
                 </select>
               </div>
-              <div style="flex:1;min-width:130px">
-                <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:3px">Rijbewijs</div>
-                <input type="text" id="profielRijbewijs" placeholder="bv. B, BE" style="width:100%;font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
-              </div>
+            </div>
+            <div>
+              <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:5px">Rijbewijs <span style="font-weight:400">(tik aan wat je hebt, meerdere mag)</span></div>
+              <div class="chips" id="profielRijbewijsWrap"></div>
             </div>
             <div id="profielContractRegel" style="font-size:12px;color:var(--muted);display:none"></div>
             <button class="btn-sm" onclick="saveProfielGegevens()" style="align-self:flex-end;padding:8px 14px">Gegevens opslaan</button>
@@ -4839,6 +4840,48 @@ async function rsZetIn(truckId,sleutel){
   await rsZorgBestuurder(truckId);
 }
 
+// De bestuurder kies je rechtstreeks uit iedereen die op de klus staat. Zit
+// diegene nog in een ander voertuig, dan verhuist hij hierheen.
+async function rsKiesBestuurder(truckId,sleutel){
+  const rit=RS_RITTEN.find(r=>r.truck_id===truckId);
+
+  if(!sleutel){
+    // "nog niemand": hij blijft wel meerijden, maar rijdt niet meer.
+    if(!rit)return;
+    const oud=(rit.personen||[]).find(x=>x.bestuurder);
+    if(oud)await sb.from('klus_rit_personen').update({bestuurder:false}).eq('id',oud.id);
+    await rsLaad();
+    return;
+  }
+
+  const k=(KLUSSEN||[]).find(x=>x.id===RS_KLUS);
+  const mens=rsMensen(k).find(m=>m.sleutel===sleutel);
+  if(!mens)return;
+
+  const t=(TRUCKS||[]).find(x=>x.id===truckId);
+  const aanhanger=rit&&rit.aanhanger_id?(TRUCKS||[]).find(x=>x.id===rit.aanhanger_id):null;
+  const nodig=rsNodigRijbewijs(t,aanhanger);
+  if(aanhanger&&mens.soort==='pers'&&!heeftRijbewijs(mens.id,nodig)){
+    toast(mens.naam+' heeft geen rijbewijs '+nodig
+      +' en kan met de aanhanger erachter niet rijden.','fout');
+    rsRender();
+    return;
+  }
+
+  // Zorg eerst dat hij in dit voertuig zit.
+  let waar=rsWaarZit(mens);
+  if(!waar||waar.rit.truck_id!==truckId){
+    await rsZetIn(truckId,mens.sleutel);
+    waar=rsWaarZit(mens);
+  }
+  if(!waar)return;
+
+  await sb.from('klus_rit_personen').update({bestuurder:false}).eq('rit_id',waar.rit.id);
+  const{error}=await sb.from('klus_rit_personen').update({bestuurder:true}).eq('id',waar.regel.id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');}
+  await rsLaad();
+}
+
 async function rsZetBestuurder(ritId,persoonRegelId){
   // Met een aanhanger erachter heb je een zwaarder rijbewijs nodig. Iemand
   // zonder dat rijbewijs kunnen we hier niet als bestuurder neerzetten.
@@ -4945,59 +4988,88 @@ function rsRender(){
             :`<span style="font-size:11px;color:var(--muted)">Geen trekhaak &mdash; hier kan geen aanhanger achter</span>`}
       </div>
 
-      ${inzittenden.length?`<div class="pb-namen">${inzittenden.map(r=>{
-        const naam=naamVan(r);
-        const magRijden=r.gebruiker_id?heeftRijbewijs(r.gebruiker_id,nodigRb):true;
-        return`<span class="pb-naam-pill"${r.bestuurder?' style="background:#EEF2FF;color:#3730A3;border-color:#C7D2FE"':''}>
-          ${r.bestuurder?'🚗 ':''}${veiligTekst(naam)}${r.bestuurder&&!magRijden?' ⚠':''}
-          <button class="pb-remove" onclick="rsZetIn('${t.id}','${r.gebruiker_id?'p:'+r.gebruiker_id:'l:'+r.los_id}')" title="Eruit halen">&#x2715;</button>
-        </span>`;}).join('')}</div>`:''}
+      ${(()=>{
+        // ── BESTUURDER ────────────────────────────────────────────────
+        // Je kiest hem uit iedereen die op de klus staat, niet alleen uit wie
+        // er al in zit. Zit hij nog in een ander voertuig, dan verhuist hij.
+        const bestuurder=inzittenden.find(r=>r.bestuurder);
+        const sleutelVan=r=>r.gebruiker_id?'p:'+r.gebruiker_id:'l:'+r.los_id;
+        const magRijden=m=>m.soort!=='pers'||heeftRijbewijs(m.id,nodigRb);
+        const waarZit=m=>{
+          const w=rsWaarZit(m);
+          if(!w)return '';
+          if(w.rit.truck_id===t.id)return '';
+          const a=(TRUCKS||[]).find(x=>x.id===w.rit.truck_id);
+          return ' — zit nu in '+(a?a.label:'ander voertuig');
+        };
+        const kanRijden=mensen.filter(m=>m.soort==='pers'&&magRijden(m));
+        const kanNiet  =mensen.filter(m=>m.soort==='pers'&&!magRijden(m));
+        const losKrachten=mensen.filter(m=>m.soort!=='pers');
+        const optie=(m,staart)=>`<option value="${m.sleutel}"${bestuurder&&sleutelVan(bestuurder)===m.sleutel?' selected':''}>${veiligTekst(m.naam)}${veiligTekst(waarZit(m))}${staart||''}</option>`;
 
-      ${inzittenden.length?(()=>{
-        // Hangt er een aanhanger achter, dan kun je alleen nog iemand kiezen
-        // die dat rijbewijs ook heeft. Van een losse kracht weten we het niet;
-        // die zetten we apart zodat je hem wel kunt kiezen als jij het weet.
-        const magLijst=inzittenden.filter(r=>r.gebruiker_id&&heeftRijbewijs(r.gebruiker_id,nodigRb));
-        const magNiet =inzittenden.filter(r=>r.gebruiker_id&&!heeftRijbewijs(r.gebruiker_id,nodigRb));
-        const losLijst=inzittenden.filter(r=>!r.gebruiker_id);
-        const optie=(r,staart)=>`<option value="${r.id}"${r.bestuurder?' selected':''}>${veiligTekst(naamVan(r))}${staart||''}</option>`;
+        // Met een aanhanger erachter kun je alleen nog kiezen wie dat
+        // rijbewijs heeft. Van een losse kracht weten we het niet, dus die
+        // blijft kiesbaar maar staat apart.
         const opties=aanhanger
-          ? magLijst.map(r=>optie(r)).join('')
-            +(losLijst.length?`<optgroup label="Rijbewijs niet bekend">${losLijst.map(r=>optie(r)).join('')}</optgroup>`:'')
-          : magLijst.map(r=>optie(r)).join('')
-            +losLijst.map(r=>optie(r,' — rijbewijs niet bekend')).join('')
-            +magNiet.map(r=>optie(r,' — geen '+veiligTekst(nodigRb))).join('');
-        const niemand=aanhanger&&!magLijst.length&&!losLijst.length;
+          ? kanRijden.map(m=>optie(m)).join('')
+            +(losKrachten.length?`<optgroup label="Rijbewijs niet bekend">${losKrachten.map(m=>optie(m)).join('')}</optgroup>`:'')
+          : kanRijden.map(m=>optie(m)).join('')
+            +losKrachten.map(m=>optie(m,' — rijbewijs niet bekend')).join('')
+            +kanNiet.map(m=>optie(m,' — geen '+veiligTekst(nodigRb))).join('');
+        const niemandMag=aanhanger&&!kanRijden.length&&!losKrachten.length;
         const eenPlek=Number(t.zitplaatsen)===1;
-        return`<div class="pb-shift" style="border-top:none;padding-top:2px">
-          <span style="font-size:11px;color:var(--muted)">Bestuurder</span>
-          <select class="pb-tijdveld" onchange="rsZetBestuurder('${rit.id}',this.value)"${niemand?' disabled':''}>
-            <option value="">nog niemand</option>
-            ${opties}
-          </select>
-          ${eenPlek?'<span style="font-size:11px;color:var(--muted)">&eacute;&eacute;n zitplaats, dus vanzelf de bestuurder</span>':''}
-        </div>
-        ${aanhanger&&magNiet.length?`<div style="font-size:11px;color:#B45309;padding:0 2px 4px">
-            ${veiligTekst(magNiet.map(naamVan).join(', '))} ${magNiet.length===1?'heeft':'hebben'} geen rijbewijs ${veiligTekst(nodigRb)} en ${magNiet.length===1?'kan':'kunnen'} met de aanhanger erachter niet rijden.
-          </div>`:''}
-        ${niemand?`<div style="font-size:11px;color:#B91C1C;font-weight:600;padding:0 2px 4px">
-            Niemand in dit voertuig heeft rijbewijs ${veiligTekst(nodigRb)}. Zet er iemand bij die dat wel heeft, of vul het rijbewijs in bij Accounts.
-          </div>`:''}`;
-      })():''}
+        const bestFout=bestuurder&&bestuurder.gebruiker_id&&!heeftRijbewijs(bestuurder.gebruiker_id,nodigRb);
+
+        // ── BIJRIJDERS ────────────────────────────────────────────────
+        const bijrijders=inzittenden.filter(r=>!r.bestuurder);
+        const vrij=plaatsen?plaatsen-inzittenden.length:null;
+
+        return`
+      <div class="pb-shift" style="border-top:none;padding-top:6px">
+        <span style="font-size:11px;color:var(--muted);font-weight:600">Bestuurder</span>
+        <select class="pb-tijdveld" style="flex:1;min-width:150px" onchange="rsKiesBestuurder('${t.id}',this.value)"${niemandMag?' disabled':''}>
+          <option value="">nog niemand</option>
+          ${opties}
+        </select>
+        ${eenPlek?'<span style="font-size:11px;color:var(--muted)">&eacute;&eacute;n zitplaats</span>':''}
+      </div>
+      ${bestFout?`<div style="font-size:11px;color:#B45309;padding:0 2px 4px">
+          ${veiligTekst(naamVan(bestuurder))} heeft geen rijbewijs ${veiligTekst(nodigRb)} — kijk of dat klopt.
+        </div>`:''}
+      ${aanhanger&&kanNiet.length?`<div style="font-size:11px;color:var(--muted);padding:0 2px 4px">
+          Niet in de lijst omdat ze geen rijbewijs ${veiligTekst(nodigRb)} hebben: ${veiligTekst(kanNiet.map(m=>m.naam).join(', '))}.
+        </div>`:''}
+      ${niemandMag?`<div style="font-size:11px;color:#B91C1C;font-weight:600;padding:0 2px 4px">
+          Niemand op deze klus heeft rijbewijs ${veiligTekst(nodigRb)}. Vul het in bij Accounts, of haal de aanhanger eraf.
+        </div>`:''}
+
+      <div class="pb-shift" style="border-top:none;padding-top:2px">
+        <span style="font-size:11px;color:var(--muted);font-weight:600">Bijrijders</span>
+        <span style="font-size:11px;color:var(--muted)">${plaatsen
+          ?(vrij>0?vrij+' plaats'+(vrij===1?'':'en')+' vrij':vrij===0?'vol':Math.abs(vrij)+' te veel')
+          :'geen zitplaatsen ingevuld'}</span>
+      </div>
+      ${bijrijders.length?`<div class="pb-namen">${bijrijders.map(r=>`
+        <span class="pb-naam-pill">${veiligTekst(naamVan(r))}
+          <button class="pb-remove" onclick="rsZetIn('${t.id}','${sleutelVan(r)}')" title="Eruit halen">&#x2715;</button>
+        </span>`).join('')}</div>`
+        :'<div style="font-size:11px;color:var(--muted);padding:0 2px 4px;font-style:italic">Nog geen bijrijders</div>'}
 
       <div class="pb-dd" style="margin-top:6px;max-height:190px;overflow-y:auto">
         ${mensen.map(m=>{
           const waar=rsWaarZit(m);
           const hier=waar&&waar.rit.truck_id===t.id;
+          const rijdt=hier&&waar.regel.bestuurder;
           const elders=waar&&!hier;
           const anderNaam=elders?((TRUCKS||[]).find(x=>x.id===waar.rit.truck_id)||{}).label:'';
           return`<div class="pb-mw" onclick="rsZetIn('${t.id}','${m.sleutel}')" style="${hier?'background:var(--bg);':''}${elders?'opacity:.6;':''}">
             <div class="pb-av" style="background:${hier?'#EEF2FF':'#F3F4F6'};color:${hier?'#4338CA':'#9CA3AF'}">${veiligTekst(m.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase())}</div>
             <span class="pb-mwnaam">${veiligTekst(m.naam)}</span>
-            <span class="pb-mwrol">${hier?'zit hier':elders?'zit in '+veiligTekst(anderNaam||'ander voertuig'):'toevoegen'}</span>
+            <span class="pb-mwrol">${rijdt?'🚗 bestuurder':hier?'rijdt mee':elders?'zit in '+veiligTekst(anderNaam||'ander voertuig'):'als bijrijder erbij'}</span>
           </div>`;
         }).join('')}
-      </div>
+      </div>`;
+      })()}
     </div>`;
   });
 
@@ -5641,6 +5713,9 @@ function loadProfiel(){
     maatSel.innerHTML='<option value="">Kies —</option>'+
       ['XS','S','M','L','XL','XXL','XXXL','XXXXL'].map(m=>`<option value="${m}">${m}</option>`).join('');
   }
+  // Altijd eerst de lege chips neerzetten. Lukt het ophalen niet, dan staan er
+  // geen vinkjes maar wel de knoppen — anders zou opslaan je rijbewijs wissen.
+  vulProfielRijbewijs('');
   sb.from('gebruikers')
     .select('straat,postcode,plaats,telefoon,geslacht,geboortedatum,contractvorm,shirtmaat,rijbewijs')
     .eq('id',CURRENT_USER.id).single().then(({data})=>{
@@ -5652,7 +5727,7 @@ function loadProfiel(){
       document.getElementById('profielGeslacht').value=data.geslacht||'';
       document.getElementById('profielGeboortedatum').value=data.geboortedatum||'';
       document.getElementById('profielShirtmaat').value=data.shirtmaat||'';
-      document.getElementById('profielRijbewijs').value=data.rijbewijs||'';
+      vulProfielRijbewijs(data.rijbewijs||'');
       // De contractvorm zet de beheerder; jij ziet alleen wat er staat.
       const cr=document.getElementById('profielContractRegel');
       if(cr){
@@ -5682,15 +5757,37 @@ function toonLeeftijd(){
   el.textContent=jaar===null?'':jaar+' jaar';
 }
 
+// De rijbewijzen op je eigen profiel. Vroeger typte je dit zelf, maar dan
+// stond er "auto" of "vrachtwagen +aanhanger" en kon het rijschema er niets
+// mee. Nu tik je de categorieën aan, precies zoals bij Accounts.
+function vulProfielRijbewijs(tekst){
+  const wrap=document.getElementById('profielRijbewijsWrap');
+  if(!wrap)return;
+  const aan=rijbewijsLijst(tekst);
+  wrap.innerHTML=RIJBEWIJS_VOLGORDE.map(c=>
+    `<div class="chip${aan.includes(c)?' on':''}" data-prb="${c}" onclick="this.classList.toggle('on')">${c} &middot; ${RIJBEWIJZEN[c]}</div>`
+  ).join('');
+}
+// Geeft undefined terug als de chips nog niet staan; dan laten we het veld
+// met rust in plaats van het leeg te maken.
+function profielRijbewijsWaarde(){
+  const wrap=document.getElementById('profielRijbewijsWrap');
+  if(!wrap||!wrap.querySelector('.chip'))return undefined;
+  const codes=[...wrap.querySelectorAll('.chip.on')].map(el=>el.dataset.prb);
+  return codes.length?rijbewijsSorteer(codes).join(', '):null;
+}
+
 async function saveProfielGegevens(){
   const btn=document.querySelector('[onclick="saveProfielGegevens()"]');
   const geslacht=document.getElementById('profielGeslacht').value||null;
   const geboortedatum=document.getElementById('profielGeboortedatum').value||null;
   const shirtmaat=document.getElementById('profielShirtmaat').value||null;
-  const rijbewijs=document.getElementById('profielRijbewijs').value.trim()||null;
+  const rijbewijs=profielRijbewijsWaarde();
   if(btn){btn.disabled=true;btn.textContent='Bezig...';}
+  const velden={geslacht,geboortedatum,shirtmaat};
+  if(rijbewijs!==undefined)velden.rijbewijs=rijbewijs;
   const{error}=await sb.from('gebruikers')
-    .update({geslacht,geboortedatum,shirtmaat,rijbewijs}).eq('id',CURRENT_USER.id);
+    .update(velden).eq('id',CURRENT_USER.id);
   if(btn)btn.disabled=false;
   if(error){
     if(btn)btn.textContent='Gegevens opslaan';
