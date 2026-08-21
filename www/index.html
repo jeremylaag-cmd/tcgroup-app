@@ -1931,7 +1931,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 
 <div class="modal-overlay" id="beschModal" onclick="if(event.target===this)closeBeschModal()">
   <div class="modal">
-    <div class="modal-title" id="beschModalTitle">Onbeschikbaarheid toevoegen</div>
+    <div class="modal-title" id="beschModalTitle">Verlof aanvragen</div>
     <div id="beschModalInfo" style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem;display:none"></div>
     <div class="fr"><span class="fl" id="bRedenLabel">Reden</span>
       <input type="text" id="bReden" placeholder="bv. Vakantie, Ziek, Vrij, Bruiloft...">
@@ -2566,7 +2566,8 @@ async function initApp(user){
     zetKlokkaartenTerug();
     tabs.innerHTML=`
       <button class="htab active" onclick="showPage('uren',this)">Uren</button>
-      <button class="htab" onclick="showPage('rooster',this)">Rooster</button>`;
+      <button class="htab" onclick="showPage('rooster',this)">Rooster</button>
+      <button class="htab" onclick="showPage('beschikbaarheid',this)">Verlof</button>`;
     ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   }else{
     zetKlokkaartenTerug();
@@ -2600,9 +2601,11 @@ async function initApp(user){
         bnavItem('open-klussen','Open klussen',ico.schema)+
         bnavItem('accounts','Accounts',ico.accounts);
     }else if(isHal){
+      // Hal-medewerkers melden zich niet aan voor open klussen; zij zijn er
+      // vast. Op die plek staat nu het aanvragen van verlof.
       bn.innerHTML=
         bnavItem('uren','Uren',ico.uren,true)+
-        bnavItem('open-klussen','Klussen',ico.schema)+
+        bnavItem('beschikbaarheid','Verlof',ico.beschikbaarheid)+
         bnavItem('rooster','Rooster',ico.rooster)+
         bnavItem('profiel','Profiel',ico.profiel);
     }else if(isFullTimer){
@@ -7650,17 +7653,17 @@ async function loadMijnBeschikbaarheid(){
 
   // De hele pagina spreekt de taal die bij je rol hoort.
   const knop=document.getElementById('beschToevoegKnop');
-  if(knop)knop.textContent=aanvraag?'+ Ik kan werken':'+ Onbeschikbaar';
+  if(knop)knop.textContent=aanvraag?'+ Ik kan werken':'+ Verlof aanvragen';
   const vrijKnop=document.getElementById('beschVrijKnop');
   if(vrijKnop)vrijKnop.style.display=aanvraag?'':'none';
   const titel=document.getElementById('beschLijstTitel');
-  if(titel)titel.textContent=aanvraag?'Wat ik heb doorgegeven':'Mijn onbeschikbaarheid';
+  if(titel)titel.textContent=aanvraag?'Wat ik heb doorgegeven':'Mijn verlof en vrije dagen';
   const uitleg=document.getElementById('beschUitleg');
   if(uitleg){
-    uitleg.style.display=aanvraag?'':'none';
+    uitleg.style.display='';
     uitleg.textContent=aanvraag
       ?'Je staat standaard niet ingepland. Geef door op welke dagen je wél kunt werken — alleen dan kan de planning je inzetten. Ga je op vakantie of ben je een periode weg, vraag dat dan aan met "Vrij aanvragen"; de planning keurt dat goed en zet je die dagen niet in.'
-      :'';
+      :'Vraag hier je vakantie of een vrije dag aan. De planning keurt het goed of af; zolang het nog niet is goedgekeurd kun je die dagen gewoon ingepland worden.';
   }
 
   el.innerHTML='<div class="spin">Laden...</div>';
@@ -7670,13 +7673,13 @@ async function loadMijnBeschikbaarheid(){
   if(!data||!data.length){
     el.innerHTML='<div class="empty">'+(aanvraag
       ?'Je hebt nog niets doorgegeven — zo kun je nog niet ingepland worden'
-      :'Geen onbeschikbaarheid ingevoerd — je staat overal op beschikbaar')+'</div>';
+      :'Je hebt nog geen verlof aangevraagd — je staat overal op beschikbaar')+'</div>';
     return;
   }
   el.innerHTML='<div class="besch-lijst">'+data.map(b=>{
     const wel=b.soort==='beschikbaar';
     const statusTekst=wel?'Doorgegeven':(b.status==='wacht'?'In afwachting':b.status==='goedgekeurd'?'Goedgekeurd':'Afgewezen');
-    const kop=wel?'Beschikbaar':(aanvraag?'Vrij':'Onbeschikbaar');
+    const kop=wel?'Beschikbaar':(aanvraag?'Vrij':'Verlof');
     return`<div class="besch-item ${b.status}" style="${wel?'border-left:3px solid #059669':(aanvraag?'border-left:3px solid #B45309':'')}">
     <div class="besch-info">
       <div class="besch-reden">${kop}${b.reden?' — '+veiligTekst(b.reden):''}</div>
@@ -7822,7 +7825,7 @@ function openBeschModal(id=null,modus){
   BESCH_MODUS=aanvraag?(modus||'kan'):'vrij';
   const vrij=BESCH_MODUS==='vrij';
   document.getElementById('beschModalTitle').textContent=
-    !aanvraag?(id?'Onbeschikbaarheid bewerken':'Onbeschikbaarheid toevoegen')
+    !aanvraag?(id?'Verlof aanpassen':'Verlof aanvragen')
      :vrij?(id?'Vrij aanpassen':'Vrij aanvragen')
           :(id?'Beschikbaarheid bewerken':'Ik ben beschikbaar');
   const lbl=document.getElementById('bRedenLabel');
@@ -7833,7 +7836,7 @@ function openBeschModal(id=null,modus){
     :'bv. Vakantie, Ziek, Vrij, Bruiloft...';
   const info=document.getElementById('beschModalInfo');
   if(info){
-    info.style.display=(aanvraag&&vrij)?'':'none';
+    info.style.display=vrij?'':'none';
     info.textContent='De planning moet dit goedkeuren. Zolang dat nog niet is gebeurd kun je die dagen gewoon ingepland worden.';
   }
   document.getElementById('beschWarnBox').className='warn-box';
