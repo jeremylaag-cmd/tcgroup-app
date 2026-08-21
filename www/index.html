@@ -1686,7 +1686,10 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="sc" style="margin-bottom:1rem">
         <div class="sc-header" style="margin-bottom:.875rem">
           <div class="st">Mijn schema</div>
-          <button class="btn-sm" id="beschToevoegKnop" onclick="openBeschModal()" style="font-size:12px;padding:7px 14px">+ Onbeschikbaar</button>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <button class="btn-edit" id="beschVrijKnop" onclick="openBeschModal(null,'vrij')" style="font-size:12px;padding:7px 14px;display:none">+ Vrij aanvragen</button>
+            <button class="btn-sm" id="beschToevoegKnop" onclick="openBeschModal()" style="font-size:12px;padding:7px 14px">+ Onbeschikbaar</button>
+          </div>
         </div>
         <div id="persWeek1" style="margin-bottom:1rem"></div>
         <div id="persWeek2"></div>
@@ -1929,6 +1932,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 <div class="modal-overlay" id="beschModal" onclick="if(event.target===this)closeBeschModal()">
   <div class="modal">
     <div class="modal-title" id="beschModalTitle">Onbeschikbaarheid toevoegen</div>
+    <div id="beschModalInfo" style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem;display:none"></div>
     <div class="fr"><span class="fl" id="bRedenLabel">Reden</span>
       <input type="text" id="bReden" placeholder="bv. Vakantie, Ziek, Vrij, Bruiloft...">
     </div>
@@ -4693,6 +4697,54 @@ function rsNodigRijbewijs(t,aanhanger){
   return zwaarste||String((t&&t.rijbewijs)||'').toUpperCase();
 }
 
+// Van een losse kracht kennen we het rijbewijs niet. Die houden we apart:
+// we blokkeren hem niet, maar zeggen er wel bij dat we het niet weten.
+function rsRijbewijsBekend(regel){return !!(regel&&regel.gebruiker_id);}
+function rsMagBesturen(regel,nodig){
+  if(!rsRijbewijsBekend(regel))return true;
+  return heeftRijbewijs(regel.gebruiker_id,nodig);
+}
+// Wat een voertuig op dit moment vraagt, aanhanger meegerekend.
+function rsRitEisen(rit){
+  const t=(TRUCKS||[]).find(x=>x.id===(rit&&rit.truck_id))||null;
+  const aanhanger=rit&&rit.aanhanger_id?(TRUCKS||[]).find(x=>x.id===rit.aanhanger_id):null;
+  return {truck:t,aanhanger,nodig:rsNodigRijbewijs(t,aanhanger)};
+}
+
+// Kan er maar één iemand in, dan is diegene vanzelf de bestuurder.
+async function rsZorgBestuurder(truckId){
+  const t=(TRUCKS||[]).find(x=>x.id===truckId);
+  const rit=RS_RITTEN.find(r=>r.truck_id===truckId);
+  if(!t||!rit)return;
+  if(Number(t.zitplaatsen)!==1)return;
+  const inzittenden=rit.personen||[];
+  if(inzittenden.length!==1||inzittenden[0].bestuurder)return;
+  // Ontbreekt het rijbewijs voor de auto zelf, dan zetten we hem er toch neer
+  // met de bekende waarschuwing erbij; anders zou het lijken alsof de app niks
+  // doet. Alleen met een aanhanger erachter houden we het echt tegen.
+  const{aanhanger,nodig}=rsRitEisen(rit);
+  if(aanhanger&&!rsMagBesturen(inzittenden[0],nodig))return;
+  const{error}=await sb.from('klus_rit_personen').update({bestuurder:true}).eq('id',inzittenden[0].id);
+  if(error)return;
+  await rsLaad();
+}
+
+// Hangt er ineens een aanhanger achter, dan mag de bestuurder er misschien
+// niet meer mee rijden. Dan halen we hem er als bestuurder af.
+async function rsControleerBestuurder(truckId){
+  const rit=RS_RITTEN.find(r=>r.truck_id===truckId);
+  if(!rit)return;
+  const{nodig}=rsRitEisen(rit);
+  const b=(rit.personen||[]).find(x=>x.bestuurder);
+  if(!b||rsMagBesturen(b,nodig))return;
+  await sb.from('klus_rit_personen').update({bestuurder:false}).eq('id',b.id);
+  const k=(KLUSSEN||[]).find(x=>x.id===RS_KLUS);
+  const p=k?(k.personeel||[]).find(x=>x.id===b.gebruiker_id):null;
+  toast((p?p.naam:'De bestuurder')+' heeft geen rijbewijs '+nodig
+    +', dus die staat niet meer als bestuurder.','fout');
+  await rsLaad();
+}
+
 // Iedereen die op de klus staat, personeel en losse krachten door elkaar.
 function rsMensen(k){
   return (k.personeel||[]).map(p=>({sleutel:'p:'+p.id,soort:'pers',id:p.id,naam:p.naam}))
@@ -4781,9 +4833,23 @@ async function rsZetIn(truckId,sleutel){
   const{error}=await sb.from('klus_rit_personen').insert(rij);
   if(error){toast('Toevoegen mislukt: '+error.message,'fout');}
   await rsLaad();
+  await rsZorgBestuurder(truckId);
 }
 
 async function rsZetBestuurder(ritId,persoonRegelId){
+  // Met een aanhanger erachter heb je een zwaarder rijbewijs nodig. Iemand
+  // zonder dat rijbewijs kunnen we hier niet als bestuurder neerzetten.
+  const rit=RS_RITTEN.find(r=>r.id===ritId);
+  if(persoonRegelId&&rit){
+    const{aanhanger,nodig}=rsRitEisen(rit);
+    const regel=(rit.personen||[]).find(x=>x.id===persoonRegelId);
+    if(regel&&!rsMagBesturen(regel,nodig)){
+      toast('Daarvoor is rijbewijs '+nodig+' nodig'
+        +(aanhanger?' — met de aanhanger erachter':'')+'.','fout');
+      rsRender();
+      return;
+    }
+  }
   // Eerst de oude bestuurder van deze rit af, anders botst de unieke index.
   await sb.from('klus_rit_personen').update({bestuurder:false}).eq('rit_id',ritId);
   if(persoonRegelId){
@@ -4806,6 +4872,7 @@ async function rsZetAanhanger(truckId,aanhangerId){
     .update({aanhanger_id:aanhangerId||null}).eq('id',rit.id);
   if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
   await rsLaad();
+  await rsControleerBestuurder(truckId);
   await rsRuimOp(RS_RITTEN.find(r=>r.id===rit.id)||rit);
   await rsLaad();
 }
@@ -4883,20 +4950,37 @@ function rsRender(){
           <button class="pb-remove" onclick="rsZetIn('${t.id}','${r.gebruiker_id?'p:'+r.gebruiker_id:'l:'+r.los_id}')" title="Eruit halen">&#x2715;</button>
         </span>`;}).join('')}</div>`:''}
 
-      ${inzittenden.length?`<div class="pb-shift" style="border-top:none;padding-top:2px">
-        <span style="font-size:11px;color:var(--muted)">Bestuurder</span>
-        <select class="pb-tijdveld" onchange="rsZetBestuurder('${rit.id}',this.value)">
-          <option value="">nog niemand</option>
-          ${inzittenden.map(r=>{
-            // Van een losse kracht kennen we het rijbewijs niet; die mag wel rijden
-            // maar dan zonder controle.
-            const los=!r.gebruiker_id;
-            const magRijden=los?true:heeftRijbewijs(r.gebruiker_id,nodigRb);
-            const staart=los?' — rijbewijs niet bekend':(magRijden?'':' — geen '+veiligTekst(nodigRb));
-            return`<option value="${r.id}"${r.bestuurder?' selected':''}>${veiligTekst(naamVan(r))}${staart}</option>`;
-          }).join('')}
-        </select>
-      </div>`:''}
+      ${inzittenden.length?(()=>{
+        // Hangt er een aanhanger achter, dan kun je alleen nog iemand kiezen
+        // die dat rijbewijs ook heeft. Van een losse kracht weten we het niet;
+        // die zetten we apart zodat je hem wel kunt kiezen als jij het weet.
+        const magLijst=inzittenden.filter(r=>r.gebruiker_id&&heeftRijbewijs(r.gebruiker_id,nodigRb));
+        const magNiet =inzittenden.filter(r=>r.gebruiker_id&&!heeftRijbewijs(r.gebruiker_id,nodigRb));
+        const losLijst=inzittenden.filter(r=>!r.gebruiker_id);
+        const optie=(r,staart)=>`<option value="${r.id}"${r.bestuurder?' selected':''}>${veiligTekst(naamVan(r))}${staart||''}</option>`;
+        const opties=aanhanger
+          ? magLijst.map(r=>optie(r)).join('')
+            +(losLijst.length?`<optgroup label="Rijbewijs niet bekend">${losLijst.map(r=>optie(r)).join('')}</optgroup>`:'')
+          : magLijst.map(r=>optie(r)).join('')
+            +losLijst.map(r=>optie(r,' — rijbewijs niet bekend')).join('')
+            +magNiet.map(r=>optie(r,' — geen '+veiligTekst(nodigRb))).join('');
+        const niemand=aanhanger&&!magLijst.length&&!losLijst.length;
+        const eenPlek=Number(t.zitplaatsen)===1;
+        return`<div class="pb-shift" style="border-top:none;padding-top:2px">
+          <span style="font-size:11px;color:var(--muted)">Bestuurder</span>
+          <select class="pb-tijdveld" onchange="rsZetBestuurder('${rit.id}',this.value)"${niemand?' disabled':''}>
+            <option value="">nog niemand</option>
+            ${opties}
+          </select>
+          ${eenPlek?'<span style="font-size:11px;color:var(--muted)">&eacute;&eacute;n zitplaats, dus vanzelf de bestuurder</span>':''}
+        </div>
+        ${aanhanger&&magNiet.length?`<div style="font-size:11px;color:#B45309;padding:0 2px 4px">
+            ${veiligTekst(magNiet.map(naamVan).join(', '))} ${magNiet.length===1?'heeft':'hebben'} geen rijbewijs ${veiligTekst(nodigRb)} en ${magNiet.length===1?'kan':'kunnen'} met de aanhanger erachter niet rijden.
+          </div>`:''}
+        ${niemand?`<div style="font-size:11px;color:#B91C1C;font-weight:600;padding:0 2px 4px">
+            Niemand in dit voertuig heeft rijbewijs ${veiligTekst(nodigRb)}. Zet er iemand bij die dat wel heeft, of vul het rijbewijs in bij Accounts.
+          </div>`:''}`;
+      })():''}
 
       <div class="pb-dd" style="margin-top:6px;max-height:190px;overflow-y:auto">
         ${mensen.map(m=>{
@@ -7400,6 +7484,11 @@ function bkIsLosseDag(b){
 function bkVrijOp(ds){
   return MIJN_BESCH.find(b=>b.soort==='onbeschikbaar'&&b.status==='goedgekeurd'&&beschDekt(b,ds));
 }
+// Vrij dat nog goedgekeurd moet worden. Je kunt die dagen nog wel ingepland
+// worden, dus we laten hem apart zien.
+function bkVrijGevraagd(ds){
+  return MIJN_BESCH.find(b=>b.soort==='onbeschikbaar'&&b.status==='wacht'&&beschDekt(b,ds));
+}
 
 function bkWissel(richting){
   bkOffset=richting===0?0:bkOffset+richting;
@@ -7477,9 +7566,11 @@ function bkRender(){
     const vrij=bkVrijOp(ds);
     const dekking=bkDekking(ds);
 
+    const gevraagd=vrij?null:bkVrijGevraagd(ds);
     let cls='bk-dag', label='';
     if(verleden)cls+=' uit';
     else if(vrij){cls+=' vrij';label='vrij';}
+    else if(gevraagd&&!bkAan.has(ds)&&!bkUit.has(ds)&&!dekking){cls+=' vrij';label='gevraagd';}
     else if(bkAan.has(ds)){cls+=' nieuw';label='nieuw';}
     else if(bkUit.has(ds)){cls+=' weg';label='weg';}
     else if(dekking){cls+=' aan';label=bkIsLosseDag(dekking)?'kan':'periode';}
@@ -7560,13 +7651,15 @@ async function loadMijnBeschikbaarheid(){
   // De hele pagina spreekt de taal die bij je rol hoort.
   const knop=document.getElementById('beschToevoegKnop');
   if(knop)knop.textContent=aanvraag?'+ Ik kan werken':'+ Onbeschikbaar';
+  const vrijKnop=document.getElementById('beschVrijKnop');
+  if(vrijKnop)vrijKnop.style.display=aanvraag?'':'none';
   const titel=document.getElementById('beschLijstTitel');
-  if(titel)titel.textContent=aanvraag?'Wanneer ik kan werken':'Mijn onbeschikbaarheid';
+  if(titel)titel.textContent=aanvraag?'Wat ik heb doorgegeven':'Mijn onbeschikbaarheid';
   const uitleg=document.getElementById('beschUitleg');
   if(uitleg){
     uitleg.style.display=aanvraag?'':'none';
     uitleg.textContent=aanvraag
-      ?'Je staat standaard niet ingepland. Geef hieronder de dagen door waarop je wél kunt werken — alleen op die dagen kan de planning je inzetten.'
+      ?'Je staat standaard niet ingepland. Geef door op welke dagen je wél kunt werken — alleen dan kan de planning je inzetten. Ga je op vakantie of ben je een periode weg, vraag dat dan aan met "Vrij aanvragen"; de planning keurt dat goed en zet je die dagen niet in.'
       :'';
   }
 
@@ -7576,16 +7669,17 @@ async function loadMijnBeschikbaarheid(){
   bkRender();
   if(!data||!data.length){
     el.innerHTML='<div class="empty">'+(aanvraag
-      ?'Je hebt nog geen dagen doorgegeven — zo kun je nog niet ingepland worden'
+      ?'Je hebt nog niets doorgegeven — zo kun je nog niet ingepland worden'
       :'Geen onbeschikbaarheid ingevoerd — je staat overal op beschikbaar')+'</div>';
     return;
   }
   el.innerHTML='<div class="besch-lijst">'+data.map(b=>{
     const wel=b.soort==='beschikbaar';
     const statusTekst=wel?'Doorgegeven':(b.status==='wacht'?'In afwachting':b.status==='goedgekeurd'?'Goedgekeurd':'Afgewezen');
-    return`<div class="besch-item ${b.status}" style="${wel?'border-left:3px solid #059669':''}">
+    const kop=wel?'Beschikbaar':(aanvraag?'Vrij':'Onbeschikbaar');
+    return`<div class="besch-item ${b.status}" style="${wel?'border-left:3px solid #059669':(aanvraag?'border-left:3px solid #B45309':'')}">
     <div class="besch-info">
-      <div class="besch-reden">${wel?'Beschikbaar':(b.reden||'Onbeschikbaar')}${wel&&b.reden?' — '+b.reden:''}</div>
+      <div class="besch-reden">${kop}${b.reden?' — '+veiligTekst(b.reden):''}</div>
       <div class="besch-datum">${fmtDatum(b.datum_start)}${b.datum_eind&&b.datum_eind!==b.datum_start?` – ${fmtDatum(b.datum_eind)}`:''}`+fmtTijdRange(b.tijd_start,b.tijd_eind)+`</div>
     </div>
     <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
@@ -7717,19 +7811,43 @@ async function loadAlleBeschikbaarheid(){
   lijstEl.innerHTML=html;
 }
 
-function openBeschModal(id=null){
+// Een part-timer kan twee dingen doorgeven: dagen waarop hij kán werken, en
+// vrij (vakantie). Dat laatste gaat wél langs de beheerder. BESCH_MODUS
+// onthoudt welke van de twee je aan het invullen bent.
+let BESCH_MODUS='kan';
+
+function openBeschModal(id=null,modus){
   editBeschId=id;
   const aanvraag=werktOpAanvraag(CURRENT_ROL);
+  BESCH_MODUS=aanvraag?(modus||'kan'):'vrij';
+  const vrij=BESCH_MODUS==='vrij';
   document.getElementById('beschModalTitle').textContent=
-    aanvraag?(id?'Beschikbaarheid bewerken':'Ik ben beschikbaar')
-            :(id?'Onbeschikbaarheid bewerken':'Onbeschikbaarheid toevoegen');
+    !aanvraag?(id?'Onbeschikbaarheid bewerken':'Onbeschikbaarheid toevoegen')
+     :vrij?(id?'Vrij aanpassen':'Vrij aanvragen')
+          :(id?'Beschikbaarheid bewerken':'Ik ben beschikbaar');
   const lbl=document.getElementById('bRedenLabel');
   const red=document.getElementById('bReden');
-  if(lbl)lbl.textContent=aanvraag?'Toelichting (optioneel)':'Reden';
-  if(red)red.placeholder=aanvraag?'bv. alleen avonden, liefst met de foodtruck...':'bv. Vakantie, Ziek, Vrij, Bruiloft...';
+  if(lbl)lbl.textContent=(aanvraag&&!vrij)?'Toelichting (optioneel)':'Reden';
+  if(red)red.placeholder=(aanvraag&&!vrij)
+    ?'bv. alleen avonden, liefst met de foodtruck...'
+    :'bv. Vakantie, Ziek, Vrij, Bruiloft...';
+  const info=document.getElementById('beschModalInfo');
+  if(info){
+    info.style.display=(aanvraag&&vrij)?'':'none';
+    info.textContent='De planning moet dit goedkeuren. Zolang dat nog niet is gebeurd kun je die dagen gewoon ingepland worden.';
+  }
   document.getElementById('beschWarnBox').className='warn-box';
   if(id){
     sb.from('beschikbaarheid').select('*').eq('id',id).single().then(({data:b})=>{
+      if(!b)return;
+      // Bij bewerken volgen we wat er al staat, niet wat je aanklikte.
+      if(aanvraag){
+        BESCH_MODUS=b.soort==='beschikbaar'?'kan':'vrij';
+        document.getElementById('beschModalTitle').textContent=
+          BESCH_MODUS==='vrij'?'Vrij aanpassen':'Beschikbaarheid bewerken';
+        const i2=document.getElementById('beschModalInfo');
+        if(i2)i2.style.display=BESCH_MODUS==='vrij'?'':'none';
+      }
       document.getElementById('bReden').value=b.reden||'';
       document.getElementById('bStart').value=b.datum_start||'';
       document.getElementById('bEind').value=b.datum_eind||b.datum_start||'';
@@ -7756,11 +7874,12 @@ async function saveBeschikbaarheid(){
   const wb=document.getElementById('beschWarnBox');
   if(!datum_start){wb.textContent='Vul een startdatum in.';wb.className='warn-box show';return;}
   if(datum_eind<datum_start){wb.textContent='Einddatum moet na startdatum liggen.';wb.className='warn-box show';return;}
-  // Part-timers melden zich beschikbaar; dat hoeft niemand goed te keuren.
-  // Vaste krachten vragen vrij, en dat gaat wel langs de beheerder.
+  // Een part-timer die zich beschikbaar meldt hoeft niemand goed te keuren.
+  // Vrij vragen gaat wél langs de beheerder, net als bij een vaste kracht.
   const aanvraag=werktOpAanvraag(CURRENT_ROL);
-  const soort=aanvraag?'beschikbaar':'onbeschikbaar';
-  const status=aanvraag?'goedgekeurd':'wacht';
+  const kanWerken=aanvraag&&BESCH_MODUS!=='vrij';
+  const soort=kanWerken?'beschikbaar':'onbeschikbaar';
+  const status=kanWerken?'goedgekeurd':'wacht';
 
   document.getElementById('beschSavingMsg').style.display='inline';
   let fout=null;
@@ -7791,6 +7910,19 @@ function verlofRegelHtml(b){
   const c=verlofVan(b.gebruiker_id);
   const perDag=c?Number(c.uren_per_dag||8):8;
   const uren=Number(b.uren||0);
+
+  // Bouwt iemand geen verlof op (part-timer, losse kracht), dan heeft een
+  // urenveld geen zin: er gaat toch niets van een saldo af. Alleen de soort
+  // is dan nog nuttig, zodat je ziek en vakantie uit elkaar kunt houden.
+  if(!c){
+    return`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:7px;padding-top:7px;border-top:1px dashed var(--border)">
+      <select onchange="vsoortGewijzigd('${b.id}',this.value)"
+        style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:var(--font)">
+        ${Object.entries(VERLOFSOORTEN).map(([w,l])=>`<option value="${w}"${b.verlofsoort===w?' selected':''}>${l}</option>`).join('')}
+      </select>
+      <span style="font-size:11px;color:var(--muted)">Bouwt geen verlofuren op — dit gaat nergens vanaf</span>
+    </div>`;
+  }
 
   const keuze=`<select onchange="vsoortGewijzigd('${b.id}',this.value)"
       style="font-size:11px;padding:3px 6px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-family:var(--font)">
