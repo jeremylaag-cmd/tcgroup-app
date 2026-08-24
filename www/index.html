@@ -1052,6 +1052,25 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         <div class="bc"><div class="bt">Skills personeel</div><div class="bl" id="skillsBeheer"><div class="spin">Laden...</div></div>
           <div class="add-form"><input type="text" id="newSkillNaam" placeholder="bv. Bar ervaring, Poffers bakken"><button class="btn-sm" onclick="addSkill()">Toevoegen</button></div>
         </div>
+        <div class="bc"><div class="bt">In- en uitklokken</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
+            Bij het in- en uitklokken slaat de app op waar iemand op dat moment is. Zet je dit
+            aan, dan lukt in- of uitklokken niet meer zolang de locatie uit staat of geweigerd
+            is. Uren die je zelf met de hand toevoegt vallen hier natuurlijk buiten.
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--text)">
+              <input type="checkbox" id="instLocIn" style="width:18px;height:18px;flex-shrink:0;margin-top:1px">
+              <span>Inklokken kan <b>alleen met locatie</b></span>
+            </label>
+            <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:var(--text)">
+              <input type="checkbox" id="instLocUit" style="width:18px;height:18px;flex-shrink:0;margin-top:1px">
+              <span>Uitklokken kan <b>alleen met locatie</b></span>
+            </label>
+            <button class="btn-sm" onclick="bewaarLocatieInstellingen()" style="align-self:flex-start">Opslaan</button>
+            <div id="instLocInfo" style="font-size:11px;color:var(--muted);line-height:1.5"></div>
+          </div>
+        </div>
         <div class="bc"><div class="bt">Loonkosten &mdash; rekenregels</div>
           <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
             Hiermee rekent de app de loonkosten uit. Het uurloon per medewerker zet je bij
@@ -2625,6 +2644,7 @@ async function initApp(user){
   // Meldingen: nu we weten wie je bent, kan het toesteltoken worden bewaard.
   initPushNotifications();
   bewaarPushToken();
+  laadAppInstellingen();
 
   await loadAll();
   if(!isBeheerder){
@@ -5849,21 +5869,24 @@ function minToStr(min){
   return`${u}u ${m.toString().padStart(2,'0')}m`;
 }
 
+// Geeft {tekst, ok, reden} terug. ok=false betekent: we weten niet waar je
+// bent. reden is 'geweigerd' (je hebt nee gezegd of de app mag het niet) of
+// 'onbekend' (geen signaal, te lang geduurd).
 async function getLocatie(){
   return new Promise(resolve=>{
     let afgerond=false;
-    const klaar=waarde=>{
+    const klaar=(waarde,ok,reden)=>{
       if(afgerond)return;
       afgerond=true;
       clearTimeout(vangnet);
-      resolve(waarde);
+      resolve({tekst:waarde,ok:!!ok,reden:reden||''});
     };
     // Vangnet. Op iOS krijgt de app geen locatierechten (die ontbreken in
     // Info.plist), en dan roept de webview soms geen van beide callbacks aan.
     // Zonder deze timer blijft de app dan eeuwig op "Locatie ophalen..." staan.
-    const vangnet=setTimeout(()=>klaar('Locatie niet beschikbaar'),10000);
+    const vangnet=setTimeout(()=>klaar('Locatie niet beschikbaar',false,'onbekend'),12000);
 
-    if(!navigator.geolocation){klaar('Locatie niet beschikbaar');return;}
+    if(!navigator.geolocation){klaar('Locatie niet beschikbaar',false,'onbekend');return;}
     navigator.geolocation.getCurrentPosition(
       async pos=>{
         const lat=pos.coords.latitude;const lng=pos.coords.longitude;
@@ -5876,13 +5899,19 @@ async function getLocatie(){
           const straat=[a.road,a.house_number].filter(Boolean).join(' ');
           const plaats=a.city||a.town||a.village||a.municipality||'';
           const adres=[straat,plaats].filter(Boolean).join(', ');
-          klaar(adres||`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+          klaar(adres||`${lat.toFixed(4)}, ${lng.toFixed(4)}`,true);
         }catch{
-          klaar(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+          // Het omzetten naar een adres lukte niet, maar we weten wél waar je
+          // bent. De coördinaten zijn dus een prima antwoord.
+          klaar(`${lat.toFixed(4)}, ${lng.toFixed(4)}`,true);
         }
       },
-      ()=>klaar('Locatie geweigerd'),
-      {timeout:8000,maximumAge:60000}
+      fout=>{
+        const geweigerd=fout&&fout.code===1;      // PERMISSION_DENIED
+        klaar(geweigerd?'Locatie geweigerd':'Locatie niet beschikbaar',
+              false, geweigerd?'geweigerd':'onbekend');
+      },
+      {timeout:10000,maximumAge:60000}
     );
   });
 }
@@ -6092,6 +6121,10 @@ function renderInklokken(klussen,container,kanInklokken){
                   :'Klok in zodra je begint. Je locatie wordt opgeslagen als bewijs.')
         :'Je kunt alleen inklokken op een dag dat je een klus hebt.'}
     </div>
+    ${kanInklokken&&(locatieVerplicht('in')||locatieVerplicht('uit'))
+      ?`<div style="font-size:12px;color:#B45309;background:#FFFBEB;border:1px solid #FDE68A;border-radius:9px;padding:8px 10px;margin-bottom:14px;line-height:1.5">
+          Zet je locatie aan &mdash; ${locatieVerplicht('in')&&locatieVerplicht('uit')?'in- en uitklokken lukken':locatieVerplicht('in')?'inklokken lukt':'uitklokken lukt'} niet zonder.
+        </div>`:''}
     ${knoppen}`;
 }
 
@@ -6148,11 +6181,17 @@ async function doInklokken(klusId){
   if(foutEl)foutEl.textContent='';
   if(btn){btn.disabled=true;btn.textContent='Locatie ophalen...';}
 
-  let locatie='Locatie niet beschikbaar';
+  let loc={tekst:'Locatie niet beschikbaar',ok:false,reden:'onbekend'};
   try{
-    locatie=await getLocatie();
+    loc=await getLocatie();
   }catch(e){
     console.warn('Locatie ophalen mislukt:',e);
+  }
+
+  // Staat de schakelaar aan, dan klokken we niet in zonder locatie.
+  if(!loc.ok&&locatieVerplicht('in')){
+    herstel('Inklokken kan alleen met je locatie aan. '+locatieUitleg(loc.reden));
+    return;
   }
 
   if(btn)btn.textContent='Inklokken...';
@@ -6160,7 +6199,8 @@ async function doInklokken(klusId){
     const{error}=await sb.from('urenregistraties').insert({
       gebruiker_id:CURRENT_USER.id,
       klus_id:klusId||null,
-      locatie_in:locatie,
+      locatie_in:loc.tekst,
+      locatie_in_ok:loc.ok,
       status:'lopend'
     });
     if(error){
@@ -6176,6 +6216,32 @@ async function doInklokken(klusId){
   // Bij een beheerder staat de klok op het beheer-tabblad; die lijst willen we
   // dan ook meteen bijwerken.
   if(CURRENT_ROL==='beheerder')loadUrenBeheer(); else loadUrenPersoneel();
+}
+
+// ── LOCATIE VERPLICHT? ──────────────────────────────────────────────────
+// De beheerder kan instellen dat in- en uitklokken alleen mag met locatie.
+// Personeel mag deze twee instellingen lezen (app_instellingen); de rest van
+// die tabel blijft dicht, daar staan de uurlonen in.
+let APP_INST={locatie_verplicht_in:'nee',locatie_verplicht_uit:'nee'};
+
+async function laadAppInstellingen(){
+  const{data,error}=await sb.rpc('app_instellingen');
+  if(error){console.warn('Instellingen ophalen mislukt:',error);return;}
+  (data||[]).forEach(r=>{APP_INST[r.sleutel]=r.waarde;});
+}
+function locatieVerplicht(welke){
+  return String(APP_INST['locatie_verplicht_'+welke]||'nee').toLowerCase()==='ja';
+}
+// Wat je moet doen als het niet lukt. Kort houden; op de telefoon leest
+// niemand een alinea.
+function locatieUitleg(reden){
+  const iOS=/iPad|iPhone|iPod/.test(navigator.userAgent||'');
+  if(reden==='geweigerd'){
+    return iOS
+      ? 'Zet hem aan bij Instellingen → Privacy → Locatie → TC Group Planning → "Bij gebruik van app".'
+      : 'Zet hem aan bij de instellingen van je telefoon → Apps → TC Group Planning → Rechten → Locatie.';
+  }
+  return 'Geen signaal gekregen. Ga even naar buiten of bij een raam staan en probeer het opnieuw.';
 }
 
 // ── PAUZE ───────────────────────────────────────────────────────────────
@@ -6261,11 +6327,16 @@ async function doUitklokken(regId,pauze_minuten=0,notitie=''){
   if(foutEl)foutEl.textContent='';
   if(btn){btn.disabled=true;btn.textContent='Locatie ophalen...';}
 
-  let locatie='Locatie niet beschikbaar';
+  let loc={tekst:'Locatie niet beschikbaar',ok:false,reden:'onbekend'};
   try{
-    locatie=await getLocatie();
+    loc=await getLocatie();
   }catch(e){
     console.warn('Locatie ophalen mislukt:',e);
+  }
+
+  if(!loc.ok&&locatieVerplicht('uit')){
+    herstel('Uitklokken kan alleen met je locatie aan. '+locatieUitleg(loc.reden));
+    return;
   }
 
   if(btn)btn.textContent='Uitklokken...';
@@ -6276,7 +6347,8 @@ async function doUitklokken(regId,pauze_minuten=0,notitie=''){
     const totaal_minuten=Math.max(0,geklokt-(pauze_minuten||0));
     const velden={
       uitgeklokt_op:new Date().toISOString(),
-      locatie_uit:locatie,
+      locatie_uit:loc.tekst,
+      locatie_uit_ok:loc.ok,
       pauze_minuten:pauze_minuten||0,
       totaal_minuten,
       status:'wacht'
@@ -7366,6 +7438,47 @@ async function laadInstellingen(){
   INSTELLINGEN=Object.fromEntries((data||[]).map(r=>[r.sleutel,r.waarde]));
   a.value=INSTELLINGEN.werkgeverslasten_pct!=null?String(INSTELLINGEN.werkgeverslasten_pct).replace(',','.'):'30';
   b.value=INSTELLINGEN.los_uurloon_standaard!=null?String(INSTELLINGEN.los_uurloon_standaard).replace(',','.'):'15';
+
+  const li=document.getElementById('instLocIn'), lu=document.getElementById('instLocUit');
+  const ja=v=>String(v||'nee').toLowerCase()==='ja';
+  if(li)li.checked=ja(INSTELLINGEN.locatie_verplicht_in);
+  if(lu)lu.checked=ja(INSTELLINGEN.locatie_verplicht_uit);
+  toonLocatieCijfers();
+}
+
+// Hoe vaak lukte het de afgelopen tijd niet? Dat is het eerlijke antwoord op
+// "kan ik dit aanzetten zonder dat mijn mensen vastlopen".
+async function toonLocatieCijfers(){
+  const el=document.getElementById('instLocInfo');
+  if(!el)return;
+  const{data,error}=await sb.from('urenregistraties')
+    .select('locatie_in,locatie_in_ok,locatie_uit,locatie_uit_ok,uitgeklokt_op,handmatig');
+  if(error)return;
+  const echt=(data||[]).filter(r=>!r.handmatig);
+  const gelukt=(ok,tekst)=>ok!=null?ok
+    :!!(tekst&&!/geweigerd|niet beschikbaar/i.test(tekst));
+  const inMis=echt.filter(r=>!gelukt(r.locatie_in_ok,r.locatie_in)).length;
+  const uitKlaar=echt.filter(r=>r.uitgeklokt_op);
+  const uitMis=uitKlaar.filter(r=>!gelukt(r.locatie_uit_ok,r.locatie_uit)).length;
+  el.innerHTML=`Tot nu toe: bij <b>${inMis}</b> van de ${echt.length} keer inklokken en
+    <b>${uitMis}</b> van de ${uitKlaar.length} keer uitklokken kwam er geen locatie binnen.
+    Zet je dit aan, dan waren dat evenzoveel keer dat iemand niet had kunnen klokken.`;
+}
+
+async function bewaarLocatieInstellingen(){
+  const info=document.getElementById('instLocInfo');
+  const inAan=document.getElementById('instLocIn').checked;
+  const uitAan=document.getElementById('instLocUit').checked;
+  if(info)info.textContent='Bezig met opslaan...';
+  const{error}=await sb.from('instellingen').upsert([
+    {sleutel:'locatie_verplicht_in', waarde:inAan?'ja':'nee', omschrijving:'Inklokken kan alleen met locatie'},
+    {sleutel:'locatie_verplicht_uit',waarde:uitAan?'ja':'nee',omschrijving:'Uitklokken kan alleen met locatie'},
+  ],{onConflict:'sleutel'});
+  if(error){if(info)info.textContent='Opslaan mislukt: '+error.message;return;}
+  APP_INST.locatie_verplicht_in=inAan?'ja':'nee';
+  APP_INST.locatie_verplicht_uit=uitAan?'ja':'nee';
+  toast('Opgeslagen');
+  toonLocatieCijfers();
 }
 
 async function bewaarInstellingen(){
