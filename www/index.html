@@ -5869,6 +5869,71 @@ function minToStr(min){
   return`${u}u ${m.toString().padStart(2,'0')}m`;
 }
 
+// Waar ben ik? In de app vragen we dat aan het toestel zelf via de
+// Geolocation-plugin, niet aan de webview. Deden we dat wel via de webview,
+// dan kwam bij elke keer inklokken opnieuw de vraag «"localhost" would like to
+// use your current location» — die toestemming hoort bij de webpagina en niet
+// bij de app, en die onthoudt iOS niet. De plugin gebruikt de toestemming die
+// je de app zelf al hebt gegeven, dus die vraag komt maar één keer.
+// In een gewone browser valt hij terug op navigator.geolocation.
+function inDeApp(){
+  return !!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());
+}
+function geoPlugin(){
+  const P=window.Capacitor&&window.Capacitor.Plugins;
+  return (P&&P.Geolocation)||null;
+}
+// Gooit een fout met .code 1 (geweigerd) of 2 (geen signaal / niet gelukt).
+async function haalPositie(){
+  const Geo=geoPlugin();
+  if(inDeApp()&&Geo){
+    let status=null;
+    try{ status=await Geo.checkPermissions(); }catch(e){ status=null; }
+    const moetVragen=s=>!s||['prompt','prompt-with-rationale'].includes(s.location)
+                            ||['prompt','prompt-with-rationale'].includes(s.coarseLocation);
+    if(moetVragen(status)){
+      try{ status=await Geo.requestPermissions({permissions:['location','coarseLocation']}); }
+      catch(e){ const f=new Error('geweigerd'); f.code=1; throw f; }
+    }
+    if(status&&status.location==='denied'&&status.coarseLocation==='denied'){
+      const f=new Error('geweigerd'); f.code=1; throw f;
+    }
+    try{
+      const pos=await Geo.getCurrentPosition({enableHighAccuracy:false,timeout:10000,maximumAge:60000});
+      return{lat:pos.coords.latitude,lng:pos.coords.longitude};
+    }catch(e){
+      const tekst=((e&&e.message)||'')+'';
+      const f=new Error(tekst||'niet gelukt');
+      f.code=/denied|permission|not authorized|toestemming/i.test(tekst)?1:2;
+      throw f;
+    }
+  }
+
+  return new Promise((klaar,fout)=>{
+    if(!navigator.geolocation){const f=new Error('geen geolocatie');f.code=2;fout(f);return;}
+    navigator.geolocation.getCurrentPosition(
+      p=>klaar({lat:p.coords.latitude,lng:p.coords.longitude}),
+      f=>fout(f),
+      {timeout:10000,maximumAge:60000});
+  });
+}
+
+// Van coördinaten een leesbaar adres maken. Lukt dat niet, dan zijn de
+// coördinaten zelf een prima antwoord — we weten immers wél waar je bent.
+async function adresBij(lat,lng){
+  try{
+    const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,
+      {headers:{'Accept-Language':'nl'}});
+    const data=await res.json();
+    const a=data.address||{};
+    const straat=[a.road,a.house_number].filter(Boolean).join(' ');
+    const plaats=a.city||a.town||a.village||a.municipality||'';
+    const adres=[straat,plaats].filter(Boolean).join(', ');
+    if(adres)return adres;
+  }catch(e){ /* geen internet of de dienst ligt eruit */ }
+  return `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+}
+
 // Geeft {tekst, ok, reden} terug. ok=false betekent: we weten niet waar je
 // bent. reden is 'geweigerd' (je hebt nee gezegd of de app mag het niet) of
 // 'onbekend' (geen signaal, te lang geduurd).
@@ -5881,38 +5946,17 @@ async function getLocatie(){
       clearTimeout(vangnet);
       resolve({tekst:waarde,ok:!!ok,reden:reden||''});
     };
-    // Vangnet. Op iOS krijgt de app geen locatierechten (die ontbreken in
-    // Info.plist), en dan roept de webview soms geen van beide callbacks aan.
-    // Zonder deze timer blijft de app dan eeuwig op "Locatie ophalen..." staan.
-    const vangnet=setTimeout(()=>klaar('Locatie niet beschikbaar',false,'onbekend'),12000);
+    // Vangnet: als er onverhoopt niets terugkomt blijft de knop anders eeuwig
+    // op "Locatie ophalen..." staan.
+    const vangnet=setTimeout(()=>klaar('Locatie niet beschikbaar',false,'onbekend'),15000);
 
-    if(!navigator.geolocation){klaar('Locatie niet beschikbaar',false,'onbekend');return;}
-    navigator.geolocation.getCurrentPosition(
-      async pos=>{
-        const lat=pos.coords.latitude;const lng=pos.coords.longitude;
-        try{
-          const res=await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1`,{
-            headers:{'Accept-Language':'nl'}
-          });
-          const data=await res.json();
-          const a=data.address||{};
-          const straat=[a.road,a.house_number].filter(Boolean).join(' ');
-          const plaats=a.city||a.town||a.village||a.municipality||'';
-          const adres=[straat,plaats].filter(Boolean).join(', ');
-          klaar(adres||`${lat.toFixed(4)}, ${lng.toFixed(4)}`,true);
-        }catch{
-          // Het omzetten naar een adres lukte niet, maar we weten wél waar je
-          // bent. De coördinaten zijn dus een prima antwoord.
-          klaar(`${lat.toFixed(4)}, ${lng.toFixed(4)}`,true);
-        }
-      },
-      fout=>{
-        const geweigerd=fout&&fout.code===1;      // PERMISSION_DENIED
-        klaar(geweigerd?'Locatie geweigerd':'Locatie niet beschikbaar',
-              false, geweigerd?'geweigerd':'onbekend');
-      },
-      {timeout:10000,maximumAge:60000}
-    );
+    haalPositie().then(async p=>{
+      klaar(await adresBij(p.lat,p.lng),true);
+    }).catch(fout=>{
+      const geweigerd=fout&&fout.code===1;
+      klaar(geweigerd?'Locatie geweigerd':'Locatie niet beschikbaar',
+            false, geweigerd?'geweigerd':'onbekend');
+    });
   });
 }
 
