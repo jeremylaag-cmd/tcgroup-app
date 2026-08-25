@@ -1067,6 +1067,18 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
               <input type="checkbox" id="instLocUit" style="width:18px;height:18px;flex-shrink:0;margin-top:1px">
               <span>Uitklokken kan <b>alleen met locatie</b></span>
             </label>
+            <div style="padding-top:2px">
+              <div class="slabel" style="margin-bottom:4px">Vlaggetje bij uitklokken ergens anders</div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-size:12px;color:var(--muted)">vanaf</span>
+                <input type="number" id="instAfwijking" min="0" max="100000" step="50" inputmode="numeric" placeholder="500" style="font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:90px">
+                <span style="font-size:12px;color:var(--muted)">meter verschil</span>
+              </div>
+              <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px">
+                Klokt iemand verder dan dit van zijn inklokplek uit, dan staat er bij de uren
+                een 🚩. Alleen als van allebei de plek bekend is.
+              </div>
+            </div>
             <button class="btn-sm" onclick="bewaarLocatieInstellingen()" style="align-self:flex-start">Opslaan</button>
             <div id="instLocInfo" style="font-size:11px;color:var(--muted);line-height:1.5"></div>
           </div>
@@ -5940,18 +5952,20 @@ async function adresBij(lat,lng){
 async function getLocatie(){
   return new Promise(resolve=>{
     let afgerond=false;
-    const klaar=(waarde,ok,reden)=>{
+    const klaar=(waarde,ok,reden,lat,lng)=>{
       if(afgerond)return;
       afgerond=true;
       clearTimeout(vangnet);
-      resolve({tekst:waarde,ok:!!ok,reden:reden||''});
+      resolve({tekst:waarde,ok:!!ok,reden:reden||'',
+               lat:(lat==null?null:Number(lat.toFixed(6))),
+               lng:(lng==null?null:Number(lng.toFixed(6)))});
     };
     // Vangnet: als er onverhoopt niets terugkomt blijft de knop anders eeuwig
     // op "Locatie ophalen..." staan.
     const vangnet=setTimeout(()=>klaar('Locatie niet beschikbaar',false,'onbekend'),15000);
 
     haalPositie().then(async p=>{
-      klaar(await adresBij(p.lat,p.lng),true);
+      klaar(await adresBij(p.lat,p.lng),true,'',p.lat,p.lng);
     }).catch(fout=>{
       const geweigerd=fout&&fout.code===1;
       klaar(geweigerd?'Locatie geweigerd':'Locatie niet beschikbaar',
@@ -6245,6 +6259,8 @@ async function doInklokken(klusId){
       klus_id:klusId||null,
       locatie_in:loc.tekst,
       locatie_in_ok:loc.ok,
+      lat_in:loc.lat,
+      lng_in:loc.lng,
       status:'lopend'
     });
     if(error){
@@ -6273,6 +6289,29 @@ async function laadAppInstellingen(){
   if(error){console.warn('Instellingen ophalen mislukt:',error);return;}
   (data||[]).forEach(r=>{APP_INST[r.sleutel]=r.waarde;});
 }
+// Hoe ver mag uitklokken van inklokken af liggen voordat we er iets van
+// zeggen. In meters, in te stellen bij Beheer.
+function afwijkingDrempel(){
+  const n=Number(String(APP_INST.locatie_afwijking_meter||'500').replace(',','.'));
+  return isNaN(n)||n<0?500:n;
+}
+function afstandTekst(m){
+  const n=Number(m||0);
+  return n>=1000?(n/1000).toFixed(1).replace('.',',')+' km':Math.round(n)+' m';
+}
+// Ligt het uitklokken ver van het inklokken af? Dan een vlaggetje. Weten we
+// van een van de twee de plek niet, dan zeggen we niets — dan is er niets te
+// vergelijken en zou een vlaggetje alleen maar verwarren.
+function afstandVlag(reg,klein){
+  const m=reg&&reg.afstand_meter;
+  if(m==null)return '';
+  if(!(Number(m)>afwijkingDrempel()))return '';
+  const stijl=klein
+    ?'font-size:11px;color:#B45309;font-weight:600;margin-top:2px'
+    :'font-size:12px;color:#B45309;font-weight:600;margin-top:2px';
+  return`<div style="${stijl}">🚩 Uitgeklokt op ${afstandTekst(m)} van waar is ingeklokt</div>`;
+}
+
 function locatieVerplicht(welke){
   return String(APP_INST['locatie_verplicht_'+welke]||'nee').toLowerCase()==='ja';
 }
@@ -6393,6 +6432,8 @@ async function doUitklokken(regId,pauze_minuten=0,notitie=''){
       uitgeklokt_op:new Date().toISOString(),
       locatie_uit:loc.tekst,
       locatie_uit_ok:loc.ok,
+      lat_uit:loc.lat,
+      lng_uit:loc.lng,
       pauze_minuten:pauze_minuten||0,
       totaal_minuten,
       status:'wacht'
@@ -6590,6 +6631,7 @@ async function loadUrenBeheer(){
           ${r.notitie_pers?`<div class="uur-item-sub" style="margin-top:4px;color:var(--text);font-weight:700">📝 ${veiligTekst(r.notitie_pers)}</div>`:''}
           ${r.notitie_beh?`<div class="uur-item-sub" style="margin-top:2px;font-style:italic">${veiligTekst(r.notitie_beh)}</div>`:''}
           ${r.locatie_in&&!r.locatie_in.includes('niet')&&!r.locatie_in.includes('geweigerd')?`<div class="uur-item-sub" style="margin-top:2px">In: ${r.locatie_in}${r.locatie_uit&&!r.locatie_uit.includes('niet')?' · Uit: '+r.locatie_uit:''}</div>`:''}
+          ${afstandVlag(r)}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
           <div class="uur-item-tijd">${minToStr(r.totaal_minuten)}</div>
@@ -6630,7 +6672,15 @@ async function loadUrenBeheer(){
   if(!rijen.length){
     maandEl.innerHTML='<div class="empty" style="padding:.75rem 0;font-size:12px">Geen goedgekeurde uren deze maand</div>';
   }else{
-    maandEl.innerHTML=`<table class="uur-tbl">
+    // Zijn er die maand mensen die ergens anders uitklokten dan waar ze
+    // begonnen? Dan zeg je dat hier, ook nadat je de uren al hebt goedgekeurd.
+    const ver=goedgekeurd.filter(r=>r.afstand_meter!=null&&Number(r.afstand_meter)>afwijkingDrempel());
+    const vlagRegel=ver.length
+      ?`<div style="font-size:12px;color:#B45309;background:#FFFBEB;border:1px solid #FDE68A;border-radius:9px;padding:8px 10px;margin-bottom:.75rem;line-height:1.5">
+          🚩 ${ver.length===1?'Eén registratie is':ver.length+' registraties zijn'} ergens anders uitgeklokt dan waar is ingeklokt:
+          ${veiligTekst([...new Set(ver.map(r=>gMap[r.gebruiker_id]||'Onbekend'))].join(', '))}.
+        </div>`:'';
+    maandEl.innerHTML=vlagRegel+`<table class="uur-tbl">
       <thead><tr><th>Naam</th><th>Klussen</th><th style="text-align:right">Uren</th></tr></thead>
       <tbody>
         ${rijen.map(r=>`<tr><td>${r.naam}</td><td>${r.klussen.size}</td><td style="text-align:right;font-weight:600">${minToStr(r.minuten)}</td></tr>`).join('')}
@@ -7124,7 +7174,7 @@ async function doeExport(){
       return g.length%2?g[m]:Math.round((g[m-1]+g[m])/2);
     };
 
-    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Pauze (min)','Duur','Uren (decimaal)','Klus','Gepland','Gepland (duur)','Verschil met planning','Samen met','Uren collega\'s','Verschil','Uurloon','Loonkosten (incl. werkgeverslasten)','Status','Handmatig','Locatie inklokken','Locatie uitklokken','Notitie medewerker','Notitie beheer']];
+    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Pauze (min)','Duur','Uren (decimaal)','Klus','Gepland','Gepland (duur)','Verschil met planning','Samen met','Uren collega\'s','Verschil','Uurloon','Loonkosten (incl. werkgeverslasten)','Status','Handmatig','Locatie inklokken','Locatie uitklokken','Afstand in-uit','Ergens anders uitgeklokt','Notitie medewerker','Notitie beheer']];
     let totaalMin=0, totaalKosten=0, zonderLoon=0;
     const perPersoon={}, kostenPerPersoon={};
     let afwijkers=0;
@@ -7179,6 +7229,8 @@ async function doeExport(){
         r.handmatig?'ja':'',
         r.locatie_in||'',
         r.locatie_uit||'',
+        r.afstand_meter!=null?afstandTekst(r.afstand_meter):'',
+        (r.afstand_meter!=null&&Number(r.afstand_meter)>afwijkingDrempel())?'ja':'',
         r.notitie_pers||'',
         r.notitie_beh||''
       ]);
@@ -7487,6 +7539,8 @@ async function laadInstellingen(){
   const ja=v=>String(v||'nee').toLowerCase()==='ja';
   if(li)li.checked=ja(INSTELLINGEN.locatie_verplicht_in);
   if(lu)lu.checked=ja(INSTELLINGEN.locatie_verplicht_uit);
+  const af=document.getElementById('instAfwijking');
+  if(af)af.value=INSTELLINGEN.locatie_afwijking_meter!=null?INSTELLINGEN.locatie_afwijking_meter:'500';
   toonLocatieCijfers();
 }
 
@@ -7513,14 +7567,21 @@ async function bewaarLocatieInstellingen(){
   const info=document.getElementById('instLocInfo');
   const inAan=document.getElementById('instLocIn').checked;
   const uitAan=document.getElementById('instLocUit').checked;
+  const afRuw=(document.getElementById('instAfwijking').value||'').trim();
+  if(afRuw===''||isNaN(Number(afRuw))||Number(afRuw)<0){
+    if(info)info.textContent='Dat aantal meter klopt niet.';return;
+  }
   if(info)info.textContent='Bezig met opslaan...';
   const{error}=await sb.from('instellingen').upsert([
     {sleutel:'locatie_verplicht_in', waarde:inAan?'ja':'nee', omschrijving:'Inklokken kan alleen met locatie'},
     {sleutel:'locatie_verplicht_uit',waarde:uitAan?'ja':'nee',omschrijving:'Uitklokken kan alleen met locatie'},
+    {sleutel:'locatie_afwijking_meter',waarde:String(Math.round(Number(afRuw))),
+     omschrijving:'Vanaf hoeveel meter verschil tussen in- en uitklokken een vlaggetje'},
   ],{onConflict:'sleutel'});
   if(error){if(info)info.textContent='Opslaan mislukt: '+error.message;return;}
   APP_INST.locatie_verplicht_in=inAan?'ja':'nee';
   APP_INST.locatie_verplicht_uit=uitAan?'ja':'nee';
+  APP_INST.locatie_afwijking_meter=String(Math.round(Number(afRuw)));
   toast('Opgeslagen');
   toonLocatieCijfers();
 }
