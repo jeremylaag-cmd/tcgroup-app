@@ -114,6 +114,9 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .tc.past-col{background:#EDECEA !important;border-color:#DEDAD5 !important;box-shadow:none !important;opacity:.45;cursor:default}
 .kl{display:flex;flex-direction:column;gap:8px}
 .kc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.875rem 1rem;cursor:pointer}
+.kc.optie{border:2px dashed #FDBA74;background:#FFFBF7}
+.optie-bdg{background:#FFF7ED;color:#C2410C;border:1px dashed #FDBA74;font-weight:700;letter-spacing:.05em;text-transform:uppercase}
+.pb-klus.optie{border-top:1px dashed #FDBA74;border-right:1px dashed #FDBA74;border-bottom:1px dashed #FDBA74;background:#FFFBF7}
 .kc:hover{box-shadow:0 1px 4px rgba(0,0,0,.06)}
 .kc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
 .kdate{font-size:10px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;margin-bottom:.35rem}
@@ -2371,8 +2374,23 @@ async function doLogin(){
   await initApp(data.user);
 }
 
+// Tussenvoegsels houden een kleine letter, behalve als de naam ermee begint.
+const TUSSENVOEGSELS=new Set(['van','de','den','der','ter','te','het','ten',
+  'op','aan','bij','in','uit','voor','tot','du','la','le','da','dos','del','di','el']);
+
+// "bram dreijer" en "BRAM DREIJER" worden allebei "Bram Dreijer".
+function netteNaam(ruw){
+  const woorden=String(ruw||'').trim().replace(/\s+/g,' ').split(' ').filter(Boolean);
+  return woorden.map((w,i)=>{
+    const klein=w.toLowerCase();
+    if(i>0&&TUSSENVOEGSELS.has(klein))return klein;
+    // Ook na een streepje of apostrof een hoofdletter: Jan-Willem, d'Angelo.
+    return klein.replace(/(^|[-'’])([a-zà-ÿ])/g,(m,scheid,letter)=>scheid+letter.toUpperCase());
+  }).join(' ');
+}
+
 async function doRegister(){
-  const naam=document.getElementById('regNaam').value.trim();
+  const naam=netteNaam(document.getElementById('regNaam').value);
   const telefoon=document.getElementById('regTel').value.trim();
   const email=document.getElementById('regEmail').value.trim();
   const pw=document.getElementById('regPw').value;
@@ -2383,6 +2401,10 @@ async function doRegister(){
   const msg=document.getElementById('authMsg');
   err.style.display='none';msg.style.display='none';
   if(!naam){err.textContent='Vul je volledige naam in.';err.style.display='block';return;}
+  if(naam.split(' ').length<2){
+    err.textContent='Vul je voor- én achternaam in, bijvoorbeeld: Bram Dreijer.';
+    err.style.display='block';return;
+  }
   if(!telefoon){err.textContent='Vul je telefoonnummer in.';err.style.display='block';return;}
   if(!email){err.textContent='Vul je e-mailadres in.';err.style.display='block';return;}
   if(pw.length<6){err.textContent='Wachtwoord moet minimaal 6 tekens zijn.';err.style.display='block';return;}
@@ -2503,7 +2525,9 @@ async function zorgVoorGebruikersRij(user){
     if(bestaand&&bestaand.length>0)return; // rij bestaat al
     // Geen rij — maak er een aan (bijv. na Sign in with Apple).
     const meta=user.user_metadata||{};
-    const naam=meta.naam||meta.full_name||meta.name||(user.email?user.email.split('@')[0]:'Nieuwe gebruiker');
+    const uitDelen=[meta.given_name,meta.family_name].filter(Boolean).join(' ').trim();
+    const naam=netteNaam(meta.naam||meta.full_name||meta.name||uitDelen)
+      ||(user.email?user.email.split('@')[0]:'Nieuwe gebruiker');
     await sb.from('gebruikers').insert({
       id:user.id,
       rol:'part-timer',
@@ -2775,7 +2799,7 @@ function zoekResultaatHtml(k){
   const merken=(verleden?merk('Geweest','#F3F4F6','#6B7280'):'')
     +(k.categorie==='franklins'?merk('Franklins','#FFFBEB','#B45309'):'')
     +(k.categorie==='intern'?merk('Intern','#EEF2FF','#3730A3'):'')
-    +(k.is_optie?merk('Optie','#EEF2FF','#3730A3'):'');
+    +(k.is_optie?merk('Optie','#FFF7ED','#C2410C'):'');
   const wie=(k.personeel||[]).map(x=>x.naam).concat((k.losse||[]).map(x=>x.naam+' (los)'));
   return`<div class="kz-item" onclick="zoekResultaatOpenen('${k.id}')">
     <div class="kz-naam">${veiligTekst(k.naam||k.food||'Klus')}${merken}</div>
@@ -3838,7 +3862,7 @@ function renderAll(){
     const tB=k.trucks.map(t=>`<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${t.label}</span>`).join('');
     const t1=tijdFromDb(k.vertrek_tijd),t4=tijdFromDb(k.einde_feest);
     const tijdStr=t1&&t4?`${t1} → ${t4}`:t1||t4||'';
-    const vastBadge=(k.is_optie?'<span class="bdg" style="background:#EEF2FF;color:#3730A3;border:1px dashed #A5B4FC">Optie</span>':'')
+    const vastBadge=(k.is_optie?'<span class="bdg optie-bdg">Optie</span>':'')
       +(k.categorie==='franklins'
       ?'<span class="bdg" style="background:#FFFBEB;color:#B45309">Franklins</span>':'')
       +(k.categorie==='intern'
@@ -3849,7 +3873,7 @@ function renderAll(){
       :k.soorten&&k.soorten.length?k.soorten.map(s=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${s.titel}</span>`).join('')
       :k.food?`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${k.food}</span>`:'');
     const pdfLinks=k.pdfs&&k.pdfs.length?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${p.url}\`,\`${p.naam}\`)">${p.naam}</span>`).join(''):'';
-    return`<div class="kc" onclick="openDetail('${k.id}')"${k.is_optie?' style="border-style:dashed"':''}>
+    return`<div class="kc${k.is_optie?' optie':''}" onclick="openDetail('${k.id}')">
       <div class="kc-top">
         <div style="min-width:0;flex:1">
           ${k.naam?`<div class="knaam">${k.naam}</div>`:''}
@@ -4630,7 +4654,7 @@ function openDetail(id){
   const dsEind=k.datum_eind?parseDate(k.datum_eind).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
   const datumStr=dsEind&&dsEind!==ds?`${ds} – ${dsEind}`:ds;
   document.getElementById('detailNaam').innerHTML=(k.naam||k.food||'Klus')
-    +(k.is_optie?' <span class="bdg" style="background:#EEF2FF;color:#3730A3;border:1px dashed #A5B4FC;vertical-align:middle">Optie</span>':'');
+    +(k.is_optie?' <span class="bdg optie-bdg" style="vertical-align:middle">Optie</span>':'');
   document.getElementById('detailTijden').innerHTML=tijdLines.map(t=>`<div style="font-size:14px;font-weight:600;color:var(--text)">${t}</div>`).join('');
   document.getElementById('detailDatum').textContent=datumStr;
   // Alleen de namen van de trucks. De gegevens per truck (rijbewijs,
@@ -9802,7 +9826,7 @@ function pbRenderContent(){
     const kanWel=g.vrij, alIngepland=g.ingepland, kanNiet=g.niet;
     const beschikbaar=gemeld.concat(kanWel);
     const isOpen=pbOpenDrop===k.id;const truckKleur=(k.trucks&&k.trucks.length)?k.trucks[0].color:'#6366F1';
-    html+=`<div class="pb-klus ${st}"><div class="pb-klus-hdr"><div><div class="pb-knaam">${k.naam}${k.milieuzone?' <span class="bdg" style="background:#ECFDF5;color:#065F46;font-size:9px">Milieuzone</span>':''}</div><div class="pb-kloc">${k.adres||'Locatie onbekend'}</div></div><span class="pb-badge ${st}"><span class="pb-bdot"></span>${stLabel}</span></div>`;
+    html+=`<div class="pb-klus ${st}${k.is_optie?' optie':''}"><div class="pb-klus-hdr"><div><div class="pb-knaam">${k.naam}${k.is_optie?' <span class="bdg optie-bdg" style="font-size:9px">Optie</span>':''}${k.milieuzone?' <span class="bdg" style="background:#ECFDF5;color:#065F46;font-size:9px">Milieuzone</span>':''}</div><div class="pb-kloc">${k.adres||'Locatie onbekend'}</div></div><span class="pb-badge ${st}"><span class="pb-bdot"></span>${stLabel}</span></div>`;
     shifts.forEach(sh=>{
       const shSt=sh.bezet>=sh.totaal?'vol':sh.bezet===0?'leeg':'deel';
       html+=`<div class="pb-shift"><span class="pb-stijd">${sh.tijd}</span><span class="pb-steam">${sh.team}</span><div class="pb-sright"><span class="pb-badge ${shSt}">${sh.bezet}/${sh.totaal}</span>${openSlots>0?`<button class="pb-wijs${isOpen?' open':''}" onclick="pbToggleDrop('${k.id}')">${isOpen?'&#x2715; Sluiten':'+ Toewijzen'}</button>`:''}</div></div>`;
