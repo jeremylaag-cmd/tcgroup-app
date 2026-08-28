@@ -9460,7 +9460,7 @@ function pbSelectDay(y,m,d){
 }
 function pbSetFilter(f,btn){pbFilter=f;document.querySelectorAll('.pb-fbtn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');pbRenderKal();pbRenderContent();}
 function pbToggleDrop(id){pbOpenDrop=pbOpenDrop===id?null:id;pbRenderContent();}
-async function pbWijsToe(klusId,mwId){
+async function pbWijsToe(klusId,mwId,gekozenShift){
   const klus=KLUSSEN.find(k=>k.id===klusId);const mw=PERSONEEL.find(p=>p.id===mwId);
   if(!klus||!mw)return;if(!klus.personeel)klus.personeel=[];
   if(klus.personeel.find(p=>p.id===mwId))return;
@@ -9480,15 +9480,21 @@ async function pbWijsToe(klusId,mwId){
     }
   }
 
-  // Heeft de klus shifts, dan komt hij in de eerste shift die nog plek heeft.
-  // Wil je hem ergens anders, dan verzet je dat in het klusformulier.
+  // Klik je op "+ Toewijzen" bij een shift, dan hoort hij in díé shift, ook
+  // als een eerdere shift nog leeg is. De regel "Hele klus" (id begint met
+  // shift-) betekent juist: zonder shift. Alleen als er niets is doorgegeven
+  // zoeken we zelf de eerste shift die nog plek heeft.
   let shiftId=null;
-  (klus.shifts||[]).some(sh=>{
-    const vol=(klus.personeel||[]).filter(p=>p.shift_id===sh.id).length
-             +((klus.losse||[]).filter(l=>l.shift_id===sh.id).length);
-    if(vol<(sh.personeel_nodig||0)){shiftId=sh.id;return true;}
-    return false;
-  });
+  if(gekozenShift){
+    if(String(gekozenShift).indexOf('shift-')!==0)shiftId=gekozenShift;
+  }else{
+    (klus.shifts||[]).some(sh=>{
+      const vol=(klus.personeel||[]).filter(p=>p.shift_id===sh.id).length
+               +((klus.losse||[]).filter(l=>l.shift_id===sh.id).length);
+      if(vol<(sh.personeel_nodig||0)){shiftId=sh.id;return true;}
+      return false;
+    });
+  }
 
   klus.personeel.push({id:mw.id,naam:mw.naam,shift_id:shiftId});pbOpenDrop=null;
   pbShowToast('toe',mw.naam,klus.naam);
@@ -9825,16 +9831,55 @@ function pbRenderContent(){
     const g=deelPersoneelIn(rest,k.datum,k.id);
     const kanWel=g.vrij, alIngepland=g.ingepland, kanNiet=g.niet;
     const beschikbaar=gemeld.concat(kanWel);
-    const isOpen=pbOpenDrop===k.id;const truckKleur=(k.trucks&&k.trucks.length)?k.trucks[0].color:'#6366F1';
+    // De keuzelijst hoort bij één shift, niet bij de hele klus: pbOpenDrop is
+    // daarom 'klusid::shiftid'. Anders belandt iedereen in de eerste shift.
+    const dropPrefix=k.id+'::';
+    const openShift=(typeof pbOpenDrop==='string'&&pbOpenDrop.indexOf(dropPrefix)===0)
+      ?pbOpenDrop.slice(dropPrefix.length):null;
+    const truckKleur=(k.trucks&&k.trucks.length)?k.trucks[0].color:'#6366F1';
     html+=`<div class="pb-klus ${st}${k.is_optie?' optie':''}"><div class="pb-klus-hdr"><div><div class="pb-knaam">${k.naam}${k.is_optie?' <span class="bdg optie-bdg" style="font-size:9px">Optie</span>':''}${k.milieuzone?' <span class="bdg" style="background:#ECFDF5;color:#065F46;font-size:9px">Milieuzone</span>':''}</div><div class="pb-kloc">${k.adres||'Locatie onbekend'}</div></div><span class="pb-badge ${st}"><span class="pb-bdot"></span>${stLabel}</span></div>`;
+    // De keuzelijst wordt onder de shift getekend waar je hem opende, zodat
+    // je ziet waar iemand terechtkomt.
+    const ddHtml=(shiftId,shiftNaam)=>{
+      let d=`<div class="pb-dd">`;
+      const regel=(mw,extra)=>{
+        const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+        return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}','${shiftId}')"><div class="pb-av" style="background:${truckKleur}25;color:${truckKleur}">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol">${extra||mw.rol}</span></div>`;
+      };
+      const kopje=t=>`<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px 4px">${t}</div>`;
+      if(shifts.length>1)d+=`<div style="font-size:11px;color:var(--muted);padding:8px 12px 0">Komt op <b>${shiftNaam}</b></div>`;
+      if(gemeld.length)d+=kopje('Heeft zich aangemeld')+gemeld.map(mw=>regel(mw,'aangemeld \u270B')).join('');
+      if(kanWel.length)d+=kopje(gemeld.length?'Verder beschikbaar':'Beschikbaar')+kanWel.map(mw=>regel(mw)).join('');
+      if(!beschikbaar.length)d+=`<div class="pb-mw" style="color:var(--muted);cursor:default">Niemand beschikbaar op deze dag</div>`;
+      if(alIngepland.length){
+        d+=kopje('Staat al ingepland \u2014 vraagt om bevestiging');
+        d+=alIngepland.map(mw=>{
+          const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+          return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}','${shiftId}')" title="${mw.naam} ${mw.reden}"><div class="pb-av" style="background:#FFFBEB;color:#B45309">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol" style="color:#B45309">${mw.reden}</span></div>`;
+        }).join('');
+      }
+      if(kanNiet.length){
+        // Ook deze zijn aan te klikken: je krijgt dan eerst de vraag of je het
+        // hebt afgestemd.
+        d+=kopje('Niet beschikbaar \u2014 vraagt om bevestiging');
+        d+=kanNiet.map(mw=>{
+          const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+          return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}','${shiftId}')" title="${mw.naam} ${mw.reden}"><div class="pb-av" style="background:#FEF2F2;color:#B91C1C">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol" style="color:#DC2626">${mw.reden}</span></div>`;
+        }).join('');
+      }
+      return d+`</div>`;
+    };
+
     shifts.forEach(sh=>{
       const shSt=sh.bezet>=sh.totaal?'vol':sh.bezet===0?'leeg':'deel';
-      html+=`<div class="pb-shift"><span class="pb-stijd">${sh.tijd}</span><span class="pb-steam">${sh.team}</span><div class="pb-sright"><span class="pb-badge ${shSt}">${sh.bezet}/${sh.totaal}</span>${openSlots>0?`<button class="pb-wijs${isOpen?' open':''}" onclick="pbToggleDrop('${k.id}')">${isOpen?'&#x2715; Sluiten':'+ Toewijzen'}</button>`:''}</div></div>`;
+      const shOpen=openShift===sh.id;
+      html+=`<div class="pb-shift"><span class="pb-stijd">${sh.tijd}</span><span class="pb-steam">${sh.team}</span><div class="pb-sright"><span class="pb-badge ${shSt}">${sh.bezet}/${sh.totaal}</span>${openSlots>0?`<button class="pb-wijs${shOpen?' open':''}" onclick="pbToggleDrop('${k.id}::${sh.id}')">${shOpen?'&#x2715; Sluiten':'+ Toewijzen'}</button>`:''}</div></div>`;
       const leden=sh.leden||[];
       if(leden.length)html+=`<div class="pb-namen">${leden.map(m=>m.soort==='los'
         ?`<span class="pb-naam-pill" style="background:#FFFBEB;color:#92400E;border-color:#FDE68A" title="Losse kracht">${m.naam} (los)<button class="pb-remove" style="color:#92400E" onclick="pbVerwijderLos('${m.id}','${String(m.naam).replace(/'/g,"\\'")}')" title="Verwijder">&#x2715;</button></span>`
         :`<span class="pb-naam-pill">${m.naam}<button class="pb-remove" onclick="pbVerwijder('${k.id}','${m.id}','${String(m.naam).replace(/'/g,"\\'")}')" title="Verwijder">&#x2715;</button></span>`
       ).join('')}</div>`;
+      if(shOpen)html+=ddHtml(sh.id,(sh.team||'shift')+' '+sh.tijd);
     });
 
     // Losse kracht er direct bij zetten, zonder de klus te hoeven bewerken.
@@ -9851,37 +9896,6 @@ function pbRenderContent(){
       ${shiftKeuze}
       <button class="pb-wijs" onclick="pbVoegLosToe('${k.id}')">+ Los</button>
     </div>`;
-    if(isOpen){
-      html+=`<div class="pb-dd">`;
-      const regel=(mw,extra)=>{
-        const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-        return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}')"><div class="pb-av" style="background:${truckKleur}25;color:${truckKleur}">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol">${extra||mw.rol}</span></div>`;
-      };
-      const kopje=t=>`<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px 4px">${t}</div>`;
-
-      if(gemeld.length)html+=kopje('Heeft zich aangemeld')+gemeld.map(mw=>regel(mw,'aangemeld ✋')).join('');
-      if(kanWel.length)html+=kopje(gemeld.length?'Verder beschikbaar':'Beschikbaar')+kanWel.map(mw=>regel(mw)).join('');
-      if(!beschikbaar.length)html+=`<div class="pb-mw" style="color:var(--muted);cursor:default">Niemand beschikbaar op deze dag</div>`;
-
-      if(alIngepland.length){
-        html+=kopje('Staat al ingepland — vraagt om bevestiging');
-        html+=alIngepland.map(mw=>{
-          const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-          return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}')" title="${mw.naam} ${mw.reden}"><div class="pb-av" style="background:#FFFBEB;color:#B45309">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol" style="color:#B45309">${mw.reden}</span></div>`;
-        }).join('');
-      }
-
-      if(kanNiet.length){
-        // Ook deze zijn aan te klikken: je krijgt dan eerst de vraag of je het
-        // hebt afgestemd.
-        html+=kopje('Niet beschikbaar — vraagt om bevestiging');
-        html+=kanNiet.map(mw=>{
-          const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-          return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}')" title="${mw.naam} ${mw.reden}"><div class="pb-av" style="background:#FEF2F2;color:#B91C1C">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol" style="color:#DC2626">${mw.reden}</span></div>`;
-        }).join('');
-      }
-      html+=`</div>`;
-    }
     html+=`</div>`;
   });
   listEl.innerHTML=html+internHtml;
