@@ -79,8 +79,11 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .cd{border-radius:8px;padding:4px 2px;text-align:center;border:1px solid transparent;background:var(--bg);min-height:34px;cursor:pointer;min-width:0;overflow:hidden}
 .cd:hover{border-color:var(--border)}
 .cd.today{background:#EFF6FF;border-color:#BFDBFE}.cd.today .dn{color:#1E40AF;font-weight:700}
-.cd.past{background:#F4F3F1;cursor:default}.cd.past .dn{color:#B0ABA5}.cd.past .dot{opacity:.4}
+.cd.past{background:#F4F3F1}.cd.past .dn{color:#B0ABA5}.cd.past .dot{opacity:.4}
 .cd.sel{border-color:var(--text);background:#fff;opacity:1}
+/* Een geselecteerde dag is altijd goed leesbaar, ook als hij voorbij is. */
+.cd.sel .dn{color:var(--text);font-weight:700}
+.cd.past.sel .dot{opacity:1}
 .cd.has-klus .dr{display:flex;flex-wrap:wrap;align-content:flex-start;justify-content:center;gap:2px;margin-top:2px;max-width:100%}
 .dn{font-size:11px;color:var(--text)}
 .dot{width:6px;height:6px;border-radius:50%;flex:0 0 auto}
@@ -111,7 +114,8 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .tc.busy:hover{transform:scale(1.08)}
 .tc.tod-col{outline:2.5px solid #2563EB;outline-offset:-1px}
 .tc.sel-col{outline:2px solid var(--text);outline-offset:-1px}
-.tc.past-col{opacity:.5;cursor:default}
+.tc.past-col{opacity:.5}
+.tc.past-col.sel-col{opacity:.85}
 .tc.past-col:not(.busy){background:#EDECEA !important;border-color:#DEDAD5 !important;box-shadow:none !important}
 .kl{display:flex;flex-direction:column;gap:8px}
 .kc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.875rem 1rem;cursor:pointer}
@@ -3849,7 +3853,7 @@ function renderAll(){
     const ds=fmt(d);const dots=[...(busyMap[ds]||[])];
     const isPast=ds<todayStr;
     return(i===7?'<div class="wdiv"></div>':'')+
-      `<div class="cd${ds===todayStr?' today':''}${isPast?' past':''}${ds===selDate?' sel':''}${dots.length?' has-klus':''}" onclick="${isPast?'':'toggleDate(\''+ds+'\');closeDrawer()'}">
+      `<div class="cd${ds===todayStr?' today':''}${isPast?' past':''}${ds===selDate?' sel':''}${dots.length?' has-klus':''}" onclick="toggleDate('${ds}');closeDrawer()">
         <div class="dn">${d.getDate()}</div>
         ${dots.length?`<div class="dr">${dots.slice(0,MAX_STIPPEN).map(tid=>{const t=TRUCKS.find(x=>x.id===tid);return t?`<div class="dot" style="background:${t.color}"></div>`:''}).join('')}${dots.length>MAX_STIPPEN?`<span class="dmeer">+${dots.length-MAX_STIPPEN}</span>`:''}</div>`:''}
       </div>`;
@@ -3870,7 +3874,7 @@ function renderAll(){
       // houden diezelfde kleur; de CSS zet ze wat doffer. Eerder werden ze
       // helemaal grijs gemaakt, waardoor terugbladeren een leeg schema gaf.
       const stijl=busy?`background:${tr.color||'#6366F1'}`:'';
-      return`<div class="tc${busy?' busy':''}${ds===todayStr?' tod-col':''}${isPast?' past-col':''}${ds===selDate?' sel-col':''}" onclick="${isPast?'':` toggleDate('${ds}')`}" style="${stijl}" title="${tr.label} — ${busy?'bezet':'vrij'}"></div>`;
+      return`<div class="tc${busy?' busy':''}${ds===todayStr?' tod-col':''}${isPast?' past-col':''}${ds===selDate?' sel-col':''}" onclick="toggleDate('${ds}')" style="${stijl}" title="${tr.label} — ${busy?'bezet':'vrij'}"></div>`;
     }).join('')}</div>
   </div>`).join('');
 
@@ -3901,7 +3905,7 @@ function renderAll(){
   document.getElementById('mainTitle').textContent=zoekWoorden.length
     ?'Gevonden: '+KLUS_ZOEK.trim()
     :selDate
-    ?new Date(selDate).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})
+    ?parseDate(selDate).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})
     :(toonEerdereKlussen?'Alle klussen':'Klussen vanaf vandaag');
   document.getElementById('btnClear').style.display=(selDate&&!zoekWoorden.length)?'':'none';
   const sorted=[...filtered].sort((a,b)=>a.datum.localeCompare(b.datum));
