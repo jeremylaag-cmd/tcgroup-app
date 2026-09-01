@@ -1108,6 +1108,15 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
                 <span style="font-size:12px;color:var(--muted)">per uur</span>
               </div>
             </div>
+            <div>
+              <div class="slabel" style="margin-bottom:4px">Vergoeding eigen auto</div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <span style="font-size:12px;color:var(--muted)">&euro;</span>
+                <input type="number" id="instKmLoon" min="0" max="10" step="0.01" inputmode="decimal" placeholder="0.25" style="font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:90px">
+                <span style="font-size:12px;color:var(--muted)">per kilometer</span>
+              </div>
+              <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5">Wat iemand krijgt die met zijn eigen auto rijdt. In 2026 is &euro; 0,25 het bedrag dat onbelast mag. Registraties die er al zijn houden het tarief van toen.</div>
+            </div>
             <button class="btn-sm" onclick="bewaarInstellingen()" style="align-self:flex-start">Opslaan</button>
             <div id="instInfo" style="font-size:11px;color:var(--muted)"></div>
           </div>
@@ -1386,6 +1395,16 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="fr"><span class="fl">Notitie <span style="color:var(--muted);font-weight:400">(optioneel)</span></span>
         <textarea id="pauzeNotitie" rows="2" placeholder="bv. later begonnen, extra opgeruimd, materiaal kapot..." style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);resize:vertical"></textarea>
         <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px">Je beheerder ziet dit bij het accorderen van je uren.</div>
+      </div>
+      <div class="fr"><span class="fl">Kilometers met je eigen auto <span style="color:var(--muted);font-weight:400">(optioneel)</span></span>
+        <input type="number" id="pauzeKm" min="0" max="2000" step="1" inputmode="numeric" placeholder="0"
+          oninput="pauzeKmBedrag()" style="max-width:120px;font-size:15px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+        <div id="pauzeKmInfo" style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px">Alleen invullen als je met je eigen auto hebt gereden. Laat leeg bij een bedrijfsbus.</div>
+      </div>
+      <div class="fr"><span class="fl">Foto <span style="color:var(--muted);font-weight:400">(optioneel)</span></span>
+        <input type="file" id="pauzeFoto" accept="image/*" onchange="pauzeFotoGekozen(this)"
+          style="width:100%;font-size:13px;font-family:var(--font);color:var(--text)">
+        <div id="pauzeFotoInfo" style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px">Bijvoorbeeld een bon, de kilometerstand of iets dat je wilt laten zien.</div>
       </div>
       <div id="pauzeWaarschuwing" class="warn-box show" style="display:none"></div>
       <div class="mfooter" style="margin-top:1rem">
@@ -2032,6 +2051,10 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="detail-section" id="detailLoonSection" style="display:none">
         <div class="detail-label">Loonkosten</div>
         <div id="detailLoon"></div>
+      </div>
+      <div class="detail-section" id="detailUrenSection" style="display:none">
+        <div class="detail-label">Urenregistratie</div>
+        <div id="detailUren"></div>
       </div>
       <div class="detail-section" id="detailNotitieSection"><div class="detail-label">Notities</div><div style="font-size:13px;color:var(--muted);font-style:italic;line-height:1.6" id="detailNotitie"></div></div>
       <div class="detail-section" id="detailPdfSection"><div class="detail-label">Bijlagen</div><div id="detailPdfs"></div></div>
@@ -4704,6 +4727,7 @@ function openDetail(id){
   laadCollegaTelefoons(k);
   tekenRijschema(k);
   tekenKlusLoon(k);
+  tekenKlusUren(k);
   const ns=document.getElementById('detailNotitieSection');ns.style.display=k.notitie?'':'none';document.getElementById('detailNotitie').textContent=k.notitie;
   const pdfs=document.getElementById('detailPdfSection');pdfs.style.display=k.pdfs&&k.pdfs.length?'':'none';
   document.getElementById('detailPdfs').innerHTML=k.pdfs?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${p.url}\`,\`${p.naam}\`)">${p.naam}</span>`).join(''):'';
@@ -6188,6 +6212,7 @@ async function loadUrenPersoneel(){
         <div class="uur-item-naam">${k?.naam||k?.food||'Klus'}</div>
         <div class="uur-item-sub">${datum}${r.pauze_minuten?' · '+r.pauze_minuten+' min pauze':''}</div>
         <div class="uur-item-sub" style="margin-top:2px;color:var(--text)">Ingeklokt <b>${in_t}</b> · ${r.uitgeklokt_op?`uitgeklokt <b>${uit_t}</b>`:'<span style="color:#B45309;font-weight:600">nog niet uitgeklokt</span>'}</div>
+        ${Number(r.km)>0?`<div class="uur-item-sub" style="margin-top:2px">🚗 ${String(Number(r.km)).replace('.',',')} km · ${lkEuro(kmBedrag(r.km,r.km_tarief))}</div>`:''}
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
         <div class="uur-item-tijd">${minToStr(r.totaal_minuten)}</div>
@@ -6397,8 +6422,102 @@ function vraagPauze(regId){
   pauzeMarkeer(min);
   const notEl=document.getElementById('pauzeNotitie');
   if(notEl)notEl.value='';
+  const kmEl=document.getElementById('pauzeKm');
+  if(kmEl)kmEl.value='';
+  const fotoEl=document.getElementById('pauzeFoto');
+  if(fotoEl)fotoEl.value='';
+  PAUZE_FOTO=null;
+  pauzeKmBedrag();
+  const fi=document.getElementById('pauzeFotoInfo');
+  if(fi){fi.textContent='Bijvoorbeeld een bon, de kilometerstand of iets dat je wilt laten zien.';fi.style.color='var(--muted)';}
   document.getElementById('pauzeWaarschuwing').style.display='none';
   ov.classList.add('open');
+}
+
+// Wat krijgt iemand per kilometer? Het bedrag komt uit de instellingen; de
+// database legt het tarief vast op het moment van invoeren, zodat een latere
+// wijziging oude registraties niet verandert.
+function kmTarief(){
+  const n=Number(String(APP_INST.km_vergoeding||'0.25').replace(',','.'));
+  return isNaN(n)||n<0?0.25:n;
+}
+function kmBedrag(km,tarief){
+  return (Number(km)||0)*(tarief!=null?Number(tarief):kmTarief());
+}
+
+let PAUZE_FOTO=null;
+
+function pauzeKmBedrag(){
+  const el=document.getElementById('pauzeKmInfo');
+  if(!el)return;
+  const km=Number(document.getElementById('pauzeKm')?.value)||0;
+  el.textContent=km>0
+    ?`${km} km \u00d7 ${lkEuro(kmTarief())} = ${lkEuro(kmBedrag(km))} vergoeding.`
+    :'Alleen invullen als je met je eigen auto hebt gereden. Laat leeg bij een bedrijfsbus.';
+}
+
+// Een telefoonfoto is zo 5 MB. Kleiner maken scheelt wachttijd op mobiel en
+// past ruim binnen de limiet. Lukt het verkleinen niet, dan gaat het origineel.
+function verkleinFoto(file,maxZijde=1600){
+  return new Promise(klaar=>{
+    try{
+      const url=URL.createObjectURL(file);
+      const img=new Image();
+      img.onload=()=>{
+        try{
+          const schaal=Math.min(1,maxZijde/Math.max(img.width,img.height));
+          if(schaal>=1&&file.size<1500000){URL.revokeObjectURL(url);klaar(file);return;}
+          const c=document.createElement('canvas');
+          c.width=Math.round(img.width*schaal);
+          c.height=Math.round(img.height*schaal);
+          c.getContext('2d').drawImage(img,0,0,c.width,c.height);
+          c.toBlob(b=>{URL.revokeObjectURL(url);klaar(b||file);},'image/jpeg',0.82);
+        }catch(e){URL.revokeObjectURL(url);klaar(file);}
+      };
+      img.onerror=()=>{URL.revokeObjectURL(url);klaar(file);};
+      img.src=url;
+    }catch(e){klaar(file);}
+  });
+}
+
+function pauzeFotoGekozen(el){
+  const info=document.getElementById('pauzeFotoInfo');
+  const f=el&&el.files&&el.files[0];
+  PAUZE_FOTO=f||null;
+  if(!info)return;
+  if(!f){
+    info.textContent='Bijvoorbeeld een bon, de kilometerstand of iets dat je wilt laten zien.';
+    info.style.color='var(--muted)';
+    return;
+  }
+  if(f.size>20*1024*1024){
+    PAUZE_FOTO=null;el.value='';
+    info.textContent='Deze foto is te groot. Maak er een kleinere.';
+    info.style.color='#B91C1C';
+    return;
+  }
+  info.textContent=`Gekozen: ${f.name} (${Math.round(f.size/1024)} kB). Wordt bij het uitklokken meegestuurd.`;
+  info.style.color='var(--muted)';
+}
+
+// De foto gaat pas mee als het uitklokken zelf gelukt is. Mislukt het uploaden,
+// dan zijn de uren nog steeds geregistreerd — dat is het belangrijkste.
+async function uploadUrenFoto(regId,file){
+  try{
+    const klein=await verkleinFoto(file);
+    const ext=(klein.type||file.type||'').includes('png')?'png':'jpg';
+    const pad=`${CURRENT_USER.id}/${regId}-${Date.now()}.${ext}`;
+    const{data:{session}}=await sb.auth.getSession();
+    const token=session?.access_token||SB_KEY;
+    const res=await fetch(`${SB_URL}/storage/v1/object/urenfotos/${pad}`,{
+      method:'POST',
+      headers:{'Authorization':`Bearer ${token}`,'Content-Type':klein.type||'image/jpeg','x-upsert':'false'},
+      body:klein,
+    });
+    if(!res.ok){console.error('Foto uploaden mislukt:',await res.text());return null;}
+    await sb.from('urenregistraties').update({foto_pad:pad}).eq('id',regId);
+    return pad;
+  }catch(e){console.error('Foto uploaden mislukt:',e);return null;}
 }
 
 function pauzeKies(m){
@@ -6435,11 +6554,13 @@ function sluitPauze(){
 async function bevestigPauze(){
   const pauze=Math.max(0,parseInt(document.getElementById('pauzeVeld').value)||0);
   const notitie=(document.getElementById('pauzeNotitie')?.value||'').trim();
+  const km=Math.max(0,Number(document.getElementById('pauzeKm')?.value)||0);
+  const foto=PAUZE_FOTO;
   sluitPauze();
-  await doUitklokken(pauzeRegId,pauze,notitie);
+  await doUitklokken(pauzeRegId,pauze,notitie,km,foto);
 }
 
-async function doUitklokken(regId,pauze_minuten=0,notitie=''){
+async function doUitklokken(regId,pauze_minuten=0,notitie='',km=0,foto=null){
   const btn=document.querySelector('.uur-btn-out');
   const herstel=melding=>{
     if(btn){btn.disabled=false;btn.textContent='Uitklokken';}
@@ -6480,12 +6601,19 @@ async function doUitklokken(regId,pauze_minuten=0,notitie=''){
     // Alleen overschrijven als er echt iets is getypt, anders wist een lege
     // notitie wat er eerder al bij stond.
     if(notitie)velden.notitie_pers=notitie;
+    if(km>0)velden.km=km;
     const{error}=await sb.from('urenregistraties').update(velden).eq('id',regId);
     if(error){
       console.error('Uitklokken mislukt:',error);
       herstel('Uitklokken mislukt: '+error.message+'. Probeer het opnieuw.');
       return;
     }
+    if(foto){
+      if(btn)btn.textContent='Foto versturen...';
+      const pad=await uploadUrenFoto(regId,foto);
+      if(!pad)toonUurFout('Je uren zijn geregistreerd, maar de foto kon niet worden verstuurd.');
+    }
+    PAUZE_FOTO=null;
   }catch(e){
     console.error('Uitklokken mislukt:',e);
     herstel('Uitklokken mislukt: '+(e&&e.message?e.message:'geen verbinding')+'. Probeer het opnieuw.');
@@ -6674,6 +6802,14 @@ async function loadUrenBeheer(){
             <div style="font-weight:700;font-size:13px">${lkEuro(uren*loon)}</div>
             <div style="color:var(--muted);font-size:10px">${lkEuro(uren*loon*opslag)} incl. lasten</div>
           </div>`);
+      // Reiskosten en foto komen van de medewerker zelf; die wil je zien
+      // voordat je akkoord geeft.
+      const kmRegel=Number(r.km)>0
+        ?`<div class="uur-item-sub" style="margin-top:2px">🚗 ${String(Number(r.km)).replace('.',',')} km met eigen auto · <b>${lkEuro(kmBedrag(r.km,r.km_tarief))}</b> <span style="color:var(--muted)">(${lkEuro(r.km_tarief||kmTarief())} per km)</span></div>`
+        :'';
+      const fotoRegel=r.foto_pad
+        ?`<div class="uur-item-sub" style="margin-top:2px">📷 <span class="pdf-link" onclick="openUrenFoto('${r.foto_pad}')">Foto bekijken</span></div>`
+        :'';
       // In- en uitkloktijd krijgen een eigen regel met de plek erachter, zodat
       // je in één oogopslag ziet wanneer iemand begon en stopte.
       const bruikbaar=t=>t&&!t.includes('niet')&&!t.includes('geweigerd')?t:'';
@@ -6703,6 +6839,8 @@ async function loadUrenBeheer(){
                 <span style="font-weight:600;color:${pv.afwijking?(pv.verschil>0?'#B45309':'#B91C1C'):'#059669'}">${pv.tekst}</span>
               </div>`
             :`<div class="uur-item-sub" style="margin-top:2px;color:var(--muted)">Geen geplande tijd bekend</div>`}
+          ${kmRegel}
+          ${fotoRegel}
           ${r.notitie_pers?`<div class="uur-item-sub" style="margin-top:4px;color:var(--text);font-weight:700">📝 ${veiligTekst(r.notitie_pers)}</div>`:''}
           ${r.notitie_beh?`<div class="uur-item-sub" style="margin-top:2px;font-style:italic">${veiligTekst(r.notitie_beh)}</div>`:''}
           ${afstandVlag(r)}
@@ -6795,6 +6933,9 @@ async function startEditUren(id){
     <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">PAUZE (minuten)</div>
     <input type="number" id="edit-pauze-${id}" value="${r.pauze_minuten||0}" min="0" max="600" step="5" inputmode="numeric"
       style="width:100%;font-size:15px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);text-align:center;margin-bottom:8px">
+    <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">KILOMETERS EIGEN AUTO</div>
+    <input type="number" id="edit-km-${id}" value="${r.km!=null?r.km:''}" min="0" max="2000" step="1" inputmode="numeric" placeholder="0"
+      style="width:100%;font-size:15px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);text-align:center;margin-bottom:8px">
     <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">NOTITIE (optioneel)</div>
     <input type="text" id="edit-notitie-${id}" value="${r.notitie_beh||''}" placeholder="Toelichting bij wijziging..."
       style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);margin-bottom:10px">
@@ -6830,7 +6971,10 @@ async function saveEditUren(id,status){
     totaal_minuten=Math.max(0,totaal_minuten-pauze);   // gewerkt is zonder pauze
   }
 
+  const kmVeld=document.getElementById(`edit-km-${id}`);
+  const kmRuw=kmVeld?String(kmVeld.value).trim():null;
   const update={status,notitie_beh:notitie,pauze_minuten:pauze};
+  if(kmVeld)update.km=(kmRuw===''?null:Math.max(0,Number(kmRuw)||0));
   if(ingeklokt_op)update.ingeklokt_op=ingeklokt_op;
   if(uitgeklokt_op)update.uitgeklokt_op=uitgeklokt_op;
   if(totaal_minuten!==null)update.totaal_minuten=totaal_minuten;
@@ -7249,7 +7393,7 @@ async function doeExport(){
       return g.length%2?g[m]:Math.round((g[m-1]+g[m])/2);
     };
 
-    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Pauze (min)','Duur','Uren (decimaal)','Klus','Gepland','Gepland (duur)','Verschil met planning','Samen met','Uren collega\'s','Verschil','Uurloon','Loonkosten (incl. werkgeverslasten)','Status','Handmatig','Locatie inklokken','Locatie uitklokken','Afstand in-uit','Ergens anders uitgeklokt','Notitie medewerker','Notitie beheer']];
+    const rijen=[['Naam','Datum','Ingeklokt','Uitgeklokt','Pauze (min)','Duur','Uren (decimaal)','Klus','Gepland','Gepland (duur)','Verschil met planning','Samen met','Uren collega\'s','Verschil','Uurloon','Loonkosten (incl. werkgeverslasten)','Km eigen auto','Tarief per km','Kilometervergoeding','Foto','Status','Handmatig','Locatie inklokken','Locatie uitklokken','Afstand in-uit','Ergens anders uitgeklokt','Notitie medewerker','Notitie beheer']];
     let totaalMin=0, totaalKosten=0, zonderLoon=0;
     const perPersoon={}, kostenPerPersoon={};
     let afwijkers=0;
@@ -7300,6 +7444,10 @@ async function doeExport(){
         verschil,
         geld(loonVan[r.gebruiker_id]!=null?loonVan[r.gebruiker_id]:null),
         geld(kostenVan(r)),
+        r.km!=null&&Number(r.km)>0?String(r.km).replace('.',','):'',
+        r.km_tarief!=null?geld(Number(r.km_tarief)):'',
+        Number(r.km)>0?geld(kmBedrag(r.km,r.km_tarief)):'',
+        r.foto_pad?'ja':'',
         r.status||'',
         r.handmatig?'ja':'',
         r.locatie_in||'',
@@ -7311,7 +7459,14 @@ async function doeExport(){
       ]);
     });
 
+    const totKm=regs.reduce((sum,r)=>sum+Number(r.km||0),0);
+    const totKmGeld=regs.reduce((sum,r)=>sum+kmBedrag(r.km,r.km_tarief),0);
+
     rijen.push([]);
+    if(totKm>0){
+      rijen.push(['Kilometers eigen auto samen',String(totKm).replace('.',','),'vergoeding',geld(totKmGeld)]);
+      rijen.push([]);
+    }
     if(afwijkers){
       rijen.push([`Let op: ${afwijkers} ${afwijkers===1?'registratie wijkt':'registraties wijken'} meer dan ${AFWIJKING_MIN} minuten af van de rest van de ploeg (kolom Verschil).`]);
       rijen.push([]);
@@ -7596,6 +7751,102 @@ async function tekenKlusLoon(k){
     <div style="font-size:11px;color:var(--muted);margin-top:4px">Inclusief werkgeverslasten.</div>`;
 }
 
+// ── URENREGISTRATIE OP DE KLUS ──────────────────────────────────────────
+// Wie stond er, wat was gepland, wat is er geklokt en wat is er aan
+// kilometers bijgekomen. Alleen voor beheerders: hier staan uren en
+// vergoedingen van collega's bij elkaar.
+async function tekenKlusUren(k){
+  const vak=document.getElementById('detailUrenSection');
+  const el=document.getElementById('detailUren');
+  if(!vak||!el)return;
+  if(CURRENT_ROL!=='beheerder'||!k){vak.style.display='none';return;}
+  vak.style.display='';
+  el.innerHTML='<div style="font-size:12px;color:var(--muted)">Bezig met ophalen...</div>';
+
+  const{data:regs,error}=await sb.from('urenregistraties')
+    .select('*').eq('klus_id',k.id).order('ingeklokt_op');
+  if(detailKlusId!==k.id)return;              // venster is intussen gewisseld
+  if(error){el.innerHTML='<div style="font-size:12px;color:var(--muted)">Kon de urenregistratie niet ophalen.</div>';return;}
+
+  // Iedereen die op de klus staat komt in de lijst, ook wie nog niet heeft
+  // ingeklokt. Juist die regels wil je zien.
+  const perPersoon=new Map();
+  (k.personeel||[]).forEach(pp=>perPersoon.set(pp.id,{naam:pp.naam,rol:(PERSONEEL.find(x=>x.id===pp.id)||{}).rol||'',reg:null}));
+  (regs||[]).forEach(r=>{
+    const best=perPersoon.get(r.gebruiker_id);
+    const naam=(PERSONEEL.find(x=>x.id===r.gebruiker_id)||{}).naam||'Onbekend';
+    if(best){if(!best.reg||geklokteMinuten(r)>geklokteMinuten(best.reg))best.reg=r;}
+    else perPersoon.set(r.gebruiker_id,{naam,rol:(PERSONEEL.find(x=>x.id===r.gebruiker_id)||{}).rol||'',reg:r,extra:true});
+  });
+
+  const rijen=[...perPersoon.values()].sort((a,b)=>a.naam.localeCompare(b.naam));
+  if(!rijen.length){
+    el.innerHTML='<div style="font-size:12px;color:var(--muted);font-style:italic">Nog niemand ingedeeld.</div>';
+    return;
+  }
+
+  const tijd=d=>d?new Date(d).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'';
+  const statusBol=st=>st==='goedgekeurd'?'<span style="color:#059669">akkoord</span>'
+    :st==='afgewezen'?'<span style="color:#DC2626">afgewezen</span>'
+    :st==='wacht'?'<span style="color:#B45309">te doen</span>'
+    :st==='lopend'?'<span style="color:#2563EB">loopt nog</span>'
+    :'<span style="color:var(--muted)">—</span>';
+
+  let totMin=0, totKm=0, totKmGeld=0;
+  const body=rijen.map(x=>{
+    const r=x.reg;
+    const g=r?planVerschil(r):null;
+    const geplTekst=g?`${g.gepland.van}\u2013${g.gepland.tot}`:'\u2014';
+    if(r){totMin+=(r.totaal_minuten||0);totKm+=Number(r.km||0);totKmGeld+=kmBedrag(r.km,r.km_tarief);}
+    const kmCel=r&&Number(r.km)>0
+      ?`${String(Number(r.km)).replace('.',',')} km<br><span style="color:var(--muted);font-size:11px">${lkEuro(kmBedrag(r.km,r.km_tarief))}</span>`
+      :'<span style="color:var(--muted)">—</span>';
+    const fotoCel=r&&r.foto_pad
+      ?`<span class="pdf-link" style="font-size:11px" onclick="openUrenFoto('${r.foto_pad}')">bekijk</span>`
+      :'<span style="color:var(--muted)">—</span>';
+    return`<tr>
+      <td><div style="font-weight:600">${veiligTekst(x.naam)}</div><div style="color:var(--muted);font-size:11px">${veiligTekst(x.rol||'')}${x.extra?' · niet ingedeeld':''}</div></td>
+      <td>${geplTekst}</td>
+      <td>${r?`${tijd(r.ingeklokt_op)}–${r.uitgeklokt_op?tijd(r.uitgeklokt_op):'…'}`:'<span style="color:var(--muted)">niet ingeklokt</span>'}</td>
+      <td style="text-align:right">${r?(r.pauze_minuten||0):''}</td>
+      <td style="text-align:right;font-weight:600">${r?minToStr(r.totaal_minuten):''}</td>
+      <td>${g?`<span style="color:${g.afwijking?(g.verschil>0?'#B45309':'#B91C1C'):'#059669'}">${g.tekst}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
+      <td style="text-align:right">${kmCel}</td>
+      <td style="text-align:center">${fotoCel}</td>
+      <td>${r?statusBol(r.status):statusBol('')}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML=`<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table class="uur-tbl" style="min-width:640px">
+      <thead><tr>
+        <th>Naam</th><th>Gepland</th><th>Geklokt</th>
+        <th style="text-align:right">Pauze</th><th style="text-align:right">Totaal</th>
+        <th>Verschil</th><th style="text-align:right">Km</th><th style="text-align:center">Foto</th><th>Status</th>
+      </tr></thead>
+      <tbody>${body}
+        <tr class="totaal">
+          <td>Totaal</td><td></td><td></td><td></td>
+          <td style="text-align:right">${minToStr(totMin)}</td><td></td>
+          <td style="text-align:right">${totKm?String(totKm).replace('.',',')+' km':'—'}</td>
+          <td></td><td></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  ${totKm?`<div style="font-size:12px;color:var(--muted);margin-top:6px">Kilometervergoeding samen: <b style="color:var(--text)">${lkEuro(totKmGeld)}</b>.</div>`:''}`;
+}
+
+// De foto's staan in een afgeschermde bucket. We maken er een link van die een
+// uur geldig is, zodat hij niet zomaar rondgestuurd kan worden.
+async function openUrenFoto(pad){
+  try{
+    const{data,error}=await sb.storage.from('urenfotos').createSignedUrl(pad,3600);
+    if(error||!data?.signedUrl){alert('Deze foto kon niet geopend worden.');return;}
+    window.open(data.signedUrl,'_blank');
+  }catch(e){alert('Deze foto kon niet geopend worden.');}
+}
+
 // ── INSTELLINGEN (beheer) ───────────────────────────────────────────────
 let INSTELLINGEN={};
 
@@ -7609,6 +7860,8 @@ async function laadInstellingen(){
   INSTELLINGEN=Object.fromEntries((data||[]).map(r=>[r.sleutel,r.waarde]));
   a.value=INSTELLINGEN.werkgeverslasten_pct!=null?String(INSTELLINGEN.werkgeverslasten_pct).replace(',','.'):'30';
   b.value=INSTELLINGEN.los_uurloon_standaard!=null?String(INSTELLINGEN.los_uurloon_standaard).replace(',','.'):'15';
+  const kmEl=document.getElementById('instKmLoon');
+  if(kmEl)kmEl.value=INSTELLINGEN.km_vergoeding!=null?String(INSTELLINGEN.km_vergoeding).replace(',','.'):'0.25';
 
   const li=document.getElementById('instLocIn'), lu=document.getElementById('instLocUit');
   const ja=v=>String(v||'nee').toLowerCase()==='ja';
@@ -7665,13 +7918,17 @@ async function bewaarInstellingen(){
   const info=document.getElementById('instInfo');
   const pct=(document.getElementById('instWglasten').value||'').trim().replace(',','.');
   const los=(document.getElementById('instLosLoon').value||'').trim().replace(',','.');
+  const km=(document.getElementById('instKmLoon')?.value||'').trim().replace(',','.');
   if(pct===''||isNaN(Number(pct))||Number(pct)<0){if(info)info.textContent='Het percentage klopt niet.';return;}
   if(los===''||isNaN(Number(los))||Number(los)<0){if(info)info.textContent='Het uurloon klopt niet.';return;}
+  if(km===''||isNaN(Number(km))||Number(km)<0){if(info)info.textContent='De kilometervergoeding klopt niet.';return;}
   if(info)info.textContent='Bezig met opslaan...';
   const{error}=await sb.from('instellingen').upsert([
     {sleutel:'werkgeverslasten_pct',waarde:pct,omschrijving:'Percentage bovenop het brutoloon'},
-    {sleutel:'los_uurloon_standaard',waarde:los,omschrijving:'Uurloon voor een losse kracht zonder eigen bedrag'}
+    {sleutel:'los_uurloon_standaard',waarde:los,omschrijving:'Uurloon voor een losse kracht zonder eigen bedrag'},
+    {sleutel:'km_vergoeding',waarde:km,omschrijving:'Vergoeding per kilometer met de eigen auto'}
   ],{onConflict:'sleutel'});
+  APP_INST.km_vergoeding=km;
   if(error){if(info)info.textContent='Opslaan mislukt: '+error.message;return;}
   if(info)info.textContent='Opgeslagen.';
   toast('Rekenregels opgeslagen');
