@@ -6636,6 +6636,20 @@ async function loadUrenBeheer(){
   const{data:gebruikers}=await sb.from('personeel_publiek').select('id,naam');
   const gMap=Object.fromEntries((gebruikers||[]).map(g=>[g.id,g.naam]));
 
+  // Wat kost deze registratie? Alleen een beheerder mag uurlonen zien, dus voor
+  // iedereen anders halen we ze niet eens op.
+  let loonVan={}, opslag=1;
+  if(CURRENT_ROL==='beheerder'){
+    const[{data:lonen},{data:inst}]=await Promise.all([
+      sb.from('gebruikers').select('id,uurloon'),
+      sb.from('instellingen').select('sleutel,waarde')
+    ]);
+    loonVan=Object.fromEntries((lonen||[]).filter(g=>g.uurloon!=null).map(g=>[g.id,Number(g.uurloon)]));
+    const pct=(inst||[]).find(r=>r.sleutel==='werkgeverslasten_pct');
+    const pctGetal=pct?Number(String(pct.waarde).replace(',','.')):30;
+    opslag=1+((isNaN(pctGetal)?30:pctGetal)/100);
+  }
+
   // Te accorderen
   const wacht=(regs||[]).filter(r=>r.status==='wacht');
   if(wachtEl)wachtEl.textContent=wacht.length?`${wacht.length} wacht`:'';
@@ -6649,6 +6663,17 @@ async function loadUrenBeheer(){
       const in_t=new Date(r.ingeklokt_op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
       const uit_t=r.uitgeklokt_op?new Date(r.uitgeklokt_op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'–';
       const pauze=r.pauze_minuten||0;
+      // Het bedrag gaat over de betaalde uren, dus zonder pauze — hetzelfde
+      // getal dat rechtsboven staat en dat ook in de export komt.
+      const loon=loonVan[r.gebruiker_id];
+      const uren=(r.totaal_minuten||0)/60;
+      const loonRegel=CURRENT_ROL!=='beheerder'?'':(loon==null
+        ?`<div style="font-size:10px;color:#B45309;text-align:right;line-height:1.4;max-width:120px">Geen uurloon ingevuld</div>`
+        :`<div style="font-size:11px;text-align:right;line-height:1.5">
+            <div style="color:var(--muted)">${lkEuro(loon)} per uur</div>
+            <div style="font-weight:700;font-size:13px">${lkEuro(uren*loon)}</div>
+            <div style="color:var(--muted);font-size:10px">${lkEuro(uren*loon*opslag)} incl. lasten</div>
+          </div>`);
       // In- en uitkloktijd krijgen een eigen regel met de plek erachter, zodat
       // je in één oogopslag ziet wanneer iemand begon en stopte.
       const bruikbaar=t=>t&&!t.includes('niet')&&!t.includes('geweigerd')?t:'';
@@ -6689,6 +6714,7 @@ async function loadUrenBeheer(){
             <button class="btn-uur-af" onclick="keurUren('${r.id}','afgewezen')">✗</button>
             <button class="btn-sm" style="padding:5px 10px;font-size:11px" onclick="startEditUren('${r.id}')">Bewerk</button>
           </div>
+          ${loonRegel}
         </div>
       </div>`;
     }).join('');
