@@ -1912,7 +1912,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div class="fr"><span class="fl">Naam klus <span style="color:#DC2626">*</span></span><input type="text" id="fNaam" placeholder="bv. Bruiloft Janssen"></div>
     <div class="two">
       <div class="fr"><span class="fl">Startdatum <span style="color:#DC2626">*</span></span><input type="date" id="fDatum" onchange="onDateChange()"></div>
-      <div class="fr"><span class="fl">Einddatum <span style="color:var(--muted);font-weight:400">(optioneel)</span></span><input type="date" id="fDatumEind"></div>
+      <div class="fr"><span class="fl">Einddatum <span style="color:var(--muted);font-weight:400">(optioneel)</span></span><input type="date" id="fDatumEind" onchange="onDateChange()"></div>
     </div>
     <div class="fr">
       <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:var(--text)">
@@ -3979,13 +3979,28 @@ function openPlan(type,id){
 }
 
 // ── MODAL (alleen beheerder) ──
-function getBezette(datum){
+function getBezette(datum,datumEind){
   if(!datum)return{trucks:[],pers:[]};
-  const andere=KLUSSEN.filter(k=>k.id!==editId&&klusDagen(k).includes(datum));
+  // Loopt de klus over meer dagen, dan telt elke dag mee. Anders zie je een
+  // botsing op dag twee pas als het misgaat.
+  const dagen=[datum];
+  if(datumEind&&datumEind>datum){
+    for(let d=parseDate(datum);fmt(d)<datumEind;){
+      d.setDate(d.getDate()+1);
+      dagen.push(fmt(d));
+    }
+  }
+  const andere=KLUSSEN.filter(k=>k.id!==editId&&klusDagen(k).some(ds=>dagen.includes(ds)));
   return{
     trucks:andere.flatMap(k=>k.trucks.map(t=>t.id)),
     pers:andere.flatMap(k=>k.personeel.map(p=>p.id)),
   };
+}
+// Één plek die de datums uit het formulier haalt, zodat elke aanroep dezelfde
+// periode gebruikt.
+function formDatums(){
+  return[document.getElementById('fDatum')?.value||'',
+         document.getElementById('fDatumEind')?.value||''];
 }
 function renderTruckChips(bezette){
   const tc=document.getElementById('truckChips');if(!tc)return;
@@ -4145,18 +4160,21 @@ function renderTruckSoortBlocks(){
     </div>`;}).join('');
 }
 function onDateChange(){
-  const datum=document.getElementById('fDatum')?.value;if(!datum)return;
-  const{trucks,pers}=getBezette(datum);
+  const[datum,datumEind]=formDatums();
+  if(!datum){renderTruckChips([]);renderPersChips([]);return;}
+  const{trucks,pers}=getBezette(datum,datumEind);
   const tw=document.getElementById('truckWarn');const pw=document.getElementById('persWarn');
   const ct=TRUCKS.filter(t=>trucks.includes(t.id));const cp=PERSONEEL.filter(p=>pers.includes(p.id));
-  const dl=parseDate(datum).toLocaleDateString('nl-NL',{day:'numeric',month:'long'});
-  if(tw){tw.className=ct.length?'chip-warn show':'chip-warn';tw.textContent=ct.length?`⚠ Al ingepland op ${dl}: ${ct.map(t=>t.label).join(', ')}`:''}
-  if(pw){pw.className=cp.length?'chip-warn show':'chip-warn';pw.textContent=cp.length?`⚠ Al ingepland op ${dl}: ${cp.map(p=>p.naam).join(', ')}`:''}
+  const dag=d=>parseDate(d).toLocaleDateString('nl-NL',{day:'numeric',month:'long'});
+  // Loopt de klus over meer dagen, dan slaat de melding op de hele periode.
+  const dl=(datumEind&&datumEind>datum)?`${dag(datum)} t/m ${dag(datumEind)}`:`op ${dag(datum)}`;
+  if(tw){tw.className=ct.length?'chip-warn show':'chip-warn';tw.textContent=ct.length?`⚠ Al ingepland ${dl}: ${ct.map(t=>t.label).join(', ')}`:''}
+  if(pw){pw.className=cp.length?'chip-warn show':'chip-warn';pw.textContent=cp.length?`⚠ Al ingepland ${dl}: ${cp.map(p=>p.naam).join(', ')}`:''}
   renderTruckChips(trucks);renderPersChips(pers);
 }
 function toggleTruck(id){
-  const datum=document.getElementById('fDatum')?.value||'';
-  const{trucks,pers}=getBezette(datum);
+  const[datum,datumEind]=formDatums();
+  const{trucks,pers}=getBezette(datum,datumEind);
   if(!formTrucks.includes(id)&&trucks.includes(id)){showWarn(`⚠ ${TRUCKS.find(t=>t.id===id)?.label} staat al ingepland.`);return;}
   formTrucks=formTrucks.includes(id)?formTrucks.filter(x=>x!==id):[...formTrucks,id];
   if(!formTrucks.includes(id))delete formTruckSoorten[id];
@@ -4164,8 +4182,8 @@ function toggleTruck(id){
   document.getElementById('warnBox').className='warn-box';
 }
 async function togglePers(id){
-  const datum=document.getElementById('fDatum')?.value||'';
-  const{pers}=getBezette(datum);
+  const[datum,datumEind]=formDatums();
+  const{pers}=getBezette(datum,datumEind);
   const persoon=PERSONEEL.find(p=>p.id===id);
   const staatErAl=formPers.includes(id);
 
@@ -4396,7 +4414,7 @@ function openModal(id=null){
   renderTruckChips([]);renderPersChips([]);renderTruckSoortBlocks();renderPdfList();renderLosseKrachten();
   renderShiftRijen();renderPersShiftKeuze();
   document.getElementById('modalOverlay').classList.add('open');
-  if(k)onDateChange();
+  onDateChange();
 }
 
 // ── LOSSE KRACHTEN OP EEN KLUS ──────────────────────────────────────────
