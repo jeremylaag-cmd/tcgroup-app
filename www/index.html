@@ -771,6 +771,33 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 .pb-mob-dots{display:flex;gap:2px;justify-content:center;min-height:5px;margin-top:1px}
 .pb-mob-dot{width:5px;height:5px;border-radius:50%}
 .pb-mob-dot.leeg{background:#DC2626}.pb-mob-dot.deel{background:#D97706}.pb-mob-dot.vol{background:#059669}.pb-mob-dot.grijs{background:#B0ABA5}
+
+/* Op een groot scherm is een kolom van 480px zonde van de ruimte: dan staat
+   alles onder elkaar terwijl er nog een halve monitor leeg is. Vanaf 1024px
+   wordt het klusvenster breder en komen de korte blokken naast elkaar. De
+   brede blokken — rijschema, urenregistratie, notities en bijlagen — houden
+   de volle breedte, anders wordt hun inhoud juist smaller. */
+@media(min-width:1024px){
+  #detailOverlay .detail-modal{width:min(1040px,94vw);max-width:none;max-height:90vh}
+  #detailOverlay .detail-body{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    column-gap:2rem;
+    align-items:start;
+  }
+  #detailOverlay .detail-body > div:not(.detail-section){grid-column:1/-1}
+  #detailOverlay #detailRitSection,
+  #detailOverlay #detailUrenSection,
+  #detailOverlay #detailNotitieSection,
+  #detailOverlay #detailPdfSection{grid-column:1/-1}
+  #detailOverlay .detail-header{padding:1.5rem 2rem 1.15rem}
+  #detailOverlay .detail-body{padding:1.5rem 2rem}
+  #detailOverlay .detail-footer{padding:1rem 2rem 1.5rem}
+  #detailOverlay .detail-naam{font-size:20px}
+}
+@media(min-width:1440px){
+  #detailOverlay .detail-modal{width:min(1200px,92vw)}
+}
 </style>
 </head>
 <body>
