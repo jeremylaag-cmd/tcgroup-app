@@ -6186,7 +6186,8 @@ async function loadUrenPersoneel(){
     return`<div class="uur-item">
       <div class="uur-item-info">
         <div class="uur-item-naam">${k?.naam||k?.food||'Klus'}</div>
-        <div class="uur-item-sub">${datum} · ${in_t} – ${uit_t}${r.pauze_minuten?' · '+r.pauze_minuten+' min pauze':''}</div>
+        <div class="uur-item-sub">${datum}${r.pauze_minuten?' · '+r.pauze_minuten+' min pauze':''}</div>
+        <div class="uur-item-sub" style="margin-top:2px;color:var(--text)">Ingeklokt <b>${in_t}</b> · ${r.uitgeklokt_op?`uitgeklokt <b>${uit_t}</b>`:'<span style="color:#B45309;font-weight:600">nog niet uitgeklokt</span>'}</div>
       </div>
       <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
         <div class="uur-item-tijd">${minToStr(r.totaal_minuten)}</div>
@@ -6648,6 +6649,16 @@ async function loadUrenBeheer(){
       const in_t=new Date(r.ingeklokt_op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
       const uit_t=r.uitgeklokt_op?new Date(r.uitgeklokt_op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'–';
       const pauze=r.pauze_minuten||0;
+      // In- en uitkloktijd krijgen een eigen regel met de plek erachter, zodat
+      // je in één oogopslag ziet wanneer iemand begon en stopte.
+      const bruikbaar=t=>t&&!t.includes('niet')&&!t.includes('geweigerd')?t:'';
+      const locIn=bruikbaar(r.locatie_in), locUit=bruikbaar(r.locatie_uit);
+      const klokRegel=`<div class="uur-item-sub" style="margin-top:4px;color:var(--text)">
+        <div>Ingeklokt <b>${in_t}</b>${locIn?' <span style="color:var(--muted)">· '+veiligTekst(locIn)+'</span>':''}</div>
+        <div>${r.uitgeklokt_op
+          ?`Uitgeklokt <b>${uit_t}</b>${locUit?' <span style="color:var(--muted)">· '+veiligTekst(locUit)+'</span>':''}`
+          :'<span style="color:#B45309;font-weight:600">Nog niet uitgeklokt</span>'}</div>
+      </div>`;
       // Gewerkte tijd is exclusief pauze; de klokkentijd is dus de som.
       const nodig=minimumPauze((r.totaal_minuten||0)+pauze);
       const teWeinig=pauze<nodig;
@@ -6655,7 +6666,8 @@ async function loadUrenBeheer(){
       return`<div class="uur-item" id="uur-${r.id}">
         <div class="uur-item-info">
           <div class="uur-item-naam">${gMap[r.gebruiker_id]||'Onbekend'}${r.handmatig?' <span style="font-size:10px;font-weight:500;color:var(--muted)">(handmatig)</span>':''}</div>
-          <div class="uur-item-sub">${datum} · ${in_t}–${uit_t} · ${k?.naam||'Klus'}</div>
+          <div class="uur-item-sub">${datum} · ${k?.naam||'Klus'}</div>
+          ${klokRegel}
           <div class="uur-item-sub" style="margin-top:2px;${teWeinig?'color:#B45309;font-weight:600':''}">
             Pauze: ${pauze} min${teWeinig?` — normaal ${nodig} min bij deze lengte`:''}
           </div>
@@ -6668,7 +6680,6 @@ async function loadUrenBeheer(){
             :`<div class="uur-item-sub" style="margin-top:2px;color:var(--muted)">Geen geplande tijd bekend</div>`}
           ${r.notitie_pers?`<div class="uur-item-sub" style="margin-top:4px;color:var(--text);font-weight:700">📝 ${veiligTekst(r.notitie_pers)}</div>`:''}
           ${r.notitie_beh?`<div class="uur-item-sub" style="margin-top:2px;font-style:italic">${veiligTekst(r.notitie_beh)}</div>`:''}
-          ${r.locatie_in&&!r.locatie_in.includes('niet')&&!r.locatie_in.includes('geweigerd')?`<div class="uur-item-sub" style="margin-top:2px">In: ${r.locatie_in}${r.locatie_uit&&!r.locatie_uit.includes('niet')?' · Uit: '+r.locatie_uit:''}</div>`:''}
           ${afstandVlag(r)}
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
