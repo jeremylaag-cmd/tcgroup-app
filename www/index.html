@@ -111,7 +111,8 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .tc.busy:hover{transform:scale(1.08)}
 .tc.tod-col{outline:2.5px solid #2563EB;outline-offset:-1px}
 .tc.sel-col{outline:2px solid var(--text);outline-offset:-1px}
-.tc.past-col{background:#EDECEA !important;border-color:#DEDAD5 !important;box-shadow:none !important;opacity:.45;cursor:default}
+.tc.past-col{opacity:.5;cursor:default}
+.tc.past-col:not(.busy){background:#EDECEA !important;border-color:#DEDAD5 !important;box-shadow:none !important}
 .kl{display:flex;flex-direction:column;gap:8px}
 .kc{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:.875rem 1rem;cursor:pointer}
 .kc.optie{border:2px dashed #FDBA74;background:#FFFBF7}
@@ -3865,8 +3866,10 @@ function renderAll(){
       const ds=fmt(d);const busy=KLUSSEN.some(k=>klusDagen(k).includes(ds)&&k.trucks.some(t=>t.id===tr.id));
       const isPast=ds<todayStr;
       // Bezette dagen krijgen de volle kleur van de truck. Met een lichte tint
-      // was op een druk scherm nauwelijks te zien wat bezet was.
-      const stijl=busy?(isPast?`background:${tr.color}55`:`background:${tr.color}`):'';
+      // was op een druk scherm nauwelijks te zien wat bezet was. Voorbije dagen
+      // houden diezelfde kleur; de CSS zet ze wat doffer. Eerder werden ze
+      // helemaal grijs gemaakt, waardoor terugbladeren een leeg schema gaf.
+      const stijl=busy?`background:${tr.color||'#6366F1'}`:'';
       return`<div class="tc${busy?' busy':''}${ds===todayStr?' tod-col':''}${isPast?' past-col':''}${ds===selDate?' sel-col':''}" onclick="${isPast?'':` toggleDate('${ds}')`}" style="${stijl}" title="${tr.label} — ${busy?'bezet':'vrij'}"></div>`;
     }).join('')}</div>
   </div>`).join('');
