@@ -6380,7 +6380,7 @@ function renderVasteDiensten(){
     const regels=VASTE_DIENSTEN.filter(v=>v.weekdag===dag);
     const rijen=regels.map(v=>`
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-        <input type="text" id="vdn-${v.id}" value="${(v.naam||'').replace(/"/g,'&quot;')}" placeholder="Naam" style="${veld};flex:1;min-width:110px">
+        <input type="text" id="vdn-${v.id}" value="${(v.naam||'').replace(/"/g,'&quot;')}" placeholder="bv. Ochtend" title="Laat leeg om de tijden als naam te gebruiken" style="${veld};flex:1;min-width:110px">
         <input type="text" class="tijd-input" id="vds-${v.id}" value="${tijdFromDb(v.start_tijd)}" placeholder="11.00" maxlength="5" oninput="formatTijd(this)" style="${veld};width:64px">
         <input type="text" class="tijd-input" id="vde-${v.id}" value="${tijdFromDb(v.eind_tijd)}" placeholder="20.00" maxlength="5" oninput="formatTijd(this)" style="${veld};width:64px">
         <input type="number" id="vdp-${v.id}" value="${v.personeel_nodig||1}" min="0" max="20" inputmode="numeric" style="${veld};width:56px" title="Aantal mensen">
@@ -6409,10 +6409,15 @@ function renderVasteDiensten(){
   }
 }
 
+function dienstNaamUitTijd(start,eind){
+  const a=tijdFromDb(start), b=tijdFromDb(eind);
+  return (a&&b)?a+'–'+b:(a||'Dienst');
+}
+
 async function voegVasteDienstToe(weekdag){
   const bestaand=VASTE_DIENSTEN.filter(v=>v.weekdag===weekdag);
   const{error}=await sb.from('vaste_diensten').insert({
-    weekdag, locatie:'Franklins', naam:'Franklins',
+    weekdag, locatie:'Franklins', naam:dienstNaamUitTijd('11:00:00','20:00:00'),
     start_tijd:'11:00:00', eind_tijd:'20:00:00',
     personeel_nodig:1, volgorde:bestaand.length,
   });
@@ -6422,15 +6427,22 @@ async function voegVasteDienstToe(weekdag){
 }
 
 async function bewaarVasteDienst(id){
-  const naam=document.getElementById('vdn-'+id).value.trim()||'Franklins';
   const start_tijd=tijdToDb(document.getElementById('vds-'+id).value);
   const eind_tijd=tijdToDb(document.getElementById('vde-'+id).value);
+  const naam=document.getElementById('vdn-'+id).value.trim()||dienstNaamUitTijd(start_tijd,eind_tijd);
   const personeel_nodig=+document.getElementById('vdp-'+id).value||0;
   const actief=document.getElementById('vda-'+id).checked;
   const{error}=await sb.from('vaste_diensten')
     .update({naam,start_tijd,eind_tijd,personeel_nodig,actief}).eq('id',id);
   if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
-  toast('Weekschema bijgewerkt');
+  // Diensten die al klaarstaan krijgen de nieuwe naam ook; anders heet dezelfde
+  // shift vandaag anders dan volgende week.
+  let mee=0;
+  try{
+    const{data}=await sb.rpc('vaste_dienst_naam_doorvoeren',{p_dienst:id,p_naam:naam});
+    mee=Number(data)||0;
+  }catch(e){}
+  toast(mee?`Weekschema bijgewerkt · ${mee} geplande diensten hernoemd`:'Weekschema bijgewerkt');
   await loadAll();
   renderVasteDiensten();
 }
@@ -8966,11 +8978,19 @@ async function laadMijnVerlof(){
 }
 
 async function meldZiek(){
-  if(!confirm('Je meldt jezelf ziek voor vandaag. Je planning van vandaag komt te vervallen en je beheerder ziet het meteen. Doorgaan?'))return;
+  if(!confirm('Je meldt jezelf ziek voor vandaag. Je beheerder krijgt er meteen bericht van en haalt je van de planning. Doorgaan?'))return;
   const{data,error}=await sb.rpc('meld_ziek',{});
   if(error){toast('Ziek melden mislukt: '+error.message,'fout');return;}
-  toast(data==='stond al'?'Je stond vandaag al ziek gemeld':'Je bent ziek gemeld voor vandaag');
+  if(data==='stond al'){toast('Je stond vandaag al ziek gemeld');return;}
+  toast('Je bent ziek gemeld voor vandaag');
   loadPersoonlijkSchema();
+  // De beheerders moeten dit meteen weten; zij halen je van de planning af.
+  try{
+    const beheerders=(PERSONEEL||[]).filter(x=>x.rol==='beheerder');
+    const vandaag=new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
+    beheerders.forEach(bh=>sendPushNotificatie(bh.id,'Ziekmelding',
+      `${CURRENT_NAAM||'Een medewerker'} heeft zich ziek gemeld voor ${vandaag}.`));
+  }catch(e){}
 }
 
 async function restantMeenemen(){
