@@ -253,6 +253,15 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .tk-kn.ja{background:#059669;border-color:#059669;color:#fff}
 .tk-kn.nee{color:#DC2626}
 
+/* Beheer: elk blok klapt open. Alles tegelijk in beeld was niet te overzien. */
+.bc.dicht > .bc-body{display:none}
+.bc > .bt.bc-kop{cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;user-select:none}
+.bc.dicht > .bt.bc-kop{margin-bottom:0}
+.bc-pijl{color:var(--muted);font-size:10px;line-height:1;flex:0 0 auto;transition:transform .15s ease}
+.bc.dicht .bc-pijl{transform:rotate(-90deg)}
+.bc > .bt.bc-kop:hover .bc-pijl{color:var(--text)}
+.bc.dicht{padding-top:1rem;padding-bottom:1rem}
+
 .tk-week{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.75rem}
 .tk-weekbalk{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:1rem}
 .tk-wd{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px 6px;border-radius:9px;background:var(--bg);border:1px solid transparent;cursor:pointer;min-width:0}
@@ -947,6 +956,21 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 </div>
 
 <!-- APP -->
+<div class="auth-wrap" id="wachtWrap" style="display:none">
+  <div class="auth-box">
+    <div class="auth-logo">TC Group <span>/ Planning</span></div>
+    <div style="font-size:15px;font-weight:600;color:var(--text);margin:1.25rem 0 .5rem">Je account wacht op goedkeuring</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6">
+      Je aanmelding is binnen. Een beheerder zet je rol en je uurloon klaar en geeft je
+      account vrij; daarna kun je meteen aan de slag. Duurt het lang, geef dan even een
+      seintje op kantoor.
+    </div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:.875rem" id="wachtNaam"></div>
+    <button class="auth-btn" style="margin-top:1.25rem" onclick="location.reload()">Opnieuw kijken</button>
+    <button class="btn-ghost" style="width:100%;margin-top:.5rem" onclick="doLogout()">Uitloggen</button>
+  </div>
+</div>
+
 <div class="app" id="appWrap">
   <header>
     <div class="logo">TC Group <span>/ Planning</span></div>
@@ -1395,6 +1419,15 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 
   <div id="page-accounts" class="page">
     <div class="beheer-wrap" style="max-width:800px">
+      <div class="bc" id="nieuweAanmeldingenCard" style="display:none;margin-bottom:1.25rem;border-color:#FDE68A;background:#FFFBEB">
+        <div class="bt" style="margin-bottom:.5rem">Nieuwe aanmeldingen <span id="aanmeldTeller" style="color:#B45309"></span></div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
+          Deze mensen hebben een account aangemaakt en wachten. Zolang je ze niet vrijgeeft
+          zien ze niets van de planning. Kies een rol en vul het uurloon in; dat is nodig
+          om ze te kunnen indelen en om de loonkosten te laten kloppen.
+        </div>
+        <div id="aanmeldLijst"></div>
+      </div>
       <div class="bc">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem">
           <div class="bt" style="margin-bottom:0">Personeelsaccounts</div>
@@ -2814,19 +2847,35 @@ async function initApp(user){
     }
   }, 1000);
   // Haal rol op — probeer meerdere keren als nodig
-  let rol='part-timer',naam=user.email;
+  let rol='part-timer',naam=user.email,goedgekeurd=null;
   try{
-    const{data,error}=await sb.from('gebruikers').select('rol,naam').eq('id',user.id).single();
-    if(data){rol=data.rol||'part-timer';naam=data.naam||user.email;}
+    const{data,error}=await sb.from('gebruikers').select('rol,naam,goedgekeurd').eq('id',user.id).single();
+    if(data){rol=data.rol||'part-timer';naam=data.naam||user.email;goedgekeurd=data.goedgekeurd;}
     else if(error){
       // Probeer opnieuw zonder single()
-      const{data:rows}=await sb.from('gebruikers').select('rol,naam').eq('id',user.id);
-      if(rows&&rows.length>0){rol=rows[0].rol||'part-timer';naam=rows[0].naam||user.email;}
+      const{data:rows}=await sb.from('gebruikers').select('rol,naam,goedgekeurd').eq('id',user.id);
+      if(rows&&rows.length>0){rol=rows[0].rol||'part-timer';naam=rows[0].naam||user.email;goedgekeurd=rows[0].goedgekeurd;}
     }
   }catch(e){console.error('Rol ophalen mislukt:',e);}
+
+  // Een nieuwe aanmelding wacht op een beheerder. Tot die tijd is er niets te
+  // zien — ook niet als je langs het scherm zou gaan: zonder goedkeuring geeft
+  // de database geen rol terug en daarmee ook geen gegevens.
+  if(goedgekeurd===false){
+    document.getElementById('authWrap').style.display='none';
+    document.getElementById('appWrap').style.display='none';
+    const w=document.getElementById('wachtWrap');
+    if(w)w.style.display='flex';
+    const wn=document.getElementById('wachtNaam');
+    if(wn)wn.textContent=`Aangemeld als ${naam} (${user.email}).`;
+    return;
+  }
+
   CURRENT_ROL=rol;
   CURRENT_NAAM=naam;
   document.getElementById('authWrap').style.display='none';
+  const w=document.getElementById('wachtWrap');
+  if(w)w.style.display='none';
   document.getElementById('appWrap').style.display='block';
   // Tabs op basis van rol
   const tabs=document.getElementById('headerTabs');
@@ -3177,7 +3226,7 @@ function showPage(id,btn){
   document.querySelectorAll('.htab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   if(btn)btn.classList.add('active');
-  if(id==='beheer'){renderBeheer();loadTakenBeheer();}
+  if(id==='beheer'){beheerUitklapbaar();renderBeheer();loadTakenBeheer();}
   if(id==='accounts')loadAccounts();
   if(id==='beschikbaarheid')loadPersoonlijkSchema();
   if(id==='beschikbaarheid-beheer')loadAlleBeschikbaarheid();
@@ -3287,7 +3336,90 @@ async function loadAccounts(){
   ]);
   SKILLS=skillsData||[];
   ACCOUNTS=data||[];
+  renderAanmeldingen();
   renderAccounts();
+}
+
+// ── NIEUWE AANMELDINGEN ─────────────────────────────────────────────────
+// Een account is pas bruikbaar als er een rol en een uurloon bij staan. De
+// database weigert het goedkeuren zonder die twee; hier vragen we ze netjes.
+function renderAanmeldingen(){
+  const kaart=document.getElementById('nieuweAanmeldingenCard');
+  const lijst=document.getElementById('aanmeldLijst');
+  if(!kaart||!lijst)return;
+  const wacht=(ACCOUNTS||[]).filter(a=>a.goedgekeurd===false);
+  kaart.style.display=wacht.length?'':'none';
+  const t=document.getElementById('aanmeldTeller');
+  if(t)t.textContent=wacht.length?`(${wacht.length})`:'';
+  if(!wacht.length){lijst.innerHTML='';return;}
+
+  const veld='width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)';
+  lijst.innerHTML=wacht.map(a=>{
+    const wanneer='';
+    return`<div style="background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:12px 13px;margin-bottom:9px">
+      <div style="font-size:14px;font-weight:600;color:var(--text)">${veiligTekst(a.naam||'Zonder naam')}</div>
+      <div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:10px">
+        ${veiligTekst(a.email||'')}${a.telefoon?' · '+veiligTekst(a.telefoon):''}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px">
+        <div style="flex:1;min-width:140px">
+          <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Rol *</div>
+          <select id="aanmRol-${a.id}" style="${veld}">
+            <option value="">Kies —</option>
+            <option value="part-timer">Part-timer</option>
+            <option value="full-timer">Full-timer</option>
+            <option value="hal">Hal medewerker</option>
+            <option value="personeel">Personeel</option>
+            <option value="beheerder">Beheerder</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:120px">
+          <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Uurloon *</div>
+          <input type="number" id="aanmLoon-${a.id}" min="0" max="999" step="0.01" inputmode="decimal" placeholder="15.00" style="${veld}">
+        </div>
+        <div style="flex:1;min-width:120px" id="aanmUrenWrap-${a.id}">
+          <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Contracturen p/w</div>
+          <input type="number" id="aanmUren-${a.id}" min="0" max="60" step="1" inputmode="numeric" placeholder="40" style="${veld}">
+        </div>
+      </div>
+      <div id="aanmFout-${a.id}" style="font-size:12px;color:#B91C1C;line-height:1.5;margin-bottom:7px;display:none"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn-ghost" style="padding:6px 12px;font-size:12px" onclick="weigerAanmelding('${a.id}')">Weigeren</button>
+        <button class="btn-sm" style="padding:6px 14px;font-size:12px" onclick="keurAanmeldingGoed('${a.id}')">Vrijgeven</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function keurAanmeldingGoed(id){
+  const foutEl=document.getElementById('aanmFout-'+id);
+  const fout=t=>{if(foutEl){foutEl.textContent=t;foutEl.style.display='';}};
+  if(foutEl)foutEl.style.display='none';
+  const rol=document.getElementById('aanmRol-'+id)?.value||'';
+  const loonRuw=(document.getElementById('aanmLoon-'+id)?.value||'').trim().replace(',','.');
+  const urenRuw=(document.getElementById('aanmUren-'+id)?.value||'').trim();
+  if(!rol){fout('Kies eerst een rol.');return;}
+  if(loonRuw===''||isNaN(Number(loonRuw))||Number(loonRuw)<0){fout('Vul een geldig uurloon in.');return;}
+
+  const velden={rol,uurloon:Number(loonRuw),goedgekeurd:true};
+  if(urenRuw!==''&&!isNaN(Number(urenRuw)))velden.contract_uren_per_week=Number(urenRuw);
+  if(isVasteKracht(rol))velden.in_dienst_op=velden.in_dienst_op||fmt(new Date());
+
+  const{error}=await sb.from('gebruikers').update(velden).eq('id',id);
+  if(error){fout('Vrijgeven mislukt: '+error.message);return;}
+  const naam=(ACCOUNTS.find(a=>a.id===id)||{}).naam||'Account';
+  await loadAccounts();
+  toast(naam+' kan aan de slag');
+}
+
+async function weigerAanmelding(id){
+  const a=ACCOUNTS.find(x=>x.id===id);
+  if(!a)return;
+  if(!confirm(`De aanmelding van ${a.naam||a.email} weigeren? Het account wordt verwijderd.`))return;
+  const{error}=await sb.from('gebruikers').delete().eq('id',id);
+  if(error){toast('Weigeren mislukt: '+error.message,'fout');return;}
+  await loadAccounts();
+  toast('Aanmelding geweigerd');
 }
 
 // Filteren op rol en op skills, naast het zoekveld. Bij de skills geldt "en":
@@ -3400,7 +3532,9 @@ function renderAccounts(){
     return true;
   };
 
-  const data=(ACCOUNTS||[]).filter(u=>zoektPast(u)&&rolPast(u)&&skillsPassen(u));
+  // Wie nog op goedkeuring wacht staat in het blok erboven, niet twee keer.
+  const data=(ACCOUNTS||[]).filter(u=>u.goedgekeurd!==false)
+    .filter(u=>zoektPast(u)&&rolPast(u)&&skillsPassen(u));
   ACCOUNTS_ZICHTBAAR=data;
   renderAccountFilters(zoektPast,rolPast,skillsPassen,rolLabels,data.length);
 
@@ -10750,6 +10884,38 @@ async function verwijderEigenTaak(id){
   if(error){toast('Weghalen mislukt: '+error.message,'fout');return;}
   await loadTaken();
   toast('Taak weggehaald');
+}
+
+// ── BEHEER: BLOKKEN UITKLAPPEN ──────────────────────────────────────────
+// Het beheerscherm toonde alles tegelijk. Nu staat er een rij kopjes en klap je
+// open wat je nodig hebt. Gebeurt één keer; daarna blijft de stand staan zolang
+// je in de app zit.
+function beheerUitklapbaar(){
+  document.querySelectorAll('#page-beheer .bc').forEach(kaart=>{
+    if(kaart.dataset.uitklap)return;
+    const kop=[...kaart.children].find(c=>c.classList&&c.classList.contains('bt'));
+    if(!kop)return;
+    kaart.dataset.uitklap='1';
+
+    const body=document.createElement('div');
+    body.className='bc-body';
+    while(kop.nextSibling)body.appendChild(kop.nextSibling);
+    kaart.appendChild(body);
+
+    kop.classList.add('bc-kop');
+    const pijl=document.createElement('span');
+    pijl.className='bc-pijl';
+    pijl.textContent='\u25BE';
+    kop.appendChild(pijl);
+
+    kaart.classList.add('dicht');
+    kop.setAttribute('role','button');
+    kop.setAttribute('tabindex','0');
+    kop.addEventListener('click',()=>kaart.classList.toggle('dicht'));
+    kop.addEventListener('keydown',e=>{
+      if(e.key==='Enter'||e.key===' '){e.preventDefault();kaart.classList.toggle('dicht');}
+    });
+  });
 }
 
 // ── TAKEN — BEHEER ──────────────────────────────────────────────────────
