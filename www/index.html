@@ -2208,15 +2208,6 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       </div>
       <div id="adresPlek" style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px"></div>
     </div>
-    <div class="fr">
-      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:var(--text)">
-        <input type="checkbox" id="fBuiten" style="width:18px;height:18px;flex-shrink:0">
-        <span>Dit is een <b>buitenklus</b></span>
-      </label>
-      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px">
-        Dan houdt het dashboard het weer voor je in de gaten, tot veertien dagen vooruit.
-      </div>
-    </div>
     <div class="two">
       <div class="fr"><span class="fl">Contactpersoon</span><input type="text" id="fContact" placeholder="Naam"></div>
       <div class="fr"><span class="fl">Telefoonnummer</span><input type="text" id="fTelefoon" placeholder="06-12345678"></div>
@@ -3168,15 +3159,19 @@ async function initApp(user){
   laadAppInstellingen();
 
   await loadAll();
-  if(!isBeheerder){
-    document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-    if(isHal){
-      document.getElementById('page-uren').classList.add('active');
-      loadUrenPersoneel();
-    }else{
-      document.getElementById('page-beschikbaarheid').classList.add('active');
-      loadPersoonlijkSchema();
-    }
+  // Welke pagina er open staat moet kloppen met welk tabblad oplicht. Voor een
+  // beheerder is dat het dashboard; dat stond wel als actief tabblad maar de
+  // rooster-pagina bleef eronder staan, dus moest je er nog een keer op tikken.
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  if(isBeheerder){
+    document.getElementById('page-dashboard').classList.add('active');
+    laadDashboard();
+  }else if(isHal){
+    document.getElementById('page-uren').classList.add('active');
+    loadUrenPersoneel();
+  }else{
+    document.getElementById('page-beschikbaarheid').classList.add('active');
+    loadPersoonlijkSchema();
   }
 }
 
@@ -4973,7 +4968,6 @@ function openModal(id=null){
   document.getElementById('herhalingPreview').textContent='';
   document.getElementById('fAdres').value=k?.adres||'';
   document.getElementById('fKlant').value=k?.klant||'';
-  document.getElementById('fBuiten').checked=!!k?.buiten;
   formLat=k&&k.lat!=null?Number(k.lat):null;
   formLon=k&&k.lon!=null?Number(k.lon):null;
   adresPlekTonen();
@@ -5112,7 +5106,7 @@ function adresPlekTonen(){
   const el=document.getElementById('adresPlek');
   if(!el)return;
   el.textContent=(formLat!=null&&formLon!=null)
-    ?'Locatie bekend — het weer en de milieuzonecontrole werken hiermee.'
+?'Locatie bekend — het weerbericht werkt hiermee, en straks de milieuzonecontrole.'
     :'Kies een adres uit de lijst, dan onthoudt de app de locatie.';
 }
 
@@ -5266,7 +5260,6 @@ async function saveKlusIntern(){
   const notitie=document.getElementById('fNotitie').value||'';
   const adres=document.getElementById('fAdres').value.trim();
   const klant=document.getElementById('fKlant').value.trim()||null;
-  const buiten=document.getElementById('fBuiten').checked;
   const lat=formLat, lon=formLon;
   const milieuzone=document.getElementById('fMilieuzone').checked;
   const contactpersoon=document.getElementById('fContact').value.trim();
@@ -5353,7 +5346,7 @@ async function saveKlusIntern(){
     };
 
     if(editId){
-      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,buiten,lat,lon}).eq('id',editId);
+      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,lat,lon}).eq('id',editId);
       if(updErr)throw new Error('Klus opslaan mislukt: '+updErr.message);
       await sb.from('klus_trucks').delete().eq('klus_id',editId);
       await sb.from('klus_gebruikers').delete().eq('klus_id',editId);
@@ -5379,7 +5372,7 @@ async function saveKlusIntern(){
         if(melder)melder.textContent=allDatums.length>1
           ? `Klus ${i+1} van ${allDatums.length} aanmaken...`
           : 'Opslaan...';
-        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,buiten,lat,lon}).select('id');
+        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,lat,lon}).select('id');
         if(error||!data||!data.length)throw new Error(error?.message||'Insert mislukt');
         const thisKlusId=data[0].id;
         if(i===0)klusId=thisKlusId; // gebruik eerste voor PDFs
@@ -11608,7 +11601,7 @@ function dbWeerBlok(rijen){
 
 function dbWeerInhoud(R){
   const zonderVerwachting=R.filter(r=>r.temp_max==null).length;
-  return `<div class="db-blok-kop"><div class="db-blok-titel">Weer bij de komende klussen</div><div class="db-blok-meta">buitenklussen, 14 dagen</div></div>
+  return `<div class="db-blok-kop"><div class="db-blok-titel">Weer bij de komende klussen</div><div class="db-blok-meta">14 dagen vooruit</div></div>
     ${R.length?R.map(r=>{
       const bft=weerBft(r.wind_ms);
       const mm=Number(r.neerslag_mm)||0;
@@ -11617,7 +11610,7 @@ function dbWeerInhoud(R){
         <span class="db-tel${streng?' rood':' grijs'}">${r.temp_max!=null?Math.round(r.temp_max)+'°':'?'}</span>
         <div class="db-tk"><b>${veiligTekst(r.naam||'Klus')}</b><span>${dbDatum(r.datum)}${r.adres?' · '+veiligTekst(String(r.adres).split(',')[0]):''}${r.temp_max!=null?' · '+weerWoord(r.symbool)+(mm>0?', '+mm.toLocaleString('nl-NL')+' mm':'')+(bft>=5?', wind '+bft+' Bft':''):' · verwachting wordt opgehaald'}</span></div>
       </div>`;
-    }).join(''):'<div class="db-leeg">Geen buitenklussen met een locatie in de komende twee weken. Vink bij een klus <b>buitenklus</b> aan en kies het adres uit de lijst, dan verschijnt het weer hier.</div>'}
+    }).join(''):'<div class="db-leeg">Nog geen klussen met een locatie in de komende twee weken. Kies bij een klus het adres uit de lijst die verschijnt terwijl je typt, dan onthoudt de app de plek en staat het weer hier.</div>'}
     <div class="db-leeg" style="margin-top:6px">Weergegevens van MET Norway (Noors meteorologisch instituut), CC BY 4.0.${zonderVerwachting?' Even geduld, de verwachting wordt opgehaald.':''}</div>`;
 }
 
