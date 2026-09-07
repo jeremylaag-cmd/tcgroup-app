@@ -1242,6 +1242,15 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
             <div id="instInfo" style="font-size:11px;color:var(--muted)"></div>
           </div>
         </div>
+        <div class="bc" id="dashRollenCard" style="grid-column:1/-1;display:none">
+          <div class="bt">Dashboard per rol</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
+            Elke beheerder heeft een rol: <b>planning</b>, <b>financieel</b> of <b>verkoper</b>. Hieronder
+            zet je per rol aan welke blokken op zijn dashboard komen. Alleen jij als administrator ziet en
+            wijzigt dit. Blokken met &ldquo;nog te bouwen&rdquo; staan er alvast in; die verschijnen zodra ze klaar zijn.
+          </div>
+          <div id="dashRollenLijst"><div class="spin">Laden...</div></div>
+        </div>
       </div>
 
       <!-- Franklins: vast weekschema -->
@@ -2440,7 +2449,15 @@ let TRUCKS=[],PERSONEEL=[],KLUSSEN=[],SOORTEN=[];
 let selDate=null,editId=null,weekOffset=0,medWeekOffset=0;
 let formTrucks=[],formPers=[],formTruckSoorten={},formPdfs=[],existingPdfs=[],formLos=[];
 let allMededelingen=[],editMedId=null;
-let CURRENT_USER=null,CURRENT_ROL=null,CURRENT_NAAM=null;
+let CURRENT_USER=null,CURRENT_ROL=null,CURRENT_NAAM=null,CURRENT_BEHEER_ROL=null;
+
+// Een beheerder heeft daarnaast een subrol: administrator, planning, financieel
+// of verkoper. Die bepaalt wat er op zijn dashboard staat. De administrator is
+// het enige account dat niemand via de app kan wijzigen of verwijderen; dat zit
+// in de database vastgezet, niet alleen hier in het scherm.
+const BEHEER_ROLLEN={administrator:'Administrator',planning:'Planning',financieel:'Financieel',verkoper:'Verkoper'};
+function isAdmin(){return CURRENT_BEHEER_ROL==='administrator';}
+function beheerRolLabel(r){return BEHEER_ROLLEN[r]||'';}
 const today=new Date();const todayStr=fmt(today);
 
 function switchNav(pageId,btn){
@@ -2847,14 +2864,14 @@ async function initApp(user){
     }
   }, 1000);
   // Haal rol op — probeer meerdere keren als nodig
-  let rol='part-timer',naam=user.email,goedgekeurd=null;
+  let rol='part-timer',naam=user.email,goedgekeurd=null,beheerRol=null;
   try{
-    const{data,error}=await sb.from('gebruikers').select('rol,naam,goedgekeurd').eq('id',user.id).single();
-    if(data){rol=data.rol||'part-timer';naam=data.naam||user.email;goedgekeurd=data.goedgekeurd;}
+    const{data,error}=await sb.from('gebruikers').select('rol,naam,goedgekeurd,beheer_rol').eq('id',user.id).single();
+    if(data){rol=data.rol||'part-timer';naam=data.naam||user.email;goedgekeurd=data.goedgekeurd;beheerRol=data.beheer_rol||null;}
     else if(error){
       // Probeer opnieuw zonder single()
-      const{data:rows}=await sb.from('gebruikers').select('rol,naam,goedgekeurd').eq('id',user.id);
-      if(rows&&rows.length>0){rol=rows[0].rol||'part-timer';naam=rows[0].naam||user.email;goedgekeurd=rows[0].goedgekeurd;}
+      const{data:rows}=await sb.from('gebruikers').select('rol,naam,goedgekeurd,beheer_rol').eq('id',user.id);
+      if(rows&&rows.length>0){rol=rows[0].rol||'part-timer';naam=rows[0].naam||user.email;goedgekeurd=rows[0].goedgekeurd;beheerRol=rows[0].beheer_rol||null;}
     }
   }catch(e){console.error('Rol ophalen mislukt:',e);}
 
@@ -2872,6 +2889,7 @@ async function initApp(user){
   }
 
   CURRENT_ROL=rol;
+  CURRENT_BEHEER_ROL=beheerRol;
   CURRENT_NAAM=naam;
   document.getElementById('authWrap').style.display='none';
   const w=document.getElementById('wachtWrap');
@@ -3226,7 +3244,7 @@ function showPage(id,btn){
   document.querySelectorAll('.htab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   if(btn)btn.classList.add('active');
-  if(id==='beheer'){beheerUitklapbaar();renderBeheer();loadTakenBeheer();}
+  if(id==='beheer'){beheerUitklapbaar();renderBeheer();loadTakenBeheer();laadDashboardRollen();}
   if(id==='accounts')loadAccounts();
   if(id==='beschikbaarheid')loadPersoonlijkSchema();
   if(id==='beschikbaarheid-beheer')loadAlleBeschikbaarheid();
@@ -3364,7 +3382,7 @@ function renderAanmeldingen(){
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px">
         <div style="flex:1;min-width:140px">
           <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Rol *</div>
-          <select id="aanmRol-${a.id}" style="${veld}">
+          <select id="aanmRol-${a.id}" onchange="aanmRolGewijzigd('${a.id}')" style="${veld}">
             <option value="">Kies —</option>
             <option value="part-timer">Part-timer</option>
             <option value="full-timer">Full-timer</option>
@@ -3376,6 +3394,14 @@ function renderAanmeldingen(){
         <div style="flex:1;min-width:120px">
           <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Uurloon *</div>
           <input type="number" id="aanmLoon-${a.id}" min="0" max="999" step="0.01" inputmode="decimal" placeholder="15.00" style="${veld}">
+        </div>
+        <div style="flex:1;min-width:140px;display:none" id="aanmSubWrap-${a.id}">
+          <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Beheerdersrol</div>
+          <select id="aanmSub-${a.id}"${isAdmin()?'':' disabled'} style="${veld}">
+            <option value="planning">Planning</option>
+            <option value="financieel">Financieel</option>
+            <option value="verkoper">Verkoper</option>
+          </select>
         </div>
         <div style="flex:1;min-width:120px" id="aanmUrenWrap-${a.id}">
           <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:3px">Contracturen p/w</div>
@@ -3391,6 +3417,12 @@ function renderAanmeldingen(){
   }).join('');
 }
 
+function aanmRolGewijzigd(id){
+  const wrap=document.getElementById('aanmSubWrap-'+id);
+  const rol=document.getElementById('aanmRol-'+id)?.value;
+  if(wrap)wrap.style.display=(rol==='beheerder')?'':'none';
+}
+
 async function keurAanmeldingGoed(id){
   const foutEl=document.getElementById('aanmFout-'+id);
   const fout=t=>{if(foutEl){foutEl.textContent=t;foutEl.style.display='';}};
@@ -3404,6 +3436,8 @@ async function keurAanmeldingGoed(id){
   const velden={rol,uurloon:Number(loonRuw),goedgekeurd:true};
   if(urenRuw!==''&&!isNaN(Number(urenRuw)))velden.contract_uren_per_week=Number(urenRuw);
   if(isVasteKracht(rol))velden.in_dienst_op=velden.in_dienst_op||fmt(new Date());
+  const sub=document.getElementById('aanmSub-'+id);
+  if(isAdmin()&&rol==='beheerder'&&sub&&!sub.disabled)velden.beheer_rol=sub.value;
 
   const{error}=await sb.from('gebruikers').update(velden).eq('id',id);
   if(error){fout('Vrijgeven mislukt: '+error.message);return;}
@@ -3556,7 +3590,7 @@ function renderAccounts(){
         <div class="acc-info" style="flex:1;min-width:0">
           <div class="acc-naam">${u.naam||'–'}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">
-            <span>${rolLabels[u.rol]||u.rol}</span>
+            <span>${rolLabels[u.rol]||u.rol}${u.beheer_rol?' \u00b7 '+beheerRolLabel(u.beheer_rol):''}</span>
             ${u.telefoon?`<span>${u.telefoon}</span>`:''}
             ${u.shirtmaat?`<span>👕 ${u.shirtmaat}</span>`:''}
             ${u.rijbewijs?`<span title="${veiligTekst(rijbewijsTekst(u.rijbewijs))}">🚗 ${veiligTekst(rijbewijsKort(u.rijbewijs))}</span>`:''}
@@ -3924,13 +3958,27 @@ function pdRenderGegevens(){
        <input type="text" id="pdNaam" value="${(u.naam||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
      </div>
      <div class="fr"><span class="fl">Rol</span>
-       <select id="pdRol" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
+       <select id="pdRol" onchange="pdRolGewijzigd()"${u.beheer_rol==='administrator'?' disabled':''} style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
          ${u.rol==='personeel'?'<option value="personeel" selected>Personeel (verouderd)</option>':''}
          <option value="part-timer"${u.rol==='part-timer'?' selected':''}>Part-timer</option>
          <option value="full-timer"${u.rol==='full-timer'?' selected':''}>Full-timer</option>
          <option value="hal"${u.rol==='hal'?' selected':''}>Hal medewerker</option>
          <option value="beheerder"${u.rol==='beheerder'?' selected':''}>Beheerder</option>
        </select>
+     </div>
+     <div class="fr" id="pdBeheerRolWrap" style="${u.rol==='beheerder'?'':'display:none'}">
+       <span class="fl">Beheerdersrol</span>
+       ${u.beheer_rol==='administrator'
+         ?`<div style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text)">Administrator</div>
+           <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5">Dit account kan niemand aanpassen of verwijderen, ook een andere beheerder niet.</div>`
+         :`<select id="pdBeheerRol"${isAdmin()?'':' disabled'} style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
+             <option value="planning"${u.beheer_rol==='planning'?' selected':''}>Planning</option>
+             <option value="financieel"${u.beheer_rol==='financieel'?' selected':''}>Financieel</option>
+             <option value="verkoper"${u.beheer_rol==='verkoper'?' selected':''}>Verkoper</option>
+           </select>
+           <div style="font-size:11px;color:var(--muted);margin-top:4px;line-height:1.5">${isAdmin()
+             ?'Bepaalt wat deze beheerder op het dashboard ziet. Dat stel je in bij <b>Dashboard per rol</b>.'
+             :'Alleen de administrator kan deze rol wijzigen.'}</div>`}
      </div>
      <div class="two">
        <div class="fr"><span class="fl">E-mailadres</span>
@@ -4009,6 +4057,12 @@ function pdRenderGegevens(){
 
 function pdToggleRijbewijs(el){el.classList.toggle('on');}
 
+function pdRolGewijzigd(){
+  const wrap=document.getElementById('pdBeheerRolWrap');
+  const rol=document.getElementById('pdRol')?.value;
+  if(wrap)wrap.style.display=(rol==='beheerder')?'':'none';
+}
+
 async function savePersDetail(){
   const uid=persDetailId;if(!uid)return;
   const naam=document.getElementById('pdNaam').value.trim();
@@ -4034,10 +4088,14 @@ async function savePersDetail(){
   if(!naam){wb.textContent='Naam is verplicht.';wb.className='warn-box show';return;}
   if(uurloon!==null&&(isNaN(uurloon)||uurloon<0)){wb.textContent='Uurloon klopt niet.';wb.className='warn-box show';return;}
   wb.className='warn-box';
-  const{error}=await sb.from('gebruikers')
-    .update({naam,rol,email,telefoon,straat,postcode,plaats,shirtmaat,rijbewijs,
+  const velden={naam,rol,email,telefoon,straat,postcode,plaats,shirtmaat,rijbewijs,
       contract_uren_per_week,in_dienst_op,uit_dienst_op,
-             geslacht,geboortedatum,contractvorm,uurloon}).eq('id',uid);
+             geslacht,geboortedatum,contractvorm,uurloon};
+  // De beheerdersrol sturen we alleen mee als de administrator hem echt mocht
+  // kiezen. Anders vult de database zelf 'planning' in.
+  const bhr=document.getElementById('pdBeheerRol');
+  if(isAdmin()&&rol==='beheerder'&&bhr&&!bhr.disabled)velden.beheer_rol=bhr.value;
+  const{error}=await sb.from('gebruikers').update(velden).eq('id',uid);
   if(error){wb.textContent='Opslaan mislukt: '+error.message;wb.className='warn-box show';return;}
   closePersDetail();
 }
@@ -6195,7 +6253,9 @@ function loadProfiel(){
   const initials=CURRENT_NAAM.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
   document.getElementById('profielAvatar').textContent=initials;
   document.getElementById('profielNaam').textContent=CURRENT_NAAM;
-  document.getElementById('profielRol').textContent=CURRENT_ROL==='beheerder'?'Beheerder':'Personeelslid';
+  document.getElementById('profielRol').textContent=CURRENT_ROL==='beheerder'
+    ?(CURRENT_BEHEER_ROL?'Beheerder \u00b7 '+beheerRolLabel(CURRENT_BEHEER_ROL):'Beheerder')
+    :'Personeelslid';
   document.getElementById('profielEmail').textContent=CURRENT_USER.email||'–';
   document.getElementById('profielNaamInput').value=CURRENT_NAAM;
   // Laad adresgegevens
@@ -10916,6 +10976,84 @@ function beheerUitklapbaar(){
       if(e.key==='Enter'||e.key===' '){e.preventDefault();kaart.classList.toggle('dicht');}
     });
   });
+}
+
+// ── DASHBOARD PER ROL ───────────────────────────────────────────────────
+// Wat een beheerder op zijn dashboard ziet, hangt aan zijn rol en niet aan zijn
+// persoon. Zo hoef je het één keer in te stellen en klopt het ook voor de
+// volgende die die rol krijgt. De database laat alleen de administrator hier
+// iets veranderen; dit scherm is de knop, niet het slot.
+let DASH_BLOKKEN=[], DASH_RECHTEN={}, DASH_BEHEERDERS=[];
+const DASH_SUBROLLEN=['administrator','planning','financieel','verkoper'];
+
+async function laadDashboardRollen(){
+  const kaart=document.getElementById('dashRollenCard');
+  if(!kaart)return;
+  kaart.style.display=isAdmin()?'':'none';
+  if(!isAdmin())return;
+  const[{data:blokken},{data:rechten},{data:mensen}]=await Promise.all([
+    sb.from('dashboard_blokken').select('*').order('volgorde'),
+    sb.from('dashboard_rechten').select('*'),
+    sb.from('gebruikers').select('naam,beheer_rol').eq('rol','beheerder').order('naam'),
+  ]);
+  DASH_BLOKKEN=blokken||[];
+  DASH_BEHEERDERS=mensen||[];
+  DASH_RECHTEN={};
+  (rechten||[]).forEach(r=>{DASH_RECHTEN[r.beheer_rol+'|'+r.blok]=!!r.aan;});
+  tekenDashboardRollen();
+}
+
+function dashAan(rol,blok){return !!DASH_RECHTEN[rol+'|'+blok];}
+
+function dashTelling(rol){
+  const n=DASH_BLOKKEN.filter(b=>dashAan(rol,b.code)).length;
+  return n===1?'1 blok':n+' blokken';
+}
+
+function tekenDashboardRollen(){
+  const el=document.getElementById('dashRollenLijst');
+  if(!el)return;
+  if(!DASH_BLOKKEN.length){el.innerHTML='<div class="empty">Nog geen blokken</div>';return;}
+
+  const th='padding:0 6px 8px;font-size:11px;font-weight:600;color:var(--muted);text-align:center;vertical-align:bottom';
+  const kop=DASH_SUBROLLEN.map(r=>{
+    const namen=DASH_BEHEERDERS.filter(g=>g.beheer_rol===r).map(g=>g.naam).filter(Boolean);
+    return`<th style="${th}">${beheerRolLabel(r)}
+      <span style="display:block;font-weight:400;font-size:10px;color:var(--muted);line-height:1.4;margin-top:2px">${namen.length?veiligTekst(namen.join(', ')):'niemand'}</span>
+      <span style="display:block;font-weight:400;font-size:10px;color:var(--muted)" id="dashTeller-${r}">${dashTelling(r)}</span>
+    </th>`;
+  }).join('');
+
+  let rijen='', vorige='';
+  DASH_BLOKKEN.forEach(b=>{
+    if(b.groep!==vorige){
+      vorige=b.groep;
+      rijen+=`<tr><td colspan="${DASH_SUBROLLEN.length+1}" style="padding:12px 0 4px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">${veiligTekst(b.groep)}</td></tr>`;
+    }
+    rijen+=`<tr>
+      <td style="padding:7px 10px 7px 0;border-top:1px solid var(--border);vertical-align:top">
+        <div style="font-size:12.5px;font-weight:600;color:var(--text)">${veiligTekst(b.naam)}${b.klaar?'':' <span style="font-size:9.5px;font-weight:600;background:#FEF3C7;color:#92400E;border-radius:20px;padding:1px 7px;vertical-align:1px">nog te bouwen</span>'}</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.45">${veiligTekst(b.omschrijving||'')}</div>
+      </td>
+      ${DASH_SUBROLLEN.map(r=>`<td style="border-top:1px solid var(--border);text-align:center;vertical-align:middle">
+        <input type="checkbox" ${dashAan(r,b.code)?'checked':''} onchange="zetDashboardRecht('${r}','${b.code}',this)" style="width:17px;height:17px;cursor:pointer">
+      </td>`).join('')}
+    </tr>`;
+  });
+
+  el.innerHTML=`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:540px">
+    <thead><tr><th style="text-align:left;padding:0 10px 8px 0;font-size:11px;font-weight:600;color:var(--muted);vertical-align:bottom">Blok</th>${kop}</tr></thead>
+    <tbody>${rijen}</tbody></table></div>`;
+}
+
+async function zetDashboardRecht(rol,blok,el){
+  const aan=el.checked;
+  const{error}=await sb.from('dashboard_rechten')
+    .upsert({beheer_rol:rol,blok,aan},{onConflict:'beheer_rol,blok'});
+  if(error){el.checked=!aan;toast('Opslaan mislukt: '+error.message,'fout');return;}
+  DASH_RECHTEN[rol+'|'+blok]=aan;
+  const t=document.getElementById('dashTeller-'+rol);
+  if(t)t.textContent=dashTelling(rol);
 }
 
 // ── TAKEN — BEHEER ──────────────────────────────────────────────────────
