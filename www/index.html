@@ -844,21 +844,34 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
    wordt het klusvenster breder en komen de korte blokken naast elkaar. De
    brede blokken — rijschema, urenregistratie, notities en bijlagen — houden
    de volle breedte, anders wordt hun inhoud juist smaller. */
+/* Tabbladen in het klusvenster. De secties blijven waar ze zijn; ze worden bij
+   het openen in het juiste paneel gezet, zodat alle bestaande code die naar een
+   sectie schrijft gewoon blijft werken. */
+.dt-balk{display:flex;gap:2px;padding:0 1.25rem;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.dt-balk::-webkit-scrollbar{display:none}
+.dt-tab{flex:0 0 auto;background:none;border:none;font-family:var(--font);font-size:13px;font-weight:600;color:var(--muted);padding:11px 11px 10px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.dt-tab.aan{color:var(--text);border-bottom-color:var(--text)}
+.dt-tab:focus-visible{outline:2px solid var(--text);outline-offset:-2px;border-radius:4px}
+.dt-tel{font-size:10px;font-weight:700;background:var(--bg);color:var(--muted);border-radius:20px;padding:1px 6px;margin-left:5px}
+.dt-paneel{display:none}
+.dt-paneel.aan{display:block}
+
 @media(min-width:1024px){
   #detailOverlay .detail-modal{width:min(1040px,94vw);max-width:none;max-height:90vh}
-  #detailOverlay .detail-body{
+  #detailOverlay .dt-paneel.aan{
     display:grid;
     grid-template-columns:1fr 1fr;
     column-gap:2rem;
     align-items:start;
   }
-  #detailOverlay .detail-body > div:not(.detail-section){grid-column:1/-1}
+  #detailOverlay .dt-paneel > div:not(.detail-section){grid-column:1/-1}
   #detailOverlay #detailRitSection,
   #detailOverlay #detailUrenSection,
   #detailOverlay #detailNotitieSection,
   #detailOverlay #detailPdfSection{grid-column:1/-1}
   #detailOverlay .detail-header{padding:1.5rem 2rem 1.15rem}
   #detailOverlay .detail-body{padding:1.5rem 2rem}
+  #detailOverlay .dt-balk{padding:0 2rem}
   #detailOverlay .detail-footer{padding:1rem 2rem 1.5rem}
   #detailOverlay .detail-naam{font-size:20px}
 }
@@ -1307,6 +1320,27 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
             </div>
             <button class="btn-sm" onclick="bewaarInstellingen()" style="align-self:flex-start">Opslaan</button>
             <div id="instInfo" style="font-size:11px;color:var(--muted)"></div>
+          </div>
+        </div>
+        <div class="bc" id="zonesCard" style="grid-column:1/-1">
+          <div class="bt">Milieuzones en zero-emissiezones</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
+            Kies je bij een klus een adres uit de lijst, dan weet de app in welke gemeente hij valt en
+            waarschuwt hij als een truck er waarschijnlijk niet in mag. <b>Waarschuwen, niet tegenhouden</b> &mdash;
+            er zijn ontheffingen en overgangsregelingen. Deze lijst verandert elk jaar; werk hem hier bij.
+          </div>
+          <div id="zonesLijst"><div class="spin">Laden...</div></div>
+          <div class="add-form" style="margin-top:.875rem">
+            <div class="add-form-row" style="flex-wrap:wrap;gap:7px">
+              <input type="text" id="zoneGemeente" placeholder="Gemeente" style="flex:2;min-width:140px;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+              <select id="zoneSoort" style="flex:1;min-width:150px;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+                <option value="zero-emissie">Zero-emissiezone</option>
+                <option value="milieuzone">Milieuzone</option>
+              </select>
+              <input type="date" id="zoneIngang" title="Vanaf wanneer (leeg = geldt nu)" style="flex:1;min-width:150px;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+              <button class="btn-sm" onclick="voegZoneToe()">Toevoegen</button>
+            </div>
+            <div id="zoneFout" style="font-size:11.5px;color:#B91C1C;margin-top:6px;display:none"></div>
           </div>
         </div>
         <div class="bc" id="targetsCard" style="grid-column:1/-1;display:none">
@@ -1943,6 +1977,15 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
   <div id="page-beschikbaarheid" class="page">
     <div style="padding:1rem;max-width:700px;margin:0 auto">
 
+      <!-- Eigen verlofsaldo en ziekmelden -->
+      <div class="sc" id="mijnVerlofCard" style="margin-bottom:1rem;display:none">
+        <div class="sc-header" style="margin-bottom:.75rem">
+          <div class="st">Mijn verlof</div>
+          <button class="btn-edit" onclick="meldZiek()" style="font-size:12px;padding:7px 14px">Ik ben ziek vandaag</button>
+        </div>
+        <div id="mijnVerlof"><div class="spin">Laden...</div></div>
+      </div>
+
       <!-- Meerdere dagen tegelijk beschikbaar melden (part-timers) -->
       <div class="sc" id="beschKalCard" style="margin-bottom:1rem;display:none">
         <div class="sc-header" style="margin-bottom:.5rem">
@@ -2006,6 +2049,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
             <button class="btn-sm" onclick="openAfwezig()" style="font-size:11px;padding:6px 12px">+ Vrij invoeren</button>
             <select id="verlofExportJaar" style="font-size:11px;padding:5px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-family:var(--font)"></select>
             <button class="btn-edit" onclick="exportVerlof(document.getElementById('verlofExportJaar').value)" style="font-size:11px;padding:6px 12px">Verlof exporteren</button>
+            <button class="btn-edit" onclick="restantMeenemen()" style="font-size:11px;padding:6px 12px">Restant meenemen</button>
             <button class="btn-nav" onclick="changeBeschWeek(-1)">&#8592;</button>
             <span class="week-nav-label" id="beschWeekLabel" style="min-width:140px"></span>
             <button class="btn-nav" onclick="changeBeschWeek(0)" style="font-size:11px">Deze maand</button>
@@ -2430,11 +2474,13 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
   <div class="detail-modal">
     <div class="detail-header"><div class="detail-naam" id="detailNaam">—</div><button class="detail-close" onclick="closeDetail()">&#x2715;</button></div>
     <div class="detail-body">
-      <div id="detailTijden" style="margin-bottom:.25rem"></div>
-      <div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;margin-bottom:1rem" id="detailDatum"></div>
-      <div class="detail-section"><div class="detail-label">Trucks</div><div class="detail-trucks" id="detailTrucks"></div></div>
-      <div class="detail-section"><div class="detail-label">Food per truck</div><div id="detailSoort"></div></div>
-      <div class="detail-section"><div class="detail-label">Personen</div><div class="detail-value" id="detailPersonen"></div></div>
+      <div id="detailKopBlok">
+        <div id="detailTijden" style="margin-bottom:.25rem"></div>
+        <div style="font-size:12px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.04em;margin-bottom:1rem" id="detailDatum"></div>
+      </div>
+      <div class="detail-section" id="detailTruckSection"><div class="detail-label">Trucks</div><div class="detail-trucks" id="detailTrucks"></div></div>
+      <div class="detail-section" id="detailSoortSection"><div class="detail-label">Food per truck</div><div id="detailSoort"></div></div>
+      <div class="detail-section" id="detailPersonenSection"><div class="detail-label">Personen</div><div class="detail-value" id="detailPersonen"></div></div>
       <div class="detail-section" id="detailAdresSection"><div class="detail-label">Adres</div><div class="detail-value" id="detailAdres"></div></div>
       <div class="detail-section" id="detailContactSection"><div class="detail-label">Contactpersoon</div><div class="detail-value" id="detailContact"></div><div id="detailTelefoon" style="margin-top:3px"></div></div>
       <div class="detail-section" id="detailPersSection"><div class="detail-label">Personeel</div><div class="detail-value" id="detailPers"></div></div>
@@ -3030,6 +3076,7 @@ async function initApp(user){
   CURRENT_ROL=rol;
   CURRENT_BEHEER_ROL=beheerRol;
   await laadMijnDashboardRechten();
+  laadZones();
   CURRENT_NAAM=naam;
   document.getElementById('authWrap').style.display='none';
   const w=document.getElementById('wachtWrap');
@@ -3392,7 +3439,7 @@ function showPage(id,btn){
   document.getElementById('page-'+id).classList.add('active');
   if(btn)btn.classList.add('active');
   if(id==='dashboard')laadDashboard();
-  if(id==='beheer'){beheerUitklapbaar();renderBeheer();loadTakenBeheer();laadDashboardRollen();laadTargets();}
+  if(id==='beheer'){beheerUitklapbaar();renderBeheer();loadTakenBeheer();laadDashboardRollen();laadTargets();laadZonesBeheer();}
   if(id==='accounts')loadAccounts();
   if(id==='beschikbaarheid')loadPersoonlijkSchema();
   if(id==='beschikbaarheid-beheer')loadAlleBeschikbaarheid();
@@ -4291,6 +4338,39 @@ let toonEerdereKlussen=false;
 let toonFranklins=false;
 let VASTE_DIENSTEN=[];
 
+// ── MILIEUZONES EN ZERO-EMISSIEZONES ────────────────────────────────────
+// Welke gemeente een zone heeft staat in een tabel die je bij Beheer kunt
+// bijwerken; die lijst verandert elk jaar. De app waarschuwt alleen — hij
+// houdt nooit een truck tegen, want er zijn ontheffingen en overgangsregels.
+let ZONES=[];
+
+async function laadZones(){
+  try{
+    const{data}=await sb.from('zones').select('*').order('gemeente');
+    ZONES=data||[];
+  }catch(e){ZONES=[];}
+}
+
+function zoneVan(gemeente,datum){
+  if(!gemeente)return null;
+  const g=String(gemeente).trim().toLowerCase();
+  const d=datum||fmt(new Date());
+  return (ZONES||[]).find(z=>String(z.gemeente).trim().toLowerCase()===g
+    && (!z.ingang||z.ingang<=d))||null;
+}
+
+function zoneNaam(z){
+  return z&&z.soort==='zero-emissie'?'zero-emissiezone':'milieuzone';
+}
+
+// Mag deze truck er waarschijnlijk in? We weten het niet zeker — daarom
+// 'waarschijnlijk niet' in plaats van 'nee'.
+function truckMagZoneIn(t,z){
+  if(!z)return true;
+  if(z.soort==='zero-emissie')return /elektr|accu|waterstof/i.test(String(t.brandstof||''));
+  return t.milieuzone_ok!==false;
+}
+
 async function loadAll(){
   const [
     {data:trucks},{data:personeel},{data:klussen},{data:klusTrucks},
@@ -4607,8 +4687,16 @@ function renderTruckInfo(){
     html+=`<div style="color:#B45309;font-weight:600;margin-top:3px">⚠ ${aanhangers.length===1?'De aanhanger':aanhangers.length+' aanhangers'} ${aanhangers.length===1?'heeft':'hebben'} een auto met trekhaak nodig`
       +(trekkers.length?` — er ${trekkers.length===1?'staat er 1':'staan er '+trekkers.length} gekozen`:' — je hebt er nog geen gekozen')+'.</div>';
   }
-  if(geenMz.length){
-    html+=`<div style="color:#B45309;margin-top:3px">${geenMz.map(t=>veiligTekst(t.label)).join(', ')} mag de milieuzone niet in.</div>`;
+  if(FORM_ZONE){
+    const mag_niet=gekozen.filter(t=>!truckMagZoneIn(t,FORM_ZONE));
+    if(mag_niet.length){
+      html+=`<div style="color:#B45309;font-weight:600;margin-top:3px">`
+        +`${mag_niet.map(t=>veiligTekst(t.label)).join(', ')} `
+        +`${mag_niet.length===1?'mag':'mogen'} de ${zoneNaam(FORM_ZONE)} van ${veiligTekst(FORM_ZONE.gemeente)} waarschijnlijk niet in.</div>`
+        +`<div style="margin-top:2px">Controleer of er een ontheffing of overgangsregeling geldt. De app houdt niets tegen.</div>`;
+    }
+  }else if(geenMz.length){
+    html+=`<div style="color:#B45309;margin-top:3px">${geenMz.map(t=>veiligTekst(t.label)).join(', ')} mag sommige milieuzones niet in.</div>`;
   }
   el.innerHTML=html;
 }
@@ -4970,6 +5058,8 @@ function openModal(id=null){
   document.getElementById('fKlant').value=k?.klant||'';
   formLat=k&&k.lat!=null?Number(k.lat):null;
   formLon=k&&k.lon!=null?Number(k.lon):null;
+  formGemeente=k?.gemeente||null;
+  FORM_ZONE=zoneVan(formGemeente,k?.datum);
   adresPlekTonen();
   vulKlantenLijst();
   document.getElementById('fMilieuzone').checked=!!k?.milieuzone;
@@ -5100,18 +5190,29 @@ function slotLos(naam){BEZIG.delete(naam);}
 // één keer op bij de klus; daarna heeft het weerbericht en straks de
 // milieuzonecontrole ze zonder opnieuw te zoeken.
 const PDOK='https://api.pdok.nl/bzk/locatieserver/search/v3_1/';
-let formLat=null, formLon=null, adresTimer=null, adresSluitTimer=null;
+let formLat=null, formLon=null, formGemeente=null, FORM_ZONE=null, adresTimer=null, adresSluitTimer=null;
 
 function adresPlekTonen(){
   const el=document.getElementById('adresPlek');
   if(!el)return;
-  el.textContent=(formLat!=null&&formLon!=null)
-?'Locatie bekend — het weerbericht werkt hiermee, en straks de milieuzonecontrole.'
-    :'Kies een adres uit de lijst, dan onthoudt de app de locatie.';
+  if(formLat==null||formLon==null){
+    el.innerHTML='Kies een adres uit de lijst, dan onthoudt de app de locatie.';
+    return;
+  }
+  let html='Locatie bekend'+(formGemeente?' &middot; gemeente '+veiligTekst(formGemeente):'')+'.';
+  FORM_ZONE=zoneVan(formGemeente,document.getElementById('fDatum')?.value);
+  if(FORM_ZONE){
+    html+=`<div style="color:#B45309;font-weight:600;margin-top:3px">`
+      +`${veiligTekst(FORM_ZONE.gemeente)} heeft een ${zoneNaam(FORM_ZONE)}`
+      +(FORM_ZONE.ingang?` sinds ${dbDatum(FORM_ZONE.ingang)}`:'')+`.</div>`
+      +(FORM_ZONE.notitie?`<div style="margin-top:2px">${veiligTekst(FORM_ZONE.notitie)}</div>`:'');
+  }
+  el.innerHTML=html;
+  renderTruckInfo();
 }
 
 function adresGetypt(){
-  formLat=null; formLon=null; adresPlekTonen();
+  formLat=null; formLon=null; formGemeente=null; FORM_ZONE=null; adresPlekTonen();
   clearTimeout(adresTimer);
   const q=(document.getElementById('fAdres')?.value||'').trim();
   if(q.length<3){adresSuggestiesTonen([]);return;}
@@ -5142,7 +5243,7 @@ function adresSluitStraks(){
 
 async function adresKies(id){
   try{
-    const res=await fetch(PDOK+'lookup?fl=id,weergavenaam,centroide_ll&id='+encodeURIComponent(id));
+    const res=await fetch(PDOK+'lookup?fl=id,weergavenaam,centroide_ll,gemeentenaam&id='+encodeURIComponent(id));
     const json=await res.json();
     const doc=json&&json.response&&json.response.docs&&json.response.docs[0];
     if(!doc)return;
@@ -5150,6 +5251,7 @@ async function adresKies(id){
     if(veld)veld.value=doc.weergavenaam||veld.value;
     const m=/POINT\(([-0-9.]+) ([-0-9.]+)\)/.exec(doc.centroide_ll||'');
     if(m){formLon=Number(m[1]);formLat=Number(m[2]);}
+    formGemeente=doc.gemeentenaam||null;
   }catch(e){}
   adresSuggestiesTonen([]);
   adresPlekTonen();
@@ -5260,7 +5362,7 @@ async function saveKlusIntern(){
   const notitie=document.getElementById('fNotitie').value||'';
   const adres=document.getElementById('fAdres').value.trim();
   const klant=document.getElementById('fKlant').value.trim()||null;
-  const lat=formLat, lon=formLon;
+  const lat=formLat, lon=formLon, gemeente=formGemeente;
   const milieuzone=document.getElementById('fMilieuzone').checked;
   const contactpersoon=document.getElementById('fContact').value.trim();
   const telefoon=document.getElementById('fTelefoon').value.trim();
@@ -5346,7 +5448,7 @@ async function saveKlusIntern(){
     };
 
     if(editId){
-      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,lat,lon}).eq('id',editId);
+      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,lat,lon,gemeente}).eq('id',editId);
       if(updErr)throw new Error('Klus opslaan mislukt: '+updErr.message);
       await sb.from('klus_trucks').delete().eq('klus_id',editId);
       await sb.from('klus_gebruikers').delete().eq('klus_id',editId);
@@ -5372,7 +5474,7 @@ async function saveKlusIntern(){
         if(melder)melder.textContent=allDatums.length>1
           ? `Klus ${i+1} van ${allDatums.length} aanmaken...`
           : 'Opslaan...';
-        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,lat,lon}).select('id');
+        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,lat,lon,gemeente}).select('id');
         if(error||!data||!data.length)throw new Error(error?.message||'Insert mislukt');
         const thisKlusId=data[0].id;
         if(i===0)klusId=thisKlusId; // gebruik eerste voor PDFs
@@ -5454,8 +5556,12 @@ function openDetail(id){
   }
   document.getElementById('detailPersonen').textContent=k.personen+' personen';
   const ad=document.getElementById('detailAdresSection');ad.style.display=(k.adres||k.milieuzone)?'':'none';
-  document.getElementById('detailAdres').innerHTML=(k.adres||'')+
-    (k.milieuzone?`<div style="margin-top:6px"><span class="bdg" style="background:#ECFDF5;color:#065F46">Let op: milieuzone</span></div>`:'');
+  const zone=zoneVan(k.gemeente,k.datum);
+  const zTrucks=zone?(k.trucks||[]).filter(t=>!truckMagZoneIn(t,zone)):[];
+  document.getElementById('detailAdres').innerHTML=(k.adres||'')
+    +(zone?`<div style="margin-top:6px"><span class="bdg" style="background:#FEF3C7;color:#92400E">${veiligTekst(zone.gemeente)}: ${zoneNaam(zone)}</span></div>`
+       +(zTrucks.length?`<div style="font-size:12px;color:#B45309;margin-top:4px;line-height:1.5">${zTrucks.map(t=>veiligTekst(t.label)).join(', ')} ${zTrucks.length===1?'mag':'mogen'} er waarschijnlijk niet in.</div>`:'')
+      :(k.milieuzone?`<div style="margin-top:6px"><span class="bdg" style="background:#ECFDF5;color:#065F46">Let op: milieuzone</span></div>`:''));
   const cs=document.getElementById('detailContactSection');cs.style.display=(k.contactpersoon||k.telefoon)?'':'none';
   document.getElementById('detailContact').textContent=k.contactpersoon||'';
   const tel=document.getElementById('detailTelefoon');tel.style.display=k.telefoon?'':'none';
@@ -5502,9 +5608,99 @@ function openDetail(id){
     kop.style.display=CURRENT_ROL==='beheerder'?'':'none';
     kop.onclick=()=>openKopieer(id);
   }
+  detailTabsTonen(k);
   document.getElementById('detailOverlay').classList.add('open');
 }
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('open');}
+
+// ── TABBLADEN IN HET KLUSVENSTER ────────────────────────────────────────
+// Het venster had alle secties onder elkaar; bij een klus met shifts, een
+// rijschema en een urenregistratie werd dat een lange rol. De secties zelf
+// blijven ongewijzigd, ze worden alleen één keer in een paneel gezet. Alles wat
+// ze vult schrijft dus nog steeds naar dezelfde elementen.
+const DETAIL_TABS=[
+  {id:'overzicht',naam:'Overzicht',secties:['detailKopBlok','detailTruckSection','detailSoortSection','detailPersonenSection','detailAdresSection','detailContactSection','detailNotitieSection']},
+  {id:'personeel',naam:'Personeel',secties:['detailPersSection','detailTelSection']},
+  {id:'rijschema',naam:'Rijschema',secties:['detailRitSection']},
+  {id:'uren',naam:'Uren',secties:['detailLoonSection','detailUrenSection']},
+  {id:'bijlagen',naam:'Bijlagen',secties:['detailPdfSection']},
+];
+let detailTabAan='overzicht';
+
+function detailTabsBouwen(){
+  const body=document.querySelector('#detailOverlay .detail-body');
+  if(!body||body.dataset.tabs)return;
+  body.dataset.tabs='1';
+
+  const balk=document.createElement('div');
+  balk.className='dt-balk';
+  balk.id='detailTabBalk';
+  body.parentNode.insertBefore(balk,body);
+
+  DETAIL_TABS.forEach(t=>{
+    const knop=document.createElement('button');
+    knop.className='dt-tab';
+    knop.id='dtk-'+t.id;
+    knop.type='button';
+    knop.innerHTML=t.naam+`<span class="dt-tel" id="dtt-${t.id}" style="display:none"></span>`;
+    knop.addEventListener('click',()=>detailTab(t.id));
+    balk.appendChild(knop);
+
+    const paneel=document.createElement('div');
+    paneel.className='dt-paneel';
+    paneel.id='dtp-'+t.id;
+    t.secties.forEach(sid=>{
+      const el=document.getElementById(sid);
+      if(el)paneel.appendChild(el);
+    });
+    body.appendChild(paneel);
+  });
+}
+
+function detailTab(id){
+  detailTabAan=id;
+  DETAIL_TABS.forEach(t=>{
+    const knop=document.getElementById('dtk-'+t.id);
+    const paneel=document.getElementById('dtp-'+t.id);
+    if(knop)knop.classList.toggle('aan',t.id===id);
+    if(paneel)paneel.classList.toggle('aan',t.id===id);
+  });
+  const body=document.querySelector('#detailOverlay .detail-body');
+  if(body)body.scrollTop=0;
+}
+
+function detailTabsTonen(k){
+  detailTabsBouwen();
+  const zichtbaar=t=>{
+    if(t.id==='overzicht')return true;
+    if(t.id==='uren')return CURRENT_ROL==='beheerder';
+    return t.secties.some(sid=>{
+      const el=document.getElementById(sid);
+      return el&&el.style.display!=='none';
+    });
+  };
+  const tel=t=>{
+    if(t.id==='personeel')return (k.personeel||[]).length+((k.losse||[]).length);
+    if(t.id==='bijlagen') return (k.pdfs||[]).length;
+    return 0;
+  };
+  let eerste=null;
+  DETAIL_TABS.forEach(t=>{
+    const knop=document.getElementById('dtk-'+t.id);
+    if(!knop)return;
+    const aan=zichtbaar(t);
+    knop.style.display=aan?'':'none';
+    if(aan&&!eerste)eerste=t.id;
+    const badge=document.getElementById('dtt-'+t.id);
+    if(badge){
+      const n=tel(t);
+      badge.textContent=n||'';
+      badge.style.display=n?'':'none';
+    }
+  });
+  const nog=DETAIL_TABS.find(t=>t.id===detailTabAan&&zichtbaar(t));
+  detailTab(nog?detailTabAan:(eerste||'overzicht'));
+}
 
 // ── RIJSCHEMA ─────────────────────────────────────────────────────────────
 // Wie rijdt met wie mee. Eén rit per voertuig op de klus; een aanhanger hangt
@@ -8730,6 +8926,59 @@ async function loadPersoonlijkSchema(){
   MM_MIJNBESCH=besch||[];
   mmRender();
   loadMijnBeschikbaarheid();
+  laadMijnVerlof();
+}
+
+// ── MIJN VERLOF ─────────────────────────────────────────────────────────
+// Alleen vaste krachten bouwen verlof op; bij een oproepkracht heeft dit blok
+// geen betekenis en laten we het weg.
+async function laadMijnVerlof(){
+  const kaart=document.getElementById('mijnVerlofCard');
+  const el=document.getElementById('mijnVerlof');
+  if(!kaart||!el)return;
+  try{
+    const{data,error}=await sb.rpc('mijn_verlof',{});
+    const v=data&&data[0];
+    if(error||!v){kaart.style.display='none';return;}
+    kaart.style.display='';
+    const uur=n=>Number(n||0).toLocaleString('nl-NL',{maximumFractionDigits:1})+' uur';
+    const dagen=v.uren_per_dag>0?Math.round((Number(v.saldo)/Number(v.uren_per_dag))*10)/10:null;
+    el.innerHTML=`
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px">
+        <div style="border:1px solid var(--border);border-radius:11px;padding:11px 13px">
+          <div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Nog op te nemen</div>
+          <div style="font-size:22px;font-weight:700;margin-top:4px">${uur(v.saldo)}</div>
+          ${dagen!=null?`<div style="font-size:11.5px;color:var(--muted);margin-top:2px">ongeveer ${dagen.toLocaleString('nl-NL')} dagen van ${uur(v.uren_per_dag)}</div>`:''}
+        </div>
+        <div style="border:1px solid var(--border);border-radius:11px;padding:11px 13px">
+          <div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Opgenomen dit jaar</div>
+          <div style="font-size:22px;font-weight:700;margin-top:4px">${uur(v.opgenomen)}</div>
+          ${Number(v.aangevraagd)>0?`<div style="font-size:11.5px;color:#B45309;margin-top:2px">${uur(v.aangevraagd)} aangevraagd, nog niet goedgekeurd</div>`:''}
+        </div>
+        <div style="border:1px solid var(--border);border-radius:11px;padding:11px 13px">
+          <div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)">Opgebouwd</div>
+          <div style="font-size:22px;font-weight:700;margin-top:4px">${uur(v.opgebouwd)}</div>
+          <div style="font-size:11.5px;color:var(--muted);margin-top:2px">tot en met deze maand</div>
+        </div>
+      </div>
+      ${Number(v.ziek_meldingen)>0?`<div style="font-size:11.5px;color:var(--muted);margin-top:9px">${v.ziek_meldingen} ${Number(v.ziek_meldingen)===1?'ziekmelding':'ziekmeldingen'} dit jaar &middot; ${uur(v.ziek_uren)}</div>`:''}`;
+  }catch(e){kaart.style.display='none';}
+}
+
+async function meldZiek(){
+  if(!confirm('Je meldt jezelf ziek voor vandaag. Je planning van vandaag komt te vervallen en je beheerder ziet het meteen. Doorgaan?'))return;
+  const{data,error}=await sb.rpc('meld_ziek',{});
+  if(error){toast('Ziek melden mislukt: '+error.message,'fout');return;}
+  toast(data==='stond al'?'Je stond vandaag al ziek gemeld':'Je bent ziek gemeld voor vandaag');
+  loadPersoonlijkSchema();
+}
+
+async function restantMeenemen(){
+  const jaar=new Date().getFullYear()-1;
+  if(!confirm(`Het restant van ${jaar} als beginsaldo voor ${jaar+1} wegschrijven? Een eerder meegenomen restant wordt overschreven.`))return;
+  const{data,error}=await sb.rpc('verlof_restant_meenemen',{p_jaar:jaar});
+  if(error){toast('Mislukt: '+error.message,'fout');return;}
+  toast(`Restant van ${jaar} meegenomen voor ${(data||[]).length} mensen`);
 }
 
 // De kalender bovenaan en het maandoverzicht hieronder lopen samen op: blader
@@ -11905,6 +12154,57 @@ function dbNogTeBouwen(){
   const nog=ALLE_BLOKKEN.filter(b=>MIJN_BLOKKEN.has(b.code)&&!b.klaar).map(b=>b.naam);
   if(!nog.length)return '';
   return `<div class="db-leeg" style="text-align:center">Nog te bouwen voor jouw rol: ${nog.map(veiligTekst).join(', ')}.</div>`;
+}
+
+// ── ZONES BEHEREN ───────────────────────────────────────────────────────
+async function laadZonesBeheer(){
+  await laadZones();
+  tekenZonesBeheer();
+}
+
+function tekenZonesBeheer(){
+  const el=document.getElementById('zonesLijst');
+  if(!el)return;
+  if(!ZONES.length){el.innerHTML='<div class="empty" style="padding:.5rem 0;font-size:12px">Nog geen gemeenten in de lijst</div>';return;}
+  const vandaag=fmt(new Date());
+  el.innerHTML=ZONES.map(z=>{
+    const later=z.ingang&&z.ingang>vandaag;
+    return`<div class="bi">
+      <div class="bi-left">
+        <div class="bi-name">${veiligTekst(z.gemeente)}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:1px">
+          ${zoneNaam(z)}${z.ingang?(later?' &middot; vanaf '+dbDatum(z.ingang):' &middot; sinds '+dbDatum(z.ingang)):''}${later?' <span style="color:#B45309">(nog niet actief)</span>':''}
+          ${z.notitie?'<br>'+veiligTekst(z.notitie):''}
+        </div>
+      </div>
+      <div class="bi-actions"><button class="btn-danger-sm" onclick="verwijderZone('${String(z.gemeente).replace(/'/g,"\\'")}')">&times;</button></div>
+    </div>`;
+  }).join('');
+}
+
+async function voegZoneToe(){
+  const fout=document.getElementById('zoneFout');
+  const zeg=t=>{if(fout){fout.textContent=t;fout.style.display='';}};
+  if(fout)fout.style.display='none';
+  const gemeente=(document.getElementById('zoneGemeente')?.value||'').trim();
+  const soort=document.getElementById('zoneSoort')?.value||'zero-emissie';
+  const ingang=document.getElementById('zoneIngang')?.value||null;
+  if(!gemeente){zeg('Vul een gemeente in.');return;}
+  const{error}=await sb.from('zones').upsert({
+    gemeente,soort,voertuigen:['bestel','vracht'],ingang,bijgewerkt_op:new Date().toISOString()
+  },{onConflict:'gemeente'});
+  if(error){zeg('Opslaan mislukt: '+error.message);return;}
+  document.getElementById('zoneGemeente').value='';
+  document.getElementById('zoneIngang').value='';
+  await laadZonesBeheer();
+  toast(gemeente+' toegevoegd');
+}
+
+async function verwijderZone(gemeente){
+  if(!confirm(gemeente+' uit de lijst halen?'))return;
+  const{error}=await sb.from('zones').delete().eq('gemeente',gemeente);
+  if(error){toast('Verwijderen mislukt: '+error.message,'fout');return;}
+  await laadZonesBeheer();
 }
 
 // ── TARGETS PER MAAND ───────────────────────────────────────────────────
