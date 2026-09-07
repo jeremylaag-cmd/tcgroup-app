@@ -11319,7 +11319,9 @@ async function laadDashboard(){
   if(sub)sub.textContent=(CURRENT_BEHEER_ROL?beheerRolLabel(CURRENT_BEHEER_ROL)+' · ':'')
     +new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
   if(CURRENT_ROL!=='beheerder'){el.innerHTML='<div class="db-leeg">Het dashboard is voor beheerders.</div>';return;}
-  if(!MIJN_BLOKKEN.size)await laadMijnDashboardRechten();
+  // Elke keer opnieuw ophalen: als de administrator net een blok aan- of
+  // uitzet, hoeft niemand daarvoor opnieuw in te loggen.
+  await laadMijnDashboardRechten();
   if(!MIJN_BLOKKEN.size){
     el.innerHTML='<div class="db-blok"><div class="db-leeg">Er staan nog geen blokken aan voor jouw rol. De administrator zet ze aan bij <b>Beheer &rarr; Dashboard per rol</b>.</div></div>';
     return;
