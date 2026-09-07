@@ -35,4 +35,6 @@
     <!-- Locatie: alleen op het moment dat iemand zelf in- of uitklokt. -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Meldingen: vanaf Android 13 moet je hier zelf om vragen. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 </manifest>

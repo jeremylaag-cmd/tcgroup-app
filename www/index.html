@@ -12774,8 +12774,26 @@ let pushGestart=false;
 
 async function bewaarPushToken(){
   if(!PUSH_TOKEN||!CURRENT_USER)return;
-  const{error}=await sb.from('gebruikers').update({push_token:PUSH_TOKEN}).eq('id',CURRENT_USER.id);
+  // Apple en Google hebben elk hun eigen postbode; de server moet weten welke.
+  const platform=(window.Capacitor&&window.Capacitor.getPlatform)?window.Capacitor.getPlatform():'web';
+  const{error}=await sb.from('gebruikers')
+    .update({push_token:PUSH_TOKEN,push_platform:platform}).eq('id',CURRENT_USER.id);
   if(error)console.error('Push token opslaan mislukt:',error);
+}
+
+// Vanaf welke Android-bundel zit Firebase erin. Oudere bundels hebben geen
+// google-services.json; daar klapt Push.register() op stuk. We kijken dus naar
+// het buildnummer van de app zelf in plaats van naar een vlaggetje in de code,
+// want een live-update kan op een oude bundel terechtkomen.
+const ANDROID_FIREBASE_VANAF=4;
+
+async function androidHeeftFirebase(){
+  try{
+    const App=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.App;
+    if(!App||!App.getInfo)return false;
+    const info=await App.getInfo();
+    return (parseInt(info&&info.build,10)||0)>=ANDROID_FIREBASE_VANAF;
+  }catch(e){return false;}
 }
 
 async function initPushNotifications(){
@@ -12783,15 +12801,15 @@ async function initPushNotifications(){
     const Push=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.PushNotifications;
     if(!Push||pushGestart)return;
 
-    // Op Android lopen pushmeldingen via Firebase Cloud Messaging. Zolang er
-    // geen Firebase-project is (geen google-services.json in de Android-map)
-    // klapt Push.register() de hele app eruit met "Default FirebaseApp is not
-    // initialized". We slaan het registreren daar dus over; de rest van de app
-    // werkt gewoon. Zodra Firebase is ingericht mag deze afslag weg.
+    // Op Android lopen pushmeldingen via Firebase Cloud Messaging. In een bundel
+    // zonder google-services.json klapt Push.register() de app eruit met
+    // "Default FirebaseApp is not initialized", dus daar slaan we het over. Het
+    // buildnummer vertelt of Firebase erin zit; zodra bundel 4 geïnstalleerd is
+    // gaat het vanzelf aan, zonder dat de code nog hoeft te veranderen.
     const platform=(window.Capacitor&&window.Capacitor.getPlatform)?window.Capacitor.getPlatform():'web';
-    if(platform==='android'&&!window.FIREBASE_KLAAR){
+    if(platform==='android'&&!(await androidHeeftFirebase())){
       pushGestart=true;
-      console.warn('Pushmeldingen staan uit op Android: Firebase is nog niet ingericht.');
+      console.warn('Pushmeldingen staan uit: deze Android-versie heeft Firebase nog niet.');
       return;
     }
 
