@@ -253,6 +253,19 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .tk-kn.ja{background:#059669;border-color:#059669;color:#fff}
 .tk-kn.nee{color:#DC2626}
 
+.tk-week{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.75rem}
+.tk-weekbalk{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:1rem}
+.tk-wd{display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 2px 6px;border-radius:9px;background:var(--bg);border:1px solid transparent;cursor:pointer;min-width:0}
+.tk-wd:hover{border-color:var(--border)}
+.tk-wd-naam{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+.tk-wd-num{font-size:14px;font-weight:600;color:var(--text);line-height:1.2}
+.tk-wd-stip{width:5px;height:5px;border-radius:50%;background:transparent}
+.tk-wd.heeft .tk-wd-stip{background:#B45309}
+.tk-wd.leeg .tk-wd-num{color:var(--muted);font-weight:500}
+.tk-wd.vandaag{background:#EFF6FF;border-color:#BFDBFE}
+.tk-wd.vandaag .tk-wd-num{color:#1E40AF;font-weight:700}
+.tk-wd.gekozen{border-color:var(--text)}
+.tk.later{opacity:.72}
 .tk-dag{display:flex;align-items:baseline;gap:8px;margin:1.1rem 0 .5rem;padding-bottom:5px;border-bottom:1px solid var(--border)}
 .tk-dag:first-child{margin-top:0}
 .tk-dag-num{font-size:13px;font-weight:700;color:var(--text)}
@@ -1905,6 +1918,15 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <div class="st">Taken</div>
           <div style="font-size:11px;color:var(--muted)" id="takenDatum"></div>
         </div>
+        <div class="tk-week">
+          <button class="btn-nav" onclick="takenWeek(-1)">&#8592;</button>
+          <span style="font-size:12px;font-weight:600;color:var(--text)" id="takenWeekLabel"></span>
+          <div style="display:flex;gap:6px">
+            <button class="btn-nav" style="font-size:11px" onclick="takenWeek(0)">Deze week</button>
+            <button class="btn-nav" onclick="takenWeek(1)">&#8594;</button>
+          </div>
+        </div>
+        <div class="tk-weekbalk" id="takenWeekbalk"></div>
         <div id="takenLijst"><div class="spin">Laden...</div></div>
       </div>
       <div class="sc">
@@ -10517,26 +10539,85 @@ async function loadTaken(){
   tekenTaken();
 }
 
+// De week die je bekijkt. 0 is deze week; met de pijlen schuif je op.
+let takenWeekOffset=0;
+function takenWeek(richting){
+  takenWeekOffset=richting===0?0:takenWeekOffset+richting;
+  tekenTaken();
+}
+function takenWeekDagen(){
+  const d=new Date();
+  d.setDate(d.getDate()-((d.getDay()+6)%7)+takenWeekOffset*7);   // maandag
+  return Array.from({length:7},(_,i)=>{const x=new Date(d);x.setDate(d.getDate()+i);return fmt(x);});
+}
+
 function tekenTaken(){
   const lijst=document.getElementById('takenLijst');
   if(!lijst)return;
   const vandaag=fmt(new Date());
-  const open=TAAKREGELS
-    .filter(r=>r.datum<=vandaag&&(r.status==='open'||r.status==='afgekeurd'))
-    .concat(TAAKREGELS.filter(r=>r.datum===vandaag&&r.status==='afgevinkt'))
-    .filter((r,i,a)=>a.indexOf(r)===i);
+  const dagen=takenWeekDagen();
+  const eersteDag=dagen[0], laatsteDag=dagen[6];
 
-  const vanPlanning=open.filter(r=>{const t=TAKEN.find(x=>x.id===r.taak_id);return t&&!t.eigenaar_id;});
-  const vanMij=open.filter(r=>{const t=TAKEN.find(x=>x.id===r.taak_id);return t&&t.eigenaar_id;});
-  vanPlanning.sort((a,b)=>a.datum.localeCompare(b.datum));
-  vanMij.sort((a,b)=>a.datum.localeCompare(b.datum));
+  // Alles wat ik mag zien in deze week, plus wat er is blijven liggen.
+  const inWeek=r=>r.datum>=eersteDag&&r.datum<=laatsteDag;
+  const blijftLiggen=TAAKREGELS.filter(r=>r.datum<vandaag&&(r.status==='open'||r.status==='afgekeurd'));
+  const dezeWeek=TAAKREGELS.filter(r=>inWeek(r)&&!(r.datum<vandaag&&(r.status==='open'||r.status==='afgekeurd')));
+
+  // Weekbalk
+  const balk=document.getElementById('takenWeekbalk');
+  if(balk){
+    const kort=['ma','di','wo','do','vr','za','zo'];
+    balk.innerHTML=dagen.map((ds,i)=>{
+      const open=TAAKREGELS.filter(r=>r.datum===ds&&(r.status==='open'||r.status==='afgekeurd')).length;
+      return`<div class="tk-wd${ds===vandaag?' vandaag':''}${open?' heeft':' leeg'}" onclick="takenNaarDag('${ds}')" title="${open?open+' open':'niets'}">
+        <span class="tk-wd-naam">${kort[i]}</span>
+        <span class="tk-wd-num">${parseDate(ds).getDate()}</span>
+        <span class="tk-wd-stip"></span>
+      </div>`;
+    }).join('');
+  }
+  const lb=document.getElementById('takenWeekLabel');
+  if(lb){
+    const a=parseDate(eersteDag), b=parseDate(laatsteDag);
+    lb.textContent=`${a.getDate()} ${a.toLocaleDateString('nl-NL',{month:'short'})} – ${b.getDate()} ${b.toLocaleDateString('nl-NL',{month:'short'})}`;
+  }
 
   let html='';
-  html+='<div class="tk-groep">Van de planning</div>';
-  html+=vanPlanning.length?vanPlanning.map(r=>taakKaart(r,vandaag)).join('')
-    :'<div style="font-size:12.5px;color:var(--muted);font-style:italic;padding:2px 0 6px">Niets openstaand. Netjes.</div>';
-  html+='<div class="tk-groep">Van mijzelf</div>';
-  html+=vanMij.map(r=>taakKaart(r,vandaag)).join('');
+  if(blijftLiggen.length&&takenWeekOffset===0){
+    html+='<div class="tk-dag laat"><span class="tk-dag-num">Blijft liggen</span>'
+      +`<span class="tk-dag-rest">${blijftLiggen.length===1?'1 taak':blijftLiggen.length+' taken'}</span></div>`;
+    html+=blijftLiggen.sort((a,b)=>a.datum.localeCompare(b.datum)).map(r=>taakKaart(r,vandaag)).join('');
+  }
+
+  dagen.forEach(ds=>{
+    const vanDag=dezeWeek.filter(r=>r.datum===ds);
+    if(!vanDag.length)return;
+    const d=parseDate(ds);
+    const morgenD=new Date();morgenD.setDate(morgenD.getDate()+1);
+    const rest=ds===vandaag?'Vandaag · '+d.toLocaleDateString('nl-NL',{weekday:'long'})
+      :ds===fmt(morgenD)?'Morgen · '+d.toLocaleDateString('nl-NL',{weekday:'long'})
+      :d.toLocaleDateString('nl-NL',{weekday:'long'});
+    html+=`<div class="tk-dag${ds===vandaag?' vandaag':''}" id="tkdag-${ds}">
+      <span class="tk-dag-num">${d.getDate()} ${d.toLocaleDateString('nl-NL',{month:'short'})}</span>
+      <span class="tk-dag-rest">${rest}</span></div>`;
+
+    const vanPlanning=vanDag.filter(r=>{const t=TAKEN.find(x=>x.id===r.taak_id);return t&&!t.eigenaar_id;});
+    const vanMij=vanDag.filter(r=>{const t=TAKEN.find(x=>x.id===r.taak_id);return t&&t.eigenaar_id;});
+    const sorteer=a=>a.sort((x,y)=>{
+      const tx=TAKEN.find(t=>t.id===x.taak_id),ty=TAKEN.find(t=>t.id===y.taak_id);
+      return (tx?tx.titel:'').localeCompare(ty?ty.titel:'');
+    });
+    if(vanPlanning.length){
+      html+='<div class="tk-rolkop">Van de planning</div>';
+      html+=sorteer(vanPlanning).map(r=>taakKaart(r,vandaag)).join('');
+    }
+    if(vanMij.length){
+      html+='<div class="tk-rolkop">Van mijzelf</div>';
+      html+=sorteer(vanMij).map(r=>taakKaart(r,vandaag)).join('');
+    }
+  });
+
+  if(!html)html='<div style="font-size:12.5px;color:var(--muted);font-style:italic;padding:2px 0 10px">Deze week staat er niets voor je klaar.</div>';
   html+='<button class="tk-eigen-knop" onclick="openEigenTaak()">+ Eigen taak</button>';
   lijst.innerHTML=html;
 
@@ -10548,6 +10629,12 @@ function tekenTaken(){
     hist.innerHTML=klaar.length?klaar.map(r=>taakKaart(r,vandaag,true)).join('')
       :'<div style="font-size:12.5px;color:var(--muted);font-style:italic">Nog niets afgerond.</div>';
   }
+}
+
+// Tik je op een dag in de balk, dan spring je naar dat kopje.
+function takenNaarDag(ds){
+  const el=document.getElementById('tkdag-'+ds);
+  if(el&&el.scrollIntoView)el.scrollIntoView({behavior:'smooth',block:'center'});
 }
 
 function taakKaart(r,vandaag,historie){
@@ -10572,9 +10659,15 @@ function taakKaart(r,vandaag,historie){
   const afkeur=r.status==='afgekeurd'&&r.opmerking
     ?`<div class="tk-meta rood">Afgekeurd: ${veiligTekst(r.opmerking)}</div>`:'';
 
-  const opSlot=r.status==='goedgekeurd'||historie;
-  return`<div class="tk${laat?' laat':''}${af?' af':''}">
-    <button class="tk-vink ${vinkKlasse}" ${opSlot?'disabled':''} onclick="vinkTaak('${r.id}')" title="${af?'Ongedaan maken':'Afvinken'}">&#10003;</button>
+  // Een taak van volgende week kun je bekijken maar nog niet afvinken; anders
+  // is de hele week met één veeg "gedaan".
+  const later=r.datum>vandaag;
+  const opSlot=r.status==='goedgekeurd'||historie||later;
+  const titel=later
+    ?'Kan pas op '+parseDate(r.datum).toLocaleDateString('nl-NL',{weekday:'long'})
+    :(af?'Ongedaan maken':'Afvinken');
+  return`<div class="tk${laat?' laat':''}${af?' af':''}${later?' later':''}">
+    <button class="tk-vink ${vinkKlasse}" ${opSlot?'disabled':''} onclick="vinkTaak('${r.id}')" title="${titel}">&#10003;</button>
     <div class="tk-tekst">
       <div class="tk-naam">${veiligTekst(t.titel)}</div>
       ${meta}
