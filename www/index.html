@@ -905,6 +905,14 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 .db-legenda span{display:inline-flex;align-items:center;gap:6px}
 .db-sleutel{width:10px;height:10px;border-radius:3px;flex:0 0 auto}
 .db-leeg{font-size:12.5px;color:var(--muted);padding:4px 0;line-height:1.5}
+.db-week{display:grid;grid-template-columns:46px minmax(0,1fr) 104px;gap:10px;align-items:center;padding:6px 0;font-size:12.5px}
+.db-week .wk{font-size:11px;color:var(--muted)}
+.db-spoor{position:relative;height:16px;background:var(--bg);border-radius:4px}
+.db-vul{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--text)}
+.db-vul.tekort{background:#B91C1C}
+.db-cap{position:absolute;top:-3px;bottom:-3px;width:2px;background:#B45309;border-radius:1px}
+.db-week .cijf{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted);font-size:11.5px;white-space:nowrap}
+.db-week .cijf b{color:var(--text)}
 .db-tabel{width:100%;border-collapse:collapse;font-size:12.5px}
 .db-tabel th{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);text-align:left;padding:0 8px 6px 0}
 .db-tabel td{padding:7px 8px 7px 0;border-top:1px solid var(--border);vertical-align:top}
@@ -2127,6 +2135,13 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div class="modal-title" id="modalTitle">Nieuwe klus</div>
     <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.75rem;padding-bottom:.5rem;border-bottom:1px solid var(--border)">Verplichte velden</div>
     <div class="fr"><span class="fl">Naam klus <span style="color:#DC2626">*</span></span><input type="text" id="fNaam" placeholder="bv. Bruiloft Janssen"></div>
+    <div class="fr"><span class="fl">Klant <span style="color:var(--muted);font-weight:400">(bedrijf of naam)</span></span>
+      <input type="text" id="fKlant" list="klantenLijst" placeholder="bv. Vandersteen Groep" autocomplete="off">
+      <datalist id="klantenLijst"></datalist>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px">
+        Hiermee kan de app je volgend jaar op tijd herinneren om deze klant te bellen.
+      </div>
+    </div>
     <div class="two">
       <div class="fr"><span class="fl">Startdatum <span style="color:#DC2626">*</span></span><input type="date" id="fDatum" onchange="onDateChange()"></div>
       <div class="fr"><span class="fl">Einddatum <span style="color:var(--muted);font-weight:400">(optioneel)</span></span><input type="date" id="fDatumEind" onchange="onDateChange()"></div>
@@ -2186,7 +2201,22 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       </div>
       <div class="chips" id="losseKrachtenLijst" style="margin-top:8px"></div>
     </div>
-    <div class="fr"><span class="fl">Adres</span><input type="text" id="fAdres" placeholder="Locatie of adres"></div>
+    <div class="fr"><span class="fl">Adres</span>
+      <div style="position:relative">
+        <input type="text" id="fAdres" placeholder="Begin te typen, bv. Stationsplein 5 Utrecht" autocomplete="off" oninput="adresGetypt()" onblur="adresSluitStraks()">
+        <div id="adresSuggesties" style="display:none;position:absolute;left:0;right:0;top:100%;z-index:30;background:var(--surface);border:1px solid var(--border);border-radius:9px;margin-top:3px;box-shadow:0 8px 24px -12px rgba(0,0,0,.35);overflow:hidden"></div>
+      </div>
+      <div id="adresPlek" style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px"></div>
+    </div>
+    <div class="fr">
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:var(--text)">
+        <input type="checkbox" id="fBuiten" style="width:18px;height:18px;flex-shrink:0">
+        <span>Dit is een <b>buitenklus</b></span>
+      </label>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:4px">
+        Dan houdt het dashboard het weer voor je in de gaten, tot veertien dagen vooruit.
+      </div>
+    </div>
     <div class="two">
       <div class="fr"><span class="fl">Contactpersoon</span><input type="text" id="fContact" placeholder="Naam"></div>
       <div class="fr"><span class="fl">Telefoonnummer</span><input type="text" id="fTelefoon" placeholder="06-12345678"></div>
@@ -4942,6 +4972,12 @@ function openModal(id=null){
   document.getElementById('herhalingEindRow').style.display='none';
   document.getElementById('herhalingPreview').textContent='';
   document.getElementById('fAdres').value=k?.adres||'';
+  document.getElementById('fKlant').value=k?.klant||'';
+  document.getElementById('fBuiten').checked=!!k?.buiten;
+  formLat=k&&k.lat!=null?Number(k.lat):null;
+  formLon=k&&k.lon!=null?Number(k.lon):null;
+  adresPlekTonen();
+  vulKlantenLijst();
   document.getElementById('fMilieuzone').checked=!!k?.milieuzone;
   document.getElementById('fContact').value=k?.contactpersoon||'';
   document.getElementById('fTelefoon').value=k?.telefoon||'';
@@ -5064,6 +5100,78 @@ const BEZIG=new Set();
 function slotPak(naam){if(BEZIG.has(naam))return false;BEZIG.add(naam);return true;}
 function slotLos(naam){BEZIG.delete(naam);}
 
+// ── ADRES AANVULLEN ─────────────────────────────────────────────────────
+// De Locatieserver van PDOK is de adressendienst van de Nederlandse overheid:
+// gratis, geen sleutel, gevoed door het BAG-register. We slaan de coördinaten
+// één keer op bij de klus; daarna heeft het weerbericht en straks de
+// milieuzonecontrole ze zonder opnieuw te zoeken.
+const PDOK='https://api.pdok.nl/bzk/locatieserver/search/v3_1/';
+let formLat=null, formLon=null, adresTimer=null, adresSluitTimer=null;
+
+function adresPlekTonen(){
+  const el=document.getElementById('adresPlek');
+  if(!el)return;
+  el.textContent=(formLat!=null&&formLon!=null)
+    ?'Locatie bekend — het weer en de milieuzonecontrole werken hiermee.'
+    :'Kies een adres uit de lijst, dan onthoudt de app de locatie.';
+}
+
+function adresGetypt(){
+  formLat=null; formLon=null; adresPlekTonen();
+  clearTimeout(adresTimer);
+  const q=(document.getElementById('fAdres')?.value||'').trim();
+  if(q.length<3){adresSuggestiesTonen([]);return;}
+  adresTimer=setTimeout(()=>adresZoek(q),320);
+}
+
+async function adresZoek(q){
+  try{
+    const res=await fetch(PDOK+'suggest?rows=6&fq=type:(adres OR weg OR woonplaats)&q='+encodeURIComponent(q));
+    if(!res.ok)return;
+    const json=await res.json();
+    adresSuggestiesTonen((json&&json.response&&json.response.docs)||[]);
+  }catch(e){ /* geen internet of dienst plat: gewoon zelf typen */ }
+}
+
+function adresSuggestiesTonen(docs){
+  const el=document.getElementById('adresSuggesties');
+  if(!el)return;
+  if(!docs.length){el.style.display='none';el.innerHTML='';return;}
+  el.innerHTML=docs.map(d=>`<div onmousedown="adresKies('${String(d.id).replace(/'/g,"")}')" style="padding:9px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border)">${veiligTekst(d.weergavenaam||'')}</div>`).join('');
+  el.style.display='';
+}
+
+function adresSluitStraks(){
+  clearTimeout(adresSluitTimer);
+  adresSluitTimer=setTimeout(()=>adresSuggestiesTonen([]),180);
+}
+
+async function adresKies(id){
+  try{
+    const res=await fetch(PDOK+'lookup?fl=id,weergavenaam,centroide_ll&id='+encodeURIComponent(id));
+    const json=await res.json();
+    const doc=json&&json.response&&json.response.docs&&json.response.docs[0];
+    if(!doc)return;
+    const veld=document.getElementById('fAdres');
+    if(veld)veld.value=doc.weergavenaam||veld.value;
+    const m=/POINT\(([-0-9.]+) ([-0-9.]+)\)/.exec(doc.centroide_ll||'');
+    if(m){formLon=Number(m[1]);formLat=Number(m[2]);}
+  }catch(e){}
+  adresSuggestiesTonen([]);
+  adresPlekTonen();
+}
+
+async function vulKlantenLijst(){
+  const el=document.getElementById('klantenLijst');
+  if(!el||el.dataset.gevuld)return;
+  try{
+    const{data}=await sb.from('klussen').select('klant').not('klant','is',null).limit(500);
+    const namen=[...new Set((data||[]).map(r=>(r.klant||'').trim()).filter(Boolean))].sort();
+    el.innerHTML=namen.map(n=>`<option value="${veiligTekst(n)}"></option>`).join('');
+    el.dataset.gevuld='1';
+  }catch(e){}
+}
+
 // ── OMZET EN KOSTEN BIJ EEN KLUS ────────────────────────────────────────
 let KLUS_LOONKOSTEN=0;
 
@@ -5157,6 +5265,9 @@ async function saveKlusIntern(){
   const personeel_nodig=parseInt(document.getElementById('fPersoneelNodig').value)||0;
   const notitie=document.getElementById('fNotitie').value||'';
   const adres=document.getElementById('fAdres').value.trim();
+  const klant=document.getElementById('fKlant').value.trim()||null;
+  const buiten=document.getElementById('fBuiten').checked;
+  const lat=formLat, lon=formLon;
   const milieuzone=document.getElementById('fMilieuzone').checked;
   const contactpersoon=document.getElementById('fContact').value.trim();
   const telefoon=document.getElementById('fTelefoon').value.trim();
@@ -5242,7 +5353,7 @@ async function saveKlusIntern(){
     };
 
     if(editId){
-      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon}).eq('id',editId);
+      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,buiten,lat,lon}).eq('id',editId);
       if(updErr)throw new Error('Klus opslaan mislukt: '+updErr.message);
       await sb.from('klus_trucks').delete().eq('klus_id',editId);
       await sb.from('klus_gebruikers').delete().eq('klus_id',editId);
@@ -5268,7 +5379,7 @@ async function saveKlusIntern(){
         if(melder)melder.textContent=allDatums.length>1
           ? `Klus ${i+1} van ${allDatums.length} aanmaken...`
           : 'Opslaan...';
-        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon}).select('id');
+        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,buiten,lat,lon}).select('id');
         if(error||!data||!data.length)throw new Error(error?.message||'Insert mislukt');
         const thisKlusId=data[0].id;
         if(i===0)klusId=thisKlusId; // gebruik eerste voor PDFs
@@ -11218,9 +11329,9 @@ async function laadDashboard(){
   const nu=new Date(), jaar=nu.getFullYear();
   const cijfers=MAG_CIJFERS&&(magBlok('omzet_target')||magBlok('marge')||magBlok('klussen_marge'));
   const leeg=Promise.resolve({data:null});
-  let maanden,klussen,wacht,plekken,kwijt,ontbreekt;
+  let maanden,klussen,wacht,plekken,kwijt,ontbreekt,capaciteit,verlof,signalen,plusmin,trucks,bellen,weer,apk,wijzigingen;
   try{
-    [maanden,klussen,wacht,plekken,kwijt,ontbreekt]=await Promise.all([
+    [maanden,klussen,wacht,plekken,kwijt,ontbreekt,capaciteit,verlof,signalen,plusmin,trucks,bellen,weer,apk,wijzigingen]=await Promise.all([
       cijfers?sb.rpc('dashboard_maanden',{p_jaar:jaar}):leeg,
       (cijfers&&(magBlok('klussen_marge')||magBlok('marge')))
         ?sb.rpc('dashboard_klussen',{p_van:jaar+'-01-01',p_tot:fmt(nu)}):leeg,
@@ -11228,6 +11339,15 @@ async function laadDashboard(){
       (magBlok('open_plekken')||magBlok('let_op'))?sb.rpc('dashboard_open_plekken',{p_dagen:14}):leeg,
       magBlok('wie_kwijt')?sb.rpc('dashboard_wie_kwijt'):leeg,
       magBlok('ontbrekend')?sb.rpc('dashboard_ontbrekend'):leeg,
+      magBlok('mensen_werk')?sb.rpc('dashboard_capaciteit',{p_weken:6}):leeg,
+      magBlok('verlof')?sb.rpc('dashboard_verlof',{p_dagen:30}):leeg,
+      magBlok('uren_signalen')?sb.rpc('dashboard_uren_signalen',{p_dagen:30}):leeg,
+      magBlok('plusmin')?sb.rpc('dashboard_plusmin',{}):leeg,
+      magBlok('trucks')?sb.rpc('dashboard_trucks',{}):leeg,
+      magBlok('bellen')?sb.rpc('dashboard_bellen'):leeg,
+      magBlok('weer')?sb.rpc('dashboard_weer'):leeg,
+      magBlok('apk')?sb.rpc('dashboard_apk'):leeg,
+      magBlok('wijzigingen')?sb.rpc('dashboard_wijzigingen'):leeg,
     ]);
   }catch(e){
     el.innerHTML='<div class="db-blok"><div class="db-leeg">Het dashboard kon niet geladen worden. Probeer het zo nog eens.</div></div>';
@@ -11249,15 +11369,28 @@ async function laadDashboard(){
   let h='';
   if(cijfers&&(magBlok('omzet_target')||magBlok('marge')))h+=dbTegels(M,K,nu);
   if(cijfers&&magBlok('omzet_target')&&M.length)h+=dbGrafiek(M,nu,jaar);
+  if(magBlok('wijzigingen'))h+=dbWijzigingenBlok(wijzigingen.data||[]);
   const links=magBlok('wacht_op_jou')?dbWachtBlok(W):'';
   const rechts=magBlok('let_op')?dbLetOpBlok(W,P):'';
   h+=(links&&rechts)?`<div class="db-twee">${links}${rechts}</div>`:(links+rechts);
+  if(magBlok('weer'))h+=dbWeerBlok(weer.data||[]);
+  if(magBlok('bellen'))h+=dbBellenBlok(bellen.data||[]);
+  if(magBlok('mensen_werk'))h+=dbCapaciteitBlok(capaciteit.data||[]);
   if(magBlok('open_plekken'))h+=dbOpenPlekkenBlok(P);
+  if(magBlok('verlof'))h+=dbVerlofBlok(verlof.data||[]);
+  if(magBlok('uren_signalen'))h+=dbSignalenBlok(signalen.data||[]);
   if(magBlok('wie_kwijt'))h+=dbWieKwijtBlok(kwijt.data||[]);
+  if(magBlok('plusmin'))h+=dbPlusminBlok(plusmin.data||[]);
+  if(magBlok('trucks'))h+=dbTrucksBlok(trucks.data||[]);
+  if(magBlok('apk'))h+=dbApkBlok(apk.data||[]);
   if(cijfers&&magBlok('klussen_marge'))h+=dbKlussenBlok(K);
+  if(cijfers&&magBlok('maandafsluiting'))h+='<div class="db-blok" id="maBlok"><div class="spin">Laden...</div></div>';
   if(magBlok('ontbrekend'))h+=dbOntbrekendBlok(ontbreekt.data||[]);
   h+=dbNogTeBouwen();
   el.innerHTML=h||'<div class="db-leeg">Niets te tonen.</div>';
+  if(cijfers&&magBlok('maandafsluiting'))laadMaandafsluiting();
+  if(magBlok('weer'))weerBijwerkenIndienNodig(weer.data||[]);
+  if(magBlok('apk'))apkBijwerkenIndienNodig(apk.data||[]);
 }
 
 function dbPct(a,b){return b>0?Math.max(0,Math.min(100,Math.round(a/b*100))):0;}
@@ -11411,6 +11544,366 @@ function dbOntbrekendBlok(lijst){
       <div class="db-tk"><b>${veiligTekst(r.toelichting||r.soort)}</b></div>
     </div>`).join('')}
   </div>`;
+}
+
+function dbWijzigingenBlok(rijen){
+  const R=(rijen||[]).slice(0,10);
+  const nieuw=R.filter(r=>r.nieuw).length;
+  const woord={nieuw:'nieuw',verzet:'verzet',weg:'weg',meer:'meer mensen',eraf:'eraf'};
+  return `<div class="db-blok" id="wijzBlok">
+    <div class="db-blok-kop">
+      <div class="db-blok-titel">Er is iets veranderd</div>
+      <div class="db-blok-meta">${nieuw?nieuw+' nieuw sinds je vorige bezoek':'niets nieuws'}${nieuw?' · <a href="#" onclick="dbWijzigingenGezien();return false" style="color:var(--text)">gelezen</a>':''}</div>
+    </div>
+    ${R.length?R.map(r=>`<div class="db-regel" onclick="dbGaNaar('planning-beheer')" style="${r.nieuw?'':'opacity:.55'}">
+      <span class="db-tel${r.soort==='weg'||r.soort==='eraf'?' rood':(r.nieuw?'':' grijs')}">${woord[r.soort]||r.soort}</span>
+      <div class="db-tk"><b>${veiligTekst(r.klus_naam||'Klus')}</b><span>${veiligTekst(r.tekst||'')}${r.door_naam?' · door '+veiligTekst(r.door_naam):''}</span></div>
+    </div>`).join(''):'<div class="db-leeg">Er is de afgelopen twee weken niets veranderd aan de planning.</div>'}
+  </div>`;
+}
+
+async function dbWijzigingenGezien(){
+  try{
+    await sb.rpc('dashboard_gezien');
+    const{data}=await sb.rpc('dashboard_wijzigingen');
+    const el=document.getElementById('wijzBlok');
+    if(el&&data){
+      const nieuwHtml=dbWijzigingenBlok(data);
+      el.outerHTML=nieuwHtml;
+    }
+  }catch(e){}
+}
+
+// ── WEER ────────────────────────────────────────────────────────────────
+// De verwachting komt van het Noorse KNMI via een edge function; die mag je
+// commercieel gebruiken als je de bron vermeldt en niet vaker ophaalt dan
+// nodig. Vandaar: hoogstens eens per drie uur, en alleen voor buitenklussen
+// waarvan het adres een locatie heeft.
+function weerWoord(code){
+  const c=String(code||'');
+  if(!c)return '';
+  if(c.indexOf('clearsky')===0)return 'zonnig';
+  if(c.indexOf('fair')===0)return 'overwegend zonnig';
+  if(c.indexOf('partlycloudy')===0)return 'wisselend bewolkt';
+  if(c.indexOf('cloudy')===0)return 'bewolkt';
+  if(c.indexOf('fog')===0)return 'mist';
+  if(c.indexOf('sleet')>=0)return 'natte sneeuw';
+  if(c.indexOf('snow')>=0)return 'sneeuw';
+  if(c.indexOf('thunder')>=0)return 'onweer';
+  if(c.indexOf('rain')>=0)return 'regen';
+  return c.replace(/_/g,' ');
+}
+function weerBft(ms){
+  const v=Number(ms||0);
+  if(!v)return 0;
+  return Math.min(12, Math.round(Math.pow(v/0.836, 2/3)));
+}
+
+function dbWeerBlok(rijen){
+  const R=(rijen||[]).slice(0,8);
+  return `<div class="db-blok" id="weerBlok">${dbWeerInhoud(R)}</div>`;
+}
+
+function dbWeerInhoud(R){
+  const zonderVerwachting=R.filter(r=>r.temp_max==null).length;
+  return `<div class="db-blok-kop"><div class="db-blok-titel">Weer bij de komende klussen</div><div class="db-blok-meta">buitenklussen, 14 dagen</div></div>
+    ${R.length?R.map(r=>{
+      const bft=weerBft(r.wind_ms);
+      const mm=Number(r.neerslag_mm)||0;
+      const streng=mm>=10||bft>=6;
+      return `<div class="db-regel" onclick="dbGaNaar('rooster')">
+        <span class="db-tel${streng?' rood':' grijs'}">${r.temp_max!=null?Math.round(r.temp_max)+'°':'?'}</span>
+        <div class="db-tk"><b>${veiligTekst(r.naam||'Klus')}</b><span>${dbDatum(r.datum)}${r.adres?' · '+veiligTekst(String(r.adres).split(',')[0]):''}${r.temp_max!=null?' · '+weerWoord(r.symbool)+(mm>0?', '+mm.toLocaleString('nl-NL')+' mm':'')+(bft>=5?', wind '+bft+' Bft':''):' · verwachting wordt opgehaald'}</span></div>
+      </div>`;
+    }).join(''):'<div class="db-leeg">Geen buitenklussen met een locatie in de komende twee weken. Vink bij een klus <b>buitenklus</b> aan en kies het adres uit de lijst, dan verschijnt het weer hier.</div>'}
+    <div class="db-leeg" style="margin-top:6px">Weergegevens van MET Norway (Noors meteorologisch instituut), CC BY 4.0.${zonderVerwachting?' Even geduld, de verwachting wordt opgehaald.':''}</div>`;
+}
+
+async function weerBijwerkenIndienNodig(R){
+  if(!R||!R.length)return;
+  const grens=Date.now()-3*3600*1000;
+  const oud=R.some(r=>!r.opgehaald_op||new Date(r.opgehaald_op).getTime()<grens||r.temp_max==null);
+  if(!oud)return;
+  try{
+    await sb.functions.invoke('weer-ophalen',{body:{}});
+    const{data}=await sb.rpc('dashboard_weer');
+    const el=document.getElementById('weerBlok');
+    if(el&&data)el.innerHTML=dbWeerInhoud(data.slice(0,8));
+  }catch(e){console.error('Weer ophalen mislukt:',e);}
+}
+
+// ── APK ─────────────────────────────────────────────────────────────────
+// De RDW publiceert kenteken en vervaldatum APK als open data. We halen het op
+// per kenteken en bewaren het bij de truck, zodat het maar eens per week hoeft.
+function dbApkBlok(rijen){
+  const R=rijen||[];
+  return `<div class="db-blok" id="apkBlok">${dbApkInhoud(R)}</div>`;
+}
+
+function dbApkInhoud(R){
+  const zorg=R.filter(r=>r.dagen!=null&&Number(r.dagen)<60)
+              .sort((a,b)=>Number(a.dagen)-Number(b.dagen));
+  return `<div class="db-blok-kop"><div class="db-blok-titel">APK per truck</div><div class="db-blok-meta">gegevens van de RDW</div></div>
+    ${!R.length
+      ?'<div class="db-leeg">Er staan nog geen kentekens bij de trucks. Vul ze in bij Beheer → Trucks, dan haalt de app de APK-datum zelf op.</div>'
+      :(zorg.length
+        ?zorg.slice(0,6).map(r=>{
+          const d=Number(r.dagen);
+          return `<div class="db-regel" onclick="dbGaNaar('beheer')">
+            <span class="db-tel${d<0?' rood':(d<30?'':' grijs')}">${d<0?'verlopen':d+' dgn'}</span>
+            <div class="db-tk"><b>${veiligTekst(r.naam||'Truck')}</b><span>${veiligTekst(r.kenteken||'')} · APK ${d<0?'verliep':'verloopt'} ${dbDatum(r.vervaldatum)}</span></div>
+          </div>`;
+        }).join('')
+        :`<div class="db-leeg">Alle ${R.length} trucks met een kenteken zijn nog ruim binnen de APK.</div>`)}`;
+}
+
+async function apkBijwerkenIndienNodig(R){
+  if(!R||!R.length)return;
+  const grens=Date.now()-7*86400000;
+  const teDoen=R.filter(r=>!r.bijgewerkt||new Date(r.bijgewerkt).getTime()<grens);
+  if(!teDoen.length)return;
+  let gelukt=0;
+  for(const r of teDoen.slice(0,25)){
+    const kenteken=String(r.kenteken||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase();
+    if(kenteken.length<6)continue;
+    try{
+      const res=await fetch('https://opendata.rdw.nl/resource/m9d7-ebf2.json?kenteken='+kenteken);
+      if(!res.ok)continue;
+      const rijen=await res.json();
+      const rij=rijen&&rijen[0];
+      const rauw=rij&&rij.vervaldatum_apk;
+      const datum=rauw&&String(rauw).length>=8
+        ?String(rauw).slice(0,4)+'-'+String(rauw).slice(4,6)+'-'+String(rauw).slice(6,8):null;
+      await sb.from('trucks').update({apk_vervaldatum:datum,apk_bijgewerkt:new Date().toISOString()}).eq('id',r.truck);
+      gelukt++;
+    }catch(e){ /* geen internet: volgende keer weer */ }
+  }
+  if(!gelukt)return;
+  try{
+    const{data}=await sb.rpc('dashboard_apk');
+    const el=document.getElementById('apkBlok');
+    if(el&&data)el.innerHTML=dbApkInhoud(data);
+  }catch(e){}
+}
+
+function dbBellenBlok(rijen){
+  const R=(rijen||[]).slice(0,8);
+  return `<div class="db-blok">
+    <div class="db-blok-kop"><div class="db-blok-titel">Wie moet ik bellen</div><div class="db-blok-meta">klanten van vorig jaar</div></div>
+    ${R.length?R.map(r=>`<div class="db-regel" onclick="dbGaNaar('rooster')">
+      <span class="db-tel">bellen</span>
+      <div class="db-tk"><b>${veiligTekst(r.klant||'')}${r.naam?' &mdash; '+veiligTekst(r.naam):''}</b><span>vorig jaar op ${dbDatum(r.toen_vastgelegd)} vastgelegd, klus was ${dbDatum(r.vorig_datum)}${r.omzet!=null?' · '+lkEuroKort(r.omzet):''}</span></div>
+    </div>`).join(''):'<div class="db-leeg">Niemand om te bellen. Dit blok vult zich zodra er klussen van een jaar geleden met een klantnaam zijn.</div>'}
+  </div>`;
+}
+
+function dbUren(n){
+  const v=Number(n||0);
+  return v.toLocaleString('nl-NL',{maximumFractionDigits:0})+' u';
+}
+
+function dbCapaciteitBlok(rijen){
+  const R=(rijen||[]).map(r=>({van:r.van,wk:Number(r.weeknr),
+    gepland:Number(r.gepland)||0,beschikbaar:Number(r.beschikbaar)||0,
+    verlof:Number(r.verlof)||0,klussen:Number(r.klussen)||0}));
+  if(!R.length)return '';
+  const max=Math.max(1,...R.map(r=>Math.max(r.gepland,r.beschikbaar)))*1.05;
+  const tekorten=R.filter(r=>r.gepland>r.beschikbaar);
+  return `<div class="db-blok">
+    <div class="db-blok-kop"><div class="db-blok-titel">Genoeg mensen voor de komende weken?</div><div class="db-blok-meta">${tekorten.length?tekorten.length+(tekorten.length===1?' week krap':' weken krap'):'ruim voldoende'}</div></div>
+    ${R.map(r=>{
+      const tekort=r.gepland>r.beschikbaar;
+      return `<div class="db-week">
+        <div class="wk">wk ${r.wk}</div>
+        <div class="db-spoor">
+          <i class="db-vul${tekort?' tekort':''}" style="width:${Math.min(100,r.gepland/max*100)}%"></i>
+          <i class="db-cap" style="left:${Math.min(100,r.beschikbaar/max*100)}%"></i>
+        </div>
+        <div class="cijf"><b>${dbUren(r.gepland)}</b> / ${dbUren(r.beschikbaar)}</div>
+      </div>`;
+    }).join('')}
+    <div class="db-legenda">
+      <span><i class="db-sleutel" style="background:var(--text)"></i> uren die het werk kost</span>
+      <span><i class="db-sleutel" style="width:14px;height:2px;border-radius:0;background:#B45309"></i> uren die je hebt</span>
+      <span><i class="db-sleutel" style="background:#B91C1C"></i> te weinig mensen</span>
+    </div>
+    <div class="db-leeg" style="margin-top:6px">Beschikbaar = contracturen van het vaste team plus het gemiddelde van de oproepkrachten over de laatste twaalf weken, min goedgekeurd verlof.</div>
+  </div>`;
+}
+
+function dbVerlofBlok(rijen){
+  const R=(rijen||[]).slice(0,10);
+  const soort={vakantie:'vakantie',ziek:'ziek',bijzonder:'bijzonder verlof',geen:'niet beschikbaar'};
+  return `<div class="db-blok">
+    <div class="db-blok-kop"><div class="db-blok-titel">Verlof in beeld</div><div class="db-blok-meta">komende maand</div></div>
+    ${R.length?R.map(r=>{
+      const wacht=r.status==='wacht';
+      return `<div class="db-regel" onclick="dbGaNaar('beschikbaarheid-beheer')">
+        <span class="db-tel${wacht?'':' grijs'}">${wacht?'aanvraag':dbUren(r.uren)}</span>
+        <div class="db-tk"><b>${veiligTekst(r.naam||'')}</b><span>${soort[r.verlofsoort]||r.verlofsoort} · ${dbDatum(r.van)}${r.tot&&r.tot!==r.van?' t/m '+dbDatum(r.tot):''}${Number(r.klussen)>0?' · '+r.klussen+' klussen die dagen':''}</span></div>
+      </div>`;
+    }).join(''):'<div class="db-leeg">Niemand is de komende maand weg.</div>'}
+  </div>`;
+}
+
+function dbSignalenBlok(rijen){
+  const R=(rijen||[]).slice(0,8);
+  const kop={afstand:'Ver weg uitgeklokt',pauze:'Geen pauze',langer:'Langer gewerkt dan gepland'};
+  return `<div class="db-blok">
+    <div class="db-blok-kop"><div class="db-blok-titel">Signalen uit de urenregistratie</div><div class="db-blok-meta">laatste 30 dagen</div></div>
+    ${R.length?R.map(r=>`<div class="db-regel" onclick="dbGaNaar('uren-beheer')">
+      <span class="db-tel${r.soort==='afstand'?' rood':''}">${r.soort==='afstand'?'locatie':(r.soort==='pauze'?'pauze':'uren')}</span>
+      <div class="db-tk"><b>${veiligTekst(r.naam||'')} · ${kop[r.soort]||r.soort}</b><span>${dbDatum(r.datum)}${r.klus?' · '+veiligTekst(r.klus):''} · ${veiligTekst(r.detail||'')}</span></div>
+    </div>`).join(''):'<div class="db-leeg">Geen bijzonderheden in de afgelopen maand.</div>'}
+  </div>`;
+}
+
+function dbPlusminBlok(rijen){
+  const R=(rijen||[]).slice(0,10);
+  return `<div class="db-blok">
+    <div class="db-blok-kop"><div class="db-blok-titel">Plus/min-uren van het vaste team</div><div class="db-blok-meta">dit jaar · alleen de uitschieters</div></div>
+    ${R.length?R.map(r=>{
+      const saldo=Number(r.saldo)||0;
+      return `<div class="db-regel" onclick="dbGaNaar('uren-beheer')">
+        <span class="db-tel${saldo<0?' rood':' groen'}">${saldo>0?'+':''}${saldo.toLocaleString('nl-NL',{maximumFractionDigits:1})} u</span>
+        <div class="db-tk"><b>${veiligTekst(r.naam||'')}</b><span>${saldo<0?'loopt achter op zijn contracturen':'heeft meer gewerkt dan zijn contract'}</span></div>
+      </div>`;
+    }).join(''):'<div class="db-leeg">Niemand wijkt meer dan acht uur af.</div>'}
+  </div>`;
+}
+
+function dbTrucksBlok(rijen){
+  const R=rijen||[];
+  const botsen=R.filter(r=>Number(r.conflicten)>0);
+  const stil=R.filter(r=>Number(r.conflicten)===0)
+              .sort((a,b)=>(Number(b.stil_weken)||999)-(Number(a.stil_weken)||999)).slice(0,4);
+  return `<div class="db-blok">
+    <div class="db-blok-kop"><div class="db-blok-titel">Trucks</div><div class="db-blok-meta">inzet dit jaar</div></div>
+    ${botsen.map(r=>`<div class="db-regel" onclick="dbGaNaar('planning-beheer')">
+      <span class="db-tel rood">${r.conflicten}&times;</span>
+      <div class="db-tk"><b>${veiligTekst(r.naam||'Truck')} staat dubbel geboekt</b><span>${r.conflicten} ${Number(r.conflicten)===1?'dag':'dagen'} met meer dan één klus</span></div>
+    </div>`).join('')}
+    ${stil.map(r=>`<div class="db-regel" onclick="dbGaNaar('beheer')">
+      <span class="db-tel grijs">${r.dagen} ${Number(r.dagen)===1?'dag':'dagen'}</span>
+      <div class="db-tk"><b>${veiligTekst(r.naam||'Truck')}</b><span>${r.laatste?'laatst op pad '+dbDatum(r.laatste)+(Number(r.stil_weken)>=4?' · staat '+r.stil_weken+' weken stil':''):'dit jaar nog niet ingezet'}</span></div>
+    </div>`).join('')}
+    ${(!botsen.length&&!stil.length)?'<div class="db-leeg">Geen bijzonderheden.</div>':''}
+  </div>`;
+}
+
+// ── MAANDAFSLUITING ─────────────────────────────────────────────────────
+// Deze knop keurt niets goed. Hij is juist geblokkeerd zolang er nog uren op
+// akkoord wachten; die moet je één voor één langs bij Uren. Wat hij wél doet:
+// de maand op slot zetten zodat er niets meer verschuift nadat de loonstroken
+// eruit zijn, en twee bestanden meegeven.
+let MA_JAAR=null, MA_MAAND=null, MA_STATUS=null;
+
+function maVorigeMaand(){
+  const d=new Date();
+  d.setDate(1); d.setMonth(d.getMonth()-1);
+  return {jaar:d.getFullYear(),maand:d.getMonth()+1};
+}
+
+async function laadMaandafsluiting(){
+  const el=document.getElementById('maBlok');
+  if(!el)return;
+  if(MA_JAAR===null){const v=maVorigeMaand();MA_JAAR=v.jaar;MA_MAAND=v.maand;}
+  const{data,error}=await sb.rpc('maandafsluiting_status',{p_jaar:MA_JAAR,p_maand:MA_MAAND});
+  if(error){el.innerHTML='<div class="db-leeg">Maandafsluiting kon niet geladen worden.</div>';return;}
+  MA_STATUS=(data&&data[0])||null;
+  tekenMaandafsluiting();
+}
+
+function maWissel(stap){
+  let m=MA_MAAND+stap, j=MA_JAAR;
+  if(m<1){m=12;j--;} if(m>12){m=1;j++;}
+  MA_MAAND=m; MA_JAAR=j;
+  const el=document.getElementById('maBlok');
+  if(el)el.innerHTML='<div class="spin">Laden...</div>';
+  laadMaandafsluiting();
+}
+
+function tekenMaandafsluiting(){
+  const el=document.getElementById('maBlok');
+  if(!el)return;
+  const st=MA_STATUS||{};
+  const naam=T_MAANDEN[MA_MAAND-1]+' '+MA_JAAR;
+  const punten=[];
+  if(Number(st.uren_wacht)>0)punten.push({tel:st.uren_wacht,titel:'Uren wachten nog op akkoord',sub:'die moet je eerst één voor één langs bij Uren',pagina:'uren-beheer',blokkeert:true});
+  if(Number(st.zonder_uurloon)>0)punten.push({tel:st.zonder_uurloon,titel:'Mensen met uren maar zonder uurloon',sub:'zonder uurloon blijft het bedrag nul',pagina:'accounts',blokkeert:true});
+  if(Number(st.klussen_zonder_omzet)>0)punten.push({tel:st.klussen_zonder_omzet,titel:'Klussen zonder omzetbedrag',sub:'niet verplicht, maar de marge klopt dan niet',pagina:'rooster',blokkeert:false});
+  const blokkeert=punten.some(x=>x.blokkeert);
+  const afgesloten=!!st.afgesloten;
+
+  el.innerHTML=`
+    <div class="db-blok-kop">
+      <div class="db-blok-titel">Maand afsluiten</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="btn-ghost" style="padding:3px 9px;font-size:12px" onclick="maWissel(-1)">&lsaquo;</button>
+        <span style="font-size:12px;font-weight:600">${naam}</span>
+        <button class="btn-ghost" style="padding:3px 9px;font-size:12px" onclick="maWissel(1)">&rsaquo;</button>
+      </div>
+    </div>
+    <div class="db-tegels" style="margin-bottom:10px">
+      <div class="db-tegel"><div class="db-lb">Uren geaccordeerd</div><div class="db-cijfer">${Number(st.uren||0).toLocaleString('nl-NL',{maximumFractionDigits:1})}</div><div class="db-onder">${st.mensen||0} mensen</div></div>
+      <div class="db-tegel"><div class="db-lb">Loonkosten</div><div class="db-cijfer">${lkEuroKort(st.loonkosten||0)}</div><div class="db-onder">incl. werkgeverslasten</div></div>
+      <div class="db-tegel"><div class="db-lb">Kilometers</div><div class="db-cijfer">${lkEuroKort(st.km_bedrag||0)}</div><div class="db-onder">${Number(st.km||0).toLocaleString('nl-NL')} km eigen auto</div></div>
+    </div>
+    ${afgesloten
+      ?`<div class="db-regel" style="cursor:default"><span class="db-tel groen">dicht</span>
+         <div class="db-tk"><b>Deze maand is afgesloten</b><span>op ${st.afgesloten_op?new Date(st.afgesloten_op).toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'}):''} · uren erin kunnen niet meer gewijzigd worden</span></div></div>`
+      :(punten.length
+        ?punten.map(x=>`<div class="db-regel" onclick="dbGaNaar('${x.pagina}')">
+            <span class="db-tel${x.blokkeert?' rood':''}">${x.tel}</span>
+            <div class="db-tk"><b>${x.titel}</b><span>${x.sub}</span></div>
+          </div>`).join('')
+        :'<div class="db-leeg">Alles staat klaar. Je kunt de maand afsluiten.</div>')}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px">
+      <button class="btn-ghost" style="padding:7px 13px;font-size:12px" onclick="maExport('uren')">Uren downloaden</button>
+      <button class="btn-ghost" style="padding:7px 13px;font-size:12px" onclick="maExport('klussen')">Klussen downloaden</button>
+      ${afgesloten
+        ?(isAdmin()?`<button class="btn-ghost" style="padding:7px 13px;font-size:12px" onclick="maHeropenen()">Heropenen</button>`
+                   :`<span style="font-size:11px;color:var(--muted)">Alleen de administrator kan heropenen.</span>`)
+        :`<button class="btn-sm" style="padding:7px 14px;font-size:12px${blokkeert?';opacity:.45':''}" onclick="maAfsluiten()">Afsluiten en op slot</button>`}
+      <span id="maInfo" style="font-size:11px;color:var(--muted)"></span>
+    </div>
+    <div class="db-leeg" style="margin-top:8px">Afsluiten keurt geen uren goed. Het zet de maand vast zodat er niets meer verschuift nadat de loonstroken eruit zijn.</div>`;
+}
+
+async function maAfsluiten(){
+  const info=document.getElementById('maInfo');
+  const naam=T_MAANDEN[MA_MAAND-1].toLowerCase()+' '+MA_JAAR;
+  if(!confirm(`${naam.charAt(0).toUpperCase()+naam.slice(1)} afsluiten? De uren van die maand liggen daarna vast.`))return;
+  const{data,error}=await sb.rpc('maand_afsluiten',{p_jaar:MA_JAAR,p_maand:MA_MAAND});
+  if(error){if(info)info.textContent=error.message;return;}
+  toast('Maand afgesloten');
+  laadMaandafsluiting();
+}
+
+async function maHeropenen(){
+  const{error}=await sb.rpc('maand_heropenen',{p_jaar:MA_JAAR,p_maand:MA_MAAND});
+  const info=document.getElementById('maInfo');
+  if(error){if(info)info.textContent=error.message;return;}
+  toast('Maand heropend');
+  laadMaandafsluiting();
+}
+
+async function maExport(wat){
+  const info=document.getElementById('maInfo');
+  if(info)info.textContent='Bezig...';
+  const fn=wat==='uren'?'maandafsluiting_uren':'maandafsluiting_klussen';
+  const{data,error}=await sb.rpc(fn,{p_jaar:MA_JAAR,p_maand:MA_MAAND});
+  if(error||!data||!data.length){if(info)info.textContent=error?('Mislukt: '+error.message):'Niets te exporteren voor deze maand.';return;}
+  const kop=wat==='uren'
+    ?['Naam','Rol','Uren','Uurloon','Bruto','Incl. werkgeverslasten','Kilometers','Kilometervergoeding','Registraties']
+    :['Klus','Datum','Omzet excl. btw','Kosten','Loonkosten','Marge','Uren','Omzet per uur'];
+  const rijen=[kop].concat(data.map(r=>wat==='uren'
+    ?[r.naam,r.rol,r.uren,r.uurloon,r.bruto,r.met_lasten,r.km,r.km_bedrag,r.registraties]
+    :[r.naam,r.datum,r.omzet,r.kosten,r.loonkosten,r.marge,r.uren,r.per_uur]));
+  const csv='﻿'+rijen.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+  const bestand=`${wat}_${MA_JAAR}-${String(MA_MAAND).padStart(2,'0')}.csv`;
+  const gelukt=await bewaarCsv(bestand,csv);
+  if(info)info.textContent=gelukt?(data.length+' regels in '+bestand):'';
 }
 
 function dbNogTeBouwen(){
