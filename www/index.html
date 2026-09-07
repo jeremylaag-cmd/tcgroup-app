@@ -224,6 +224,35 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .detail-trucks{display:flex;gap:5px;flex-wrap:wrap}
 .detail-footer{padding:.875rem 1.5rem 1.25rem;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end}
 
+/* Taken */
+.tk-groep{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:1rem 0 .5rem}
+.tk-groep:first-child{margin-top:0}
+.tk{display:flex;gap:11px;align-items:flex-start;background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:11px 12px;margin-bottom:8px}
+.tk.laat{border-color:#FCA5A5;background:#FEF6F5}
+.tk.af{background:var(--bg)}
+.tk-vink{flex:0 0 22px;height:22px;margin-top:1px;border:1.5px solid var(--muted);border-radius:7px;background:var(--surface);display:grid;place-items:center;font-size:13px;line-height:1;color:transparent;cursor:pointer;padding:0}
+.tk-vink.aan{background:#059669;border-color:#059669;color:#fff}
+.tk-vink.wacht{background:#B45309;border-color:#B45309;color:#fff}
+.tk-vink:disabled{cursor:default;opacity:.75}
+.tk-tekst{min-width:0;flex:1}
+.tk-naam{font-size:13.5px;font-weight:600;color:var(--text);line-height:1.4}
+.tk.af .tk-naam{color:var(--muted);text-decoration:line-through}
+.tk-meta{font-size:11.5px;color:var(--muted);line-height:1.5;margin-top:2px}
+.tk-meta.rood{color:#B91C1C;font-weight:600}
+.tk-uitleg{font-size:12px;color:var(--muted);line-height:1.5;margin-top:3px}
+.tk-bdg{display:inline-block;font-size:10px;font-weight:600;padding:2px 7px;border-radius:20px;line-height:1.5;white-space:nowrap}
+.tk-bdg.wacht{background:#FFFBEB;color:#B45309}
+.tk-bdg.ok{background:#ECFDF5;color:#059669}
+.tk-bdg.laat{background:#FEF2F2;color:#B91C1C}
+.tk-bdg.herhaal{background:#F5F3FF;color:#5B21B6}
+.tk-eigen-knop{width:100%;border:1px dashed var(--border);border-radius:11px;padding:11px;background:none;font-family:var(--font);font-size:13px;color:var(--muted);cursor:pointer}
+.tk-eigen-knop:hover{border-color:var(--muted);color:var(--text)}
+.tk-weg{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;padding:2px 4px;flex:0 0 auto}
+.tk-knoppen{display:flex;gap:6px;flex:0 0 auto}
+.tk-kn{font-size:11px;font-weight:600;padding:5px 10px;border-radius:7px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-family:var(--font);cursor:pointer}
+.tk-kn.ja{background:#059669;border-color:#059669;color:#fff}
+.tk-kn.nee{color:#DC2626}
+
 /* Klus modal */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
 .modal-overlay.open{display:flex}
@@ -1084,6 +1113,18 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         <div class="bc"><div class="bt">Soorten</div><div class="bl" id="soortenBeheer"></div>
           <div class="add-form"><input type="text" id="newSoortTitel" placeholder="Titel (bv. BBQ)"><textarea id="newSoortBeschr" placeholder="Beschrijving (optioneel)"></textarea><button class="btn-sm" onclick="addSoort()">Toevoegen</button></div>
         </div>
+        <div class="bc" style="grid-column:1/-1">
+          <div class="bt" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span>Taken</span>
+            <span style="font-size:11px;font-weight:600;color:#B45309" id="takenWachtCount"></span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
+            Klusjes voor de hal of de full-timers. Zij vinken af, jij keurt goed. Laat je
+            de personen leeg, dan geldt de taak voor iedereen met die rol.
+          </div>
+          <div id="takenBeheer"><div class="spin">Laden...</div></div>
+          <div class="add-form"><button class="btn-sm" onclick="openTaakModal()">+ Nieuwe taak</button></div>
+        </div>
         <div class="bc"><div class="bt">Skills personeel</div><div class="bl" id="skillsBeheer"><div class="spin">Laden...</div></div>
           <div class="add-form"><input type="text" id="newSkillNaam" placeholder="bv. Bar ervaring, Poffers bakken"><button class="btn-sm" onclick="addSkill()">Toevoegen</button></div>
         </div>
@@ -1845,6 +1886,26 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     </div>
   </div>
 
+  <!-- TAKEN — MEDEWERKER -->
+  <div id="page-taken" class="page">
+    <div style="padding:1.25rem;max-width:600px;margin:0 auto">
+      <div class="sc">
+        <div class="sc-header" style="margin-bottom:.875rem">
+          <div class="st">Taken</div>
+          <div style="font-size:11px;color:var(--muted)" id="takenDatum"></div>
+        </div>
+        <div id="takenLijst"><div class="spin">Laden...</div></div>
+      </div>
+      <div class="sc">
+        <div class="st" style="margin-bottom:.875rem">Afgerond</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.75rem">
+          Wat je de afgelopen twee weken hebt afgevinkt.
+        </div>
+        <div id="takenHistorie"></div>
+      </div>
+    </div>
+  </div>
+
   <!-- UREN — BEHEERDER -->
   <div id="page-uren-beheer" class="page">
     <div style="padding:1.25rem;max-width:900px;margin:0 auto">
@@ -2032,6 +2093,119 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <span class="saving-msg" id="beschSavingMsg" style="display:none">Opslaan...</span>
       <button class="btn-ghost" onclick="closeBeschModal()">Annuleren</button>
       <button class="btn-sm" onclick="saveBeschikbaarheid()">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="taakOverlay" onclick="if(event.target===this)sluitTaakModal()">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-drag"></div>
+    <div class="modal-title" id="taakModalTitel">Nieuwe taak</div>
+    <div class="fr"><span class="fl">Wat moet er gebeuren <span style="color:#DC2626">*</span></span>
+      <input type="text" id="tkTitel" placeholder="bv. vriezer ontdooien" maxlength="120"></div>
+    <div class="fr"><span class="fl">Toelichting <span style="color:var(--muted);font-weight:400">(optioneel)</span></span>
+      <textarea id="tkOmschrijving" rows="2" placeholder="bv. eerst leeghalen, doek eronder"></textarea></div>
+
+    <div class="fr"><span class="fl">Voor wie</span>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="tkRollen">
+        <div class="chip on" data-rol="hal" onclick="tkWisselRol(this)">Hal</div>
+        <div class="chip" data-rol="full-timer" onclick="tkWisselRol(this)">Full-timers</div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:5px">Hal en full-timers krijgen elk hun eigen taken. Allebei aanzetten mag ook.</div>
+    </div>
+
+    <div class="fr"><span class="fl">Alleen voor deze personen <span style="color:var(--muted);font-weight:400">(optioneel)</span></span>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="tkPersonen"></div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:5px" id="tkPersonenUitleg">Niemand gekozen: de taak geldt voor iedereen met die rol.</div>
+    </div>
+
+    <div class="fr"><span class="fl">Hoe vaak</span>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="tkHerhaal">
+        <div class="chip on" data-soort="eenmalig" onclick="tkKiesHerhaal(this)">Eenmalig</div>
+        <div class="chip" data-soort="dagelijks" onclick="tkKiesHerhaal(this)">Elke dag</div>
+        <div class="chip" data-soort="wekelijks" onclick="tkKiesHerhaal(this)">Elke week</div>
+        <div class="chip" data-soort="maandelijks" onclick="tkKiesHerhaal(this)">Elke maand</div>
+        <div class="chip" data-soort="datums" onclick="tkKiesHerhaal(this)">Losse datums</div>
+      </div>
+    </div>
+
+    <div class="fr" id="tkWerkdagenRij" style="display:none">
+      <label style="display:flex;align-items:center;gap:9px;cursor:pointer;font-size:13px;color:var(--text)">
+        <input type="checkbox" id="tkWerkdagen" style="width:18px;height:18px;flex-shrink:0">
+        <span>Alleen op werkdagen (ma t/m vr)</span>
+      </label>
+    </div>
+
+    <div class="fr" id="tkWeekdagenRij" style="display:none"><span class="fl">Op welke dagen</span>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="tkWeekdagen">
+        <div class="chip" data-dag="1" onclick="tkWisselDag(this)">ma</div>
+        <div class="chip" data-dag="2" onclick="tkWisselDag(this)">di</div>
+        <div class="chip" data-dag="3" onclick="tkWisselDag(this)">wo</div>
+        <div class="chip" data-dag="4" onclick="tkWisselDag(this)">do</div>
+        <div class="chip" data-dag="5" onclick="tkWisselDag(this)">vr</div>
+        <div class="chip" data-dag="6" onclick="tkWisselDag(this)">za</div>
+        <div class="chip" data-dag="7" onclick="tkWisselDag(this)">zo</div>
+      </div>
+    </div>
+
+    <div class="fr" id="tkMaanddagRij" style="display:none"><span class="fl">Welke dag van de maand</span>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <input type="number" id="tkMaanddag" min="1" max="31" value="1" style="max-width:90px">
+        <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;color:var(--text)">
+          <input type="checkbox" id="tkLaatsteDag" onchange="tkLaatsteWissel()" style="width:17px;height:17px;flex-shrink:0">
+          <span>laatste dag van de maand</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="fr" id="tkDatumsRij" style="display:none"><span class="fl">Datums</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="date" id="tkNieuweDatum" style="flex:1">
+        <button class="btn-sm" onclick="tkVoegDatumToe()" style="align-self:auto">Erbij</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:7px" id="tkDatumLijst"></div>
+    </div>
+
+    <div class="fr"><span class="fl" id="tkStartLabel">Vanaf</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input type="date" id="tkStart" style="flex:1;min-width:130px">
+        <input type="date" id="tkEind" style="flex:1;min-width:130px" placeholder="einddatum">
+      </div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:5px">Einddatum leeg laten betekent: blijft doorlopen.</div>
+    </div>
+
+    <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.5rem" id="tkVoorbeeld"></div>
+    <div class="warn-box" id="tkWarn"></div>
+    <div class="mfooter">
+      <button class="btn-ghost" onclick="sluitTaakModal()">Annuleren</button>
+      <button class="btn-sm" onclick="bewaarTaak()">Opslaan</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="eigenTaakOverlay" onclick="if(event.target===this)sluitEigenTaak()">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-drag"></div>
+    <div class="modal-title">Eigen taak</div>
+    <div class="fr"><span class="fl">Wat moet er gebeuren</span>
+      <input type="text" id="etTitel" placeholder="bv. kabelhaspel terugbrengen naar hal 2" maxlength="120"></div>
+    <div class="fr"><span class="fl">Wanneer</span>
+      <input type="date" id="etDatum"></div>
+    <div class="fr" style="margin-bottom:.5rem"><span class="fl">Herhalen</span>
+      <div class="chips" id="etHerhaal" style="display:flex;flex-wrap:wrap;gap:6px">
+        <div class="chip on" data-soort="eenmalig" onclick="etKiesHerhaal(this)">Niet</div>
+        <div class="chip" data-soort="dagelijks" onclick="etKiesHerhaal(this)">Elke dag</div>
+        <div class="chip" data-soort="wekelijks" onclick="etKiesHerhaal(this)">Elke week</div>
+        <div class="chip" data-soort="maandelijks" onclick="etKiesHerhaal(this)">Elke maand</div>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:.5rem" id="etUitleg">
+      Deze taak zie alleen jij. Hij hoeft niet goedgekeurd te worden en je kunt hem altijd weghalen.
+    </div>
+    <div class="warn-box" id="etWarn"></div>
+    <div class="mfooter">
+      <button class="btn-ghost" onclick="sluitEigenTaak()">Annuleren</button>
+      <button class="btn-sm" onclick="bewaarEigenTaak()">Toevoegen</button>
     </div>
   </div>
 </div>
@@ -2638,6 +2812,7 @@ async function initApp(user){
     beschikbaarheid:`<svg width="20" height="20" viewBox="0 0 24 24"><path class="ni" d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle class="ni" cx="9" cy="7" r="4"/><path class="ni" d="M23 21v-2a4 4 0 0 0-3-3.87"/><path class="ni" d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
     accounts:`<svg width="20" height="20" viewBox="0 0 24 24"><path class="ni" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle class="ni" cx="12" cy="7" r="4"/></svg>`,
     profiel:`<svg width="20" height="20" viewBox="0 0 24 24"><path class="ni" d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle class="ni" cx="12" cy="7" r="4"/></svg>`,
+    taken:`<svg width="20" height="20" viewBox="0 0 24 24"><polyline class="ni" points="9 11 12 14 22 4"/><path class="ni" d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>`,
   };
   function bnavItem(page,label,icon,active=false){
     return`<button class="bnav-item${active?' active':''}" onclick="switchNav('${page}',this)"><div class="bnav-icon">${icon}</div><span class="bnav-label">${label}</span></button>`;
@@ -2671,6 +2846,7 @@ async function initApp(user){
     zetKlokkaartenTerug();
     tabs.innerHTML=`
       <button class="htab active" onclick="showPage('uren',this)">Uren</button>
+      <button class="htab" onclick="showPage('taken',this)">Taken</button>
       <button class="htab" onclick="showPage('rooster',this)">Rooster</button>
       <button class="htab" onclick="showPage('beschikbaarheid',this)">Verlof</button>`;
     ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
@@ -2682,6 +2858,7 @@ async function initApp(user){
     tabs.innerHTML=`
       <button class="htab active" onclick="showPage('beschikbaarheid',this)">Mijn schema</button>
       <button class="htab" onclick="showPage('uren',this)">Uren</button>
+      ${isFullTimer?`<button class="htab" onclick="showPage('taken',this)">Taken</button>`:''}
       <button class="htab" onclick="showPage('open-klussen',this)">Open klussen</button>
       ${extraTab}`;
     ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
@@ -2710,6 +2887,7 @@ async function initApp(user){
       // vast. Op die plek staat nu het aanvragen van verlof.
       bn.innerHTML=
         bnavItem('uren','Uren',ico.uren,true)+
+        bnavItem('taken','Taken',ico.taken)+
         bnavItem('beschikbaarheid','Verlof',ico.beschikbaarheid)+
         bnavItem('rooster','Rooster',ico.rooster)+
         bnavItem('profiel','Profiel',ico.profiel);
@@ -2717,8 +2895,8 @@ async function initApp(user){
       bn.innerHTML=
         bnavItem('beschikbaarheid','Mijn schema',ico.rooster,true)+
         bnavItem('uren','Uren',ico.uren)+
+        bnavItem('taken','Taken',ico.taken)+
         bnavItem('open-klussen','Klussen',ico.schema)+
-        bnavItem('rooster','Rooster',ico.schema)+
         bnavItem('profiel','Profiel',ico.profiel);
     }else{
       // Part-timer
@@ -2966,7 +3144,7 @@ function showPage(id,btn){
   document.querySelectorAll('.htab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   if(btn)btn.classList.add('active');
-  if(id==='beheer')renderBeheer();
+  if(id==='beheer'){renderBeheer();loadTakenBeheer();}
   if(id==='accounts')loadAccounts();
   if(id==='beschikbaarheid')loadPersoonlijkSchema();
   if(id==='beschikbaarheid-beheer')loadAlleBeschikbaarheid();
@@ -2974,6 +3152,7 @@ function showPage(id,btn){
   if(id==='profiel')loadProfiel();
   if(id==='uren')loadUrenPersoneel();
   if(id==='uren-beheer')loadUrenBeheer();
+  if(id==='taken')loadTaken();
 
   if(id==='planning-beheer'){pbInit();loadAanmeldingen();}
   onthoudPagina(id);
@@ -3789,6 +3968,12 @@ async function loadAll(){
   }));
   renderMededelingen(meds||[]);
   renderAll();
+
+  // De teller bij het tabblad Taken vullen zonder dat je de pagina hoeft te
+  // openen. Gaat het mis, dan mag de rest van de app daar niet op stuklopen.
+  if(CURRENT_ROL==='beheerder'||magTaken()){
+    try{await laadTaken();taakTellerBijwerken();}catch(e){console.warn('Taken laden mislukt:',e);}
+  }
 }
 
 function toggleEerdere(){
@@ -10246,6 +10431,516 @@ function pbRenderContent(){
   });
   listEl.innerHTML=html+internHtml;
 }
+// ── TAKEN ───────────────────────────────────────────────────────────────
+// Twee lagen: een taak beschrijft wat er moet gebeuren en hoe vaak hij
+// terugkomt, en per dag staat er een regel klaar die je afvinkt. De database
+// zet die regels zelf klaar, dus de app hoeft alleen te lezen en af te vinken.
+const TAAK_ROLLEN=['hal','full-timer'];
+let TAKEN=[], TAAKREGELS=[], TAAK_TOEWIJZING=[];
+
+function magTaken(rol){return TAAK_ROLLEN.indexOf(rol||CURRENT_ROL)>=0;}
+
+const WEEKDAG_KORT=['','ma','di','wo','do','vr','za','zo'];
+function herhaalTekst(t){
+  if(!t)return '';
+  switch(t.herhaal_soort){
+    case 'dagelijks':return t.alleen_werkdagen?'elke werkdag':'elke dag';
+    case 'wekelijks':{
+      const d=(t.weekdagen||[]).slice().sort((a,b)=>a-b).map(n=>WEEKDAG_KORT[n]).filter(Boolean);
+      return d.length?'elke '+d.join(', '):'elke week';
+    }
+    case 'maandelijks':
+      return t.maanddag===-1?'laatste dag van de maand'
+        :t.maanddag?`elke ${t.maanddag}e van de maand`:'elke maand';
+    case 'datums':return `${(t.datums||[]).length} vaste datums`;
+    default:return '';
+  }
+}
+
+async function laadTaken(){
+  const[{data:tk},{data:rg},{data:tp}]=await Promise.all([
+    sb.from('taken').select('*'),
+    sb.from('taak_regels').select('*').gte('datum',fmt(new Date(Date.now()-21*864e5))),
+    sb.from('taak_personen').select('*'),
+  ]);
+  TAKEN=tk||[];TAAKREGELS=rg||[];TAAK_TOEWIJZING=tp||[];
+}
+
+// Hoeveel staat er voor mij open vandaag of eerder? Dat getal komt naast het
+// tabblad te staan.
+function taakOpenAantal(){
+  const vandaag=fmt(new Date());
+  return TAAKREGELS.filter(r=>r.datum<=vandaag&&r.status==='open').length;
+}
+// En voor de beheerder: hoeveel wacht er op goedkeuring.
+function taakWachtAantal(){
+  return TAAKREGELS.filter(r=>{
+    const t=TAKEN.find(x=>x.id===r.taak_id);
+    return r.status==='afgevinkt'&&t&&t.goedkeuring_nodig;
+  }).length;
+}
+function taakTellerBijwerken(){
+  // Het aantal staat in het tabblad zelf, zoals "3 wacht" bij de uren. Een
+  // eigen bolletje erbij zou op de telefoon te weinig ruimte overhouden.
+  const n=CURRENT_ROL==='beheerder'?taakWachtAantal():taakOpenAantal();
+  document.querySelectorAll('.htab').forEach(t=>{
+    if((t.getAttribute('onclick')||'').indexOf("'taken'")>=0)t.textContent=n?`Taken (${n})`:'Taken';
+  });
+  document.querySelectorAll('.bnav-item').forEach(b=>{
+    if((b.getAttribute('onclick')||'').indexOf("'taken'")>=0){
+      const lb=b.querySelector('.bnav-label');
+      if(lb)lb.textContent=n?`Taken (${n})`:'Taken';
+    }
+  });
+  const w=document.getElementById('takenWachtCount');
+  if(w){const a=taakWachtAantal();w.textContent=a?`${a} wacht`:'';}
+}
+
+async function loadTaken(){
+  const lijst=document.getElementById('takenLijst');
+  if(!lijst)return;
+  await laadTaken();
+  taakTellerBijwerken();
+  const dEl=document.getElementById('takenDatum');
+  if(dEl)dEl.textContent=new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
+  tekenTaken();
+}
+
+function tekenTaken(){
+  const lijst=document.getElementById('takenLijst');
+  if(!lijst)return;
+  const vandaag=fmt(new Date());
+  const open=TAAKREGELS
+    .filter(r=>r.datum<=vandaag&&(r.status==='open'||r.status==='afgekeurd'))
+    .concat(TAAKREGELS.filter(r=>r.datum===vandaag&&r.status==='afgevinkt'))
+    .filter((r,i,a)=>a.indexOf(r)===i);
+
+  const vanPlanning=open.filter(r=>{const t=TAKEN.find(x=>x.id===r.taak_id);return t&&!t.eigenaar_id;});
+  const vanMij=open.filter(r=>{const t=TAKEN.find(x=>x.id===r.taak_id);return t&&t.eigenaar_id;});
+  vanPlanning.sort((a,b)=>a.datum.localeCompare(b.datum));
+  vanMij.sort((a,b)=>a.datum.localeCompare(b.datum));
+
+  let html='';
+  html+='<div class="tk-groep">Van de planning</div>';
+  html+=vanPlanning.length?vanPlanning.map(r=>taakKaart(r,vandaag)).join('')
+    :'<div style="font-size:12.5px;color:var(--muted);font-style:italic;padding:2px 0 6px">Niets openstaand. Netjes.</div>';
+  html+='<div class="tk-groep">Van mijzelf</div>';
+  html+=vanMij.map(r=>taakKaart(r,vandaag)).join('');
+  html+='<button class="tk-eigen-knop" onclick="openEigenTaak()">+ Eigen taak</button>';
+  lijst.innerHTML=html;
+
+  const hist=document.getElementById('takenHistorie');
+  if(hist){
+    const klaar=TAAKREGELS
+      .filter(r=>r.status==='goedgekeurd'||(r.status==='afgevinkt'&&r.datum<vandaag))
+      .sort((a,b)=>b.datum.localeCompare(a.datum)).slice(0,25);
+    hist.innerHTML=klaar.length?klaar.map(r=>taakKaart(r,vandaag,true)).join('')
+      :'<div style="font-size:12.5px;color:var(--muted);font-style:italic">Nog niets afgerond.</div>';
+  }
+}
+
+function taakKaart(r,vandaag,historie){
+  const t=TAKEN.find(x=>x.id===r.taak_id);
+  if(!t)return '';
+  const laat=r.datum<vandaag&&(r.status==='open'||r.status==='afgekeurd');
+  const af=r.status!=='open'&&r.status!=='afgekeurd';
+  const klaarZonderKeuring=r.status==='afgevinkt'&&!t.goedkeuring_nodig;
+  const vinkKlasse=r.status==='goedgekeurd'||klaarZonderKeuring?'aan'
+    :r.status==='afgevinkt'?'wacht':'';
+  const dagTekst=r.datum===vandaag?'Vandaag'
+    :parseDate(r.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
+  const hh=herhaalTekst(t);
+
+  let meta='';
+  if(laat)meta=`<div class="tk-meta rood">Stond op ${dagTekst.toLowerCase()}</div>`;
+  else if(r.status==='goedgekeurd')meta=`<div class="tk-meta">${dagTekst} · <span class="tk-bdg ok">goedgekeurd</span></div>`;
+  else if(r.status==='afgevinkt'&&t.goedkeuring_nodig)meta=`<div class="tk-meta">Afgevinkt ${tijdVan(r.afgevinkt_op)} · <span class="tk-bdg wacht">wacht op de planning</span></div>`;
+  else if(klaarZonderKeuring)meta=`<div class="tk-meta">Afgevinkt ${tijdVan(r.afgevinkt_op)}</div>`;
+  else meta=`<div class="tk-meta">${dagTekst}${hh?' · <span class="tk-bdg herhaal">'+hh+'</span>':''}</div>`;
+
+  const afkeur=r.status==='afgekeurd'&&r.opmerking
+    ?`<div class="tk-meta rood">Afgekeurd: ${veiligTekst(r.opmerking)}</div>`:'';
+
+  const opSlot=r.status==='goedgekeurd'||historie;
+  return`<div class="tk${laat?' laat':''}${af?' af':''}">
+    <button class="tk-vink ${vinkKlasse}" ${opSlot?'disabled':''} onclick="vinkTaak('${r.id}')" title="${af?'Ongedaan maken':'Afvinken'}">&#10003;</button>
+    <div class="tk-tekst">
+      <div class="tk-naam">${veiligTekst(t.titel)}</div>
+      ${meta}
+      ${afkeur}
+      ${t.omschrijving?`<div class="tk-uitleg">${veiligTekst(t.omschrijving)}</div>`:''}
+    </div>
+    ${t.eigenaar_id&&!historie?`<button class="tk-weg" onclick="verwijderEigenTaak('${t.id}')" title="Weghalen">&#10005;</button>`:''}
+  </div>`;
+}
+
+function tijdVan(ts){
+  return ts?new Date(ts).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'';
+}
+
+async function vinkTaak(regelId){
+  const r=TAAKREGELS.find(x=>x.id===regelId);
+  if(!r||r.status==='goedgekeurd')return;
+  const nieuw=r.status==='afgevinkt'?'open':'afgevinkt';
+  const oud=r.status;
+  r.status=nieuw;
+  r.afgevinkt_op=nieuw==='afgevinkt'?new Date().toISOString():null;
+  tekenTaken();taakTellerBijwerken();
+  const{error}=await sb.from('taak_regels').update({status:nieuw}).eq('id',regelId);
+  if(error){
+    r.status=oud;tekenTaken();taakTellerBijwerken();
+    toast('Afvinken mislukt: '+error.message,'fout');
+  }
+}
+
+// ── eigen taak ──────────────────────────────────────────────────────────
+let etSoort='eenmalig';
+function openEigenTaak(){
+  etSoort='eenmalig';
+  document.getElementById('etTitel').value='';
+  document.getElementById('etDatum').value=fmt(new Date());
+  document.querySelectorAll('#etHerhaal .chip').forEach(c=>c.classList.toggle('on',c.dataset.soort==='eenmalig'));
+  document.getElementById('etWarn').className='warn-box';
+  document.getElementById('eigenTaakOverlay').classList.add('open');
+}
+function sluitEigenTaak(){document.getElementById('eigenTaakOverlay').classList.remove('open');}
+function etKiesHerhaal(el){
+  etSoort=el.dataset.soort;
+  document.querySelectorAll('#etHerhaal .chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  const u=document.getElementById('etUitleg');
+  if(u)u.textContent=etSoort==='eenmalig'
+    ?'Deze taak zie alleen jij. Hij hoeft niet goedgekeurd te worden en je kunt hem altijd weghalen.'
+    :'Vanaf de gekozen datum komt hij steeds terug. Alleen jij ziet hem.';
+}
+
+async function bewaarEigenTaak(){
+  const titel=(document.getElementById('etTitel').value||'').trim();
+  const datum=document.getElementById('etDatum').value;
+  const w=document.getElementById('etWarn');
+  const fout=t=>{w.textContent=t;w.className='warn-box show';};
+  if(!titel){fout('Vul in wat er moet gebeuren.');return;}
+  if(!datum){fout('Kies een datum.');return;}
+  const rij={
+    titel, omschrijving:'',
+    rollen:[CURRENT_ROL],
+    eigenaar_id:CURRENT_USER.id,
+    goedkeuring_nodig:false,
+    herhaal_soort:etSoort,
+    start_op:datum,
+    weekdagen:etSoort==='wekelijks'?[parseDate(datum).getDay()===0?7:parseDate(datum).getDay()]:[],
+    maanddag:etSoort==='maandelijks'?parseDate(datum).getDate():null,
+  };
+  const{error}=await sb.from('taken').insert(rij);
+  if(error){fout('Opslaan mislukt: '+error.message);return;}
+  sluitEigenTaak();
+  await loadTaken();
+  toast('Taak toegevoegd');
+}
+
+async function verwijderEigenTaak(id){
+  const t=TAKEN.find(x=>x.id===id);
+  if(!t)return;
+  if(!confirm(`"${t.titel}" weghalen?`))return;
+  const{error}=await sb.from('taken').delete().eq('id',id);
+  if(error){toast('Weghalen mislukt: '+error.message,'fout');return;}
+  await loadTaken();
+  toast('Taak weggehaald');
+}
+
+// ── TAKEN — BEHEER ──────────────────────────────────────────────────────
+let taakBewerktId=null, tkSoort='eenmalig', tkRollen=new Set(['hal']),
+    tkDagen=new Set(), tkPersonen=new Set(), tkDatums=[];
+
+async function loadTakenBeheer(){
+  const el=document.getElementById('takenBeheer');
+  if(!el||CURRENT_ROL!=='beheerder')return;
+  await laadTaken();
+  taakTellerBijwerken();
+  tekenTakenBeheer();
+}
+
+function taakNaam(id){return (PERSONEEL.find(p=>p.id===id)||{}).naam||'Onbekend';}
+
+function tekenTakenBeheer(){
+  const el=document.getElementById('takenBeheer');
+  if(!el)return;
+  const vandaag=fmt(new Date());
+  const regelRij=(r,knoppen)=>{
+    const t=TAKEN.find(x=>x.id===r.taak_id);
+    if(!t)return '';
+    const laat=r.datum<vandaag&&r.status==='open';
+    return`<div class="tk${laat?' laat':''}">
+      <div class="tk-tekst">
+        <div class="tk-naam">${veiligTekst(t.titel)}</div>
+        <div class="tk-meta${laat?' rood':''}">${
+          r.status==='afgevinkt'
+            ?`${veiligTekst(taakNaam(r.afgevinkt_door))} · ${parseDate(r.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'})} ${tijdVan(r.afgevinkt_op)}`
+            :`Open sinds ${parseDate(r.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'})}${herhaalTekst(t)?' · '+herhaalTekst(t):''}`
+        }</div>
+      </div>
+      ${knoppen?`<div class="tk-knoppen">
+        <button class="tk-kn ja" onclick="keurTaak('${r.id}','goedgekeurd')" title="Goedkeuren">&#10003;</button>
+        <button class="tk-kn nee" onclick="keurTaak('${r.id}','afgekeurd')" title="Afkeuren">&#10005;</button>
+      </div>`:''}
+    </div>`;
+  };
+
+  const wacht=TAAKREGELS.filter(r=>{
+    const t=TAKEN.find(x=>x.id===r.taak_id);
+    return r.status==='afgevinkt'&&t&&t.goedkeuring_nodig;
+  }).sort((a,b)=>a.datum.localeCompare(b.datum));
+
+  const blijftLiggen=TAAKREGELS.filter(r=>r.status==='open'&&r.datum<vandaag)
+    .sort((a,b)=>a.datum.localeCompare(b.datum));
+
+  const eigen=TAKEN.filter(t=>!t.eigenaar_id).sort((a,b)=>a.titel.localeCompare(b.titel));
+
+  let html='';
+  html+='<div class="tk-groep">Wacht op goedkeuring</div>';
+  html+=wacht.length?wacht.map(r=>regelRij(r,true)).join('')
+    :'<div style="font-size:12.5px;color:var(--muted);font-style:italic;padding:2px 0 6px">Niets te beoordelen.</div>';
+
+  if(blijftLiggen.length){
+    html+='<div class="tk-groep">Blijft liggen</div>';
+    html+=blijftLiggen.slice(0,12).map(r=>regelRij(r,false)).join('');
+    if(blijftLiggen.length>12)html+=`<div style="font-size:11.5px;color:var(--muted)">en nog ${blijftLiggen.length-12} andere.</div>`;
+  }
+
+  html+='<div class="tk-groep">Alle taken</div>';
+  html+=eigen.length?eigen.map(t=>{
+    const wie=TAAK_TOEWIJZING.filter(x=>x.taak_id===t.id).map(x=>taakNaam(x.gebruiker_id));
+    const rollen=(t.rollen||[]).map(r=>r==='hal'?'hal':'full-timers').join(' en ');
+    const hh=herhaalTekst(t)||'eenmalig op '+parseDate(t.start_op).toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+    return`<div class="tk${t.actief?'':' af'}">
+      <div class="tk-tekst">
+        <div class="tk-naam">${veiligTekst(t.titel)}</div>
+        <div class="tk-meta">${hh} · ${rollen}${wie.length?' · alleen '+veiligTekst(wie.join(', ')):''}${t.actief?'':' · uitgezet'}</div>
+      </div>
+      <div class="tk-knoppen">
+        <button class="tk-kn" onclick="openTaakModal('${t.id}')">Bewerk</button>
+        <button class="tk-kn nee" onclick="verwijderTaak('${t.id}')">&#10005;</button>
+      </div>
+    </div>`;
+  }).join(''):'<div style="font-size:12.5px;color:var(--muted);font-style:italic">Nog geen taken.</div>';
+
+  el.innerHTML=html;
+}
+
+async function keurTaak(regelId,status){
+  let opmerking='';
+  if(status==='afgekeurd'){
+    const r=prompt('Waarom niet akkoord? (kort, de medewerker ziet dit)');
+    if(r===null)return;
+    opmerking=r.trim();
+  }
+  const velden=status==='afgekeurd'?{status:'open',opmerking}:{status,opmerking:''};
+  const{error}=await sb.from('taak_regels').update(velden).eq('id',regelId);
+  if(error){toast('Mislukt: '+error.message,'fout');return;}
+  await loadTakenBeheer();
+  toast(status==='afgekeurd'?'Teruggezet naar open':'Goedgekeurd');
+}
+
+// ── taak aanmaken en bewerken ───────────────────────────────────────────
+function tkWisselRol(el){
+  const r=el.dataset.rol;
+  if(tkRollen.has(r)&&tkRollen.size===1)return;   // minstens één rol
+  tkRollen.has(r)?tkRollen.delete(r):tkRollen.add(r);
+  el.classList.toggle('on',tkRollen.has(r));
+  tkTekenPersonen();
+}
+function tkWisselDag(el){
+  const d=+el.dataset.dag;
+  tkDagen.has(d)?tkDagen.delete(d):tkDagen.add(d);
+  el.classList.toggle('on',tkDagen.has(d));
+  tkVoorbeeld();
+}
+function tkWisselPersoon(el){
+  const id=el.dataset.id;
+  tkPersonen.has(id)?tkPersonen.delete(id):tkPersonen.add(id);
+  el.classList.toggle('on',tkPersonen.has(id));
+  const u=document.getElementById('tkPersonenUitleg');
+  if(u)u.textContent=tkPersonen.size
+    ?`Alleen deze ${tkPersonen.size===1?'persoon ziet':'mensen zien'} de taak.`
+    :'Niemand gekozen: de taak geldt voor iedereen met die rol.';
+}
+function tkTekenPersonen(){
+  const el=document.getElementById('tkPersonen');
+  if(!el)return;
+  const lijst=(PERSONEEL||[]).filter(p=>tkRollen.has(p.rol)).sort((a,b)=>a.naam.localeCompare(b.naam));
+  el.innerHTML=lijst.length?lijst.map(p=>
+    `<div class="chip${tkPersonen.has(p.id)?' on':''}" data-id="${p.id}" onclick="tkWisselPersoon(this)">${veiligTekst(p.naam)}</div>`
+  ).join(''):'<div style="font-size:12px;color:var(--muted);font-style:italic">Niemand met deze rol.</div>';
+}
+function tkKiesHerhaal(el){
+  tkSoort=el.dataset.soort;
+  document.querySelectorAll('#tkHerhaal .chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  tkToonVelden();
+}
+function tkToonVelden(){
+  const zet=(id,aan)=>{const e=document.getElementById(id);if(e)e.style.display=aan?'':'none';};
+  zet('tkWerkdagenRij',tkSoort==='dagelijks');
+  zet('tkWeekdagenRij',tkSoort==='wekelijks');
+  zet('tkMaanddagRij',tkSoort==='maandelijks');
+  zet('tkDatumsRij',tkSoort==='datums');
+  const lb=document.getElementById('tkStartLabel');
+  if(lb)lb.textContent=tkSoort==='eenmalig'?'Op welke dag':'Vanaf — tot';
+  const eind=document.getElementById('tkEind');
+  if(eind)eind.style.display=tkSoort==='eenmalig'?'none':'';
+  tkVoorbeeld();
+}
+function tkLaatsteWissel(){
+  const aan=document.getElementById('tkLaatsteDag').checked;
+  const v=document.getElementById('tkMaanddag');
+  if(v)v.disabled=aan;
+  tkVoorbeeld();
+}
+function tkVoegDatumToe(){
+  const el=document.getElementById('tkNieuweDatum');
+  const d=el.value;
+  if(!d)return;
+  if(tkDatums.indexOf(d)<0)tkDatums.push(d);
+  tkDatums.sort();
+  el.value='';
+  tkTekenDatums();
+}
+function tkTekenDatums(){
+  const el=document.getElementById('tkDatumLijst');
+  if(!el)return;
+  el.innerHTML=tkDatums.map(d=>
+    `<div class="chip on" onclick="tkHaalDatumWeg('${d}')" title="Weghalen">${parseDate(d).toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'})} &#10005;</div>`
+  ).join('');
+  tkVoorbeeld();
+}
+function tkHaalDatumWeg(d){tkDatums=tkDatums.filter(x=>x!==d);tkTekenDatums();}
+
+// Laat zien wanneer de taak de eerstvolgende keren valt, zodat je het ziet
+// voordat je opslaat.
+function tkVoorbeeld(){
+  const el=document.getElementById('tkVoorbeeld');
+  if(!el)return;
+  const start=document.getElementById('tkStart').value;
+  if(!start){el.textContent='';return;}
+  const eind=document.getElementById('tkEind').value;
+  const laatste=document.getElementById('tkLaatsteDag')?.checked;
+  const maanddag=laatste?-1:(+document.getElementById('tkMaanddag').value||1);
+  const werkdagen=document.getElementById('tkWerkdagen')?.checked;
+  const dagen=[...tkDagen];
+  const treffers=[];
+  const d=parseDate(start);
+  const grens=eind?parseDate(eind):null;
+  for(let i=0;i<400&&treffers.length<4;i++){
+    if(grens&&d>grens)break;
+    const ds=fmt(d), iso=d.getDay()===0?7:d.getDay();
+    let raak=false;
+    if(tkSoort==='eenmalig')raak=ds===start;
+    else if(tkSoort==='dagelijks')raak=!werkdagen||iso<=5;
+    else if(tkSoort==='wekelijks')raak=dagen.indexOf(iso)>=0;
+    else if(tkSoort==='maandelijks'){
+      const laatsteDag=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();
+      raak=maanddag===-1?d.getDate()===laatsteDag:d.getDate()===maanddag;
+    }
+    else if(tkSoort==='datums')raak=tkDatums.indexOf(ds)>=0;
+    if(raak)treffers.push(parseDate(ds).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}));
+    d.setDate(d.getDate()+1);
+  }
+  el.innerHTML=treffers.length
+    ?`Eerstvolgende keren: <b style="color:var(--text)">${treffers.join('</b>, <b style="color:var(--text)">')}</b>${treffers.length===4?' …':''}`
+    :'<span style="color:#B45309">Met deze instelling valt de taak nergens op.</span>';
+}
+
+function openTaakModal(id){
+  taakBewerktId=id||null;
+  const t=id?TAKEN.find(x=>x.id===id):null;
+  document.getElementById('taakModalTitel').textContent=t?'Taak bewerken':'Nieuwe taak';
+  document.getElementById('tkTitel').value=t?t.titel:'';
+  document.getElementById('tkOmschrijving').value=t?t.omschrijving||'':'';
+  tkRollen=new Set(t&&t.rollen&&t.rollen.length?t.rollen:['hal']);
+  document.querySelectorAll('#tkRollen .chip').forEach(c=>c.classList.toggle('on',tkRollen.has(c.dataset.rol)));
+  tkPersonen=new Set(t?TAAK_TOEWIJZING.filter(x=>x.taak_id===t.id).map(x=>x.gebruiker_id):[]);
+  tkTekenPersonen();
+  const u=document.getElementById('tkPersonenUitleg');
+  if(u)u.textContent=tkPersonen.size?`Alleen deze ${tkPersonen.size===1?'persoon ziet':'mensen zien'} de taak.`:'Niemand gekozen: de taak geldt voor iedereen met die rol.';
+
+  tkSoort=t?t.herhaal_soort:'eenmalig';
+  document.querySelectorAll('#tkHerhaal .chip').forEach(c=>c.classList.toggle('on',c.dataset.soort===tkSoort));
+  tkDagen=new Set(t&&t.weekdagen?t.weekdagen:[]);
+  document.querySelectorAll('#tkWeekdagen .chip').forEach(c=>c.classList.toggle('on',tkDagen.has(+c.dataset.dag)));
+  tkDatums=t&&t.datums?t.datums.slice():[];
+  tkTekenDatums();
+  document.getElementById('tkWerkdagen').checked=!!(t&&t.alleen_werkdagen);
+  const laatste=!!(t&&t.maanddag===-1);
+  document.getElementById('tkLaatsteDag').checked=laatste;
+  document.getElementById('tkMaanddag').value=t&&t.maanddag&&t.maanddag>0?t.maanddag:1;
+  document.getElementById('tkMaanddag').disabled=laatste;
+  document.getElementById('tkStart').value=t?t.start_op:fmt(new Date());
+  document.getElementById('tkEind').value=t&&t.eind_op?t.eind_op:'';
+  document.getElementById('tkWarn').className='warn-box';
+  tkToonVelden();
+  document.getElementById('taakOverlay').classList.add('open');
+}
+function sluitTaakModal(){document.getElementById('taakOverlay').classList.remove('open');}
+
+async function bewaarTaak(){
+  const w=document.getElementById('tkWarn');
+  const fout=t=>{w.textContent=t;w.className='warn-box show';};
+  const titel=(document.getElementById('tkTitel').value||'').trim();
+  const start=document.getElementById('tkStart').value;
+  if(!titel){fout('Vul in wat er moet gebeuren.');return;}
+  if(!start){fout('Kies een datum.');return;}
+  if(tkSoort==='wekelijks'&&!tkDagen.size){fout('Kies minstens één weekdag.');return;}
+  if(tkSoort==='datums'&&!tkDatums.length){fout('Voeg minstens één datum toe.');return;}
+  const laatste=document.getElementById('tkLaatsteDag').checked;
+  const eind=document.getElementById('tkEind').value||null;
+  if(eind&&eind<start){fout('De einddatum ligt vóór de startdatum.');return;}
+
+  const rij={
+    titel,
+    omschrijving:(document.getElementById('tkOmschrijving').value||'').trim(),
+    rollen:[...tkRollen],
+    eigenaar_id:null,
+    goedkeuring_nodig:true,
+    herhaal_soort:tkSoort,
+    alleen_werkdagen:tkSoort==='dagelijks'&&document.getElementById('tkWerkdagen').checked,
+    weekdagen:tkSoort==='wekelijks'?[...tkDagen].sort((a,b)=>a-b):[],
+    maanddag:tkSoort==='maandelijks'?(laatste?-1:(+document.getElementById('tkMaanddag').value||1)):null,
+    datums:tkSoort==='datums'?tkDatums:[],
+    start_op:start,
+    eind_op:tkSoort==='eenmalig'?start:eind,
+    aangemaakt_door:CURRENT_USER.id,
+  };
+
+  let id=taakBewerktId;
+  if(id){
+    const{error}=await sb.from('taken').update(rij).eq('id',id);
+    if(error){fout('Opslaan mislukt: '+error.message);return;}
+    await sb.from('taak_personen').delete().eq('taak_id',id);
+  }else{
+    const{data,error}=await sb.from('taken').insert(rij).select('id').single();
+    if(error||!data){fout('Opslaan mislukt: '+(error?error.message:'onbekend'));return;}
+    id=data.id;
+  }
+  if(tkPersonen.size){
+    const{error}=await sb.from('taak_personen')
+      .insert([...tkPersonen].map(g=>({taak_id:id,gebruiker_id:g})));
+    if(error){fout('De taak is opgeslagen, maar de personen niet: '+error.message);return;}
+  }
+  sluitTaakModal();
+  await loadTakenBeheer();
+  toast(taakBewerktId?'Taak bijgewerkt':'Taak toegevoegd');
+}
+
+async function verwijderTaak(id){
+  const t=TAKEN.find(x=>x.id===id);
+  if(!t)return;
+  if(!confirm(`"${t.titel}" weghalen? Alles wat er al is afgevinkt verdwijnt dan ook.`))return;
+  const{error}=await sb.from('taken').delete().eq('id',id);
+  if(error){toast('Weghalen mislukt: '+error.message,'fout');return;}
+  await loadTakenBeheer();
+  toast('Taak weggehaald');
+}
+
 // ── PUSH NOTIFICATIES ──
 // Het toestel geeft zijn token vaak al door voordat je ingelogd bent. We houden
 // het daarom vast en schrijven het weg zodra we weten wie je bent.
