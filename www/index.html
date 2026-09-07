@@ -1242,6 +1242,24 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
             <div id="instInfo" style="font-size:11px;color:var(--muted)"></div>
           </div>
         </div>
+        <div class="bc" id="targetsCard" style="grid-column:1/-1;display:none">
+          <div class="bt">Targets per maand</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
+            Wat je per maand aan omzet wilt draaien, <b>exclusief btw</b>. Het jaartarget is de som van
+            de twaalf maanden &mdash; je hoeft dus niet twee getallen bij te houden.
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.875rem">
+            <button class="btn-ghost" style="padding:5px 11px;font-size:12px" onclick="targetJaarWissel(-1)">&lsaquo;</button>
+            <span id="targetJaarLabel" style="font-size:14px;font-weight:600;min-width:52px;text-align:center"></span>
+            <button class="btn-ghost" style="padding:5px 11px;font-size:12px" onclick="targetJaarWissel(1)">&rsaquo;</button>
+            <button class="btn-ghost" style="padding:5px 11px;font-size:12px" onclick="targetsVanVorigJaar()">Vorig jaar overnemen</button>
+          </div>
+          <div id="targetsRaster"><div class="spin">Laden...</div></div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:.875rem">
+            <button class="btn-sm" onclick="bewaarTargets()">Opslaan</button>
+            <span id="targetsInfo" style="font-size:11px;color:var(--muted)"></span>
+          </div>
+        </div>
         <div class="bc" id="dashRollenCard" style="grid-column:1/-1;display:none">
           <div class="bt">Dashboard per rol</div>
           <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
@@ -2114,6 +2132,25 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="fr"><span class="fl">Contactpersoon</span><input type="text" id="fContact" placeholder="Naam"></div>
       <div class="fr"><span class="fl">Telefoonnummer</span><input type="text" id="fTelefoon" placeholder="06-12345678"></div>
     </div>
+    <div class="fr" id="fFinancieelWrap" style="display:none">
+      <span class="fl">Omzet en kosten</span>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:7px">
+        Omzet <b>exclusief btw</b>. Bij kosten zet je inkoop, huur en alles wat deze klus kost &mdash;
+        <b>zonder loonkosten</b>, die rekent de app zelf uit de geklokte uren. Alleen beheerders met
+        cijfers in hun dashboard zien dit.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div style="flex:1;min-width:130px">
+          <div class="slabel" style="margin-bottom:4px">Omzet excl. btw</div>
+          <input type="number" id="fOmzet" min="0" step="0.01" inputmode="decimal" placeholder="0.00" oninput="klusMargeBijwerken()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
+        </div>
+        <div style="flex:1;min-width:130px">
+          <div class="slabel" style="margin-bottom:4px">Kosten (zonder loon)</div>
+          <input type="number" id="fKosten" min="0" step="0.01" inputmode="decimal" placeholder="0.00" oninput="klusMargeBijwerken()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
+        </div>
+      </div>
+      <div id="fMargeRegel" style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6"></div>
+    </div>
     <div class="fr"><span class="fl">Notities</span><textarea id="fNotitie" placeholder="Extra info..."></textarea></div>
     <div class="fr"><span class="fl">PDF bijlagen</span>
       <div class="bij" id="bijZone" onclick="document.getElementById('fPdf').click()">Klik om PDF toe te voegen</div>
@@ -2457,6 +2494,28 @@ let CURRENT_USER=null,CURRENT_ROL=null,CURRENT_NAAM=null,CURRENT_BEHEER_ROL=null
 // in de database vastgezet, niet alleen hier in het scherm.
 const BEHEER_ROLLEN={administrator:'Administrator',planning:'Planning',financieel:'Financieel',verkoper:'Verkoper'};
 function isAdmin(){return CURRENT_BEHEER_ROL==='administrator';}
+
+// Welke dashboardblokken bij mijn beheerdersrol horen, en of ik daarmee ook
+// bedragen mag zien. Dat laatste is geen aparte instelling: heb je een blok uit
+// de groep Cijfers aanstaan, dan geeft de database je ook de omzet. Staat er
+// geen enkel cijferblok aan, dan bestaan die bedragen niet voor jou — ook niet
+// als je het scherm zou omzeilen.
+let MIJN_BLOKKEN=new Set(), ALLE_BLOKKEN=[], MAG_CIJFERS=false;
+
+async function laadMijnDashboardRechten(){
+  MIJN_BLOKKEN=new Set(); ALLE_BLOKKEN=[]; MAG_CIJFERS=false;
+  if(CURRENT_ROL!=='beheerder'||!CURRENT_BEHEER_ROL)return;
+  try{
+    const[{data:blokken},{data:rechten}]=await Promise.all([
+      sb.from('dashboard_blokken').select('code,naam,omschrijving,groep,volgorde,klaar').order('volgorde'),
+      sb.from('dashboard_rechten').select('blok,aan').eq('beheer_rol',CURRENT_BEHEER_ROL).eq('aan',true),
+    ]);
+    ALLE_BLOKKEN=blokken||[];
+    (rechten||[]).forEach(r=>MIJN_BLOKKEN.add(r.blok));
+    MAG_CIJFERS=ALLE_BLOKKEN.some(b=>b.groep==='Cijfers'&&MIJN_BLOKKEN.has(b.code));
+  }catch(e){console.error('Dashboardrechten ophalen mislukt:',e);}
+}
+function magBlok(code){return MIJN_BLOKKEN.has(code);}
 function beheerRolLabel(r){return BEHEER_ROLLEN[r]||'';}
 const today=new Date();const todayStr=fmt(today);
 
@@ -2890,6 +2949,7 @@ async function initApp(user){
 
   CURRENT_ROL=rol;
   CURRENT_BEHEER_ROL=beheerRol;
+  await laadMijnDashboardRechten();
   CURRENT_NAAM=naam;
   document.getElementById('authWrap').style.display='none';
   const w=document.getElementById('wachtWrap');
@@ -3244,7 +3304,7 @@ function showPage(id,btn){
   document.querySelectorAll('.htab').forEach(t=>t.classList.remove('active'));
   document.getElementById('page-'+id).classList.add('active');
   if(btn)btn.classList.add('active');
-  if(id==='beheer'){beheerUitklapbaar();renderBeheer();loadTakenBeheer();laadDashboardRollen();}
+  if(id==='beheer'){beheerUitklapbaar();renderBeheer();loadTakenBeheer();laadDashboardRollen();laadTargets();}
   if(id==='accounts')loadAccounts();
   if(id==='beschikbaarheid')loadPersoonlijkSchema();
   if(id==='beschikbaarheid-beheer')loadAlleBeschikbaarheid();
@@ -4795,6 +4855,7 @@ function openModal(id=null){
   (k?.personeel||[]).forEach(p=>{if(p.shift_id&&shiftSleutelVanId[p.shift_id])formPersShift[p.id]=shiftSleutelVanId[p.shift_id];});
   (k?.losse||[]).forEach((l,i)=>{if(l.shift_id&&shiftSleutelVanId[l.shift_id])formLosShift[i]=shiftSleutelVanId[l.shift_id];});
   document.getElementById('modalTitle').textContent=id?'Klus bewerken':'Nieuwe klus';
+  laadKlusFinancieel(id);
   document.getElementById('fNaam').value=k?.naam||'';
   document.getElementById('fDatum').value=k?k.datum:(selDate||todayStr);
   document.getElementById('fDatumEind').value=k?.datum_eind||'';
@@ -4940,6 +5001,72 @@ const BEZIG=new Set();
 function slotPak(naam){if(BEZIG.has(naam))return false;BEZIG.add(naam);return true;}
 function slotLos(naam){BEZIG.delete(naam);}
 
+// ── OMZET EN KOSTEN BIJ EEN KLUS ────────────────────────────────────────
+let KLUS_LOONKOSTEN=0;
+
+async function laadKlusFinancieel(id){
+  const wrap=document.getElementById('fFinancieelWrap');
+  if(!wrap)return;
+  wrap.style.display=MAG_CIJFERS?'':'none';
+  const o=document.getElementById('fOmzet'), k=document.getElementById('fKosten');
+  if(o)o.value=''; if(k)k.value='';
+  KLUS_LOONKOSTEN=0;
+  if(!MAG_CIJFERS||!id){klusMargeBijwerken();return;}
+  try{
+    const[fin,loon]=await Promise.all([
+      sb.from('klus_financieel').select('omzet,kosten').eq('klus_id',id).maybeSingle(),
+      sb.rpc('klus_loonkosten',{p_klus:id}),
+    ]);
+    const f=fin&&fin.data;
+    if(f){
+      if(o&&f.omzet!=null)o.value=f.omzet;
+      if(k&&f.kosten!=null)k.value=f.kosten;
+    }
+    KLUS_LOONKOSTEN=Number(loon&&loon.data)||0;
+  }catch(e){console.error('Bedragen ophalen mislukt:',e);}
+  klusMargeBijwerken();
+}
+
+function klusMargeBijwerken(){
+  const el=document.getElementById('fMargeRegel');
+  if(!el)return;
+  const getal=id=>{
+    const v=(document.getElementById(id)?.value||'').trim().replace(',','.');
+    return v===''?null:Number(v);
+  };
+  const omzet=getal('fOmzet'), kosten=getal('fKosten');
+  if(omzet===null&&kosten===null){
+    el.innerHTML=editId
+      ?'Nog geen bedragen ingevuld. Zonder omzet telt deze klus niet mee op het dashboard.'
+      :'Bij een herhaling vul je de bedragen per klus in, nadat ze zijn aangemaakt.';
+    return;
+  }
+  const loon=KLUS_LOONKOSTEN||0;
+  const marge=(omzet||0)-(kosten||0)-loon;
+  const pct=omzet?Math.round(marge/omzet*100):null;
+  el.innerHTML=`Loonkosten tot nu toe <b>${lkEuro(loon)}</b> &middot; marge <b>${lkEuro(marge)}</b>`
+    +(pct!==null?` (${pct}%)`:'')
+    +`<br><span style="color:var(--muted)">Loonkosten zijn de geaccordeerde uren maal het uurloon, plus werkgeverslasten. Ze lopen op zolang er nog uren goedgekeurd worden.</span>`;
+}
+
+async function bewaarKlusFinancieel(id){
+  if(!MAG_CIJFERS||!id)return;
+  const getal=veldId=>{
+    const v=(document.getElementById(veldId)?.value||'').trim().replace(',','.');
+    return v===''?null:Number(v);
+  };
+  const omzet=getal('fOmzet'), kosten=getal('fKosten');
+  if(omzet===null&&kosten===null){
+    await sb.from('klus_financieel').delete().eq('klus_id',id);
+    return;
+  }
+  if((omzet!==null&&(isNaN(omzet)||omzet<0))||(kosten!==null&&(isNaN(kosten)||kosten<0)))
+    throw new Error('Omzet of kosten klopt niet.');
+  const{error}=await sb.from('klus_financieel')
+    .upsert({klus_id:id,omzet,kosten},{onConflict:'klus_id'});
+  if(error)throw new Error('Omzet opslaan mislukt: '+error.message);
+}
+
 async function saveKlus(){
   if(!slotPak('klus'))return;
   const knop=document.getElementById('klusOpslaanKnop');
@@ -5061,6 +5188,7 @@ async function saveKlusIntern(){
       await sb.from('klus_losse_personen').delete().eq('klus_id',editId);
       await sb.from('klus_shifts').delete().eq('klus_id',editId);
       await schrijfKoppelingen(editId);
+      await bewaarKlusFinancieel(editId);
       const removedPdfs=KLUSSEN.find(k=>k.id===editId)?.pdfs.filter(p=>!existingPdfs.find(e=>e.id===p.id))||[];
       for(const p of removedPdfs){
         if(p.url&&p.url.includes('/storage/v1/object/public/pdf/')){
@@ -5083,6 +5211,8 @@ async function saveKlusIntern(){
         if(i===0)klusId=thisKlusId; // gebruik eerste voor PDFs
         await schrijfKoppelingen(thisKlusId);
       }
+      // Bij een herhaling zijn de bedragen per klus anders; die vul je daar in.
+      if(allDatums.length===1)await bewaarKlusFinancieel(klusId);
     }
     // Upload PDFs naar Storage via REST API
     for(const p of formPdfs){
@@ -10976,6 +11106,83 @@ function beheerUitklapbaar(){
       if(e.key==='Enter'||e.key===' '){e.preventDefault();kaart.classList.toggle('dicht');}
     });
   });
+}
+
+// ── TARGETS PER MAAND ───────────────────────────────────────────────────
+// Twaalf bedragen per jaar. Het jaartotaal rekenen we uit; dat bewaren we niet
+// apart, anders kunnen die twee uit elkaar gaan lopen.
+const T_MAANDEN=['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];
+let TARGET_JAAR=new Date().getFullYear(), TARGETS={};
+
+async function laadTargets(){
+  const kaart=document.getElementById('targetsCard');
+  if(!kaart)return;
+  kaart.style.display=MAG_CIJFERS?'':'none';
+  if(!MAG_CIJFERS)return;
+  const{data,error}=await sb.from('maand_targets').select('maand,bedrag').eq('jaar',TARGET_JAAR);
+  TARGETS={};
+  if(!error)(data||[]).forEach(r=>{TARGETS[r.maand]=Number(r.bedrag)||0;});
+  tekenTargets();
+}
+
+function targetJaarWissel(stap){
+  TARGET_JAAR+=stap;
+  laadTargets();
+}
+
+function tekenTargets(){
+  const el=document.getElementById('targetsRaster');
+  const jl=document.getElementById('targetJaarLabel');
+  if(jl)jl.textContent=TARGET_JAAR;
+  if(!el)return;
+  const veld='font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%;text-align:right';
+  el.innerHTML=`<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:9px">`
+    +T_MAANDEN.map((naam,i)=>`<div>
+        <div class="slabel" style="margin-bottom:4px">${naam}</div>
+        <div style="display:flex;align-items:center;gap:5px">
+          <span style="font-size:12px;color:var(--muted)">&euro;</span>
+          <input type="number" id="tg-${i+1}" min="0" step="100" inputmode="decimal" value="${TARGETS[i+1]!=null?TARGETS[i+1]:''}" placeholder="0" oninput="targetsTotaalBijwerken()" style="${veld}">
+        </div>
+      </div>`).join('')
+    +`</div>
+      <div id="targetsTotaal" style="font-size:13px;font-weight:600;margin-top:.875rem;padding-top:.75rem;border-top:1px solid var(--border)"></div>`;
+  targetsTotaalBijwerken();
+}
+
+function targetsTotaalBijwerken(){
+  let som=0, gevuld=0;
+  for(let m=1;m<=12;m++){
+    const v=(document.getElementById('tg-'+m)?.value||'').trim().replace(',','.');
+    if(v!==''&&!isNaN(Number(v))){som+=Number(v);gevuld++;}
+  }
+  const el=document.getElementById('targetsTotaal');
+  if(el)el.innerHTML=`Jaartarget ${TARGET_JAAR}: ${lkEuro(som)}`
+    +(gevuld<12?` <span style="font-weight:400;color:var(--muted)">&middot; ${12-gevuld} ${12-gevuld===1?'maand':'maanden'} nog leeg</span>`:'');
+}
+
+async function targetsVanVorigJaar(){
+  const info=document.getElementById('targetsInfo');
+  const{data}=await sb.from('maand_targets').select('maand,bedrag').eq('jaar',TARGET_JAAR-1);
+  if(!data||!data.length){if(info)info.textContent=`Voor ${TARGET_JAAR-1} staan er nog geen targets.`;return;}
+  data.forEach(r=>{const el=document.getElementById('tg-'+r.maand);if(el)el.value=Number(r.bedrag)||0;});
+  targetsTotaalBijwerken();
+  if(info)info.textContent=`Overgenomen uit ${TARGET_JAAR-1}. Nog niet opgeslagen.`;
+}
+
+async function bewaarTargets(){
+  const info=document.getElementById('targetsInfo');
+  const rijen=[];
+  for(let m=1;m<=12;m++){
+    const v=(document.getElementById('tg-'+m)?.value||'').trim().replace(',','.');
+    const bedrag=v===''?0:Number(v);
+    if(isNaN(bedrag)||bedrag<0){if(info)info.textContent=`Het bedrag bij ${T_MAANDEN[m-1].toLowerCase()} klopt niet.`;return;}
+    rijen.push({jaar:TARGET_JAAR,maand:m,bedrag,bijgewerkt_op:new Date().toISOString()});
+  }
+  const{error}=await sb.from('maand_targets').upsert(rijen,{onConflict:'jaar,maand'});
+  if(error){if(info)info.textContent='Opslaan mislukt: '+error.message;return;}
+  rijen.forEach(r=>{TARGETS[r.maand]=r.bedrag;});
+  if(info)info.textContent='Opgeslagen.';
+  toast('Targets opgeslagen');
 }
 
 // ── DASHBOARD PER ROL ───────────────────────────────────────────────────
