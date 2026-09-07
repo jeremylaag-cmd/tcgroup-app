@@ -2131,7 +2131,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 
     <div class="fr" id="tkWerkdagenRij" style="display:none">
       <label style="display:flex;align-items:center;gap:9px;cursor:pointer;font-size:13px;color:var(--text)">
-        <input type="checkbox" id="tkWerkdagen" style="width:18px;height:18px;flex-shrink:0">
+        <input type="checkbox" id="tkWerkdagen" onchange="tkVoorbeeld()" style="width:18px;height:18px;flex-shrink:0">
         <span>Alleen op werkdagen (ma t/m vr)</span>
       </label>
     </div>
@@ -2150,7 +2150,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 
     <div class="fr" id="tkMaanddagRij" style="display:none"><span class="fl">Welke dag van de maand</span>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        <input type="number" id="tkMaanddag" min="1" max="31" value="1" style="max-width:90px">
+        <input type="number" id="tkMaanddag" min="1" max="31" value="1" style="max-width:90px" oninput="tkVoorbeeld()">
         <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:12.5px;color:var(--text)">
           <input type="checkbox" id="tkLaatsteDag" onchange="tkLaatsteWissel()" style="width:17px;height:17px;flex-shrink:0">
           <span>laatste dag van de maand</span>
@@ -2168,8 +2168,8 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 
     <div class="fr"><span class="fl" id="tkStartLabel">Vanaf</span>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <input type="date" id="tkStart" style="flex:1;min-width:130px">
-        <input type="date" id="tkEind" style="flex:1;min-width:130px" placeholder="einddatum">
+        <input type="date" id="tkStart" style="flex:1;min-width:130px" onchange="tkVoorbeeld()">
+        <input type="date" id="tkEind" style="flex:1;min-width:130px" placeholder="einddatum" onchange="tkVoorbeeld()">
       </div>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:5px">Einddatum leeg laten betekent: blijft doorlopen.</div>
     </div>
@@ -10784,6 +10784,8 @@ function tkToonVelden(){
   zet('tkWeekdagenRij',tkSoort==='wekelijks');
   zet('tkMaanddagRij',tkSoort==='maandelijks');
   zet('tkDatumsRij',tkSoort==='datums');
+  const e=document.getElementById('tkEind');
+  if(e&&tkSoort==='eenmalig')e.value='';
   const lb=document.getElementById('tkStartLabel');
   if(lb)lb.textContent=tkSoort==='eenmalig'?'Op welke dag':'Vanaf — tot';
   const eind=document.getElementById('tkEind');
@@ -10822,7 +10824,7 @@ function tkVoorbeeld(){
   if(!el)return;
   const start=document.getElementById('tkStart').value;
   if(!start){el.textContent='';return;}
-  const eind=document.getElementById('tkEind').value;
+  const eind=tkSoort==='eenmalig'?'':document.getElementById('tkEind').value;
   const laatste=document.getElementById('tkLaatsteDag')?.checked;
   const maanddag=laatste?-1:(+document.getElementById('tkMaanddag').value||1);
   const werkdagen=document.getElementById('tkWerkdagen')?.checked;
@@ -10892,7 +10894,9 @@ async function bewaarTaak(){
   if(tkSoort==='wekelijks'&&!tkDagen.size){fout('Kies minstens één weekdag.');return;}
   if(tkSoort==='datums'&&!tkDatums.length){fout('Voeg minstens één datum toe.');return;}
   const laatste=document.getElementById('tkLaatsteDag').checked;
-  const eind=document.getElementById('tkEind').value||null;
+  // Een eenmalige taak heeft geen einddatum; dat veld staat dan verborgen en
+  // telt dus ook niet mee.
+  const eind=tkSoort==='eenmalig'?null:(document.getElementById('tkEind').value||null);
   if(eind&&eind<start){fout('De einddatum ligt vóór de startdatum.');return;}
 
   const rij={
