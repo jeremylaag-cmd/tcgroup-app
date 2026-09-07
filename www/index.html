@@ -253,6 +253,17 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .tk-kn.ja{background:#059669;border-color:#059669;color:#fff}
 .tk-kn.nee{color:#DC2626}
 
+.tk-dag{display:flex;align-items:baseline;gap:8px;margin:1.1rem 0 .5rem;padding-bottom:5px;border-bottom:1px solid var(--border)}
+.tk-dag:first-child{margin-top:0}
+.tk-dag-num{font-size:13px;font-weight:700;color:var(--text)}
+.tk-dag-rest{font-size:12px;color:var(--muted)}
+.tk-dag.laat .tk-dag-num,.tk-dag.laat .tk-dag-rest{color:#B91C1C}
+.tk-dag.vandaag{border-bottom-color:#BFDBFE}
+.tk-dag.vandaag .tk-dag-num{color:#1E40AF}
+.tk-rolkop{font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:.55rem 0 .4rem}
+.tk-schakel{display:flex;gap:6px;margin-bottom:.875rem}
+.tk-schakel .chip{cursor:pointer}
+
 /* Klus modal */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
 .modal-overlay.open{display:flex}
@@ -10650,7 +10661,7 @@ async function verwijderEigenTaak(id){
 
 // ── TAKEN — BEHEER ──────────────────────────────────────────────────────
 let taakBewerktId=null, tkSoort='eenmalig', tkRollen=new Set(['hal']),
-    tkDagen=new Set(), tkPersonen=new Set(), tkDatums=[];
+    tkDagen=new Set(), tkPersonen=new Set(), tkDatums=[], takenWeergave='dag';
 
 async function loadTakenBeheer(){
   const el=document.getElementById('takenBeheer');
@@ -10691,9 +10702,6 @@ function tekenTakenBeheer(){
     return r.status==='afgevinkt'&&t&&t.goedkeuring_nodig;
   }).sort((a,b)=>a.datum.localeCompare(b.datum));
 
-  const blijftLiggen=TAAKREGELS.filter(r=>r.status==='open'&&r.datum<vandaag)
-    .sort((a,b)=>a.datum.localeCompare(b.datum));
-
   const eigen=TAKEN.filter(t=>!t.eigenaar_id).sort((a,b)=>a.titel.localeCompare(b.titel));
 
   let html='';
@@ -10701,30 +10709,119 @@ function tekenTakenBeheer(){
   html+=wacht.length?wacht.map(r=>regelRij(r,true)).join('')
     :'<div style="font-size:12.5px;color:var(--muted);font-style:italic;padding:2px 0 6px">Niets te beoordelen.</div>';
 
-  if(blijftLiggen.length){
-    html+='<div class="tk-groep">Blijft liggen</div>';
-    html+=blijftLiggen.slice(0,12).map(r=>regelRij(r,false)).join('');
-    if(blijftLiggen.length>12)html+=`<div style="font-size:11.5px;color:var(--muted)">en nog ${blijftLiggen.length-12} andere.</div>`;
-  }
-
-  html+='<div class="tk-groep">Alle taken</div>';
-  html+=eigen.length?eigen.map(t=>{
-    const wie=TAAK_TOEWIJZING.filter(x=>x.taak_id===t.id).map(x=>taakNaam(x.gebruiker_id));
-    const rollen=(t.rollen||[]).map(r=>r==='hal'?'hal':'full-timers').join(' en ');
-    const hh=herhaalTekst(t)||'eenmalig op '+parseDate(t.start_op).toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
-    return`<div class="tk${t.actief?'':' af'}">
-      <div class="tk-tekst">
-        <div class="tk-naam">${veiligTekst(t.titel)}</div>
-        <div class="tk-meta">${hh} · ${rollen}${wie.length?' · alleen '+veiligTekst(wie.join(', ')):''}${t.actief?'':' · uitgezet'}</div>
-      </div>
-      <div class="tk-knoppen">
-        <button class="tk-kn" onclick="openTaakModal('${t.id}')">Bewerk</button>
-        <button class="tk-kn nee" onclick="verwijderTaak('${t.id}')">&#10005;</button>
-      </div>
+  html+=`<div class="tk-groep">Alle taken</div>
+    <div class="tk-schakel">
+      <div class="chip${takenWeergave==='dag'?' on':''}" onclick="takenWeergaveWissel('dag')">Per dag</div>
+      <div class="chip${takenWeergave==='lijst'?' on':''}" onclick="takenWeergaveWissel('lijst')">Op naam</div>
     </div>`;
-  }).join(''):'<div style="font-size:12.5px;color:var(--muted);font-style:italic">Nog geen taken.</div>';
+  html+=takenWeergave==='dag'?takenPerDagHtml():takenOpNaamHtml(eigen);
 
   el.innerHTML=html;
+}
+
+function takenWeergaveWissel(w){takenWeergave=w;tekenTakenBeheer();}
+
+// Groepslabel bij een taak: voor wie is hij bedoeld.
+function taakGroepLabel(t){
+  const r=(t.rollen||[]).slice().sort();
+  if(r.length>1)return 'Hal en full-timers';
+  return r[0]==='full-timer'?'Full-timers':'Hal';
+}
+
+// Per dag, en binnen een dag per groep — zoals je een agenda leest. Een taak
+// die elke week terugkomt staat dus op elke dag waarop hij valt.
+function takenPerDagHtml(){
+  const vandaag=fmt(new Date());
+  const grens=new Date();grens.setDate(grens.getDate()+14);
+  const tot=fmt(grens);
+  const rijen=TAAKREGELS.filter(r=>{
+    const t=TAKEN.find(x=>x.id===r.taak_id);
+    if(!t||t.eigenaar_id)return false;
+    if(r.datum>tot)return false;
+    // Voorbij en al afgehandeld hoef je niet meer te zien.
+    if(r.datum<vandaag&&(r.status==='goedgekeurd'))return false;
+    return true;
+  });
+  if(!rijen.length)return '<div style="font-size:12.5px;color:var(--muted);font-style:italic">Niets ingepland de komende twee weken.</div>';
+
+  const perDag={};
+  rijen.forEach(r=>{(perDag[r.datum]=perDag[r.datum]||[]).push(r);});
+  const dagen=Object.keys(perDag).sort();
+
+  const morgenD=new Date();morgenD.setDate(morgenD.getDate()+1);
+  const morgen=fmt(morgenD);
+
+  return dagen.map(ds=>{
+    const d=parseDate(ds);
+    const laat=ds<vandaag;
+    const num=d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+    const rest=ds===vandaag?'Vandaag · '+d.toLocaleDateString('nl-NL',{weekday:'long'})
+      :ds===morgen?'Morgen · '+d.toLocaleDateString('nl-NL',{weekday:'long'})
+      :laat?'Blijft liggen · '+d.toLocaleDateString('nl-NL',{weekday:'long'})
+      :d.toLocaleDateString('nl-NL',{weekday:'long'});
+    let uit=`<div class="tk-dag${laat?' laat':''}${ds===vandaag?' vandaag':''}">
+      <span class="tk-dag-num">${num}</span><span class="tk-dag-rest">${rest}</span></div>`;
+
+    const perGroep={};
+    perDag[ds].forEach(r=>{
+      const t=TAKEN.find(x=>x.id===r.taak_id);
+      const g=taakGroepLabel(t);
+      (perGroep[g]=perGroep[g]||[]).push(r);
+    });
+    Object.keys(perGroep).sort().forEach(g=>{
+      uit+=`<div class="tk-rolkop">${g}</div>`;
+      uit+=perGroep[g].sort((a,b)=>{
+        const ta=TAKEN.find(x=>x.id===a.taak_id),tb=TAKEN.find(x=>x.id===b.taak_id);
+        return (ta?ta.titel:'').localeCompare(tb?tb.titel:'');
+      }).map(r=>taakDagRij(r,laat)).join('');
+    });
+    return uit;
+  }).join('');
+}
+
+function taakDagRij(r,laat){
+  const t=TAKEN.find(x=>x.id===r.taak_id);
+  if(!t)return '';
+  const wie=TAAK_TOEWIJZING.filter(x=>x.taak_id===t.id).map(x=>taakNaam(x.gebruiker_id));
+  let stand='';
+  if(r.status==='afgevinkt')stand=`<span class="tk-bdg wacht">wacht op jou</span> ${veiligTekst(taakNaam(r.afgevinkt_door))}`;
+  else if(r.status==='goedgekeurd')stand='<span class="tk-bdg ok">goedgekeurd</span>';
+  else if(laat)stand='<span class="tk-bdg laat">niet gedaan</span>';
+  else stand='<span style="color:var(--muted)">open</span>';
+  const hh=herhaalTekst(t);
+  return`<div class="tk${laat&&r.status==='open'?' laat':''}">
+    <div class="tk-tekst">
+      <div class="tk-naam">${veiligTekst(t.titel)}</div>
+      <div class="tk-meta">${stand}${wie.length?' · alleen '+veiligTekst(wie.join(', ')):''}${hh?' · '+hh:''}</div>
+    </div>
+    <div class="tk-knoppen">
+      ${r.status==='afgevinkt'?`<button class="tk-kn ja" onclick="keurTaak('${r.id}','goedgekeurd')" title="Goedkeuren">&#10003;</button>
+      <button class="tk-kn nee" onclick="keurTaak('${r.id}','afgekeurd')" title="Afkeuren">&#10005;</button>`
+      :`<button class="tk-kn" onclick="openTaakModal('${t.id}')">Bewerk</button>`}
+    </div>
+  </div>`;
+}
+
+function takenOpNaamHtml(eigen){
+  if(!eigen.length)return '<div style="font-size:12.5px;color:var(--muted);font-style:italic">Nog geen taken.</div>';
+  const perGroep={};
+  eigen.forEach(t=>{const g=taakGroepLabel(t);(perGroep[g]=perGroep[g]||[]).push(t);});
+  return Object.keys(perGroep).sort().map(g=>
+    `<div class="tk-rolkop">${g}</div>`+perGroep[g].map(t=>{
+      const wie=TAAK_TOEWIJZING.filter(x=>x.taak_id===t.id).map(x=>taakNaam(x.gebruiker_id));
+      const hh=herhaalTekst(t)||'eenmalig op '+parseDate(t.start_op).toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+      return`<div class="tk${t.actief?'':' af'}">
+        <div class="tk-tekst">
+          <div class="tk-naam">${veiligTekst(t.titel)}</div>
+          <div class="tk-meta">${hh}${wie.length?' · alleen '+veiligTekst(wie.join(', ')):''}${t.actief?'':' · uitgezet'}</div>
+        </div>
+        <div class="tk-knoppen">
+          <button class="tk-kn" onclick="openTaakModal('${t.id}')">Bewerk</button>
+          <button class="tk-kn nee" onclick="verwijderTaak('${t.id}')">&#10005;</button>
+        </div>
+      </div>`;
+    }).join('')
+  ).join('');
 }
 
 async function keurTaak(regelId,status){
