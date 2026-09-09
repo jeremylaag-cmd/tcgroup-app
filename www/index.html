@@ -3141,15 +3141,17 @@ async function initApp(user){
     ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   }else{
     zetKlokkaartenTerug();
-    const extraTab=isFullTimer
+    // Full-timers staan vast ingepland en melden zich niet aan voor open
+    // klussen; zij hebben aan het rooster meer. Part-timers houden Open klussen,
+    // want dat is voor hen juist de manier om aan werk te komen.
+    const laatsteTab=isFullTimer
       ?`<button class="htab" onclick="showPage('rooster',this)">Rooster</button>`
-      :'';
+      :`<button class="htab" onclick="showPage('open-klussen',this)">Open klussen</button>`;
     tabs.innerHTML=`
       <button class="htab active" onclick="showPage('beschikbaarheid',this)">Mijn schema</button>
       <button class="htab" onclick="showPage('uren',this)">Uren</button>
       ${isFullTimer?`<button class="htab" onclick="showPage('taken',this)">Taken</button>`:''}
-      <button class="htab" onclick="showPage('open-klussen',this)">Open klussen</button>
-      ${extraTab}`;
+      ${laatsteTab}`;
     ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   }
 
@@ -3186,7 +3188,7 @@ async function initApp(user){
         bnavItem('beschikbaarheid','Mijn schema',ico.rooster,true)+
         bnavItem('uren','Uren',ico.uren)+
         bnavItem('taken','Taken',ico.taken)+
-        bnavItem('open-klussen','Klussen',ico.schema)+
+        bnavItem('rooster','Rooster',ico.schema)+
         bnavItem('profiel','Profiel',ico.profiel);
     }else{
       // Part-timer
