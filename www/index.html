@@ -4572,7 +4572,7 @@ function renderAll(){
     const dsEind=k.datum_eind?parseDate(k.datum_eind).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}):'';
     const datumStr=dsEind&&dsEind!==ds?`${ds} – ${dsEind}`:ds;
     const tB=k.trucks.map(t=>`<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${t.label}</span>`).join('');
-    const t1=tijdFromDb(k.vertrek_tijd),t4=tijdFromDb(k.einde_feest);
+    const t1=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd),t4=tijdFromDb(k.einde_feest);
     const tijdStr=t1&&t4?`${t1} → ${t4}`:t1||t4||'';
     const vastBadge=(k.is_optie?'<span class="bdg optie-bdg">Optie</span>':'')
       +(k.categorie==='franklins'
@@ -4622,7 +4622,7 @@ function openPlan(type,id){
     if(!kw.length)return`<div class="plan-week"><div class="plan-week-label">${label}</div><div class="plan-empty">Geen klussen gepland</div></div>`;
     return`<div class="plan-week"><div class="plan-week-label">${label}</div>${kw.map(k=>{
       const ds=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
-      const t1=tijdFromDb(k.vertrek_tijd),t4=tijdFromDb(k.einde_feest);
+      const t1=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd),t4=tijdFromDb(k.einde_feest);
       const tijden=t1&&t4?`${t1} → ${t4}`:t1||t4||'';
       return`<div class="plan-klus" style="border-left-color:${accent}" onclick="openDetail('${k.id}')">
         <div class="plan-klus-date">${ds}${tijden?` · ${tijden}`:''}</div>
@@ -9036,7 +9036,9 @@ function mmMijnShift(k){
 function mmTijden(k){
   const sh=mmMijnShift(k);
   if(sh)return{van:sh.start_tijd,tot:sh.eind_tijd,naam:sh.naam||'',shift:true};
-  return{van:k.vertrek_tijd||k.start_tijd||k.start_opbouw,
+  // De starttijd is wanneer je begint; vertrek is pas wanneer de auto weggaat.
+  // Op je eigen overzicht wil je het eerste zien, niet het tweede.
+  return{van:k.start_tijd||k.vertrek_tijd||k.start_opbouw,
          tot:k.einde_klus||k.einde_feest,naam:'',shift:false};
 }
 function mmUren(k){
