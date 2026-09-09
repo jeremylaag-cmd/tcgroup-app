@@ -2346,8 +2346,9 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div style="display:flex;flex-wrap:wrap;gap:6px" id="tkRollen">
         <div class="chip on" data-rol="hal" onclick="tkWisselRol(this)">Hal</div>
         <div class="chip" data-rol="full-timer" onclick="tkWisselRol(this)">Full-timers</div>
+        <div class="chip" data-rol="manager-franklins" onclick="tkWisselRol(this)">Manager Franklins</div>
       </div>
-      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:5px">Hal en full-timers krijgen elk hun eigen taken. Allebei aanzetten mag ook.</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:5px">Elke groep krijgt zijn eigen taken. Meerdere groepen aanzetten mag ook.</div>
     </div>
 
     <div class="fr"><span class="fl">Alleen voor deze personen <span style="color:var(--muted);font-weight:400">(optioneel)</span></span>
@@ -3088,7 +3089,10 @@ async function initApp(user){
   const isHal=CURRENT_ROL==='hal';
   const isFullTimer=CURRENT_ROL==='full-timer';
   const isPartTimer=CURRENT_ROL==='part-timer';
-  const isPersoneel=isHal||isFullTimer||isPartTimer;
+  // De manager Franklins heeft dezelfde rechten als een full-timer, maar geen
+  // rooster; zij werkt vanuit de Franklins-diensten.
+  const isManagerFr=CURRENT_ROL==='manager-franklins';
+  const isPersoneel=isHal||isFullTimer||isPartTimer||isManagerFr;
 
   // SVG iconen herbruikbaar
   const ico={
@@ -3142,15 +3146,17 @@ async function initApp(user){
   }else{
     zetKlokkaartenTerug();
     // Full-timers staan vast ingepland en melden zich niet aan voor open
-    // klussen; zij hebben aan het rooster meer. Part-timers houden Open klussen,
-    // want dat is voor hen juist de manier om aan werk te komen.
+    // klussen; zij hebben aan het rooster meer. Part-timers en de manager
+    // Franklins houden Open klussen — voor hen is dat juist de manier om aan
+    // werk te komen. Zij ziet daar alleen de Franklins-diensten; dat filtert de
+    // database, niet dit scherm.
     const laatsteTab=isFullTimer
       ?`<button class="htab" onclick="showPage('rooster',this)">Rooster</button>`
-      :`<button class="htab" onclick="showPage('open-klussen',this)">Open klussen</button>`;
+      :`<button class="htab" onclick="showPage('open-klussen',this)">${isManagerFr?'Franklins':'Open klussen'}</button>`;
     tabs.innerHTML=`
       <button class="htab active" onclick="showPage('beschikbaarheid',this)">Mijn schema</button>
       <button class="htab" onclick="showPage('uren',this)">Uren</button>
-      ${isFullTimer?`<button class="htab" onclick="showPage('taken',this)">Taken</button>`:''}
+      ${(isFullTimer||isManagerFr)?`<button class="htab" onclick="showPage('taken',this)">Taken</button>`:''}
       ${laatsteTab}`;
     ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   }
@@ -3189,6 +3195,13 @@ async function initApp(user){
         bnavItem('uren','Uren',ico.uren)+
         bnavItem('taken','Taken',ico.taken)+
         bnavItem('rooster','Rooster',ico.schema)+
+        bnavItem('profiel','Profiel',ico.profiel);
+    }else if(isManagerFr){
+      bn.innerHTML=
+        bnavItem('beschikbaarheid','Mijn schema',ico.rooster,true)+
+        bnavItem('uren','Uren',ico.uren)+
+        bnavItem('taken','Taken',ico.taken)+
+        bnavItem('open-klussen','Franklins',ico.schema)+
         bnavItem('profiel','Profiel',ico.profiel);
     }else{
       // Part-timer
@@ -3584,6 +3597,7 @@ function renderAanmeldingen(){
             <option value="part-timer">Part-timer</option>
             <option value="full-timer">Full-timer</option>
             <option value="hal">Hal medewerker</option>
+            <option value="manager-franklins">Manager Franklins</option>
             <option value="personeel">Personeel</option>
             <option value="beheerder">Beheerder</option>
           </select>
@@ -3661,7 +3675,7 @@ let accRol='';
 let accSkills=new Set();
 let ACCOUNTS_ZICHTBAAR=[];
 
-const ACC_ROLLEN=['beheerder','full-timer','hal','part-timer','personeel'];
+const ACC_ROLLEN=['beheerder','full-timer','hal','manager-franklins','part-timer','personeel'];
 
 function accSkillIdsVan(u){
   try{
@@ -3739,7 +3753,7 @@ function renderAccountFilters(zoektPast,rolPast,skillsPassen,rolLabels,aantalNu)
 function renderAccounts(){
   const acc=document.getElementById('accList');
   if(!acc)return;
-  const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','personeel':'Personeel'};
+  const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','manager-franklins':'Manager Franklins','personeel':'Personeel'};
   const zoek=(document.getElementById('accZoek')?.value||'').trim().toLowerCase();
 
   const skillNamenVan=u=>{
@@ -3826,7 +3840,7 @@ async function exportPersoneel(){
     }
 
     const skillNaam=Object.fromEntries((skillsData||[]).map(s=>[s.id,s.naam]));
-    const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','personeel':'Personeel'};
+    const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','manager-franklins':'Manager Franklins','personeel':'Personeel'};
 
     const geslachtLabel={'man':'Man','vrouw':'Vrouw','anders':'Anders','zeg-ik-liever-niet':'Zegt het liever niet'};
     const contractLabel={'oproep':'Oproepkracht','bepaalde-tijd':'Bepaalde tijd','onbepaalde-tijd':'Onbepaalde tijd','stage':'Stage','zzp':'ZZP','vakantiekracht':'Vakantiekracht'};
@@ -3886,7 +3900,7 @@ let persDetailId=null;
 let PD=null;            // medewerker die nu open staat, met zijn gegevens
 let pdAgendaOffset=0;   // 0 = deze maand
 
-const PD_ROLLABEL={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','personeel':'Personeel'};
+const PD_ROLLABEL={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','manager-franklins':'Manager Franklins','personeel':'Personeel'};
 const PD_GESLACHT={'man':'Man','vrouw':'Vrouw','anders':'Anders','zeg-ik-liever-niet':'Zegt het liever niet'};
 const PD_CONTRACT={'oproep':'Oproepkracht','bepaalde-tijd':'Bepaalde tijd','onbepaalde-tijd':'Onbepaalde tijd','stage':'Stage','zzp':'ZZP','vakantiekracht':'Vakantiekracht'};
 const PD_MAANDEN=['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];
@@ -4160,6 +4174,7 @@ function pdRenderGegevens(){
          <option value="part-timer"${u.rol==='part-timer'?' selected':''}>Part-timer</option>
          <option value="full-timer"${u.rol==='full-timer'?' selected':''}>Full-timer</option>
          <option value="hal"${u.rol==='hal'?' selected':''}>Hal medewerker</option>
+         <option value="manager-franklins"${u.rol==='manager-franklins'?' selected':''}>Manager Franklins</option>
          <option value="beheerder"${u.rol==='beheerder'?' selected':''}>Beheerder</option>
        </select>
      </div>
@@ -9692,7 +9707,7 @@ let ALLE_BESCH=[];
 let VERLOF_CIJFERS=[];
 let PLUSMIN=[];
 
-function isVasteKracht(rol){return rol==='hal'||rol==='full-timer'||rol==='beheerder';}
+function isVasteKracht(rol){return rol==='hal'||rol==='full-timer'||rol==='beheerder'||rol==='manager-franklins';}
 function uur1(n){return (Math.round(Number(n||0)*10)/10).toFixed(1).replace('.',',');}
 
 // "84,0 u (10,5 d)"
@@ -10982,7 +10997,7 @@ const INTERN_START='08:00',INTERN_EIND='17:00';
 // Iedereen mag op een interne klus. Wie erop staat ziet hem ook, ongeacht zijn
 // rol; een part-timer die er niet op staat ziet hem nergens. Dat regelt de
 // database (mag_klus_zien).
-const INTERN_ROLLEN=['beheerder','full-timer','hal','part-timer','personeel'];
+const INTERN_ROLLEN=['beheerder','full-timer','hal','manager-franklins','part-timer','personeel'];
 
 function pbInternKlus(naam,d){
   const ds=pbFmt(d);
@@ -11230,7 +11245,7 @@ function pbRenderContent(){
 // Twee lagen: een taak beschrijft wat er moet gebeuren en hoe vaak hij
 // terugkomt, en per dag staat er een regel klaar die je afvinkt. De database
 // zet die regels zelf klaar, dus de app hoeft alleen te lezen en af te vinken.
-const TAAK_ROLLEN=['hal','full-timer'];
+const TAAK_ROLLEN=['hal','full-timer','manager-franklins'];
 let TAKEN=[], TAAKREGELS=[], TAAK_TOEWIJZING=[];
 
 function magTaken(rol){return TAAK_ROLLEN.indexOf(rol||CURRENT_ROL)>=0;}
@@ -12447,10 +12462,13 @@ function tekenTakenBeheer(){
 function takenWeergaveWissel(w){takenWeergave=w;tekenTakenBeheer();}
 
 // Groepslabel bij een taak: voor wie is hij bedoeld.
+const TAAK_GROEPNAAM={'hal':'Hal','full-timer':'Full-timers','manager-franklins':'Manager Franklins'};
+
 function taakGroepLabel(t){
-  const r=(t.rollen||[]).slice().sort();
-  if(r.length>1)return 'Hal en full-timers';
-  return r[0]==='full-timer'?'Full-timers':'Hal';
+  const r=(t.rollen||[]).slice().sort().map(x=>TAAK_GROEPNAAM[x]||x);
+  if(!r.length)return 'Iedereen';
+  if(r.length===1)return r[0];
+  return r.slice(0,-1).join(', ')+' en '+r[r.length-1].toLowerCase();
 }
 
 // Per dag, en binnen een dag per groep — zoals je een agenda leest. Een taak
