@@ -2413,7 +2413,10 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 
     <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.5rem" id="tkVoorbeeld"></div>
     <div class="warn-box" id="tkWarn"></div>
-    <div class="mfooter">
+    <div class="mfooter" style="flex-wrap:wrap;gap:8px">
+      <button class="btn-danger-sm" id="tkVerwijderKnop" style="display:none;padding:8px 14px;font-size:12px" onclick="verwijderTaak(taakBewerktId)">Verwijderen</button>
+      <button class="btn-ghost" id="tkStopKnop" style="display:none" onclick="taakActiefWissel(taakBewerktId)">Stopzetten</button>
+      <div style="flex:1"></div>
       <button class="btn-ghost" onclick="sluitTaakModal()">Annuleren</button>
       <button class="btn-sm" onclick="bewaarTaak()">Opslaan</button>
     </div>
@@ -12455,13 +12458,99 @@ function tekenTakenBeheer(){
     <div class="tk-schakel">
       <div class="chip${takenWeergave==='dag'?' on':''}" onclick="takenWeergaveWissel('dag')">Per dag</div>
       <div class="chip${takenWeergave==='lijst'?' on':''}" onclick="takenWeergaveWissel('lijst')">Op naam</div>
+      <div class="chip${takenWeergave==='gedaan'?' on':''}" onclick="takenWeergaveWissel('gedaan')">Gedaan</div>
     </div>`;
-  html+=takenWeergave==='dag'?takenPerDagHtml():takenOpNaamHtml(eigen);
+  html+=takenWeergave==='dag'?takenPerDagHtml()
+       :takenWeergave==='lijst'?takenOpNaamHtml(eigen)
+       :'<div id="taakHistorie"><div class="spin">Laden...</div></div>';
+
+  el.innerHTML=html;
+  if(takenWeergave==='gedaan')laadTaakHistorie();
+}
+
+function takenWeergaveWissel(w){takenWeergave=w;tekenTakenBeheer();}
+
+// ── TERUGKIJKEN: WAT IS ER GEDAAN ───────────────────────────────────────
+// De regels van afgeronde taken blijven bewaard, ook als de taak allang niet
+// meer terugkomt. Verwijder je een taak, dan gaat deze geschiedenis wél mee —
+// daarom vraagt de app daar apart naar.
+let taakHistorieDagen=30, TAAK_HISTORIE=[];
+
+async function laadTaakHistorie(){
+  const el=document.getElementById('taakHistorie');
+  if(!el)return;
+  const van=new Date(); van.setDate(van.getDate()-taakHistorieDagen);
+  const{data,error}=await sb.rpc('taken_historie',{p_van:fmt(van),p_tot:fmt(new Date())});
+  if(error){el.innerHTML='<div style="font-size:12.5px;color:var(--muted)">Geschiedenis kon niet geladen worden.</div>';return;}
+  TAAK_HISTORIE=data||[];
+  tekenTaakHistorie();
+}
+
+function taakHistoriePeriode(dagen){
+  taakHistorieDagen=dagen;
+  const el=document.getElementById('taakHistorie');
+  if(el)el.innerHTML='<div class="spin">Laden...</div>';
+  laadTaakHistorie();
+}
+
+function tekenTaakHistorie(){
+  const el=document.getElementById('taakHistorie');
+  if(!el)return;
+  const knop=(d,label)=>`<div class="chip${taakHistorieDagen===d?' on':''}" onclick="taakHistoriePeriode(${d})">${label}</div>`;
+  let html=`<div class="tk-schakel" style="margin-top:2px">
+      ${knop(30,'30 dagen')}${knop(90,'3 maanden')}${knop(365,'Dit jaar')}
+      <div class="chip" onclick="exportTaakHistorie()">Downloaden</div>
+    </div>`;
+
+  if(!TAAK_HISTORIE.length){
+    el.innerHTML=html+'<div style="font-size:12.5px;color:var(--muted);font-style:italic">Nog niets afgevinkt in deze periode.</div>';
+    return;
+  }
+
+  const klaar=TAAK_HISTORIE.filter(r=>r.status==='goedgekeurd').length;
+  const wacht=TAAK_HISTORIE.length-klaar;
+  html+=`<div style="font-size:12px;color:var(--muted);margin:0 0 8px">${klaar} goedgekeurd${wacht?` · ${wacht} nog te beoordelen`:''}</div>`;
+
+  const perDag={};
+  TAAK_HISTORIE.forEach(r=>{(perDag[r.datum]=perDag[r.datum]||[]).push(r);});
+
+  html+=Object.keys(perDag).sort().reverse().map(ds=>{
+    const d=parseDate(ds);
+    const kop=`<div class="tk-dag"><span class="tk-dag-num">${d.toLocaleDateString('nl-NL',{day:'numeric',month:'short'})}</span>`
+      +`<span class="tk-dag-rest">${d.toLocaleDateString('nl-NL',{weekday:'long'})}</span></div>`;
+    return kop+perDag[ds].map(r=>{
+      const groep=taakGroepLabel({rollen:r.groep});
+      const wie=r.afgevinkt_door?veiligTekst(r.afgevinkt_door):'onbekend';
+      const wanneer=r.afgevinkt_op?tijdVan(r.afgevinkt_op):'';
+      const door=r.beoordeeld_door
+        ?`goedgekeurd door ${veiligTekst(r.beoordeeld_door)}`
+        :'<span style="color:#B45309">nog niet beoordeeld</span>';
+      return`<div class="tk">
+        <div class="tk-tekst">
+          <div class="tk-naam">${veiligTekst(r.titel)}</div>
+          <div class="tk-meta">Afgevinkt door <b>${wie}</b>${wanneer?' om '+wanneer:''} · ${door} · ${groep}${r.opmerking?' · '+veiligTekst(r.opmerking):''}</div>
+        </div>
+      </div>`;
+    }).join('');
+  }).join('');
 
   el.innerHTML=html;
 }
 
-function takenWeergaveWissel(w){takenWeergave=w;tekenTakenBeheer();}
+async function exportTaakHistorie(){
+  if(!TAAK_HISTORIE.length){toast('Niets te downloaden','fout');return;}
+  const rijen=[['Datum','Taak','Voor wie','Afgevinkt door','Afgevinkt op','Status','Goedgekeurd door','Goedgekeurd op','Opmerking']];
+  TAAK_HISTORIE.forEach(r=>rijen.push([
+    r.datum, r.titel, taakGroepLabel({rollen:r.groep}),
+    r.afgevinkt_door||'', r.afgevinkt_op?new Date(r.afgevinkt_op).toLocaleString('nl-NL'):'',
+    r.status==='goedgekeurd'?'Goedgekeurd':'Wacht op goedkeuring',
+    r.beoordeeld_door||'', r.beoordeeld_op?new Date(r.beoordeeld_op).toLocaleString('nl-NL'):'',
+    r.opmerking||'',
+  ]));
+  const csv='\ufeff'+rijen.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(';')).join('\r\n');
+  const gelukt=await bewaarCsv('taken_'+fmt(new Date())+'.csv',csv);
+  if(gelukt)toast(TAAK_HISTORIE.length+' regels geëxporteerd');
+}
 
 // Groepslabel bij een taak: voor wie is hij bedoeld.
 const TAAK_GROEPNAAM={'hal':'Hal','full-timer':'Full-timers','manager-franklins':'Manager Franklins'};
@@ -12721,6 +12810,14 @@ function openTaakModal(id){
   document.getElementById('tkStart').value=t?t.start_op:fmt(new Date());
   document.getElementById('tkEind').value=t&&t.eind_op?t.eind_op:'';
   document.getElementById('tkWarn').className='warn-box';
+  // Verwijderen en stopzetten kan alleen bij een taak die al bestaat.
+  const vk=document.getElementById('tkVerwijderKnop');
+  const sk=document.getElementById('tkStopKnop');
+  if(vk)vk.style.display=t?'':'none';
+  if(sk){
+    sk.style.display=t?'':'none';
+    sk.textContent=(t&&!t.actief)?'Weer aanzetten':'Stopzetten';
+  }
   tkToonVelden();
   document.getElementById('taakOverlay').classList.add('open');
 }
@@ -12777,12 +12874,34 @@ async function bewaarTaak(){
   toast(taakBewerktId?'Taak bijgewerkt':'Taak toegevoegd');
 }
 
+// Stopzetten laat de taak staan maar zet hem uit: hij komt niet meer terug op
+// nieuwe dagen, en alles wat er al gedaan is blijft in de geschiedenis staan.
+async function taakActiefWissel(id){
+  const t=TAKEN.find(x=>x.id===id);
+  if(!t)return;
+  const aan=!t.actief;
+  const{error}=await sb.from('taken').update({actief:aan}).eq('id',id);
+  if(error){toast('Mislukt: '+error.message,'fout');return;}
+  sluitTaakModal();
+  await loadTakenBeheer();
+  toast(aan?'Taak staat weer aan':'Taak stopgezet — de geschiedenis blijft bewaard');
+}
+
 async function verwijderTaak(id){
   const t=TAKEN.find(x=>x.id===id);
   if(!t)return;
-  if(!confirm(`"${t.titel}" weghalen? Alles wat er al is afgevinkt verdwijnt dan ook.`))return;
+  let gedaan=0;
+  try{
+    const{data}=await sb.rpc('taak_historie_aantal',{p_taak:id});
+    gedaan=Number(data)||0;
+  }catch(e){}
+  const waarschuwing=gedaan
+    ? `"${t.titel}" is ${gedaan} keer afgevinkt. Verwijderen wist die geschiedenis ook — je kunt dan niet meer terugkijken wie het heeft gedaan.\n\nWil je hem alleen stopzetten, klik dan op Annuleren en gebruik de knop Stopzetten.\n\nToch definitief verwijderen?`
+    : `"${t.titel}" verwijderen?`;
+  if(!confirm(waarschuwing))return;
   const{error}=await sb.from('taken').delete().eq('id',id);
   if(error){toast('Weghalen mislukt: '+error.message,'fout');return;}
+  sluitTaakModal();
   await loadTakenBeheer();
   toast('Taak weggehaald');
 }
