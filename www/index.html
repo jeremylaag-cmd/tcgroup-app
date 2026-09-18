@@ -288,6 +288,10 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 
 /* Klus modal */
 .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:200;align-items:center;justify-content:center}
+/* Het klusvenster staat op 300. Een kaartje dat je daar vanuit opent hoort er
+   dus bovenop, anders verdwijnt het erachter. */
+#mwKaartOverlay{z-index:420}
+#persDetailOverlay{z-index:400}
 .modal-overlay.open{display:flex}
 .modal{background:var(--surface);border-radius:14px;border:1px solid var(--border);padding:1.5rem;width:560px;max-width:95vw;max-height:90vh;overflow-y:auto}
 .modal-title{font-size:15px;font-weight:600;margin-bottom:1.25rem}
@@ -454,6 +458,17 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .besch-item.wacht{border-left-color:#F59E0B}
 .mw-knop{cursor:pointer;border-bottom:1px dotted var(--muted)}
 .mw-knop:hover{color:#2563EB;border-bottom-color:#2563EB}
+.kp-groep{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 2px}
+.kp-groep:first-child{margin-top:0}
+.kp-rij{display:flex;align-items:center;gap:11px;padding:9px 2px;border-bottom:1px solid var(--border);cursor:pointer}
+.kp-rij:hover{background:var(--bg)}
+.kp-av{width:34px;height:34px;border-radius:50%;background:var(--text);color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+.kp-mid{flex:1;min-width:0}
+.kp-naam{font-size:14px;font-weight:500;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kp-rol{font-size:11.5px;color:var(--muted);margin-top:1px}
+.kp-tel{flex-shrink:0;font-size:13.5px;color:#2563EB;text-decoration:none;font-weight:500}
+.kp-geen{flex-shrink:0;font-size:11px;color:var(--muted);font-style:italic}
+.kp-leeg{font-size:12.5px;color:var(--muted);font-style:italic;padding:6px 0}
 .besch-item.goedgekeurd{border-left-color:#059669}
 .besch-item.afgewezen{border-left-color:#DC2626;opacity:.7}
 .besch-info{flex:1;min-width:0}
@@ -1330,33 +1345,14 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
             <button class="btn-ghost" style="padding:5px 11px;font-size:12px" onclick="logExport()">Exporteren</button>
           </div>
           <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
-            Alles wat er verandert staat hier: wie een klus aanmaakte, wie verlof aanvroeg,
-            wie uren aanpaste. Alleen jij ziet dit. Het logboek wordt na achttien maanden
-            automatisch opgeschoond.
+            De laatste wijzigingen, nieuwste bovenaan. Alleen jij ziet dit.
           </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.875rem">
-            <div style="flex:1;min-width:130px">
-              <div class="slabel" style="margin-bottom:3px">Van</div>
-              <input type="date" id="logVan" onchange="laadLogboek()" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
-            </div>
-            <div style="flex:1;min-width:130px">
-              <div class="slabel" style="margin-bottom:3px">Tot en met</div>
-              <input type="date" id="logTot" onchange="laadLogboek()" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
-            </div>
-            <div style="flex:1;min-width:150px">
-              <div class="slabel" style="margin-bottom:3px">Soort</div>
-              <select id="logSoort" onchange="laadLogboek()" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"><option value="">Alles</option></select>
-            </div>
-            <div style="flex:1;min-width:150px">
-              <div class="slabel" style="margin-bottom:3px">Wie</div>
-              <select id="logWie" onchange="laadLogboek()" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"><option value="">Iedereen</option></select>
-            </div>
-            <div style="flex:2;min-width:170px">
-              <div class="slabel" style="margin-bottom:3px">Zoeken</div>
-              <input type="search" id="logZoek" placeholder="bv. een klusnaam" oninput="logZoekLater()" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
-            </div>
-          </div>
+          <input type="search" id="logZoek" placeholder="Zoeken op naam, klus of wat er veranderde..." oninput="logZoekLater()"
+            style="width:100%;font-size:13px;padding:9px 11px;border:1px solid var(--border);border-radius:9px;font-family:var(--font);background:var(--surface);color:var(--text);margin-bottom:.875rem">
           <div id="logLijst"><div class="spin">Laden...</div></div>
+          <div id="logMeerWrap" style="display:none;text-align:center;margin-top:.875rem">
+            <button class="btn-ghost" style="padding:7px 16px;font-size:12px" onclick="logMeer()">Meer laden</button>
+          </div>
         </div>
 
         <div class="bc" id="zonesCard" style="grid-column:1/-1">
@@ -2563,7 +2559,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="detail-section" id="detailAdresSection"><div class="detail-label">Adres</div><div class="detail-value" id="detailAdres"></div></div>
       <div class="detail-section" id="detailContactSection"><div class="detail-label">Contactpersoon</div><div class="detail-value" id="detailContact"></div><div id="detailTelefoon" style="margin-top:3px"></div></div>
       <div class="detail-section" id="detailPersSection"><div class="detail-label">Personeel</div><div class="detail-value" id="detailPers"></div></div>
-      <div class="detail-section" id="detailTelSection" style="display:none"><div class="detail-label">Bellen met je collega's</div><div id="detailCollegaTel"></div></div>
+      <div class="detail-section" id="detailTelSection" style="display:none"><div class="detail-label">Wie staat erop</div><div id="detailCollegaTel"></div></div>
       <div class="detail-section" id="detailRitSection" style="display:none">
         <div class="detail-label" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
           <span>Rijschema</span>
@@ -5807,7 +5803,7 @@ function openDetail(id){
   MW_KLUS_LOS=(k.losse||[]);
   const alleNamen=k.personeel.map(p=>persNaamKnop(p)).concat((k.losse||[]).map(l=>losNaamKnop(l)));
   const ps=document.getElementById('detailPersSection');
-  ps.style.display=(alleNamen.length||(k.shifts||[]).length)?'':'none';
+  ps.style.display='none';   // staat nu volledig in het tabblad Personeel
   const persEl=document.getElementById('detailPers');
   if((k.shifts||[]).length){
     const blokken=k.shifts.map(sh=>{
@@ -5857,7 +5853,7 @@ function closeDetail(){document.getElementById('detailOverlay').classList.remove
 // ze vult schrijft dus nog steeds naar dezelfde elementen.
 const DETAIL_TABS=[
   {id:'overzicht',naam:'Overzicht',secties:['detailKopBlok','detailTruckSection','detailSoortSection','detailPersonenSection','detailAdresSection','detailContactSection','detailNotitieSection']},
-  {id:'personeel',naam:'Personeel',secties:['detailPersSection','detailTelSection']},
+  {id:'personeel',naam:'Personeel',secties:['detailTelSection']},
   {id:'rijschema',naam:'Rijschema',secties:['detailRitSection']},
   {id:'uren',naam:'Uren',secties:['detailLoonSection','detailUrenSection']},
   {id:'bijlagen',naam:'Bijlagen',secties:['detailPdfSection']},
@@ -6436,35 +6432,82 @@ async function laadCollegaTelefoons(k){
   const lijst=document.getElementById('detailCollegaTel');
   if(!vak||!lijst)return;
   detailTelKlus=k.id;
-  vak.style.display='none';
-  lijst.innerHTML='';
+
+  // Eerst neerzetten wie erop staat — dat weten we al. De nummers komen
+  // daarna uit de database en schuiven er dan in.
+  KP_KLUS=k;
+  KP_TEL={};
+  tekenKlusPersoneel();
 
   const{data,error}=await sb.rpc('collega_telefoons',{k:k.id});
-  // Ondertussen een andere klus geopend? Dan hoort dit antwoord er niet meer bij.
-  if(detailTelKlus!==k.id)return;
+  if(detailTelKlus!==k.id)return;          // ondertussen een andere klus geopend
   if(error){console.warn('Telefoonnummers ophalen mislukt:',error);return;}
   COLLEGA_TEL=data||[];
+  KP_TEL=Object.fromEntries((data||[]).map(r=>[r.id,r.telefoon]));
+  tekenKlusPersoneel();
+}
+
+let KP_KLUS=null;
+let KP_TEL={};
+
+function kpInitialen(naam){
+  return String(naam||'?').split(' ').filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase()||'?';
+}
+
+// Eén rij: wie het is, wat hij doet, en het nummer om te bellen. De hele rij
+// opent het kaartje; op het nummer tikken belt meteen.
+function kpRij(r){
+  const nr=telSchoon(r.telefoon);
+  const tel=nr
+    ? `<a class="kp-tel" href="tel:${nr}" onclick="event.stopPropagation()">${veiligTekst(r.telefoon)}</a>`
+    : '<span class="kp-geen">geen nummer</span>';
+  return `<div class="kp-rij" onclick="${r.los?`openLosKaart('${r.id}')`:`openMwKaart('${r.id}')`}">
+    <div class="kp-av">${veiligTekst(kpInitialen(r.naam))}</div>
+    <div class="kp-mid">
+      <div class="kp-naam">${veiligTekst(r.naam)}${r.ikzelf?' <span style="font-weight:400;color:var(--muted)">(jij)</span>':''}</div>
+      <div class="kp-rol">${veiligTekst(r.rol)}</div>
+    </div>
+    ${tel}
+  </div>`;
+}
+
+function tekenKlusPersoneel(){
+  const vak=document.getElementById('detailTelSection');
+  const lijst=document.getElementById('detailCollegaTel');
+  const k=KP_KLUS;
+  if(!vak||!lijst||!k)return;
 
   const mij=CURRENT_USER?CURRENT_USER.id:null;
-  const rijen=(data||[])
-    .filter(p=>p.id!==mij)
-    .map(p=>({naam:p.naam,rol:PD_ROLLABEL[p.rol]||p.rol||'',telefoon:p.telefoon}))
-    .concat((k.losse||[]).filter(l=>l.telefoon).map(l=>({naam:l.naam,rol:'Losse kracht',telefoon:l.telefoon})));
+  const maak=(p)=>({id:p.id,naam:p.naam,rol:PD_ROLLABEL[p.rol]||p.rol||'',
+                    telefoon:KP_TEL[p.id]||null,ikzelf:p.id===mij,los:false,shift_id:p.shift_id||null});
+  const maakLos=(l)=>({id:l.id,naam:l.naam,rol:'Losse kracht',telefoon:l.telefoon||null,
+                       ikzelf:false,los:true,shift_id:l.shift_id||null});
 
-  if(!rijen.length)return;
+  const iedereen=(k.personeel||[]).map(maak).concat((k.losse||[]).map(maakLos));
+  if(!iedereen.length&&!(k.shifts||[]).length){vak.style.display='none';return;}
   vak.style.display='';
-  lijst.innerHTML=rijen.map(p=>{
-    const nr=telSchoon(p.telefoon);
-    return`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-bottom:1px solid var(--border)">
-      <div style="min-width:0">
-        <div style="font-size:13px;font-weight:500;color:var(--text)">${veiligTekst(p.naam)}</div>
-        <div style="font-size:11px;color:var(--muted)">${veiligTekst(p.rol)}</div>
-      </div>
-      ${nr
-        ?`<a href="tel:${nr}" style="flex-shrink:0;font-size:13px;color:#2563EB;text-decoration:none;font-weight:500">${veiligTekst(p.telefoon)}</a>`
-        :'<span style="flex-shrink:0;font-size:11px;color:var(--muted);font-style:italic">geen nummer bekend</span>'}
-    </div>`;
-  }).join('');
+
+  // Heeft de klus shifts, dan zetten we de mensen daaronder; anders gewoon
+  // één lijst op naam.
+  if((k.shifts||[]).length){
+    const blokken=k.shifts.map(sh=>{
+      const wie=iedereen.filter(r=>r.shift_id===sh.id).sort((a,b)=>String(a.naam).localeCompare(String(b.naam)));
+      const tijd=[tijdFromDb(sh.start_tijd),tijdFromDb(sh.eind_tijd)].filter(Boolean).join(' – ');
+      const nodig=sh.personeel_nodig||0;
+      const tekort=Math.max(0,nodig-wie.length);
+      return `<div class="kp-groep">${veiligTekst(sh.naam||'Shift')}${tijd?' &middot; '+veiligTekst(tijd):''}`
+        +(nodig?` &middot; ${wie.length} van ${nodig}`:'')
+        +(tekort?` <span style="color:#B45309">nog ${tekort} nodig</span>`:'')
+        +`</div>`
+        +(wie.length?wie.map(kpRij).join(''):'<div class="kp-leeg">nog niemand ingedeeld</div>');
+    }).join('');
+    const rest=iedereen.filter(r=>!r.shift_id).sort((a,b)=>String(a.naam).localeCompare(String(b.naam)));
+    lijst.innerHTML=blokken+(rest.length
+      ?`<div class="kp-groep">Hele klus</div>`+rest.map(kpRij).join('')
+      :'');
+  }else{
+    lijst.innerHTML=iedereen.sort((a,b)=>String(a.naam).localeCompare(String(b.naam))).map(kpRij).join('');
+  }
 }
 
 // ── MEDEDELINGEN ──
@@ -9094,20 +9137,20 @@ async function openUrenFoto(pad){
 
 // ── LOGBOEK ─────────────────────────────────────────────────────────────
 // Elke wijziging in de database wordt door een trigger vastgelegd. Dit scherm
-// leest dat terug, en alleen de hoofdbeheerder krijgt er antwoord op — dat
-// bewaakt de database zelf, niet dit scherm.
+// toont ze op volgorde, nieuwste bovenaan, met een zoekveld en een export.
+// Alleen de hoofdbeheerder krijgt antwoord — dat bewaakt de database zelf.
 let LOG_REGELS=[];
+let LOG_LIMIET=150;
 let logZoekTimer=null;
 
 function logZoekLater(){
   clearTimeout(logZoekTimer);
-  logZoekTimer=setTimeout(laadLogboek,400);
+  logZoekTimer=setTimeout(()=>{LOG_LIMIET=150;laadLogboek();},400);
 }
 
-function logDatumStandaard(){
-  const van=document.getElementById('logVan'), tot=document.getElementById('logTot');
-  if(van&&!van.value){const d=new Date();d.setDate(d.getDate()-30);van.value=fmt(d);}
-  if(tot&&!tot.value)tot.value=fmt(new Date());
+function logMeer(){
+  LOG_LIMIET+=250;
+  laadLogboek();
 }
 
 async function laadLogboek(){
@@ -9116,20 +9159,18 @@ async function laadLogboek(){
   if(!kaart||!lijst)return;
   if(!isAdmin()){kaart.style.display='none';return;}
   kaart.style.display='';
-  logDatumStandaard();
 
-  const van=document.getElementById('logVan').value;
-  const tot=document.getElementById('logTot').value;
-  const soort=document.getElementById('logSoort').value||null;
-  const wie=document.getElementById('logWie').value||null;
   const zoek=(document.getElementById('logZoek').value||'').trim()||null;
+  if(!LOG_REGELS.length)lijst.innerHTML='<div class="spin">Laden...</div>';
 
-  lijst.innerHTML='<div class="spin">Laden...</div>';
-  const totEind=tot?new Date(tot+'T23:59:59'):new Date();
+  // Geen periode meer: we pakken gewoon de laatste wijzigingen. Vijf jaar
+  // terug is ruim genoeg, het logboek wordt na achttien maanden opgeschoond.
+  const van=new Date(); van.setFullYear(van.getFullYear()-5);
+  const tot=new Date(); tot.setDate(tot.getDate()+1);
+
   const{data,error}=await sb.rpc('auditlog_lezen',{
-    p_van:van?new Date(van+'T00:00:00').toISOString():null,
-    p_tot:totEind.toISOString(),
-    p_wie:wie, p_tabel:soort, p_zoek:zoek, p_limiet:400,
+    p_van:van.toISOString(), p_tot:tot.toISOString(),
+    p_wie:null, p_tabel:null, p_zoek:zoek, p_limiet:LOG_LIMIET,
   });
 
   if(error){
@@ -9140,98 +9181,98 @@ async function laadLogboek(){
         ?'Het logboek staat nog niet aan in de database. Voer eerst het script <b>01-logboek.sql</b> uit in Supabase; daarna verschijnt hier vanzelf alles wat er verandert.'
         :'Logboek ophalen mislukt: '+veiligTekst(error.message)}
     </div>`;
+    document.getElementById('logMeerWrap').style.display='none';
     return;
   }
 
   LOG_REGELS=data||[];
-  vulLogFilters();
   tekenLogboek();
-}
-
-// De keuzelijsten vullen zich met wat er daadwerkelijk in het logboek staat.
-async function vulLogFilters(){
-  const wieSel=document.getElementById('logWie');
-  if(wieSel&&wieSel.options.length<=1){
-    const namen=[...new Map((PERSONEEL||[]).map(p=>[p.id,p.naam])).entries()]
-      .sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
-    wieSel.innerHTML='<option value="">Iedereen</option>'+
-      namen.map(([id,naam])=>`<option value="${id}">${veiligTekst(naam)}</option>`).join('');
-  }
-  const soortSel=document.getElementById('logSoort');
-  if(soortSel&&soortSel.options.length<=1){
-    const{data}=await sb.rpc('auditlog_soorten');
-    if(data&&data.length){
-      soortSel.innerHTML='<option value="">Alles</option>'+
-        data.map(r=>`<option value="${veiligTekst(r.tabel)}">${veiligTekst(r.onderdeel||r.tabel)} (${r.aantal})</option>`).join('');
-    }
-  }
 }
 
 function logWanneer(op){
   const d=new Date(op);
-  const vandaag=fmt(new Date())===fmt(d);
+  const vandaag=fmt(new Date());
+  const gisteren=new Date(); gisteren.setDate(gisteren.getDate()-1);
   const tijd=d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
-  return vandaag?('vandaag '+tijd)
-    :d.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'})+' '+tijd;
+  if(fmt(d)===vandaag)return 'Vandaag '+tijd;
+  if(fmt(d)===fmt(gisteren))return 'Gisteren '+tijd;
+  return d.toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'})+' '+tijd;
 }
 
 const LOG_KLEUR={'toegevoegd':['#F0FDF4','#166534'],'gewijzigd':['#EFF6FF','#1E40AF'],'verwijderd':['#FEF2F2','#991B1B']};
 
 // Een veldnaam als 'start_tijd' lezen mensen niet; 'start tijd' wel.
-function logVeldNaam(k){
-  return String(k||'').replace(/_/g,' ');
-}
+function logVeldNaam(k){return String(k||'').replace(/_/g,' ');}
 function logWaarde(v){
-  if(v===null||v===undefined)return '<span style="color:var(--muted);font-style:italic">leeg</span>';
+  if(v===null||v===undefined||v==='')return '<span style="color:var(--muted);font-style:italic">leeg</span>';
   if(typeof v==='boolean')return v?'ja':'nee';
   const t=String(v);
-  return veiligTekst(t.length>60?t.slice(0,60)+'…':t);
+  return veiligTekst(t.length>60?t.slice(0,60)+'\u2026':t);
 }
 
 function tekenLogboek(){
   const lijst=document.getElementById('logLijst');
+  const meer=document.getElementById('logMeerWrap');
   if(!lijst)return;
   if(!LOG_REGELS.length){
-    lijst.innerHTML='<div class="empty" style="padding:1rem 0;font-size:12.5px">Niets gevonden in deze periode.</div>';
+    lijst.innerHTML='<div class="empty" style="padding:1rem 0;font-size:12.5px">Niets gevonden.</div>';
+    if(meer)meer.style.display='none';
     return;
   }
+
+  // Een kopregel per dag, zodat je in één oogopslag ziet waar je bent.
+  let vorigeDag='';
   lijst.innerHTML=LOG_REGELS.map(r=>{
+    const dag=fmt(new Date(r.op));
+    let kop='';
+    if(dag!==vorigeDag){
+      vorigeDag=dag;
+      const d=new Date(r.op);
+      kop=`<div class="kp-groep" style="margin-top:16px">${veiligTekst(d.toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}))}</div>`;
+    }
     const[bg,kl]=LOG_KLEUR[r.actie]||['#F3F4F6','#374151'];
     let detail='';
     if(r.actie==='gewijzigd'&&r.velden&&typeof r.velden==='object'){
-      const rijen=Object.entries(r.velden).slice(0,8).map(([k,v])=>
+      const rijen=Object.entries(r.velden).slice(0,6).map(([k,v])=>
         `<div style="font-size:11.5px;color:var(--muted);line-height:1.6">
            <span style="color:var(--text)">${veiligTekst(logVeldNaam(k))}</span>:
            ${logWaarde(v&&v.oud)} &rarr; <b style="color:var(--text)">${logWaarde(v&&v.nieuw)}</b>
          </div>`).join('');
-      const meer=Object.keys(r.velden).length-8;
-      detail=rijen+(meer>0?`<div style="font-size:11px;color:var(--muted)">en nog ${meer} ${meer===1?'veld':'velden'}</div>`:'');
+      const over=Object.keys(r.velden).length-6;
+      detail=rijen+(over>0?`<div style="font-size:11px;color:var(--muted)">en nog ${over} ${over===1?'veld':'velden'}</div>`:'');
     }
-    return`<div style="padding:9px 0;border-bottom:1px solid var(--border)">
-      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
-        <span class="bdg" style="background:${bg};color:${kl};font-size:10px">${veiligTekst(r.actie)}</span>
-        <span style="font-size:13.5px;color:var(--text);font-weight:500">${veiligTekst(r.omschrijving||r.onderdeel||r.tabel)}</span>
+    return kop+`<div style="display:flex;gap:11px;padding:9px 2px;border-bottom:1px solid var(--border)">
+      <div style="flex:0 0 64px;font-size:12px;color:var(--muted);padding-top:2px;font-variant-numeric:tabular-nums">
+        ${veiligTekst(new Date(r.op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}))}
       </div>
-      <div style="font-size:11.5px;color:var(--muted);margin-top:2px">
-        ${veiligTekst(r.wie_naam||'onbekend')} &middot; ${veiligTekst(logWanneer(r.op))}
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:baseline;gap:7px;flex-wrap:wrap">
+          <span class="bdg" style="background:${bg};color:${kl};font-size:10px">${veiligTekst(r.actie)}</span>
+          <span style="font-size:13.5px;color:var(--text);font-weight:500">${veiligTekst(r.omschrijving||r.onderdeel||r.tabel)}</span>
+        </div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:2px">door ${veiligTekst(r.wie_naam||'onbekend')}</div>
+        ${detail?`<div style="margin-top:5px">${detail}</div>`:''}
       </div>
-      ${detail?`<div style="margin-top:5px">${detail}</div>`:''}
     </div>`;
   }).join('');
+
+  // Zat de lijst vol, dan valt er waarschijnlijk nog meer te halen.
+  if(meer)meer.style.display=(LOG_REGELS.length>=LOG_LIMIET)?'':'none';
 }
 
 function logExport(){
   if(!LOG_REGELS.length){toast('Er is niets om te exporteren','fout');return;}
   const esc=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
-  const rijen=[['Wanneer','Wie','Soort','Actie','Omschrijving','Wat er veranderde'].map(esc).join(';')];
+  const rijen=[['Datum','Tijd','Wie','Soort','Actie','Omschrijving','Wat er veranderde'].map(esc).join(';')];
   LOG_REGELS.forEach(r=>{
+    const d=new Date(r.op);
     let wat='';
     if(r.actie==='gewijzigd'&&r.velden&&typeof r.velden==='object'){
       wat=Object.entries(r.velden).map(([k,v])=>
-        `${logVeldNaam(k)}: ${v&&v.oud==null?'leeg':v&&v.oud} -> ${v&&v.nieuw==null?'leeg':v&&v.nieuw}`).join(' | ');
+        `${logVeldNaam(k)}: ${(v&&v.oud)==null?'leeg':v.oud} -> ${(v&&v.nieuw)==null?'leeg':v.nieuw}`).join(' | ');
     }
-    rijen.push([new Date(r.op).toLocaleString('nl-NL'),r.wie_naam||'',r.onderdeel||r.tabel,
-                r.actie,r.omschrijving||'',wat].map(esc).join(';'));
+    rijen.push([d.toLocaleDateString('nl-NL'),d.toLocaleTimeString('nl-NL'),r.wie_naam||'',
+                r.onderdeel||r.tabel,r.actie,r.omschrijving||'',wat].map(esc).join(';'));
   });
   const blob=new Blob(['\uFEFF'+rijen.join('\n')],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');
