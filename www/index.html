@@ -452,6 +452,8 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .besch-lijst{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:10px;align-items:start}
 .besch-item{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--border);border-radius:10px;padding:10px 12px}
 .besch-item.wacht{border-left-color:#F59E0B}
+.mw-knop{cursor:pointer;border-bottom:1px dotted var(--muted)}
+.mw-knop:hover{color:#2563EB;border-bottom-color:#2563EB}
 .besch-item.goedgekeurd{border-left-color:#059669}
 .besch-item.afgewezen{border-left-color:#DC2626;opacity:.7}
 .besch-info{flex:1;min-width:0}
@@ -1322,6 +1324,41 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
             <div id="instInfo" style="font-size:11px;color:var(--muted)"></div>
           </div>
         </div>
+        <div class="bc" id="logboekCard" style="grid-column:1/-1;display:none">
+          <div class="bt" style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+            <span>Logboek</span>
+            <button class="btn-ghost" style="padding:5px 11px;font-size:12px" onclick="logExport()">Exporteren</button>
+          </div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
+            Alles wat er verandert staat hier: wie een klus aanmaakte, wie verlof aanvroeg,
+            wie uren aanpaste. Alleen jij ziet dit. Het logboek wordt na achttien maanden
+            automatisch opgeschoond.
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:.875rem">
+            <div style="flex:1;min-width:130px">
+              <div class="slabel" style="margin-bottom:3px">Van</div>
+              <input type="date" id="logVan" onchange="laadLogboek()" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+            </div>
+            <div style="flex:1;min-width:130px">
+              <div class="slabel" style="margin-bottom:3px">Tot en met</div>
+              <input type="date" id="logTot" onchange="laadLogboek()" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+            </div>
+            <div style="flex:1;min-width:150px">
+              <div class="slabel" style="margin-bottom:3px">Soort</div>
+              <select id="logSoort" onchange="laadLogboek()" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"><option value="">Alles</option></select>
+            </div>
+            <div style="flex:1;min-width:150px">
+              <div class="slabel" style="margin-bottom:3px">Wie</div>
+              <select id="logWie" onchange="laadLogboek()" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"><option value="">Iedereen</option></select>
+            </div>
+            <div style="flex:2;min-width:170px">
+              <div class="slabel" style="margin-bottom:3px">Zoeken</div>
+              <input type="search" id="logZoek" placeholder="bv. een klusnaam" oninput="logZoekLater()" style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+            </div>
+          </div>
+          <div id="logLijst"><div class="spin">Laden...</div></div>
+        </div>
+
         <div class="bc" id="zonesCard" style="grid-column:1/-1">
           <div class="bt">Milieuzones en zero-emissiezones</div>
           <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:.875rem">
@@ -1412,6 +1449,19 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
   <!-- PROFIEL PAGINA -->
   <div id="page-profiel" class="page">
     <div style="padding:1.25rem;max-width:480px;margin:0 auto">
+      <div class="sc" id="wachtBanner" style="display:none;background:#FFFBEB;border-color:#FDE68A;margin-bottom:1rem">
+        <div style="font-size:15px;font-weight:600;color:#92400E">Je account wacht op goedkeuring</div>
+        <div style="font-size:12.5px;color:#92400E;line-height:1.6;margin-top:6px">
+          Je aanmelding is binnen. Een beheerder zet je rol en je uurloon klaar en geeft je
+          account vrij; daarna staat de hele app voor je open. Duurt het lang, geef dan even
+          een seintje op kantoor.
+        </div>
+        <div style="font-size:12.5px;color:#92400E;line-height:1.6;margin-top:9px">
+          <b>Vul hieronder alvast je gegevens in.</b> Hoe completer dit staat, hoe sneller je
+          op de juiste klussen wordt ingedeeld — je rijbewijs en je shirtmaat schelen echt.
+        </div>
+        <button class="btn-sm" style="margin-top:11px;padding:8px 14px" onclick="location.reload()">Kijk of ik al ben vrijgegeven</button>
+      </div>
       <div class="sc">
         <!-- Avatar + naam -->
         <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;padding-bottom:1.25rem;border-bottom:1px solid var(--border)">
@@ -1679,6 +1729,17 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="mfooter" style="margin-top:1rem">
         <button class="btn-ghost" onclick="sluitPauze()">Annuleren</button>
         <button class="btn-sm" onclick="bevestigPauze()">Uitklokken</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- WIE IS DIT — korte kaart vanuit een klus -->
+  <div class="modal-overlay" id="mwKaartOverlay" onclick="if(event.target===this)sluitMwKaart()">
+    <div class="modal" style="max-width:400px">
+      <div id="mwKaartInhoud"></div>
+      <div class="mfooter" style="margin-top:1rem">
+        <button class="btn-ghost" onclick="sluitMwKaart()">Sluiten</button>
+        <button class="btn-sm" id="mwKaartProfiel" style="display:none">Volledig profiel</button>
       </div>
     </div>
   </div>
@@ -3088,23 +3149,18 @@ async function initApp(user){
     }
   }catch(e){console.error('Rol ophalen mislukt:',e);}
 
-  // Een nieuwe aanmelding wacht op een beheerder. Tot die tijd is er niets te
-  // zien — ook niet als je langs het scherm zou gaan: zonder goedkeuring geeft
-  // de database geen rol terug en daarmee ook geen gegevens.
-  if(goedgekeurd===false){
-    document.getElementById('authWrap').style.display='none';
-    document.getElementById('appWrap').style.display='none';
-    const w=document.getElementById('wachtWrap');
-    if(w)w.style.display='flex';
-    const wn=document.getElementById('wachtNaam');
-    if(wn)wn.textContent=`Aangemeld als ${naam} (${user.email}).`;
-    return;
-  }
+  // Een nieuwe aanmelding wacht op een beheerder. Tot die tijd is er bijna
+  // niets te zien: alleen het eigen profiel, zodat iemand zijn gegevens alvast
+  // kwijt kan. De rest wordt niet eens geladen, en de database houdt hem
+  // sowieso tegen — dit scherm is het gemak, niet het slot.
+  const WACHT_OP_GOEDKEURING=(goedgekeurd===false);
 
-  CURRENT_ROL=rol;
-  CURRENT_BEHEER_ROL=beheerRol;
-  await laadMijnDashboardRechten();
-  laadZones();
+  CURRENT_ROL=WACHT_OP_GOEDKEURING?'wachtend':rol;
+  CURRENT_BEHEER_ROL=WACHT_OP_GOEDKEURING?null:beheerRol;
+  if(!WACHT_OP_GOEDKEURING){
+    await laadMijnDashboardRechten();
+    laadZones();
+  }
   CURRENT_NAAM=naam;
   document.getElementById('authWrap').style.display='none';
   const w=document.getElementById('wachtWrap');
@@ -3135,6 +3191,23 @@ async function initApp(user){
   };
   function bnavItem(page,label,icon,active=false){
     return`<button class="bnav-item${active?' active':''}" onclick="switchNav('${page}',this)"><div class="bnav-icon">${icon}</div><span class="bnav-label">${label}</span></button>`;
+  }
+
+  // Wacht je nog op goedkeuring, dan houdt het hier op: één tabblad met je
+  // eigen gegevens, en verder niets om aan te tikken.
+  if(WACHT_OP_GOEDKEURING){
+    tabs.innerHTML=`<button class="htab active" onclick="showPage('profiel',this)">Mijn gegevens</button>`;
+    ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    const bnw=document.getElementById('bottomNav');
+    if(bnw){bnw.classList.add('visible');bnw.innerHTML=bnavItem('profiel','Mijn gegevens',ico.profiel,true);}
+    const eb=document.getElementById('detailEditBtn');if(eb)eb.style.display='none';
+    document.querySelectorAll('.page').forEach(pg=>pg.classList.remove('active'));
+    document.getElementById('page-profiel').classList.add('active');
+    loadProfiel();
+    const banner=document.getElementById('wachtBanner');if(banner)banner.style.display='';
+    // Meldingen testen heeft nog geen zin; die komen pas na het vrijgeven.
+    const tb=document.getElementById('testMeldingBlok');if(tb)tb.style.display='none';
+    return;
   }
 
   if(isBeheerder){
@@ -3481,7 +3554,7 @@ function showPage(id,btn){
   document.getElementById('page-'+id).classList.add('active');
   if(btn)btn.classList.add('active');
   if(id==='dashboard')laadDashboard();
-  if(id==='beheer'){beheerUitklapbaar();renderBeheer();loadTakenBeheer();laadDashboardRollen();laadTargets();laadZonesBeheer();}
+  if(id==='beheer'){beheerUitklapbaar();renderBeheer();loadTakenBeheer();laadDashboardRollen();laadTargets();laadZonesBeheer();laadLogboek();}
   if(id==='accounts')loadAccounts();
   if(id==='beschikbaarheid')loadPersoonlijkSchema();
   if(id==='beschikbaarheid-beheer')loadAlleBeschikbaarheid();
@@ -3931,6 +4004,125 @@ const PD_ROLLABEL={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer
 const PD_GESLACHT={'man':'Man','vrouw':'Vrouw','anders':'Anders','zeg-ik-liever-niet':'Zegt het liever niet'};
 const PD_CONTRACT={'oproep':'Oproepkracht','bepaalde-tijd':'Bepaalde tijd','onbepaalde-tijd':'Onbepaalde tijd','stage':'Stage','zzp':'ZZP','vakantiekracht':'Vakantiekracht'};
 const PD_MAANDEN=['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];
+
+// ── WIE IS DIT ──────────────────────────────────────────────────────────
+// Een naam bij een klus is een knopje geworden. Je tikt erop en ziet in één
+// oogopslag wat je op dat moment nodig hebt: het nummer om te bellen, de
+// shirtmaat voor de kleding, de rijbewijzen voor de bus en de vaardigheden om
+// te weten wat iemand kan. Het volledige profiel zit er voor een beheerder
+// nog achter.
+let MW_KLUS_LOS=[];
+
+function persNaamKnop(p){
+  return `<span class="mw-knop" onclick="openMwKaart('${p.id}')">${veiligTekst(p.naam)}</span>`;
+}
+function losNaamKnop(l){
+  return `<span class="mw-knop" onclick="openLosKaart('${l.id}')">${veiligTekst(l.naam)} (los)</span>`;
+}
+
+function sluitMwKaart(){document.getElementById('mwKaartOverlay').classList.remove('open');}
+
+function mwRij(label,waarde){
+  if(!waarde)return '';
+  return `<div style="display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
+    <div style="flex:0 0 108px;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;padding-top:2px">${label}</div>
+    <div style="flex:1;font-size:13.5px;color:var(--text);line-height:1.5">${waarde}</div>
+  </div>`;
+}
+function mwChips(lijst,leeg){
+  if(!lijst||!lijst.length)return `<span style="color:var(--muted);font-style:italic">${leeg}</span>`;
+  return lijst.map(t=>`<span class="bdg" style="background:#F3F4F6;color:#374151;margin:0 4px 4px 0;display:inline-block">${veiligTekst(t)}</span>`).join('');
+}
+function mwKop(naam,sub){
+  const initialen=String(naam||'?').split(' ').filter(Boolean).map(w=>w[0]).slice(0,2).join('').toUpperCase()||'?';
+  return `<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">
+    <div style="width:44px;height:44px;border-radius:50%;background:var(--text);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:600;flex-shrink:0">${veiligTekst(initialen)}</div>
+    <div style="min-width:0">
+      <div style="font-size:16px;font-weight:600;color:var(--text)">${veiligTekst(naam)}</div>
+      <div style="font-size:12px;color:var(--muted)">${veiligTekst(sub)}</div>
+    </div>
+  </div>`;
+}
+
+// Een losse kracht heeft geen account; alles wat we van hem weten staat bij de
+// klus zelf.
+function openLosKaart(id){
+  const l=(MW_KLUS_LOS||[]).find(x=>x.id===id);
+  if(!l)return;
+  const nr=telSchoon(l.telefoon);
+  document.getElementById('mwKaartInhoud').innerHTML=
+    mwKop(l.naam,'Losse kracht')+
+    `<div>`+
+    mwRij('Telefoon',nr?`<a href="tel:${nr}" style="color:#2563EB;text-decoration:none;font-weight:500">${veiligTekst(l.telefoon)}</a>`:'<span style="color:var(--muted);font-style:italic">geen nummer bekend</span>')+
+    (CURRENT_ROL==='beheerder'&&l.uurloon!=null?mwRij('Uurloon',lkEuro(l.uurloon)):'')+
+    mwRij('Notitie',veiligTekst(l.notitie||''))+
+    `</div>
+    <div style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:10px">
+      Een losse kracht heeft geen account in de app, dus er is verder niets van hem bekend.
+    </div>`;
+  const pb=document.getElementById('mwKaartProfiel');
+  if(pb)pb.style.display='none';
+  document.getElementById('mwKaartOverlay').classList.add('open');
+}
+
+async function openMwKaart(uid){
+  const basis=(PERSONEEL||[]).find(x=>x.id===uid)||{};
+  const inhoud=document.getElementById('mwKaartInhoud');
+  inhoud.innerHTML=mwKop(basis.naam||'Medewerker',PD_ROLLABEL[basis.rol]||basis.rol||'')+
+    '<div class="spin" style="padding:1rem 0">Laden...</div>';
+  const pb=document.getElementById('mwKaartProfiel');
+  if(pb)pb.style.display='none';
+  document.getElementById('mwKaartOverlay').classList.add('open');
+
+  // Het volledige profiel mag alleen een beheerder opvragen; de database
+  // bewaakt dat zelf. Voor de rest halen we het nummer uit de collegalijst die
+  // bij de klus hoort — die mag iedereen zien die er zelf op staat.
+  const [{data:u},{data:sk}]=await Promise.all([
+    sb.from('gebruikers').select('naam,rol,email,telefoon,straat,postcode,plaats,geboortedatum,shirtmaat,rijbewijs,skills,contractvorm').eq('id',uid).maybeSingle(),
+    (SKILLS&&SKILLS.length)?Promise.resolve({data:SKILLS}):sb.from('skills').select('id,naam').order('naam'),
+  ]);
+  if(sk&&sk.length)SKILLS=sk;
+
+  if(!u){
+    // Geen rechten op het profiel: laat zien wat er wél bekend is.
+    const tel=(COLLEGA_TEL||[]).find(x=>x.id===uid);
+    const nr=tel?telSchoon(tel.telefoon):'';
+    inhoud.innerHTML=mwKop(basis.naam||'Medewerker',PD_ROLLABEL[basis.rol]||basis.rol||'')+
+      `<div>`+
+      mwRij('Telefoon',nr?`<a href="tel:${nr}" style="color:#2563EB;text-decoration:none;font-weight:500">${veiligTekst(tel.telefoon)}</a>`:'<span style="color:var(--muted);font-style:italic">geen nummer bekend</span>')+
+      `</div>
+      <div style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:10px">
+        Meer gegevens van een collega ziet alleen een beheerder.
+      </div>`;
+    return;
+  }
+
+  let skillIds=[];
+  try{const rauw=u.skills;skillIds=rauw?(typeof rauw==='string'?JSON.parse(rauw):rauw):[];}catch(e){skillIds=[];}
+  if(!Array.isArray(skillIds))skillIds=[];
+  const skillNamen=skillIds.map(id=>(SKILLS||[]).find(x=>x.id===id)).filter(Boolean).map(x=>x.naam);
+  const rb=rijbewijsLijst(u.rijbewijs||'').map(c=>c+' · '+(RIJBEWIJZEN[c]||''));
+  const nr=telSchoon(u.telefoon);
+  const leeftijd=berekenLeeftijd(u.geboortedatum);
+  const adres=[u.straat,[u.postcode,u.plaats].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+
+  inhoud.innerHTML=mwKop(u.naam||basis.naam,PD_ROLLABEL[u.rol]||u.rol||'')+
+    `<div>`+
+    mwRij('Telefoon',nr?`<a href="tel:${nr}" style="color:#2563EB;text-decoration:none;font-weight:500">${veiligTekst(u.telefoon)}</a>`:'<span style="color:var(--muted);font-style:italic">geen nummer bekend</span>')+
+    mwRij('E-mail',u.email?`<a href="mailto:${veiligTekst(u.email)}" style="color:#2563EB;text-decoration:none">${veiligTekst(u.email)}</a>`:'')+
+    mwRij('Shirtmaat',u.shirtmaat?`<b>${veiligTekst(u.shirtmaat)}</b>`:'<span style="color:var(--muted);font-style:italic">niet ingevuld</span>')+
+    mwRij('Rijbewijs',mwChips(rb,'geen rijbewijs doorgegeven'))+
+    mwRij('Kan',mwChips(skillNamen,'nog geen vaardigheden aangevinkt'))+
+    (leeftijd!==null?mwRij('Leeftijd',leeftijd+' jaar'):'')+
+    (CURRENT_ROL==='beheerder'?mwRij('Contract',veiligTekst(PD_CONTRACT[u.contractvorm]||'')):'')+
+    (CURRENT_ROL==='beheerder'?mwRij('Adres',veiligTekst(adres)):'')+
+    `</div>`;
+
+  if(pb&&CURRENT_ROL==='beheerder'){
+    pb.style.display='';
+    pb.onclick=()=>{sluitMwKaart();openPersDetail(uid);};
+  }
+}
 
 async function openPersDetail(uid){
   persDetailId=uid; pdAgendaOffset=0; PD=null;
@@ -5612,14 +5804,15 @@ function openDetail(id){
   tel.innerHTML=k.telefoon?`<a href="tel:${veiligTekst(k.telefoon)}" style="color:#2563EB;text-decoration:none;font-size:13px">${veiligTekst(k.telefoon)}</a>`:'';
   // Heeft de klus shifts, dan zetten we de mensen per shift onder elkaar; dat
   // leest een stuk prettiger dan een rij namen zonder tijden.
-  const alleNamen=k.personeel.map(p=>p.naam).concat((k.losse||[]).map(l=>l.naam+' (los)'));
+  MW_KLUS_LOS=(k.losse||[]);
+  const alleNamen=k.personeel.map(p=>persNaamKnop(p)).concat((k.losse||[]).map(l=>losNaamKnop(l)));
   const ps=document.getElementById('detailPersSection');
   ps.style.display=(alleNamen.length||(k.shifts||[]).length)?'':'none';
   const persEl=document.getElementById('detailPers');
   if((k.shifts||[]).length){
     const blokken=k.shifts.map(sh=>{
-      const wie=k.personeel.filter(p=>p.shift_id===sh.id).map(p=>p.naam)
-        .concat((k.losse||[]).filter(l=>l.shift_id===sh.id).map(l=>l.naam+' (los)'));
+      const wie=k.personeel.filter(p=>p.shift_id===sh.id).map(p=>persNaamKnop(p))
+        .concat((k.losse||[]).filter(l=>l.shift_id===sh.id).map(l=>losNaamKnop(l)));
       const tijd=[tijdFromDb(sh.start_tijd),tijdFromDb(sh.eind_tijd)].filter(Boolean).join(' – ');
       const tekort=Math.max(0,(sh.personeel_nodig||0)-wie.length);
       return`<div style="margin-bottom:7px">
@@ -5627,11 +5820,11 @@ function openDetail(id){
         <div style="font-size:13px">${wie.length?wie.join(', '):'<span style="color:var(--muted);font-style:italic">nog niemand</span>'}${tekort?` <span style="color:#B45309;font-size:11px;font-weight:600">· nog ${tekort} nodig</span>`:''}</div>
       </div>`;
     }).join('');
-    const rest=k.personeel.filter(p=>!p.shift_id).map(p=>p.naam)
-      .concat((k.losse||[]).filter(l=>!l.shift_id).map(l=>l.naam+' (los)'));
+    const rest=k.personeel.filter(p=>!p.shift_id).map(p=>persNaamKnop(p))
+      .concat((k.losse||[]).filter(l=>!l.shift_id).map(l=>losNaamKnop(l)));
     persEl.innerHTML=blokken+(rest.length?`<div style="font-size:13px;padding-top:5px;border-top:1px solid var(--border)"><span style="color:var(--muted);font-size:11px">Hele klus:</span> ${rest.join(', ')}</div>`:'');
   }else{
-    persEl.textContent=alleNamen.join(', ');
+    persEl.innerHTML=alleNamen.join(', ');
   }
   laadCollegaTelefoons(k);
   tekenRijschema(k);
@@ -6236,6 +6429,8 @@ let detailTelKlus=null;
 
 function telSchoon(t){return String(t||'').replace(/[^0-9+]/g,'');}
 
+let COLLEGA_TEL=[];
+
 async function laadCollegaTelefoons(k){
   const vak=document.getElementById('detailTelSection');
   const lijst=document.getElementById('detailCollegaTel');
@@ -6248,6 +6443,7 @@ async function laadCollegaTelefoons(k){
   // Ondertussen een andere klus geopend? Dan hoort dit antwoord er niet meer bij.
   if(detailTelKlus!==k.id)return;
   if(error){console.warn('Telefoonnummers ophalen mislukt:',error);return;}
+  COLLEGA_TEL=data||[];
 
   const mij=CURRENT_USER?CURRENT_USER.id:null;
   const rijen=(data||[])
@@ -6804,6 +7000,7 @@ function loadProfiel(){
   document.getElementById('profielNaam').textContent=CURRENT_NAAM;
   document.getElementById('profielRol').textContent=CURRENT_ROL==='beheerder'
     ?(CURRENT_BEHEER_ROL?'Beheerder \u00b7 '+beheerRolLabel(CURRENT_BEHEER_ROL):'Beheerder')
+    :CURRENT_ROL==='wachtend'?'Wacht op goedkeuring'
     :'Personeelslid';
   document.getElementById('profielEmail').textContent=CURRENT_USER.email||'–';
   document.getElementById('profielNaamInput').value=CURRENT_NAAM;
@@ -8893,6 +9090,155 @@ async function openUrenFoto(pad){
     if(error||!data?.signedUrl){alert('Deze foto kon niet geopend worden.');return;}
     window.open(data.signedUrl,'_blank');
   }catch(e){alert('Deze foto kon niet geopend worden.');}
+}
+
+// ── LOGBOEK ─────────────────────────────────────────────────────────────
+// Elke wijziging in de database wordt door een trigger vastgelegd. Dit scherm
+// leest dat terug, en alleen de hoofdbeheerder krijgt er antwoord op — dat
+// bewaakt de database zelf, niet dit scherm.
+let LOG_REGELS=[];
+let logZoekTimer=null;
+
+function logZoekLater(){
+  clearTimeout(logZoekTimer);
+  logZoekTimer=setTimeout(laadLogboek,400);
+}
+
+function logDatumStandaard(){
+  const van=document.getElementById('logVan'), tot=document.getElementById('logTot');
+  if(van&&!van.value){const d=new Date();d.setDate(d.getDate()-30);van.value=fmt(d);}
+  if(tot&&!tot.value)tot.value=fmt(new Date());
+}
+
+async function laadLogboek(){
+  const kaart=document.getElementById('logboekCard');
+  const lijst=document.getElementById('logLijst');
+  if(!kaart||!lijst)return;
+  if(!isAdmin()){kaart.style.display='none';return;}
+  kaart.style.display='';
+  logDatumStandaard();
+
+  const van=document.getElementById('logVan').value;
+  const tot=document.getElementById('logTot').value;
+  const soort=document.getElementById('logSoort').value||null;
+  const wie=document.getElementById('logWie').value||null;
+  const zoek=(document.getElementById('logZoek').value||'').trim()||null;
+
+  lijst.innerHTML='<div class="spin">Laden...</div>';
+  const totEind=tot?new Date(tot+'T23:59:59'):new Date();
+  const{data,error}=await sb.rpc('auditlog_lezen',{
+    p_van:van?new Date(van+'T00:00:00').toISOString():null,
+    p_tot:totEind.toISOString(),
+    p_wie:wie, p_tabel:soort, p_zoek:zoek, p_limiet:400,
+  });
+
+  if(error){
+    // Nog niet aangezet? Dan is dat geen fout maar een stap die nog moet.
+    const nog=/does not exist|schema cache|function/i.test(error.message||'');
+    lijst.innerHTML=`<div class="empty" style="padding:1rem 0;font-size:12.5px;line-height:1.6">
+      ${nog
+        ?'Het logboek staat nog niet aan in de database. Voer eerst het script <b>01-logboek.sql</b> uit in Supabase; daarna verschijnt hier vanzelf alles wat er verandert.'
+        :'Logboek ophalen mislukt: '+veiligTekst(error.message)}
+    </div>`;
+    return;
+  }
+
+  LOG_REGELS=data||[];
+  vulLogFilters();
+  tekenLogboek();
+}
+
+// De keuzelijsten vullen zich met wat er daadwerkelijk in het logboek staat.
+async function vulLogFilters(){
+  const wieSel=document.getElementById('logWie');
+  if(wieSel&&wieSel.options.length<=1){
+    const namen=[...new Map((PERSONEEL||[]).map(p=>[p.id,p.naam])).entries()]
+      .sort((a,b)=>String(a[1]).localeCompare(String(b[1])));
+    wieSel.innerHTML='<option value="">Iedereen</option>'+
+      namen.map(([id,naam])=>`<option value="${id}">${veiligTekst(naam)}</option>`).join('');
+  }
+  const soortSel=document.getElementById('logSoort');
+  if(soortSel&&soortSel.options.length<=1){
+    const{data}=await sb.rpc('auditlog_soorten');
+    if(data&&data.length){
+      soortSel.innerHTML='<option value="">Alles</option>'+
+        data.map(r=>`<option value="${veiligTekst(r.tabel)}">${veiligTekst(r.onderdeel||r.tabel)} (${r.aantal})</option>`).join('');
+    }
+  }
+}
+
+function logWanneer(op){
+  const d=new Date(op);
+  const vandaag=fmt(new Date())===fmt(d);
+  const tijd=d.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+  return vandaag?('vandaag '+tijd)
+    :d.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'})+' '+tijd;
+}
+
+const LOG_KLEUR={'toegevoegd':['#F0FDF4','#166534'],'gewijzigd':['#EFF6FF','#1E40AF'],'verwijderd':['#FEF2F2','#991B1B']};
+
+// Een veldnaam als 'start_tijd' lezen mensen niet; 'start tijd' wel.
+function logVeldNaam(k){
+  return String(k||'').replace(/_/g,' ');
+}
+function logWaarde(v){
+  if(v===null||v===undefined)return '<span style="color:var(--muted);font-style:italic">leeg</span>';
+  if(typeof v==='boolean')return v?'ja':'nee';
+  const t=String(v);
+  return veiligTekst(t.length>60?t.slice(0,60)+'…':t);
+}
+
+function tekenLogboek(){
+  const lijst=document.getElementById('logLijst');
+  if(!lijst)return;
+  if(!LOG_REGELS.length){
+    lijst.innerHTML='<div class="empty" style="padding:1rem 0;font-size:12.5px">Niets gevonden in deze periode.</div>';
+    return;
+  }
+  lijst.innerHTML=LOG_REGELS.map(r=>{
+    const[bg,kl]=LOG_KLEUR[r.actie]||['#F3F4F6','#374151'];
+    let detail='';
+    if(r.actie==='gewijzigd'&&r.velden&&typeof r.velden==='object'){
+      const rijen=Object.entries(r.velden).slice(0,8).map(([k,v])=>
+        `<div style="font-size:11.5px;color:var(--muted);line-height:1.6">
+           <span style="color:var(--text)">${veiligTekst(logVeldNaam(k))}</span>:
+           ${logWaarde(v&&v.oud)} &rarr; <b style="color:var(--text)">${logWaarde(v&&v.nieuw)}</b>
+         </div>`).join('');
+      const meer=Object.keys(r.velden).length-8;
+      detail=rijen+(meer>0?`<div style="font-size:11px;color:var(--muted)">en nog ${meer} ${meer===1?'veld':'velden'}</div>`:'');
+    }
+    return`<div style="padding:9px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+        <span class="bdg" style="background:${bg};color:${kl};font-size:10px">${veiligTekst(r.actie)}</span>
+        <span style="font-size:13.5px;color:var(--text);font-weight:500">${veiligTekst(r.omschrijving||r.onderdeel||r.tabel)}</span>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:2px">
+        ${veiligTekst(r.wie_naam||'onbekend')} &middot; ${veiligTekst(logWanneer(r.op))}
+      </div>
+      ${detail?`<div style="margin-top:5px">${detail}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function logExport(){
+  if(!LOG_REGELS.length){toast('Er is niets om te exporteren','fout');return;}
+  const esc=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+  const rijen=[['Wanneer','Wie','Soort','Actie','Omschrijving','Wat er veranderde'].map(esc).join(';')];
+  LOG_REGELS.forEach(r=>{
+    let wat='';
+    if(r.actie==='gewijzigd'&&r.velden&&typeof r.velden==='object'){
+      wat=Object.entries(r.velden).map(([k,v])=>
+        `${logVeldNaam(k)}: ${v&&v.oud==null?'leeg':v&&v.oud} -> ${v&&v.nieuw==null?'leeg':v&&v.nieuw}`).join(' | ');
+    }
+    rijen.push([new Date(r.op).toLocaleString('nl-NL'),r.wie_naam||'',r.onderdeel||r.tabel,
+                r.actie,r.omschrijving||'',wat].map(esc).join(';'));
+  });
+  const blob=new Blob(['\uFEFF'+rijen.join('\n')],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='logboek_'+fmt(new Date())+'.csv';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 
 // ── INSTELLINGEN (beheer) ───────────────────────────────────────────────
