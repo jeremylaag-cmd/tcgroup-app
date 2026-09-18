@@ -1723,6 +1723,9 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="fr"><span class="fl">Klus (optioneel)</span>
         <select id="hmKlus" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"></select>
       </div>
+      <div class="fr"><span class="fl">Kilometers eigen auto (optioneel)</span>
+        <input type="number" id="hmKm" min="0" max="2000" step="1" inputmode="numeric" placeholder="0" oninput="hmBereken()" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+      </div>
       <div class="fr"><span class="fl">Notitie (optioneel)</span>
         <input type="text" id="hmNotitie" placeholder="bv. vergeten in te klokken" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
       </div>
@@ -7981,6 +7984,7 @@ async function openHandmatig(){
   document.getElementById('hmVan').value='';
   document.getElementById('hmTot').value='';
   document.getElementById('hmPauze').value=0;
+  document.getElementById('hmKm').value='';
   document.getElementById('hmNotitie').value='';
   document.getElementById('hmZoek').value='';
   document.getElementById('hmUitkomst').textContent='';
@@ -8026,13 +8030,23 @@ function hmMinuten(){
   return{geklokt:d,pauze,gewerkt:Math.max(0,d-pauze)};
 }
 
+function hmKmWaarde(){
+  const ruw=(document.getElementById('hmKm').value||'').trim();
+  if(ruw==='')return null;
+  const n=Math.round(Number(ruw.replace(',','.')));
+  if(isNaN(n)||n<=0)return null;
+  return Math.min(2000,n);
+}
+
 function hmBereken(){
   const el=document.getElementById('hmUitkomst');
   const r=hmMinuten();
-  if(!r){el.textContent='';return;}
+  const km=hmKmWaarde();
+  const kmRegel=km?`<br>Plus <b>${km} km</b> vergoeding: ${lkEuro(kmBedrag(km))} (${lkEuro(kmTarief())} per km).`:'';
+  if(!r){el.innerHTML=km?kmRegel.replace(/^<br>/,''):'';return;}
   const nodig=minimumPauze(r.geklokt);
   el.innerHTML=`Dat is <b>${minToStr(r.gewerkt)}</b> gewerkt (${minToStr(r.geklokt)} min ${r.pauze} min pauze).`+
-    (r.pauze<nodig?`<br><span style="color:#B45309">Bij deze lengte hoort normaal ${nodig} minuten pauze.</span>`:'');
+    (r.pauze<nodig?`<br><span style="color:#B45309">Bij deze lengte hoort normaal ${nodig} minuten pauze.</span>`:'')+kmRegel;
 }
 
 async function bewaarHandmatig(){
@@ -8044,6 +8058,7 @@ async function bewaarHandmatig(){
   const datum=document.getElementById('hmDatum').value;
   const klus_id=document.getElementById('hmKlus').value||null;
   const notitie=document.getElementById('hmNotitie').value.trim();
+  const km=hmKmWaarde();
   const r=hmMinuten();
 
   if(!gebruiker_id){toonFout('Kies eerst een medewerker.');return;}
@@ -8066,6 +8081,7 @@ async function bewaarHandmatig(){
     uitgeklokt_op:uitgeklokt.toISOString(),
     pauze_minuten:r.pauze,
     totaal_minuten:r.gewerkt,
+    km,
     status:'goedgekeurd',
     handmatig:true,
     locatie_in:'Handmatig toegevoegd',
@@ -8075,7 +8091,7 @@ async function bewaarHandmatig(){
   if(error){toonFout('Toevoegen mislukt: '+error.message);return;}
 
   sluitHandmatig();
-  toast(minToStr(r.gewerkt)+' toegevoegd');
+  toast(minToStr(r.gewerkt)+(km?' + '+km+' km':'')+' toegevoegd');
   loadUrenBeheer();
 }
 
