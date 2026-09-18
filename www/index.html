@@ -1522,6 +1522,17 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <button onclick="openVerwijderAccount()" style="width:100%;background:transparent;color:#991B1B;border:none;padding:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:var(--font);text-decoration:underline">Account verwijderen</button>
         </div>
 
+        <!-- Privacy -->
+        <div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--border)">
+          <div class="detail-label">Jouw gegevens</div>
+          <div style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:6px">
+            Deze app legt vast wanneer je werkt, hoeveel uren je maakt en — op het moment dat je
+            zelf in- of uitklokt — waar je dan bent. Je wordt niet op de achtergrond gevolgd.
+            Wil je weten wat er precies wordt bewaard, hoe lang, en wat je rechten zijn?
+          </div>
+          <button class="btn-sm" onclick="openPrivacy()" style="margin-top:9px;padding:8px 14px">Lees het privacybeleid</button>
+        </div>
+
         <!-- Versie-info (wordt gevuld door het live-update script onderaan) -->
         <div id="appVersie" style="margin-top:1.25rem;text-align:center;font-size:11px;color:var(--muted)"></div>
       </div>
@@ -2847,7 +2858,7 @@ async function bewaarNieuwWachtwoord(){
   const toonFout=t=>{err.textContent=t;err.style.display='block';};
   err.style.display='none';msg.style.display='none';
 
-  if(pw1.length<6){toonFout('Je wachtwoord moet minimaal 6 tekens lang zijn.');return;}
+  if(pw1.length<12){toonFout('Je wachtwoord moet minimaal 12 tekens lang zijn. Drie losse woorden achter elkaar is makkelijk te onthouden en juist heel sterk.');return;}
   if(pw1!==pw2){toonFout('De twee wachtwoorden zijn niet gelijk.');return;}
 
   const{data:{session}}=await sb.auth.getSession();
@@ -2894,8 +2905,8 @@ function netteNaam(ruw){
 }
 
 async function doRegister(){
-  const naam=netteNaam(document.getElementById('regNaam').value);
-  const telefoon=document.getElementById('regTel').value.trim();
+  const naam=netteNaam(schoneInvoer(document.getElementById('regNaam').value,80));
+  const telefoon=schoneInvoer(document.getElementById('regTel').value,30);
   const email=document.getElementById('regEmail').value.trim();
   const pw=document.getElementById('regPw').value;
   const maat=document.getElementById('regMaat').value;
@@ -2911,7 +2922,7 @@ async function doRegister(){
   }
   if(!telefoon){err.textContent='Vul je telefoonnummer in.';err.style.display='block';return;}
   if(!email){err.textContent='Vul je e-mailadres in.';err.style.display='block';return;}
-  if(pw.length<6){err.textContent='Wachtwoord moet minimaal 6 tekens zijn.';err.style.display='block';return;}
+  if(pw.length<12){err.textContent='Je wachtwoord moet minimaal 12 tekens zijn. Tip: drie losse woorden achter elkaar.';err.style.display='block';return;}
   if(!maat){err.textContent='Selecteer je shirtmaat.';err.style.display='block';return;}
   if(!rijbewijsRuw){err.textContent='Selecteer je rijbewijs (kies "Geen" als je geen rijbewijs hebt).';err.style.display='block';return;}
   const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{naam}}});
@@ -2964,6 +2975,16 @@ async function doLogout(){
   // Alles schoon voor de volgende die inlogt: anders blijven lijsten, timers en
   // verplaatste kaarten van de vorige rol achter.
   setTimeout(()=>location.reload(),80);
+}
+
+// Het privacybeleid staat op de website, zodat er maar één versie is die we
+// hoeven bij te werken. In de app openen we hem in de browser van het toestel.
+const PRIVACY_URL='https://jeremylaag-cmd.github.io/tcgroup-app/privacy.html';
+
+function openPrivacy(){
+  const B=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Browser;
+  if(B&&B.open){ B.open({url:PRIVACY_URL}).catch(()=>window.open(PRIVACY_URL,'_blank')); return; }
+  window.open(PRIVACY_URL,'_blank');
 }
 
 function openVerwijderAccount(){
@@ -3515,7 +3536,7 @@ function renderSkillsBeheer(){
   if(!el)return;
   if(!SKILLS.length){el.innerHTML='<div class="empty" style="padding:.5rem 0;font-size:12px">Nog geen skills toegevoegd</div>';return;}
   el.innerHTML=SKILLS.map(s=>`<div class="bi">
-    <div class="bi-left"><div class="bi-name">${s.naam}</div></div>
+    <div class="bi-left"><div class="bi-name">${veiligTekst(s.naam)}</div></div>
     <div class="bi-actions"><button class="btn-danger-sm" onclick="deleteSkill('${s.id}')">×</button></div>
   </div>`).join('');
 }
@@ -3805,11 +3826,11 @@ function renderAccounts(){
     return`<div class="acc-item" id="ac-${u.id}" style="cursor:pointer;flex-direction:column;align-items:stretch;gap:6px" onclick="openPersDetail('${u.id}')">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
         <div class="acc-info" style="flex:1;min-width:0">
-          <div class="acc-naam">${u.naam||'–'}</div>
+          <div class="acc-naam">${veiligTekst(u.naam||'–')}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">
             <span>${rolLabels[u.rol]||u.rol}${u.beheer_rol?' \u00b7 '+beheerRolLabel(u.beheer_rol):''}</span>
-            ${u.telefoon?`<span>${u.telefoon}</span>`:''}
-            ${u.shirtmaat?`<span>👕 ${u.shirtmaat}</span>`:''}
+            ${u.telefoon?`<span>${veiligTekst(u.telefoon)}</span>`:''}
+            ${u.shirtmaat?`<span>👕 ${veiligTekst(u.shirtmaat)}</span>`:''}
             ${u.rijbewijs?`<span title="${veiligTekst(rijbewijsTekst(u.rijbewijs))}">🚗 ${veiligTekst(rijbewijsKort(u.rijbewijs))}</span>`:''}
           </div>
           ${skillNames.length?`<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">${skillNames.map(n=>`<span style="font-size:10px;background:#F0FDF4;color:#166534;border:1px solid #BBF7D0;border-radius:20px;padding:1px 7px;font-weight:500">${n}</span>`).join('')}</div>`:''}
@@ -3967,17 +3988,17 @@ function pdRenderZij(){
 
   document.getElementById('pdZij').innerHTML=
     `<div class="pd-av">${initialen}</div>
-     <div class="pd-naam">${u.naam||'Onbekend'}</div>
+     <div class="pd-naam">${veiligTekst(u.naam||'Onbekend')}</div>
      ${rij('&#9679;',PD_ROLLABEL[u.rol]||u.rol||'')}
      ${rij('&#9787;',persoon)}
      ${rij('&#128196;',PD_CONTRACT[u.contractvorm]||'')}
      ${rij('&euro;',u.uurloon!=null?('&euro; '+Number(u.uurloon).toFixed(2).replace('.',',')+' <span style="color:var(--muted)">per uur</span>'):'')}
-     ${rij('&#9993;',u.email?`<a href="mailto:${u.email}">${u.email}</a>`:'')}
-     ${rij('&#9742;',u.telefoon?`<a href="tel:${u.telefoon}">${u.telefoon}</a>`:'')}
-     ${rij('&#9873;',adres)}
-     ${rij('&#128085;',u.shirtmaat)}
+     ${rij('&#9993;',u.email?`<a href="mailto:${veiligTekst(u.email)}">${veiligTekst(u.email)}</a>`:'')}
+     ${rij('&#9742;',u.telefoon?`<a href="tel:${veiligTekst(u.telefoon)}">${veiligTekst(u.telefoon)}</a>`:'')}
+     ${rij('&#9873;',veiligTekst(adres))}
+     ${rij('&#128085;',veiligTekst(u.shirtmaat))}
      ${rij('&#128663;',rijbewijsTekst(u.rijbewijs))}
-     ${namen.length?`<div style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:4px">${namen.map(n=>`<span style="font-size:10px;background:#F0FDF4;color:#166534;border:1px solid #BBF7D0;border-radius:20px;padding:2px 8px;font-weight:500">${n}</span>`).join('')}</div>`:''}
+     ${namen.length?`<div style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:4px">${namen.map(n=>`<span style="font-size:10px;background:#F0FDF4;color:#166534;border:1px solid #BBF7D0;border-radius:20px;padding:2px 8px;font-weight:500">${veiligTekst(n)}</span>`).join('')}</div>`:''}
      <button class="btn-ghost" style="width:100%;margin-top:1.25rem;justify-content:center" onclick="pdToon('gegevens',document.querySelectorAll('.pd-tab')[3])">Gegevens bewerken</button>`;
 }
 
@@ -4049,7 +4070,7 @@ function pdRenderAlgemeen(){
      ${(deze.onbekend||volgende.onbekend)?'<div style="font-size:10px;color:var(--muted);margin-top:6px">* bij sommige klussen staan nog geen tijden ingevuld</div>':''}
      <div style="margin-top:1.25rem">
        <div class="pd-mlbl" style="margin-bottom:6px">Interne notitie</div>
-       <textarea id="pdNotitie" placeholder="Alleen zichtbaar voor beheerders" style="width:100%;height:84px;font-size:13px;font-family:var(--font);padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">${(PD.u.notitie||'').replace(/</g,'&lt;')}</textarea>
+       <textarea id="pdNotitie" placeholder="Alleen zichtbaar voor beheerders" style="width:100%;height:84px;font-size:13px;font-family:var(--font);padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text)">${veiligTekst(PD.u.notitie)}</textarea>
        <button class="btn-sm" style="margin-top:8px" onclick="pdBewaarNotitie()">Notitie opslaan</button>
      </div>`;
 }
@@ -4113,9 +4134,9 @@ function pdRenderAgenda(){
            <div style="font-weight:${isVandaag?'700':'500'};margin-bottom:2px">${d.getDate()}</div>
            ${bs.map(b=>{
              const wel=b.soort==='beschikbaar';
-             return`<div style="border-radius:3px;padding:1px 3px;margin-bottom:2px;background:${wel?'#EFF6FF':'#FEF2F2'};color:${wel?'#1E40AF':'#991B1B'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${wel?'Beschikbaar':'Niet beschikbaar'}${b.reden?' — '+b.reden:''}">${wel?'✓ kan':'✕ vrij'}</div>`;
+             return`<div style="border-radius:3px;padding:1px 3px;margin-bottom:2px;background:${wel?'#EFF6FF':'#FEF2F2'};color:${wel?'#1E40AF':'#991B1B'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${wel?'Beschikbaar':'Niet beschikbaar'}${b.reden?' — '+veiligTekst(b.reden):''}">${wel?'✓ kan':'✕ vrij'}</div>`;
            }).join('')}
-           ${kl.map(k=>`<div style="border-radius:3px;padding:1px 3px;margin-bottom:2px;background:#F0FDF4;color:#065F46;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="${(k.naam||k.food||'Klus')}" onclick="closePersDetail();openDetail('${k.id}')">${k.naam||k.food||'Klus'}</div>`).join('')}
+           ${kl.map(k=>`<div style="border-radius:3px;padding:1px 3px;margin-bottom:2px;background:#F0FDF4;color:#065F46;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer" title="${veiligTekst(k.naam||k.food||'Klus')}" onclick="closePersDetail();openDetail('${k.id}')">${veiligTekst(k.naam||k.food||'Klus')}</div>`).join('')}
          </div>`;
     }
   }
@@ -4148,7 +4169,7 @@ function pdRenderAgenda(){
 function pdRenderSkills(){
   const gekozen=pdSkillIds();
   const pills=SKILLS.length
-    ?SKILLS.map(s=>`<button type="button" class="chip${gekozen.includes(s.id)?' on':''}" style="font-size:12px;padding:6px 13px" onclick="pdToggleSkill('${PD.u.id}','${s.id}',this)">${s.naam}</button>`).join('')
+    ?SKILLS.map(s=>`<button type="button" class="chip${gekozen.includes(s.id)?' on':''}" style="font-size:12px;padding:6px 13px" onclick="pdToggleSkill('${PD.u.id}','${s.id}',this)">${veiligTekst(s.naam)}</button>`).join('')
     :'<span style="font-size:12px;color:var(--muted)">Nog geen vaardigheden aangemaakt — ga naar Beheer → Skills.</span>';
 
   // Waar is deze medewerker de afgelopen tijd voor ingezet?
@@ -4164,7 +4185,7 @@ function pdRenderSkills(){
      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:1.5rem">${pills}</div>
      <div class="pd-mlbl" style="margin-bottom:8px">Ingezet bij</div>
      ${ervaring.length
-       ?ervaring.map(([naam,n])=>`<div class="pd-stat"><span><b>${n}x</b> ${naam}</span></div>`).join('')
+       ?ervaring.map(([naam,n])=>`<div class="pd-stat"><span><b>${n}x</b> ${veiligTekst(naam)}</span></div>`).join('')
        :'<div style="font-size:12px;color:var(--muted)">Nog niet ingedeeld op klussen met een soort.</div>'}`;
 }
 
@@ -4172,7 +4193,7 @@ function pdRenderGegevens(){
   const u=PD.u;
   document.getElementById('pdVak-gegevens').innerHTML=
     `<div class="fr"><span class="fl">Naam</span>
-       <input type="text" id="pdNaam" value="${(u.naam||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       <input type="text" id="pdNaam" value="${veiligTekst(u.naam)}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
      </div>
      <div class="fr"><span class="fl">Rol</span>
        <select id="pdRol" onchange="pdRolGewijzigd()"${u.beheer_rol==='administrator'?' disabled':''} style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
@@ -4200,21 +4221,21 @@ function pdRenderGegevens(){
      </div>
      <div class="two">
        <div class="fr"><span class="fl">E-mailadres</span>
-         <input type="email" id="pdEmail" value="${(u.email||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+         <input type="email" id="pdEmail" value="${veiligTekst(u.email)}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
        </div>
        <div class="fr"><span class="fl">Telefoonnummer</span>
-         <input type="tel" id="pdTel" value="${(u.telefoon||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+         <input type="tel" id="pdTel" value="${veiligTekst(u.telefoon)}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
        </div>
      </div>
      <div class="fr"><span class="fl">Straat en huisnummer</span>
-       <input type="text" id="pdStraat" value="${(u.straat||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+       <input type="text" id="pdStraat" value="${veiligTekst(u.straat)}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
      </div>
      <div class="two">
        <div class="fr"><span class="fl">Postcode</span>
-         <input type="text" id="pdPostcode" value="${(u.postcode||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+         <input type="text" id="pdPostcode" value="${veiligTekst(u.postcode)}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
        </div>
        <div class="fr"><span class="fl">Plaats</span>
-         <input type="text" id="pdPlaats" value="${(u.plaats||'').replace(/"/g,'&quot;')}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
+         <input type="text" id="pdPlaats" value="${veiligTekst(u.plaats)}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
        </div>
      </div>
      <div class="two">
@@ -4501,10 +4522,10 @@ function renderAll(){
   const legendaHTML=
     `<div class="slabel" style="margin-top:.5rem">Trucks</div>
     <div class="zoek-wrap"><span class="zoek-icon">&#128269;</span><input type="text" placeholder="Zoeken..." oninput="filterLgd('bTruck',this.value)"></div>
-    <div id="bTruckLijst">${TRUCKS.map(t=>`<div class="lgr-btn" data-naam="${t.label.toLowerCase()}" onclick="openPlan('truck','${t.id}');closeDrawer()"><div class="ls" style="background:${t.color}"></div>${t.label}</div>`).join('')}</div>
+    <div id="bTruckLijst">${TRUCKS.map(t=>`<div class="lgr-btn" data-naam="${veiligTekst(String(t.label||"").toLowerCase())}" onclick="openPlan('truck','${t.id}');closeDrawer()"><div class="ls" style="background:${t.color}"></div>${veiligTekst(t.label)}</div>`).join('')}</div>
     <div class="slabel" style="margin-top:.75rem">Personeel</div>
     <div class="zoek-wrap"><span class="zoek-icon">&#128269;</span><input type="text" placeholder="Zoeken..." oninput="filterLgd('bPers',this.value)"></div>
-    <div id="bPersLijst">${PERSONEEL.map(p=>`<div class="lgr-btn" data-naam="${p.naam.toLowerCase()}" onclick="openPlan('pers','${p.id}');closeDrawer()">${p.naam}</div>`).join('')}</div>`;
+    <div id="bPersLijst">${PERSONEEL.map(p=>`<div class="lgr-btn" data-naam="${veiligTekst(String(p.naam||"").toLowerCase())}" onclick="openPlan('pers','${p.id}');closeDrawer()">${veiligTekst(p.naam)}</div>`).join('')}</div>`;
   document.getElementById('legenda').innerHTML=legendaHTML;
   const legendaDesk=document.getElementById('legendaDesk');
   if(legendaDesk)legendaDesk.innerHTML=legendaHTML;
@@ -4526,7 +4547,7 @@ function renderAll(){
   // Timeline
   document.getElementById('tlDates').innerHTML=days.map(d=>`<div class="td${fmt(d)===todayStr?' tod':''}${fmt(d)<todayStr?' past-date':''}">${d.getDate()}</div>`).join('');
   document.getElementById('tlRows').innerHTML=TRUCKS.map(tr=>`<div class="tl-row">
-    <div class="tl-name" title="${tr.label}">${tr.label}</div>
+    <div class="tl-name" title="${veiligTekst(tr.label)}">${veiligTekst(tr.label)}</div>
     <div class="tl-cells">${days.map(d=>{
       const ds=fmt(d);const busy=KLUSSEN.some(k=>klusDagen(k).includes(ds)&&k.trucks.some(t=>t.id===tr.id));
       const isPast=ds<todayStr;
@@ -4577,7 +4598,7 @@ function renderAll(){
     const ds=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
     const dsEind=k.datum_eind?parseDate(k.datum_eind).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}):'';
     const datumStr=dsEind&&dsEind!==ds?`${ds} – ${dsEind}`:ds;
-    const tB=k.trucks.map(t=>`<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${t.label}</span>`).join('');
+    const tB=k.trucks.map(t=>`<span class="bdg" style="background:${hbg(t.color)};color:${t.color}">${veiligTekst(t.label)}</span>`).join('');
     const t1=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd),t4=tijdFromDb(k.einde_feest);
     const tijdStr=t1&&t4?`${t1} → ${t4}`:t1||t4||'';
     const vastBadge=(k.is_optie?'<span class="bdg optie-bdg">Optie</span>':'')
@@ -4588,16 +4609,16 @@ function renderAll(){
       +(k.milieuzone?'<span class="bdg" style="background:#ECFDF5;color:#065F46">Milieuzone</span>':'');
     const soortBadges=vastBadge+(k.truckSoorten&&k.truckSoorten.length
       ?[...new Set(k.truckSoorten.map(ts=>ts.soort.titel))].map(t=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${t}</span>`).join('')
-      :k.soorten&&k.soorten.length?k.soorten.map(s=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${s.titel}</span>`).join('')
-      :k.food?`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${k.food}</span>`:'');
-    const pdfLinks=k.pdfs&&k.pdfs.length?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${p.url}\`,\`${p.naam}\`)">${p.naam}</span>`).join(''):'';
+      :k.soorten&&k.soorten.length?k.soorten.map(s=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${veiligTekst(s.titel)}</span>`).join('')
+      :k.food?`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${veiligTekst(k.food)}</span>`:'');
+    const pdfLinks=k.pdfs&&k.pdfs.length?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${veiligJs(p.url)}\`,\`${veiligJs(p.naam)}\`)">${veiligTekst(p.naam)}</span>`).join(''):'';
     return`<div class="kc${k.is_optie?' optie':''}" onclick="openDetail('${k.id}')">
       <div class="kc-top">
         <div style="min-width:0;flex:1">
-          ${k.naam?`<div class="knaam">${k.naam}</div>`:''}
+          ${k.naam?`<div class="knaam">${veiligTekst(k.naam)}</div>`:''}
           <div class="kdate">${datumStr}${tijdStr?` · ${tijdStr}`:''}</div>
           <div class="ktrucks">${tB}${soortBadges}</div>
-          <div class="kmeta">${k.personen?`<strong>${k.personen} gasten</strong>`:'<strong>Dienst</strong>'}${k.personeel_nodig?` &nbsp;·&nbsp; ${k.personeel_nodig} pers. nodig`:''}${k.personeel.length?' &nbsp;·&nbsp; '+k.personeel.map(p=>p.naam).join(', '):''}${(k.losse&&k.losse.length)?' &nbsp;·&nbsp; '+k.losse.map(l=>l.naam+' (los)').join(', '):''}</div>
+          <div class="kmeta">${k.personen?`<strong>${k.personen} gasten</strong>`:'<strong>Dienst</strong>'}${k.personeel_nodig?` &nbsp;·&nbsp; ${k.personeel_nodig} pers. nodig`:''}${k.personeel.length?' &nbsp;·&nbsp; '+k.personeel.map(p=>veiligTekst(p.naam)).join(', '):''}${(k.losse&&k.losse.length)?' &nbsp;·&nbsp; '+k.losse.map(l=>veiligTekst(l.naam)+' (los)').join(', '):''}</div>
           ${pdfLinks?`<div style="margin-top:4px">${pdfLinks}</div>`:''}
         </div>
         ${isBeheerder?`<div class="kactions" onclick="event.stopPropagation()">
@@ -4632,7 +4653,7 @@ function openPlan(type,id){
       const tijden=t1&&t4?`${t1} → ${t4}`:t1||t4||'';
       return`<div class="plan-klus" style="border-left-color:${accent}" onclick="openDetail('${k.id}')">
         <div class="plan-klus-date">${ds}${tijden?` · ${tijden}`:''}</div>
-        ${k.naam?`<div class="plan-klus-naam">${k.naam}</div>`:''}
+        ${k.naam?`<div class="plan-klus-naam">${veiligTekst(k.naam)}</div>`:''}
         <div class="plan-klus-meta">${k.personen} pers.</div>
       </div>`;
     }).join('')}</div>`;
@@ -4680,7 +4701,7 @@ function renderTruckChips(bezette){
       t.rijbewijs?'Rijbewijs '+t.rijbewijs:'',
       t.milieuzone_ok===false?'Mag de milieuzone niet in':'',
       warn?'Al ingepland op deze dag':''].filter(Boolean).join(' · ');
-    return`<div class="chip${on?' on':''}${warn?' warn':''}" title="${titel}" onclick="toggleTruck('${t.id}')">${t.label}${merk}${warn?' ⚠':''}</div>`;
+    return`<div class="chip${on?' on':''}${warn?' warn':''}" title="${veiligTekst(titel)}" onclick="toggleTruck('${t.id}')">${veiligTekst(t.label)}${merk}${warn?' ⚠':''}</div>`;
   }).join('');
   renderTruckInfo();
 }
@@ -4784,7 +4805,7 @@ function renderPersChips(bezette){
       const dubbel=persLaatsteBezet.includes(p.id);
       const let_=!check.ok?' 🚫':dubbel?' ⚠':'';
       const titel=!check.ok?p.naam+' '+check.reden:dubbel?'Staat die dag al op een andere klus':'';
-      return`<div class="chip on${!check.ok?' niet':''}" onclick="togglePers('${p.id}')" title="${titel}">${p.naam}${let_} ✕</div>`;
+      return`<div class="chip on${!check.ok?' niet':''}" onclick="togglePers('${p.id}')" title="${veiligTekst(titel)}">${veiligTekst(p.naam)}${let_} ✕</div>`;
     }).join('')
     :'<div class="pers-leeg">Nog niemand gekozen</div>';
 
@@ -4811,7 +4832,7 @@ function renderPersLijsten(){
   const chip=(p,soort)=>{
     const merk=soort==='vrij'?'':soort==='bezig'?' ⚠':' 🚫';
     const cls=soort==='vrij'?'chip':soort==='bezig'?'chip warn':'chip niet';
-    return`<div class="${cls}" onclick="togglePers('${p.id}')" title="${p.reden?p.naam+' '+p.reden:''}">${p.naam}${merk}</div>`;
+    return`<div class="${cls}" onclick="togglePers('${p.id}')" title="${p.reden?veiligTekst(p.naam+' '+p.reden):''}">${veiligTekst(p.naam)}${merk}</div>`;
   };
   const groep=(titel,lijst,soort,leegTekst)=>
     `<div class="pers-kop">${titel} (${lijst.length})</div>`
@@ -4827,9 +4848,9 @@ function renderTruckSoortBlocks(){
   el.innerHTML=formTrucks.map(tid=>{
     const t=TRUCKS.find(x=>x.id===tid);if(!t)return'';
     const sel=formTruckSoorten[tid]||[];
-    return`<div class="truck-soort-block"><div class="truck-soort-naam"><div class="ls" style="background:${t.color}"></div>${t.label}</div>
+    return`<div class="truck-soort-block"><div class="truck-soort-naam"><div class="ls" style="background:${t.color}"></div>${veiligTekst(t.label)}</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px">${SOORTEN.map(s=>{const on=sel.includes(s.id);
-        return`<div class="chip${on?' on':''}" style="font-size:10px;padding:4px 9px" onclick="toggleTruckSoort('${tid}','${s.id}')">${s.titel}</div>`;}).join('')}</div>
+        return`<div class="chip${on?' on':''}" style="font-size:10px;padding:4px 9px" onclick="toggleTruckSoort('${tid}','${s.id}')">${veiligTekst(s.titel)}</div>`;}).join('')}</div>
     </div>`;}).join('');
 }
 function onDateChange(){
@@ -4953,7 +4974,7 @@ function renderShiftRijen(){
   const veld='font-size:12px;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-family:var(--font);background:var(--surface);color:var(--text)';
   el.innerHTML=formShifts.map((s,i)=>`
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-      <input type="text" value="${(s.naam||'').replace(/"/g,'&quot;')}" placeholder="bv. Opbouw" oninput="shiftVeld('${s.sleutel}','naam',this.value)" style="${veld};flex:1;min-width:110px">
+      <input type="text" value="${veiligTekst(s.naam)}" placeholder="bv. Opbouw" oninput="shiftVeld('${s.sleutel}','naam',this.value)" style="${veld};flex:1;min-width:110px">
       <input type="text" class="tijd-input" value="${s.start||''}" placeholder="09.00" maxlength="5" oninput="formatTijd(this);shiftVeld('${s.sleutel}','start',this.value)" style="${veld};width:64px">
       <input type="text" class="tijd-input" value="${s.eind||''}" placeholder="17.00" maxlength="5" oninput="formatTijd(this);shiftVeld('${s.sleutel}','eind',this.value)" style="${veld};width:64px">
       <input type="number" value="${s.nodig}" min="0" max="50" inputmode="numeric" title="Aantal mensen" oninput="shiftVeld('${s.sleutel}','nodig',this.value)" style="${veld};width:60px">
@@ -4972,12 +4993,12 @@ function renderPersShiftKeuze(){
   const rijen=formPers.map(gid=>{
     const p=PERSONEEL.find(x=>x.id===gid);
     return`<div style="display:flex;gap:8px;align-items:center;margin-bottom:5px">
-      <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p?.naam||'—'}</span>
+      <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${veiligTekst(p?.naam||'—')}</span>
       <select onchange="formPersShift['${gid}']=this.value" style="${veld};max-width:190px">${opties(formPersShift[gid]||'')}</select>
     </div>`;
   }).concat(formLos.map((l,i)=>`
     <div style="display:flex;gap:8px;align-items:center;margin-bottom:5px">
-      <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${l.naam} <span style="color:var(--muted)">(los)</span></span>
+      <span style="font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${veiligTekst(l.naam)} <span style="color:var(--muted)">(los)</span></span>
       <select onchange="formLosShift['${i}']=this.value" style="${veld};max-width:190px">${opties(formLosShift[i]||'')}</select>
     </div>`)).join('');
 
@@ -5127,7 +5148,7 @@ function renderLosseKrachten(){
   const el=document.getElementById('losseKrachtenLijst');
   if(!el)return;
   el.innerHTML=formLos.length
-    ?formLos.map((l,i)=>`<div class="chip on" style="cursor:default">${l.naam}${l.telefoon?' · '+l.telefoon:''}${l.uurloon!=null?' · € '+Number(l.uurloon).toFixed(2).replace('.',','):''}<span onclick="verwijderLosseKracht(${i})" style="margin-left:8px;cursor:pointer;font-weight:700" title="Verwijderen">×</span></div>`).join('')
+    ?formLos.map((l,i)=>`<div class="chip on" style="cursor:default">${veiligTekst(l.naam)}${l.telefoon?' · '+veiligTekst(l.telefoon):''}${l.uurloon!=null?' · € '+Number(l.uurloon).toFixed(2).replace('.',','):''}<span onclick="verwijderLosseKracht(${i})" style="margin-left:8px;cursor:pointer;font-weight:700" title="Verwijderen">×</span></div>`).join('')
     :'<span style="font-size:12px;color:var(--muted);font-style:italic">Nog geen losse krachten</span>';
 }
 function closeModal(){document.getElementById('modalOverlay').classList.remove('open');}
@@ -5148,8 +5169,8 @@ function renderPdfList(){
   z.className='bij'+(all.length?' has':'');
   const pl=document.getElementById('pdfList');if(!pl)return;
   pl.innerHTML=[
-    ...existingPdfs.map(p=>`<div class="pdf-item"><span class="pdf-name" onclick="openPdf('${p.url}','${p.naam}')">${p.naam}</span><button class="btn-danger-sm" onclick="removeExistingPdf('${p.id}')">×</button></div>`),
-    ...formPdfs.map((p,i)=>`<div class="pdf-item"><span class="pdf-name" style="color:var(--text)">${p.naam} ✓ klaar om op te slaan</span><button class="btn-danger-sm" onclick="removeNewPdf(${i})">×</button></div>`),
+    ...existingPdfs.map(p=>`<div class="pdf-item"><span class="pdf-name" onclick="openPdf('${veiligJs(p.url)}','${veiligJs(p.naam)}')">${veiligTekst(p.naam)}</span><button class="btn-danger-sm" onclick="removeExistingPdf('${p.id}')">×</button></div>`),
+    ...formPdfs.map((p,i)=>`<div class="pdf-item"><span class="pdf-name" style="color:var(--text)">${veiligTekst(p.naam)} ✓ klaar om op te slaan</span><button class="btn-danger-sm" onclick="removeNewPdf(${i})">×</button></div>`),
   ].join('');
 }
 function removeExistingPdf(id){existingPdfs=existingPdfs.filter(p=>p.id!==id);renderPdfList();}
@@ -5572,10 +5593,10 @@ function openDetail(id){
   const soortEl=document.getElementById('detailSoort');
   if(k.truckSoorten&&k.truckSoorten.length){
     const byTruck={};k.truckSoorten.forEach(ts=>{if(!byTruck[ts.truck.id])byTruck[ts.truck.id]={truck:ts.truck,soorten:[]};byTruck[ts.truck.id].soorten.push(ts.soort.titel);});
-    soortEl.innerHTML=Object.values(byTruck).map(({truck,soorten})=>`<div style="margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:${truck.color}">${truck.label}:</span> <span style="font-size:13px">${soorten.join(', ')}</span></div>`).join('');
+    soortEl.innerHTML=Object.values(byTruck).map(({truck,soorten})=>`<div style="margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:${truck.color}">${veiligTekst(truck.label)}:</span> <span style="font-size:13px">${soorten.join(', ')}</span></div>`).join('');
   }else{
     const sl=k.soorten&&k.soorten.length?k.soorten:k.food?[{titel:k.food}]:[];
-    soortEl.innerHTML=sl.length?sl.map(s=>`<span style="font-size:13px">${s.titel}</span>`).join(', '):'–';
+    soortEl.innerHTML=sl.length?sl.map(s=>`<span style="font-size:13px">${veiligTekst(s.titel)}</span>`).join(', '):'–';
   }
   document.getElementById('detailPersonen').textContent=k.personen+' personen';
   const ad=document.getElementById('detailAdresSection');ad.style.display=(k.adres||k.milieuzone)?'':'none';
@@ -5588,7 +5609,7 @@ function openDetail(id){
   const cs=document.getElementById('detailContactSection');cs.style.display=(k.contactpersoon||k.telefoon)?'':'none';
   document.getElementById('detailContact').textContent=k.contactpersoon||'';
   const tel=document.getElementById('detailTelefoon');tel.style.display=k.telefoon?'':'none';
-  tel.innerHTML=k.telefoon?`<a href="tel:${k.telefoon}" style="color:#2563EB;text-decoration:none;font-size:13px">${k.telefoon}</a>`:'';
+  tel.innerHTML=k.telefoon?`<a href="tel:${veiligTekst(k.telefoon)}" style="color:#2563EB;text-decoration:none;font-size:13px">${veiligTekst(k.telefoon)}</a>`:'';
   // Heeft de klus shifts, dan zetten we de mensen per shift onder elkaar; dat
   // leest een stuk prettiger dan een rij namen zonder tijden.
   const alleNamen=k.personeel.map(p=>p.naam).concat((k.losse||[]).map(l=>l.naam+' (los)'));
@@ -5602,7 +5623,7 @@ function openDetail(id){
       const tijd=[tijdFromDb(sh.start_tijd),tijdFromDb(sh.eind_tijd)].filter(Boolean).join(' – ');
       const tekort=Math.max(0,(sh.personeel_nodig||0)-wie.length);
       return`<div style="margin-bottom:7px">
-        <div style="font-size:12px;font-weight:600;color:var(--text)">${sh.naam||'Shift'}${tijd?` <span style="font-weight:400;color:var(--muted)">${tijd}</span>`:''}</div>
+        <div style="font-size:12px;font-weight:600;color:var(--text)">${veiligTekst(sh.naam||'Shift')}${tijd?` <span style="font-weight:400;color:var(--muted)">${tijd}</span>`:''}</div>
         <div style="font-size:13px">${wie.length?wie.join(', '):'<span style="color:var(--muted);font-style:italic">nog niemand</span>'}${tekort?` <span style="color:#B45309;font-size:11px;font-weight:600">· nog ${tekort} nodig</span>`:''}</div>
       </div>`;
     }).join('');
@@ -5618,7 +5639,7 @@ function openDetail(id){
   tekenKlusUren(k);
   const ns=document.getElementById('detailNotitieSection');ns.style.display=k.notitie?'':'none';document.getElementById('detailNotitie').textContent=k.notitie;
   const pdfs=document.getElementById('detailPdfSection');pdfs.style.display=k.pdfs&&k.pdfs.length?'':'none';
-  document.getElementById('detailPdfs').innerHTML=k.pdfs?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${p.url}\`,\`${p.naam}\`)">${p.naam}</span>`).join(''):'';
+  document.getElementById('detailPdfs').innerHTML=k.pdfs?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${veiligJs(p.url)}\`,\`${veiligJs(p.naam)}\`)">${veiligTekst(p.naam)}</span>`).join(''):'';
   document.getElementById('detailEditBtn').style.display=CURRENT_ROL==='beheerder'?'':'none';
   document.getElementById('detailEditBtn').onclick=()=>{closeDetail();editKlus(id);};
   const bev=document.getElementById('detailBevestigBtn');
@@ -6296,8 +6317,8 @@ function renderMededelingen(meds){
         </div>
         <div class="med-dag-mob-items">${dagMeds.map(m=>`<div class="med-dag-mob-item"${m.verjaardag?' style="cursor:default"':` onclick="${isBeheerder?`openMedModal('${m.id}')`:`openMedDetail('${m.id}')`}"`}>
           <div style="flex:1;min-width:0">
-            <div class="med-dag-mob-titel">${m.titel}</div>
-            ${m.beschrijving?`<div class="med-dag-mob-beschr">${m.beschrijving}</div>`:''}
+            <div class="med-dag-mob-titel">${veiligTekst(m.titel)}</div>
+            ${m.beschrijving?`<div class="med-dag-mob-beschr">${veiligTekst(m.beschrijving)}</div>`:''}
           </div>
           ${m.verjaardag?'':isBeheerder?`<button class="med-pill-del" style="font-size:18px;color:var(--muted);padding:4px 8px" onclick="event.stopPropagation();deleteMed('${m.id}')">×</button>`:`<span class="med-dag-mob-chevron">›</span>`}
         </div>`).join('')}</div>
@@ -6315,7 +6336,7 @@ function renderMededelingen(meds){
       const ds=fmt(d);const isToday=ds===todayStr;const isPast=ds<todayStr;
       const dagMeds=medsMetDatum.filter(m=>m.datum===ds);
       return`<div class="med-dag${isToday?' vandaag-dag':''}${isPast?' verleden':''}"><div class="med-dag-hdr${isToday?' vandaag':''}"><div class="med-dag-naam">${dagNamen[i]}</div><div class="med-dag-num">${d.getDate()}</div></div>
-        <div class="med-dag-items">${dagMeds.length?dagMeds.map(m=>`<div class="med-pill"${m.verjaardag?' style="cursor:default;background:#FFF7ED"':` onclick="${isBeheerder?`openMedModal('${m.id}')`:`openMedDetail('${m.id}')`}"`}><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.titel}</span>${(!m.verjaardag&&isBeheerder)?`<button class="med-pill-del" onclick="event.stopPropagation();deleteMed('${m.id}')">×</button>`:''}</div>`).join(''):'<div class="med-geen">–</div>'}</div>
+        <div class="med-dag-items">${dagMeds.length?dagMeds.map(m=>`<div class="med-pill"${m.verjaardag?' style="cursor:default;background:#FFF7ED"':` onclick="${isBeheerder?`openMedModal('${m.id}')`:`openMedDetail('${m.id}')`}"`}><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${veiligTekst(m.titel)}</span>${(!m.verjaardag&&isBeheerder)?`<button class="med-pill-del" onclick="event.stopPropagation();deleteMed('${m.id}')">×</button>`:''}</div>`).join(''):'<div class="med-geen">–</div>'}</div>
       </div>`;
     }).join('');
     html=`<div class="med-week">${weekGrid}</div>`;
@@ -6325,8 +6346,8 @@ function renderMededelingen(meds){
     html+=`<div class="med-zonder-datum"><div class="med-zonder-titel">Zonder datum</div>
       ${medsZonderDatum.map(m=>`<div class="${isMobiel?'med-dag-mob-item':''}style="display:flex;align-items:flex-start;justify-content:space-between;padding:${isMobiel?'0':'6px 9px'};background:${isMobiel?'transparent':'var(--bg)'};border-radius:7px;gap:8px;margin-bottom:${isMobiel?'0':'5px'}">
         <div style="flex:1;cursor:pointer;padding:${isMobiel?'.75rem 1rem':0}" onclick="${isBeheerder?`openMedModal('${m.id}')`:`openMedDetail('${m.id}')`}">
-          <div style="font-size:${isMobiel?'14':'12'}px;font-weight:500">${m.titel}</div>
-          ${m.beschrijving?`<div style="font-size:${isMobiel?'12':'10'}px;color:var(--muted);margin-top:2px">${m.beschrijving}</div>`:''}
+          <div style="font-size:${isMobiel?'14':'12'}px;font-weight:500">${veiligTekst(m.titel)}</div>
+          ${m.beschrijving?`<div style="font-size:${isMobiel?'12':'10'}px;color:var(--muted);margin-top:2px">${veiligTekst(m.beschrijving)}</div>`:''}
         </div>
         ${isBeheerder?`<button class="${isMobiel?'btn-danger-sm':'btn-danger-sm'}" style="${isMobiel?'margin:.75rem .75rem 0 0;align-self:flex-start':''}" onclick="deleteMed('${m.id}')">×</button>`:''}
       </div>`).join('')}
@@ -6385,7 +6406,7 @@ function renderBeheer(){
         <button class="btn-edit" onclick="openTruck('${t.id}')">Bewerk</button>
       </div>
     </div>`).join('');
-  document.getElementById('soortenBeheer').innerHTML=SOORTEN.map(s=>`<div class="bi" id="sb-${s.id}"><div class="bi-left"><div class="bi-name">${s.titel}</div>${s.beschrijving?`<div class="bi-desc">${s.beschrijving}</div>`:''}</div><div class="bi-actions"><button class="btn-edit" onclick="startEditSoort('${s.id}')">Bewerk</button><button class="btn-danger-sm" onclick="deleteSoort('${s.id}')">×</button></div></div>`).join('');
+  document.getElementById('soortenBeheer').innerHTML=SOORTEN.map(s=>`<div class="bi" id="sb-${s.id}"><div class="bi-left"><div class="bi-name">${veiligTekst(s.titel)}</div>${s.beschrijving?`<div class="bi-desc">${veiligTekst(s.beschrijving)}</div>`:''}</div><div class="bi-actions"><button class="btn-edit" onclick="startEditSoort('${s.id}')">Bewerk</button><button class="btn-danger-sm" onclick="deleteSoort('${s.id}')">×</button></div></div>`).join('');
   loadSkills();
   renderVasteDiensten();
   laadInstellingen();
@@ -6403,7 +6424,7 @@ function renderVasteDiensten(){
     const regels=VASTE_DIENSTEN.filter(v=>v.weekdag===dag);
     const rijen=regels.map(v=>`
       <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-        <input type="text" id="vdn-${v.id}" value="${(v.naam||'').replace(/"/g,'&quot;')}" placeholder="bv. Ochtend" title="Laat leeg om de tijden als naam te gebruiken" style="${veld};flex:1;min-width:110px">
+        <input type="text" id="vdn-${v.id}" value="${veiligTekst(v.naam)}" placeholder="bv. Ochtend" title="Laat leeg om de tijden als naam te gebruiken" style="${veld};flex:1;min-width:110px">
         <input type="text" class="tijd-input" id="vds-${v.id}" value="${tijdFromDb(v.start_tijd)}" placeholder="11.00" maxlength="5" oninput="formatTijd(this)" style="${veld};width:64px">
         <input type="text" class="tijd-input" id="vde-${v.id}" value="${tijdFromDb(v.eind_tijd)}" placeholder="20.00" maxlength="5" oninput="formatTijd(this)" style="${veld};width:64px">
         <input type="number" id="vdp-${v.id}" value="${v.personeel_nodig||1}" min="0" max="20" inputmode="numeric" style="${veld};width:56px" title="Aantal mensen">
@@ -6608,7 +6629,7 @@ function truckBadges(t,kort){
   if(t.zitplaatsen!=null&&!isAanhanger(t))uit+=b(t.zitplaatsen+' zitplaats'+(t.zitplaatsen===1?'':'en'),'#F0FDF4','#166534');
   if(kort)return uit;
   if(t.brandstof&&TRUCK_BRANDSTOF[t.brandstof])uit+=b(TRUCK_BRANDSTOF[t.brandstof],'#F3F4F6','#374151');
-  if(!t.milieuzone_ok)uit+=b('Geen milieuzone','#FEF2F2','#991B1B',t.milieuzone_note||'Mag de milieuzone niet in');
+  if(!t.milieuzone_ok)uit+=b('Geen milieuzone','#FEF2F2','#991B1B',veiligTekst(t.milieuzone_note||'Mag de milieuzone niet in'));
   if(t.kilometerheffing)uit+=b('Kilometerheffing','#FFFBEB','#B45309');
   if(t.trekhaak)uit+=b('Trekhaak','#F0FDF4','#166534');
   const maten=truckMaten(t);
@@ -6743,14 +6764,14 @@ async function addTruck(){
 }
 function startEditPers(id){
   const p=PERSONEEL.find(x=>x.id===id);
-  document.getElementById('pb-'+id).innerHTML=`<div style="flex:1"><div class="bi-edit-form"><input type="text" id="ep-${id}" value="${p.naam}" style="font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:var(--font)"><div class="bi-edit-row"><button class="btn-danger-sm" onclick="renderBeheer()">Annuleer</button><button class="btn-sm" onclick="savePers('${id}')">Opslaan</button></div></div></div>`;
+  document.getElementById('pb-'+id).innerHTML=`<div style="flex:1"><div class="bi-edit-form"><input type="text" id="ep-${id}" value="${veiligTekst(p.naam)}" style="font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:var(--font)"><div class="bi-edit-row"><button class="btn-danger-sm" onclick="renderBeheer()">Annuleer</button><button class="btn-sm" onclick="savePers('${id}')">Opslaan</button></div></div></div>`;
 }
 async function savePers(id){const naam=document.getElementById('ep-'+id).value.trim();if(!naam)return;await sb.from('personeel').update({naam}).eq('id',id);await loadAll();renderBeheer();}
 async function addPersoneelLid(){const naam=document.getElementById('newPersNaam').value.trim();if(!naam)return;await sb.from('personeel').insert({naam});document.getElementById('newPersNaam').value='';await loadAll();renderBeheer();}
 async function deletePersoneel(id){if(!confirm('Personeelslid verwijderen?'))return;await sb.from('klus_personeel').delete().eq('personeel_id',id);await sb.from('personeel').delete().eq('id',id);await loadAll();renderBeheer();}
 function startEditSoort(id){
   const s=SOORTEN.find(x=>x.id===id);
-  document.getElementById('sb-'+id).innerHTML=`<div style="flex:1"><div class="bi-edit-form"><input type="text" id="est-${id}" value="${s.titel}" style="font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:var(--font)"><textarea id="esb-${id}" style="font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);resize:vertical;min-height:44px">${s.beschrijving||''}</textarea><div class="bi-edit-row"><button class="btn-danger-sm" onclick="renderBeheer()">Annuleer</button><button class="btn-sm" onclick="saveSoort('${id}')">Opslaan</button></div></div></div>`;
+  document.getElementById('sb-'+id).innerHTML=`<div style="flex:1"><div class="bi-edit-form"><input type="text" id="est-${id}" value="${veiligTekst(s.titel)}" style="font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:var(--font)"><textarea id="esb-${id}" style="font-size:12px;padding:6px 9px;border:1px solid var(--border);border-radius:6px;font-family:var(--font);resize:vertical;min-height:44px">${veiligTekst(s.beschrijving)}</textarea><div class="bi-edit-row"><button class="btn-danger-sm" onclick="renderBeheer()">Annuleer</button><button class="btn-sm" onclick="saveSoort('${id}')">Opslaan</button></div></div></div>`;
 }
 async function saveSoort(id){const titel=document.getElementById('est-'+id).value.trim();const beschrijving=document.getElementById('esb-'+id).value.trim();if(!titel)return;await sb.from('soorten').update({titel,beschrijving}).eq('id',id);await loadAll();renderBeheer();}
 async function addSoort(){const titel=document.getElementById('newSoortTitel').value.trim();const beschrijving=document.getElementById('newSoortBeschr').value.trim();if(!titel)return;await sb.from('soorten').insert({titel,beschrijving,volgorde:SOORTEN.length+1});document.getElementById('newSoortTitel').value='';document.getElementById('newSoortBeschr').value='';await loadAll();renderBeheer();}
@@ -6881,8 +6902,9 @@ async function saveProfielGegevens(){
 }
 
 async function saveProfielNaam(){
-  const naam=document.getElementById('profielNaamInput').value.trim();
+  const naam=schoneInvoer(document.getElementById('profielNaamInput').value,80);
   if(!naam)return;
+  document.getElementById('profielNaamInput').value=naam;
   await sb.from('gebruikers').update({naam}).eq('id',CURRENT_USER.id);
   CURRENT_NAAM=naam;
   document.getElementById('userBadge').textContent=naam;
@@ -7011,8 +7033,8 @@ async function getLocatie(){
       afgerond=true;
       clearTimeout(vangnet);
       resolve({tekst:waarde,ok:!!ok,reden:reden||'',
-               lat:(lat==null?null:Number(lat.toFixed(6))),
-               lng:(lng==null?null:Number(lng.toFixed(6)))});
+               lat:(lat==null?null:Number(lat.toFixed(3))),
+               lng:(lng==null?null:Number(lng.toFixed(3)))});
     };
     // Vangnet: als er onverhoopt niets terugkomt blijft de knop anders eeuwig
     // op "Locatie ophalen..." staan.
@@ -7201,7 +7223,7 @@ async function loadUrenPersoneel(){
     const labelStatus=r.status==='goedgekeurd'?'Goedgekeurd':r.status==='afgewezen'?'Afgewezen':'In afwachting';
     return`<div class="uur-item">
       <div class="uur-item-info">
-        <div class="uur-item-naam">${k?.naam||k?.food||'Klus'}</div>
+        <div class="uur-item-naam">${veiligTekst(k?.naam||k?.food||'Klus')}</div>
         <div class="uur-item-sub">${datum}${r.pauze_minuten?' · '+r.pauze_minuten+' min pauze':''}</div>
         <div class="uur-item-sub" style="margin-top:2px;color:var(--text)">Ingeklokt <b>${in_t}</b> · ${r.uitgeklokt_op?`uitgeklokt <b>${uit_t}</b>`:'<span style="color:#B45309;font-weight:600">nog niet uitgeklokt</span>'}</div>
         ${Number(r.km)>0?`<div class="uur-item-sub" style="margin-top:2px">🚗 ${String(Number(r.km)).replace('.',',')} km · ${lkEuro(kmBedrag(r.km,r.km_tarief))}</div>`:''}
@@ -7263,7 +7285,7 @@ function renderIngeklokt(reg,klus){
     </div>
     <div class="uur-loc">
       <div class="uur-loc-dot"></div>
-      <div class="uur-loc-txt">Ingeklokt om ${inTijd.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}${reg.locatie_in&&reg.locatie_in!=='Locatie geweigerd'&&reg.locatie_in!=='Locatie niet beschikbaar'?` · ${reg.locatie_in}`:''}</div>
+      <div class="uur-loc-txt">Ingeklokt om ${inTijd.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}${reg.locatie_in&&reg.locatie_in!=='Locatie geweigerd'&&reg.locatie_in!=='Locatie niet beschikbaar'?` · ${veiligTekst(reg.locatie_in)}`:''}</div>
     </div>
     <button class="uur-btn uur-btn-out" style="margin-top:14px" onclick="vraagPauze('${reg.id}')">Uitklokken</button>`;
 
@@ -7545,7 +7567,7 @@ function sluitPauze(){
 
 async function bevestigPauze(){
   const pauze=Math.max(0,parseInt(document.getElementById('pauzeVeld').value)||0);
-  const notitie=(document.getElementById('pauzeNotitie')?.value||'').trim();
+  const notitie=schoneInvoer(document.getElementById('pauzeNotitie')?.value,500);
   const km=Math.max(0,Number(document.getElementById('pauzeKm')?.value)||0);
   const foto=PAUZE_FOTO;
   sluitPauze();
@@ -7697,6 +7719,27 @@ function veiligTekst(t){
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
+// Tekst die in een onclick belandt zit in twee lagen tegelijk: een JS-string
+// binnen een HTML-attribuut. Eerst de JS-kant dichttimmeren (backslash, beide
+// soorten aanhalingstekens, en ${ zodat een backtick-string niets uitvoert),
+// daarna de HTML-kant. De browser haalt de HTML-laag er weer af voordat de JS
+// wordt gelezen, dus in die volgorde klopt het.
+// Wat iemand in een tekstveld typt hoeft nooit HTML te zijn. We halen de
+// punthaken er al bij het opslaan uit, zodat er ook niets geks in de database
+// komt te staan. Het scherm filtert daarnaast nog een keer — twee sloten.
+function schoneInvoer(t,max){
+  const uit=String(t==null?'':t).replace(/[<>]/g,'').replace(/\s+/g,' ').trim();
+  return max?uit.slice(0,max):uit;
+}
+
+function veiligJs(t){
+  return veiligTekst(String(t==null?'':t)
+    .replace(/\\/g,'\\\\')
+    .replace(/'/g,"\\'")
+    .replace(/`/g,'\\`')
+    .replace(/\$\{/g,'\\${'));
+}
+
 // ── GEPLANDE TIJD BIJ EEN URENREGISTRATIE ────────────────────────────────
 // Om te kunnen zien of iemand langer of korter heeft gewerkt dan afgesproken.
 // Stond hij in een shift, dan gelden de tijden van die shift; anders die van de
@@ -7819,7 +7862,7 @@ async function loadUrenBeheer(){
       return`<div class="uur-item" id="uur-${r.id}">
         <div class="uur-item-info">
           <div class="uur-item-naam">${gMap[r.gebruiker_id]||'Onbekend'}${r.handmatig?' <span style="font-size:10px;font-weight:500;color:var(--muted)">(handmatig)</span>':''}</div>
-          <div class="uur-item-sub">${datum} · ${k?.naam||'Klus'}</div>
+          <div class="uur-item-sub">${datum} · ${veiligTekst(k?.naam||'Klus')}</div>
           ${klokRegel}
           <div class="uur-item-sub" style="margin-top:2px;${teWeinig?'color:#B45309;font-weight:600':''}">
             Pauze: ${pauze} min${teWeinig?` — normaal ${nodig} min bij deze lengte`:''}
@@ -7888,7 +7931,7 @@ async function loadUrenBeheer(){
     maandEl.innerHTML=vlagRegel+`<table class="uur-tbl">
       <thead><tr><th>Naam</th><th>Klussen</th><th style="text-align:right">Uren</th></tr></thead>
       <tbody>
-        ${rijen.map(r=>`<tr><td>${r.naam}</td><td>${r.klussen.size}</td><td style="text-align:right;font-weight:600">${minToStr(r.minuten)}</td></tr>`).join('')}
+        ${rijen.map(r=>`<tr><td>${veiligTekst(r.naam)}</td><td>${r.klussen.size}</td><td style="text-align:right;font-weight:600">${minToStr(r.minuten)}</td></tr>`).join('')}
         <tr class="totaal"><td>Totaal</td><td></td><td style="text-align:right">${minToStr(totaalMin)}</td></tr>
       </tbody>
     </table>`;
@@ -7929,7 +7972,7 @@ async function startEditUren(id){
     <input type="number" id="edit-km-${id}" value="${r.km!=null?r.km:''}" min="0" max="2000" step="1" inputmode="numeric" placeholder="0"
       style="width:100%;font-size:15px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);text-align:center;margin-bottom:8px">
     <div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:4px">NOTITIE (optioneel)</div>
-    <input type="text" id="edit-notitie-${id}" value="${r.notitie_beh||''}" placeholder="Toelichting bij wijziging..."
+    <input type="text" id="edit-notitie-${id}" value="${veiligTekst(r.notitie_beh)}" placeholder="Toelichting bij wijziging..."
       style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);margin-bottom:10px">
     <div style="display:flex;gap:8px;justify-content:flex-end">
       <button class="btn-ghost" onclick="loadUrenBeheer()" style="font-size:12px;padding:7px 14px">Annuleer</button>
@@ -7946,7 +7989,7 @@ async function saveEditUren(id,status){
   const datum=el?.dataset.datum||fmt(new Date());
   const inVal=document.getElementById(`edit-in-${id}`)?.value.trim().replace(':','').padStart(4,'0');
   const uitVal=document.getElementById(`edit-uit-${id}`)?.value.trim().replace(':','').padStart(4,'0');
-  const notitie=document.getElementById(`edit-notitie-${id}`)?.value.trim();
+  const notitie=schoneInvoer(document.getElementById(`edit-notitie-${id}`)?.value,300);
 
   const parseTime=(d,t)=>{
     if(!t||t.length<4)return null;
@@ -7999,7 +8042,7 @@ async function openHandmatig(){
   const opties=(KLUSSEN||[])
     .filter(k=>parseDate(k.datum)>=grens)
     .sort((a,b)=>a.datum.localeCompare(b.datum))
-    .map(k=>`<option value="${k.id}">${parseDate(k.datum).toLocaleDateString('nl-NL',{day:'numeric',month:'short'})} — ${k.naam||k.food||'Klus'}</option>`)
+    .map(k=>`<option value="${k.id}">${parseDate(k.datum).toLocaleDateString('nl-NL',{day:'numeric',month:'short'})} — ${veiligTekst(k.naam||k.food||'Klus')}</option>`)
     .join('');
   document.getElementById('hmKlus').innerHTML='<option value="">Geen klus</option>'+opties;
 
@@ -8013,7 +8056,7 @@ function hmFilter(){
   const sel=document.getElementById('hmPersoon');
   const huidig=sel.value;
   const lijst=zoek?HM_PERSONEN.filter(m=>(m.naam||'').toLowerCase().includes(zoek)):HM_PERSONEN;
-  sel.innerHTML=lijst.map(m=>`<option value="${m.id}">${m.naam}</option>`).join('');
+  sel.innerHTML=lijst.map(m=>`<option value="${m.id}">${veiligTekst(m.naam)}</option>`).join('');
   if(huidig&&lijst.some(m=>m.id===huidig))sel.value=huidig;
 }
 
@@ -8057,7 +8100,7 @@ async function bewaarHandmatig(){
   const gebruiker_id=document.getElementById('hmPersoon').value;
   const datum=document.getElementById('hmDatum').value;
   const klus_id=document.getElementById('hmKlus').value||null;
-  const notitie=document.getElementById('hmNotitie').value.trim();
+  const notitie=schoneInvoer(document.getElementById('hmNotitie').value,300);
   const km=hmKmWaarde();
   const r=hmMinuten();
 
@@ -8142,7 +8185,7 @@ function expFilterPersonen(){
   const huidig=sel.value;
   const lijst=zoek?EXPORT_PERSONEN.filter(m=>(m.naam||'').toLowerCase().includes(zoek)):EXPORT_PERSONEN;
   sel.innerHTML='<option value="">Iedereen</option>'+
-    lijst.map(m=>`<option value="${m.id}">${m.naam}</option>`).join('');
+    lijst.map(m=>`<option value="${m.id}">${veiligTekst(m.naam)}</option>`).join('');
   if(huidig&&lijst.some(m=>m.id===huidig))sel.value=huidig;
   const info=document.getElementById('expZoekInfo');
   if(info)info.textContent=zoek
@@ -9501,7 +9544,7 @@ async function loadAlleBeschikbaarheid(){
         ${dagBesch.map(b=>{
           const g=gMap[b.gebruiker_id];
           const tijdStr=b.tijd_start?` ${b.tijd_start.slice(0,5)}–${b.tijd_eind?b.tijd_eind.slice(0,5):'?'}`:'';
-          return`<div style="font-size:9px;font-weight:600;border-radius:3px;padding:2px 4px;background:#FEE2E2;color:#991B1B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${g?.naam||'?'} — niet beschikbaar${tijdStr}${b.reden?' — '+b.reden:''}">${g?.naam?.split(' ')[0]||'?'}${b.reden?' · '+b.reden:''}${tijdStr}</div>`;
+          return`<div style="font-size:9px;font-weight:600;border-radius:3px;padding:2px 4px;background:#FEE2E2;color:#991B1B;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${veiligTekst(g?.naam||'?')} — niet beschikbaar${tijdStr}${b.reden?' — '+veiligTekst(b.reden):''}">${veiligTekst(g?.naam?.split(' ')[0]||'?')}${b.reden?' · '+veiligTekst(b.reden):''}${tijdStr}</div>`;
         }).join('')}
       </div>
     </div>`;
@@ -9526,8 +9569,8 @@ async function loadAlleBeschikbaarheid(){
     const tijdStr=b.tijd_start?` · ${b.tijd_start.slice(0,5)}–${b.tijd_eind?b.tijd_eind.slice(0,5):'?'}`:'';
     return`<div class="besch-item ${b.status}" style="${wel?'border-left:3px solid #2563EB':''}">
       <div class="besch-info">
-        <div class="besch-naam">${g?.naam||'Onbekend'}</div>
-        <div class="besch-reden">${wel?'Kan werken':(b.reden||'Onbeschikbaar')}${wel&&b.reden?' — '+b.reden:''}</div>
+        <div class="besch-naam">${veiligTekst(g?.naam||'Onbekend')}</div>
+        <div class="besch-reden">${veiligTekst(wel?'Kan werken':(b.reden||'Onbeschikbaar'))}${wel&&b.reden?' — '+veiligTekst(b.reden):''}</div>
         <div class="besch-datum">${ds}${de}${tijdStr}</div>
         ${wel?'':verlofRegelHtml(b)}
       </div>
@@ -9615,7 +9658,7 @@ function openBeschModal(id=null,modus){
 function closeBeschModal(){document.getElementById('beschModal').classList.remove('open');}
 
 async function saveBeschikbaarheid(){
-  const reden=document.getElementById('bReden').value.trim();
+  const reden=schoneInvoer(document.getElementById('bReden').value,200);
   const datum_start=document.getElementById('bStart').value;
   const datum_eind=document.getElementById('bEind').value||datum_start;
   const tijd_start=tijdToDb(document.getElementById('bTijdStart').value);
@@ -10375,7 +10418,7 @@ function afwRenderLijst(){
         const aan=AFW_GEKOZEN.has(p.id);
         return`<label class="afw-regel${aan?' aan':''}">
           <input type="checkbox" ${aan?'checked':''} onchange="afwVink('${p.id}',this.checked)">
-          <span class="afw-naam">${p.naam||'—'}</span>
+          <span class="afw-naam">${veiligTekst(p.naam||'—')}</span>
           <span class="afw-rol">${p.rol||''}</span>
         </label>`;
       }).join('')
@@ -10424,7 +10467,7 @@ function afwCheck(){
     (k.personeel||[]).forEach(p=>{
       if(!AFW_GEKOZEN.has(p.id))return;
       const dag=parseDate(dagen[0]).toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
-      botsingen.push(`${p.naam} staat op ${dag} ingedeeld op ${k.naam||k.food||'een klus'}`);
+      botsingen.push(`${veiligTekst(p.naam)} staat op ${dag} ingedeeld op ${veiligTekst(k.naam||k.food||'een klus')}`);
     });
   });
 
@@ -10459,7 +10502,7 @@ function afwSoortGekozen(){
 
 async function bewaarAfwezig(){
   const wb=document.getElementById('afwWarn');
-  const reden=document.getElementById('afwReden').value.trim();
+  const reden=schoneInvoer(document.getElementById('afwReden').value,200);
   const datum_start=document.getElementById('afwStart').value;
   const datum_eind=document.getElementById('afwEind').value||datum_start;
   const tijd_start=tijdToDb(document.getElementById('afwTijdStart').value);
@@ -10592,7 +10635,7 @@ function renderOpenKlussen(){
         const tijd=[tijdFromDb(sh.start_tijd),tijdFromDb(sh.eind_tijd)].filter(Boolean).join(' – ');
         const vol=(sh.personeel_nodig||0)>0&&(sh.bezet||0)>=(sh.personeel_nodig||0);
         return`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
-          <span style="font-size:12px">${sh.naam||'Shift'}${tijd?` <span style="color:var(--muted)">${tijd}</span>`:''}
+          <span style="font-size:12px">${veiligTekst(sh.naam||'Shift')}${tijd?` <span style="color:var(--muted)">${tijd}</span>`:''}
             <span style="color:var(--muted)">· ${sh.bezet||0}/${sh.personeel_nodig||0}</span></span>
           ${vol
             ?'<span style="font-size:11px;color:var(--muted)">vol</span>'
@@ -10604,10 +10647,10 @@ function renderOpenKlussen(){
     }
 
     return`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
-      <div style="font-size:15px;font-weight:600;color:var(--text)">${k.naam||'Klus'}</div>
+      <div style="font-size:15px;font-weight:600;color:var(--text)">${veiligTekst(k.naam||'Klus')}</div>
       <div style="font-size:12px;color:var(--muted);margin-top:3px">${datum}${tot}</div>
       ${tijden?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${tijden}</div>`:''}
-      ${k.adres?`<div style="font-size:12px;color:var(--muted);margin-top:3px">📍 ${k.adres}</div>`:''}
+      ${k.adres?`<div style="font-size:12px;color:var(--muted);margin-top:3px">📍 ${veiligTekst(k.adres)}</div>`:''}
       <div style="font-size:12px;color:var(--text);margin-top:8px">
         <span style="color:var(--muted)">Al ingedeeld:</span>
         ${namen.length?namen.join(', '):'nog niemand'}${losse?`<span style="color:var(--muted)"> + ${losse} losse ${losse===1?'kracht':'krachten'}</span>`:''}
@@ -10684,8 +10727,8 @@ async function loadAanmeldingen(){
     const datum=k?parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}):'';
     return`<div class="besch-item wacht">
       <div class="besch-info">
-        <div class="besch-naam">${naamVan[a.gebruiker_id]||'Onbekend'}</div>
-        <div class="besch-reden">${k?(k.naam||k.food||'Klus'):'Klus'}</div>
+        <div class="besch-naam">${veiligTekst(naamVan[a.gebruiker_id]||'Onbekend')}</div>
+        <div class="besch-reden">${veiligTekst(k?(k.naam||k.food||'Klus'):'Klus')}</div>
         <div class="besch-datum">${datum}</div>
       </div>
       <div class="besch-actions">
@@ -10913,7 +10956,7 @@ function pbVerwijder(klusId,mwId,naam){
 function pbShowToast(type,naam,klusnaam){
   const c=document.getElementById('pb-toast');if(!c)return;
   const isAdd=type==='toe';const t=document.createElement('div');t.className='pb-toast';
-  t.innerHTML=`<div class="pb-toast-icon" style="background:${isAdd?'#F0FDF4':'#FEF2F2'}"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="${isAdd?'M2 6l3 3 5-5':'M3 3l6 6M9 3l-6 6'}" stroke="${isAdd?'#059669':'#DC2626'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><strong>${naam}</strong> ${isAdd?'toegewezen aan':'verwijderd van'} <em>${klusnaam}</em>${isAdd?' — notificatie verstuurd ✓':''}</div>`;
+  t.innerHTML=`<div class="pb-toast-icon" style="background:${isAdd?'#F0FDF4':'#FEF2F2'}"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="${isAdd?'M2 6l3 3 5-5':'M3 3l6 6M9 3l-6 6'}" stroke="${isAdd?'#059669':'#DC2626'}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div><strong>${veiligTekst(naam)}</strong> ${isAdd?'toegewezen aan':'verwijderd van'} <em>${veiligTekst(klusnaam)}</em>${isAdd?' — notificatie verstuurd ✓':''}</div>`;
   c.appendChild(t);setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300);},3500);
 }
 // Weekstart voor mobiele kalender (maandag van de geselecteerde week)
@@ -11199,17 +11242,17 @@ function pbRenderContent(){
     const openShift=(typeof pbOpenDrop==='string'&&pbOpenDrop.indexOf(dropPrefix)===0)
       ?pbOpenDrop.slice(dropPrefix.length):null;
     const truckKleur=(k.trucks&&k.trucks.length)?k.trucks[0].color:'#6366F1';
-    html+=`<div class="pb-klus ${st}${k.is_optie?' optie':''}"><div class="pb-klus-hdr"><div><div class="pb-knaam">${k.naam}${k.is_optie?' <span class="bdg optie-bdg" style="font-size:9px">Optie</span>':''}${k.milieuzone?' <span class="bdg" style="background:#ECFDF5;color:#065F46;font-size:9px">Milieuzone</span>':''}</div><div class="pb-kloc">${k.adres||'Locatie onbekend'}</div></div><span class="pb-badge ${st}"><span class="pb-bdot"></span>${stLabel}</span></div>`;
+    html+=`<div class="pb-klus ${st}${k.is_optie?' optie':''}"><div class="pb-klus-hdr"><div><div class="pb-knaam">${veiligTekst(k.naam)}${k.is_optie?' <span class="bdg optie-bdg" style="font-size:9px">Optie</span>':''}${k.milieuzone?' <span class="bdg" style="background:#ECFDF5;color:#065F46;font-size:9px">Milieuzone</span>':''}</div><div class="pb-kloc">${veiligTekst(k.adres||'Locatie onbekend')}</div></div><span class="pb-badge ${st}"><span class="pb-bdot"></span>${stLabel}</span></div>`;
     // De keuzelijst wordt onder de shift getekend waar je hem opende, zodat
     // je ziet waar iemand terechtkomt.
     const ddHtml=(shiftId,shiftNaam)=>{
       let d=`<div class="pb-dd">`;
       const regel=(mw,extra)=>{
         const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-        return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}','${shiftId}')"><div class="pb-av" style="background:${truckKleur}25;color:${truckKleur}">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol">${extra||mw.rol}</span></div>`;
+        return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}','${shiftId}')"><div class="pb-av" style="background:${truckKleur}25;color:${truckKleur}">${initials}</div><span class="pb-mwnaam">${veiligTekst(mw.naam)}</span><span class="pb-mwrol">${extra||mw.rol}</span></div>`;
       };
       const kopje=t=>`<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px 4px">${t}</div>`;
-      if(shifts.length>1)d+=`<div style="font-size:11px;color:var(--muted);padding:8px 12px 0">Komt op <b>${shiftNaam}</b></div>`;
+      if(shifts.length>1)d+=`<div style="font-size:11px;color:var(--muted);padding:8px 12px 0">Komt op <b>${veiligTekst(shiftNaam)}</b></div>`;
       if(gemeld.length)d+=kopje('Heeft zich aangemeld')+gemeld.map(mw=>regel(mw,'aangemeld \u270B')).join('');
       if(kanWel.length)d+=kopje(gemeld.length?'Verder beschikbaar':'Beschikbaar')+kanWel.map(mw=>regel(mw)).join('');
       if(!beschikbaar.length)d+=`<div class="pb-mw" style="color:var(--muted);cursor:default">Niemand beschikbaar op deze dag</div>`;
@@ -11217,7 +11260,7 @@ function pbRenderContent(){
         d+=kopje('Staat al ingepland \u2014 vraagt om bevestiging');
         d+=alIngepland.map(mw=>{
           const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-          return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}','${shiftId}')" title="${mw.naam} ${mw.reden}"><div class="pb-av" style="background:#FFFBEB;color:#B45309">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol" style="color:#B45309">${mw.reden}</span></div>`;
+          return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}','${shiftId}')" title="${veiligTekst(mw.naam+' '+mw.reden)}"><div class="pb-av" style="background:#FFFBEB;color:#B45309">${initials}</div><span class="pb-mwnaam">${veiligTekst(mw.naam)}</span><span class="pb-mwrol" style="color:#B45309">${veiligTekst(mw.reden)}</span></div>`;
         }).join('');
       }
       if(kanNiet.length){
@@ -11226,7 +11269,7 @@ function pbRenderContent(){
         d+=kopje('Niet beschikbaar \u2014 vraagt om bevestiging');
         d+=kanNiet.map(mw=>{
           const initials=mw.naam.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
-          return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}','${shiftId}')" title="${mw.naam} ${mw.reden}"><div class="pb-av" style="background:#FEF2F2;color:#B91C1C">${initials}</div><span class="pb-mwnaam">${mw.naam}</span><span class="pb-mwrol" style="color:#DC2626">${mw.reden}</span></div>`;
+          return`<div class="pb-mw" onclick="pbWijsToe('${k.id}','${mw.id}','${shiftId}')" title="${veiligTekst(mw.naam+' '+mw.reden)}"><div class="pb-av" style="background:#FEF2F2;color:#B91C1C">${initials}</div><span class="pb-mwnaam">${veiligTekst(mw.naam)}</span><span class="pb-mwrol" style="color:#DC2626">${veiligTekst(mw.reden)}</span></div>`;
         }).join('');
       }
       return d+`</div>`;
@@ -11238,8 +11281,8 @@ function pbRenderContent(){
       html+=`<div class="pb-shift"><span class="pb-stijd">${sh.tijd}</span><span class="pb-steam">${sh.team}</span><div class="pb-sright"><span class="pb-badge ${shSt}">${sh.bezet}/${sh.totaal}</span>${openSlots>0?`<button class="pb-wijs${shOpen?' open':''}" onclick="pbToggleDrop('${k.id}::${sh.id}')">${shOpen?'&#x2715; Sluiten':'+ Toewijzen'}</button>`:''}</div></div>`;
       const leden=sh.leden||[];
       if(leden.length)html+=`<div class="pb-namen">${leden.map(m=>m.soort==='los'
-        ?`<span class="pb-naam-pill" style="background:#FFFBEB;color:#92400E;border-color:#FDE68A" title="Losse kracht">${m.naam} (los)<button class="pb-remove" style="color:#92400E" onclick="pbVerwijderLos('${m.id}','${String(m.naam).replace(/'/g,"\\'")}')" title="Verwijder">&#x2715;</button></span>`
-        :`<span class="pb-naam-pill">${m.naam}<button class="pb-remove" onclick="pbVerwijder('${k.id}','${m.id}','${String(m.naam).replace(/'/g,"\\'")}')" title="Verwijder">&#x2715;</button></span>`
+        ?`<span class="pb-naam-pill" style="background:#FFFBEB;color:#92400E;border-color:#FDE68A" title="Losse kracht">${veiligTekst(m.naam)} (los)<button class="pb-remove" style="color:#92400E" onclick="pbVerwijderLos('${m.id}','${veiligJs(m.naam)}')" title="Verwijder">&#x2715;</button></span>`
+        :`<span class="pb-naam-pill">${veiligTekst(m.naam)}<button class="pb-remove" onclick="pbVerwijder('${k.id}','${m.id}','${veiligJs(m.naam)}')" title="Verwijder">&#x2715;</button></span>`
       ).join('')}</div>`;
       if(shOpen)html+=ddHtml(sh.id,(sh.team||'shift')+' '+sh.tijd);
     });
@@ -11249,7 +11292,7 @@ function pbRenderContent(){
     // nergens goed te staan.
     const shiftKeuze=(k.shifts&&k.shifts.length)
       ?`<select id="pbLosShift-${k.id}" style="flex-shrink:0;font-size:11px;font-family:var(--font);padding:5px 8px;border:1px solid var(--border);border-radius:20px;background:var(--surface);color:var(--text)">
-          ${k.shifts.map(sh=>`<option value="${sh.id}">${sh.naam||'Shift'}${tijdFromDb(sh.start_tijd)?' '+tijdFromDb(sh.start_tijd):''}</option>`).join('')}
+          ${k.shifts.map(sh=>`<option value="${sh.id}">${veiligTekst(sh.naam||'Shift')}${tijdFromDb(sh.start_tijd)?' '+tijdFromDb(sh.start_tijd):''}</option>`).join('')}
           <option value="">Hele klus</option>
         </select>`
       :'';
@@ -11465,7 +11508,7 @@ function taakKaart(r,vandaag,historie){
     ?'Kan pas op '+parseDate(r.datum).toLocaleDateString('nl-NL',{weekday:'long'})
     :(af?'Ongedaan maken':'Afvinken');
   return`<div class="tk${laat?' laat':''}${af?' af':''}${later?' later':''}">
-    <button class="tk-vink ${vinkKlasse}" ${opSlot?'disabled':''} onclick="vinkTaak('${r.id}')" title="${titel}">&#10003;</button>
+    <button class="tk-vink ${vinkKlasse}" ${opSlot?'disabled':''} onclick="vinkTaak('${r.id}')" title="${veiligTekst(titel)}">&#10003;</button>
     <div class="tk-tekst">
       <div class="tk-naam">${veiligTekst(t.titel)}</div>
       ${meta}
@@ -13239,7 +13282,12 @@ const UPDATE_MANIFEST = 'https://jeremylaag-cmd.github.io/tcgroup-app/version.js
       if(huidig && huidig.bundle && huidig.bundle.version === info.version) return;
 
       console.log('Nieuwe versie gevonden:', info.version, '(nu:', APP_VERSION + ')');
-      const bundel = await U.download({url: info.url, version: info.version});
+      // De checksum uit version.json meegeven. Klopt het gedownloade bestand
+      // daar niet mee, dan weigert de updater hem — zo kan een halve of
+      // gewijzigde bundel nooit actief worden.
+      const opdracht = {url: info.url, version: info.version};
+      if(info.checksum) opdracht.checksum = info.checksum;
+      const bundel = await U.download(opdracht);
 
       // Wachten tot je niets kwijt kunt raken. We kijken elke 5 seconden.
       if(!magNuHerladen()){
