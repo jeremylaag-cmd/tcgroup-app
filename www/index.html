@@ -2810,6 +2810,12 @@ function toast(tekst,soort){
 // of, erger, als een leeg scherm. Deze wrapper vangt elk mislukt verzoek af
 // en toont het. Inloggen slaan we over, want die schermen tonen hun eigen
 // foutmelding.
+// Wie via de Manchester-ingang binnenkomt of bij Manchester hoort, krijgt
+// Engelse meldingen. Anders stond er ineens Nederlands op een Engels scherm.
+function engelsScherm(){
+  try{ if(typeof MIJN_VESTIGING!=='undefined' && MIJN_VESTIGING==='MCR')return true; }catch(e){}
+  try{ return localStorage.getItem('tc_ingang')==='MCR'; }catch(e){ return false; }
+}
 async function sbFetch(input,init){
   const url=typeof input==='string'?input:(input&&input.url)||'';
   try{
@@ -2819,16 +2825,22 @@ async function sbFetch(input,init){
       try{ detail=(await res.clone().json()).message||''; }catch(e){}
       console.error('Databaseverzoek mislukt',res.status,url,detail);
       if(res.status===401||res.status===403){
-        toast('Je hebt hier geen toegang toe, of je sessie is verlopen. Log opnieuw in.','fout');
+        toast(engelsScherm()
+          ?'You do not have access to this, or your session has expired. Please sign in again.'
+          :'Je hebt hier geen toegang toe, of je sessie is verlopen. Log opnieuw in.','fout');
       }else{
-        toast('Er ging iets mis bij de server'+(detail?': '+detail:'')+'. Probeer het opnieuw.','fout');
+        toast(engelsScherm()
+          ?'Something went wrong at our end. Please try again.'
+          :'Er ging iets mis bij de server'+(detail?': '+detail:'')+'. Probeer het opnieuw.','fout');
       }
     }
     return res;
   }catch(e){
     if(!url.includes('/auth/v1/')){
       console.error('Geen verbinding met de server:',url,e);
-      toast('Geen verbinding met de server. Controleer je internet.','fout');
+      toast(engelsScherm()
+        ?'No connection to the server. Check your internet and try again.'
+        :'Geen verbinding met de server. Controleer je internet.','fout');
     }
     throw e;
   }
@@ -5263,18 +5275,29 @@ async function doRegisterMCR(){
   const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{naam}}});
   if(error) return stop(error.message);
   if(data.user){
-    const extra={telefoon,geboortedatum:geb,contractvorm:'zzp',vestiging:'MCR',aangebracht_door:via||null};
-    let gelukt=false;
+    // Geen contractvorm meesturen: die mag alleen een beheerder zetten, en de
+    // database vult 'zzp' zelf in zodra de vestiging op Manchester staat.
+    const extra={telefoon,geboortedatum:geb,vestiging:'MCR',aangebracht_door:via||null};
+    let gelukt=false, zetFout=null;
     for(let poging=0;poging<5&&!gelukt;poging++){
       const{data:rij}=await sb.from('gebruikers').select('id').eq('id',data.user.id);
       if(rij&&rij.length>0){
         const{error:upErr}=await sb.from('gebruikers').update(extra).eq('id',data.user.id);
-        if(upErr){ console.error('Vestiging zetten mislukt:',upErr); }
-        gelukt=true;
+        if(upErr){ console.error('Vestiging zetten mislukt:',upErr); zetFout=upErr; }
+        gelukt=!upErr;
       }else{ await new Promise(r=>setTimeout(r,400)); }
     }
     if(!gelukt){
-      await sb.from('gebruikers').insert({id:data.user.id,rol:'part-timer',naam,email,...extra});
+      const{error:inErr}=await sb.from('gebruikers')
+        .insert({id:data.user.id,rol:'part-timer',naam,email,...extra});
+      if(inErr){ console.error('Account aanvullen mislukt:',inErr); zetFout=zetFout||inErr; }
+      else zetFout=null;
+    }
+    // Lukte het niet, dan staat het account bij de verkeerde vestiging. Dat is
+    // geen detail voor de console: dan ziet Bram het niet in zijn lijst staan.
+    if(zetFout){
+      return stop('Your account was created, but we could not save your details. '
+                + 'Please sign in and tell Bram, so he can put you on the Manchester list.');
     }
     if(hr){
       try{ await sb.from('huisregels_akkoord').insert({gebruiker_id:data.user.id,huisregels_id:hr.id,naam_getypt:naam}); }
