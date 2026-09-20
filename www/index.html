@@ -5520,11 +5520,11 @@ async function initApp(user){
         `<button class="htab${i===0?' active':''}" onclick="mbNaar('${k}',this)">${veiligTekst(l)}</button>`).join('');
       ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
       const bn=document.getElementById('bottomNav'); if(bn)bn.classList.remove('visible');
-      setTimeout(()=>mbNaar('overzicht'),0);
+    }else{
+      const topBtn=document.getElementById('addKlusBtnTop');if(topBtn)topBtn.style.display='';
+      const optieBtn=document.getElementById('addOptieBtnTop');if(optieBtn)optieBtn.style.display='';
+      document.getElementById('addMedBtn').style.display='';
     }
-    const topBtn=document.getElementById('addKlusBtnTop');if(topBtn)topBtn.style.display='';
-    const optieBtn=document.getElementById('addOptieBtnTop');if(optieBtn)optieBtn.style.display='';
-    document.getElementById('addMedBtn').style.display='';
   }else if(isHal){
     zetKlokkaartenTerug();
     tabs.innerHTML=`
@@ -5615,7 +5615,10 @@ async function initApp(user){
   // beheerder is dat het dashboard; dat stond wel als actief tabblad maar de
   // rooster-pagina bleef eronder staan, dus moest je er nog een keer op tikken.
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
-  if(isBeheerder){
+  if(isBeheerder && ACTIEVE_VESTIGING==='MCR'){
+    // Manchester heeft zijn eigen overzicht; het Nederlandse dashboard slaan we over.
+    mbNaar('overzicht');
+  }else if(isBeheerder){
     document.getElementById('page-dashboard').classList.add('active');
     laadDashboard();
   }else if(isHal){
