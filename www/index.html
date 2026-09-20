@@ -32,6 +32,40 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .vest-switch button.active{background:#B4472B;color:#fff}
 .vest-switch button.nl.active{background:var(--text);color:#fff}
 @media(max-width:820px){.vest-switch button{padding:5px 8px;font-size:11px}}
+/* ── Manchester: eigen app voor het Engelse personeel ────────────── */
+#mcrApp{position:fixed;inset:0;background:#F7F6F2;display:flex;flex-direction:column;z-index:500;font-family:var(--font)}
+.mcr-head{flex-shrink:0;padding:18px 20px 14px;background:#fff;border-bottom:1px solid #E6E4DE;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.mcr-title{font-size:19px;font-weight:700;color:#1A1917;letter-spacing:-.2px}
+.mcr-sub{font-size:12px;color:#8A8984;margin-top:1px}
+.mcr-avatar{width:34px;height:34px;border-radius:50%;background:#B4472B;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12.5px;font-weight:600;flex-shrink:0}
+.mcr-main{flex-grow:1;overflow:auto;padding:16px 16px 24px;-webkit-overflow-scrolling:touch}
+.mcr-nav{flex-shrink:0;height:68px;background:#fff;border-top:1px solid #E6E4DE;display:flex;align-items:flex-start;padding-bottom:env(safe-area-inset-bottom)}
+.mcr-nav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;background:none;border:none;color:#94938E;padding:8px 0 0;cursor:pointer;font-family:var(--font)}
+.mcr-nav button.aan{color:#1A1917}
+.mcr-nav button span{font-size:10.5px;font-weight:500}
+.mcr-nav button.aan span{font-weight:600}
+.mcr-kaart{background:#fff;border:1px solid #E6E4DE;border-radius:14px;padding:14px 15px;margin-bottom:12px}
+.mcr-kop{font-size:11px;font-weight:700;color:#6B6A66;text-transform:uppercase;letter-spacing:.05em;margin:4px 0 8px}
+.mcr-rij{display:flex;gap:12px;padding:12px 0;border-bottom:1px solid #EFEDE7}
+.mcr-rij:last-child{border-bottom:none}
+.mcr-dag{flex:0 0 44px;text-align:center}
+.mcr-dag b{display:block;font-size:19px;font-weight:700;color:#1A1917;line-height:1.15}
+.mcr-dag i{display:block;font-style:normal;font-size:10.5px;font-weight:600;color:#8A8984;text-transform:uppercase;letter-spacing:.04em}
+.mcr-knop{display:block;width:100%;text-align:center;background:#1A1917;color:#fff;font-size:15px;font-weight:600;padding:14px 0;border:none;border-radius:11px;cursor:pointer;font-family:var(--font)}
+.mcr-knop.licht{background:#fff;color:#1A1917;border:1px solid #D9D7D0}
+.mcr-knop[disabled]{opacity:.45;cursor:default}
+.mcr-chip{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.mcr-veld{width:100%;box-sizing:border-box;font-family:var(--font);font-size:15px;padding:12px 13px;border:1px solid #D9D7D0;border-radius:11px;background:#fff;color:#1A1917}
+.mcr-label{display:block;font-size:11px;font-weight:600;color:#6B6A66;margin-bottom:5px}
+.mcr-leeg{text-align:center;color:#8A8984;font-size:13.5px;line-height:1.6;padding:28px 10px}
+.mcr-cirkel{width:200px;height:200px;border-radius:50%;border:2px dashed #C9C6BD;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;margin:0 auto;cursor:pointer;font-family:var(--font)}
+.mcr-cirkel.uit{border:none;background:#1A1917;color:#fff}
+.mcr-kal{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.mcr-kal div{height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13.5px;cursor:pointer;border:1px solid #E6E4DE;background:#fff;color:#6B6A66}
+.mcr-kal div.ja{background:#E9F7F0;color:#0F7A52;font-weight:700;border-color:#BFE6D4}
+.mcr-kal div.nee{color:#C2C0BA;text-decoration:line-through}
+.mcr-kal div.uit{background:#F3F2EE;color:#C2C0BA;border-color:#F3F2EE;cursor:default}
+.mcr-kal b{font-size:10.5px;font-weight:600;color:#8A8984;text-transform:uppercase;height:auto;background:none;border:none;display:flex;align-items:center;justify-content:center}
 .auth-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .auth-field{margin-bottom:.875rem}
 .auth-label{font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px;display:block}
@@ -1100,6 +1134,19 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <button class="auth-btn" id="wachtHerlaad" style="margin-top:1.25rem" onclick="location.reload()">Opnieuw kijken</button>
     <button class="btn-ghost" id="wachtUitloggen" style="width:100%;margin-top:.5rem" onclick="doLogout()">Uitloggen</button>
   </div>
+</div>
+
+<!-- MANCHESTER — de app voor het Engelse personeel -->
+<div id="mcrApp" style="display:none">
+  <header class="mcr-head">
+    <div>
+      <div class="mcr-title" id="mcrTitel">My shifts</div>
+      <div class="mcr-sub" id="mcrSub"></div>
+    </div>
+    <div class="mcr-avatar" id="mcrAvatar"></div>
+  </header>
+  <main class="mcr-main" id="mcrMain"></main>
+  <nav class="mcr-nav" id="mcrNav"></nav>
 </div>
 
 <div class="app" id="appWrap">
@@ -2838,6 +2885,715 @@ function closeDrawer(){
 
 // ── AUTH ──
 
+
+// ══════════════════════════════════════════════════════════════════
+//  MANCHESTER — de app voor het Engelse personeel
+//  Een eigen, losse schil. De Nederlandse schermen blijven ongemoeid.
+// ══════════════════════════════════════════════════════════════════
+let MCR_TAB = 'shifts';
+let MCR_STATUS = null;
+let MCR_TIMER = null;
+let MCR_MAAND = null;   // eerste dag van de maand in het beschikbaarheidsscherm
+
+const MCR_ICO = {
+  shifts:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/>',
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  hours:'<path d="M4 19V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M8 9h8M8 13h8M8 17h5"/>',
+  invoice:'<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/><path d="M9 13h6M9 17h4"/>',
+  me:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+};
+const MCR_TITELS = {shifts:['My shifts',''],clock:['Clock in',''],hours:['My hours',''],
+                    invoice:['Invoice',''],me:['My details','']};
+
+function mcrGeld(n){ return '£' + (Number(n)||0).toFixed(2); }
+function mcrDatum(d){
+  const dt = (d instanceof Date) ? d : new Date(String(d)+'T00:00:00');
+  return dt.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+}
+function mcrDagNr(d){ return new Date(String(d)+'T00:00:00').getDate(); }
+function mcrDagKort(d){ return new Date(String(d)+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'}); }
+function mcrTijd(t){ return t ? String(t).slice(0,5) : ''; }
+function mcrKlok(ts){
+  if(!ts)return '';
+  return new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false});
+}
+function mcrChip(tekst,kleur,achter){
+  return `<span class="mcr-chip" style="background:${achter};color:${kleur}">${veiligTekst(tekst)}</span>`;
+}
+function mcrStatusChip(st){
+  if(st==='goedgekeurd') return mcrChip('Approved','#0F7A52','#ECFDF3');
+  if(st==='afgewezen')   return mcrChip('Rejected','#B4472B','#FBEDE9');
+  if(st==='lopend')      return mcrChip('Running','#2A4EA8','#EEF4FF');
+  return mcrChip('Waiting for approval','#B45309','#FEF6E7');
+}
+function mcrLeeg(t){ return `<div class="mcr-leeg">${veiligTekst(t)}</div>`; }
+function mcrFout(e){
+  const m = (e && (e.message||e.hint||e.details)) ? String(e.message||e.hint||e.details) : 'Something went wrong.';
+  return m.replace(/^.*?:\s*/,'');
+}
+
+async function mcrStart(){
+  document.getElementById('appWrap').style.display='none';
+  const w=document.getElementById('wachtWrap'); if(w)w.style.display='none';
+  document.getElementById('authWrap').style.display='none';
+  const bn=document.getElementById('bottomNav'); if(bn)bn.classList.remove('visible');
+  document.getElementById('mcrApp').style.display='flex';
+  const av=document.getElementById('mcrAvatar');
+  if(av)av.textContent=(CURRENT_NAAM||'').split(' ').filter(Boolean).map(x=>x[0]).slice(0,2).join('').toUpperCase();
+  mcrNav();
+  await mcrGa('shifts');
+}
+
+function mcrNav(){
+  const nav=document.getElementById('mcrNav'); if(!nav)return;
+  const items=[['shifts','Shifts'],['clock','Clock in'],['hours','Hours'],['invoice','Invoice'],['me','Me']];
+  nav.innerHTML=items.map(([k,l])=>{
+    const aan=(MCR_TAB===k);
+    return `<button class="${aan?'aan':''}" onclick="mcrGa('${k}')">
+      <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="${aan?'#1A1917':'#94938E'}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${MCR_ICO[k]}</svg>
+      <span>${l}</span></button>`;
+  }).join('');
+}
+
+async function mcrGa(tab){
+  MCR_TAB=tab; mcrNav();
+  if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
+  const t=MCR_TITELS[tab]||['',''];
+  document.getElementById('mcrTitel').textContent=t[0];
+  document.getElementById('mcrSub').textContent=t[1];
+  const m=document.getElementById('mcrMain');
+  m.scrollTop=0;
+  m.innerHTML='<div class="mcr-leeg">Loading&hellip;</div>';
+  try{
+    if(tab==='shifts')  return await mcrShifts();
+    if(tab==='open')    return await mcrOpenShifts();
+    if(tab==='avail')   return await mcrBeschikbaarheid();
+    if(tab==='clock')   return await mcrKlok0();
+    if(tab==='hours')   return await mcrUren();
+    if(tab==='invoice') return await mcrFacturen();
+    if(tab==='me')      return await mcrProfiel();
+  }catch(e){
+    console.error(e);
+    m.innerHTML=mcrLeeg('Could not load this screen. Check your connection and try again.');
+  }
+}
+
+// ─── Mijn diensten ─────────────────────────────────────────────────
+async function mcrShifts(){
+  const vandaag=new Date().toISOString().slice(0,10);
+  const{data,error}=await sb.rpc('mcr_mijn_shifts',{p_van:vandaag,p_tot:null});
+  if(error)throw error;
+  const m=document.getElementById('mcrMain');
+  let uit='';
+  if(!data||!data.length){
+    uit=mcrLeeg('No shifts yet. Tap "Find more shifts" below to put your name down.');
+  }else{
+    uit='<div class="mcr-kaart" style="padding:2px 15px">';
+    data.forEach(r=>{
+      const chip = r.uitgeklokt_op ? mcrStatusChip(r.status)
+                 : (r.ingeklokt_op ? mcrChip('Clocked in','#0F7A52','#ECFDF3') : '');
+      uit+=`<div class="mcr-rij">
+        <div class="mcr-dag"><i>${veiligTekst(mcrDagKort(r.datum))}</i><b>${mcrDagNr(r.datum)}</b></div>
+        <div style="flex-grow:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:7px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${veiligTekst(r.kleur)};flex-shrink:0"></span>
+            <span style="font-size:14.5px;font-weight:600;color:#1A1917">${veiligTekst(r.kraam)}</span>
+          </div>
+          <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${veiligTekst(mcrTijd(r.start_tijd))} &ndash; ${veiligTekst(mcrTijd(r.eind_tijd))}${r.shift_naam?' &middot; '+veiligTekst(r.shift_naam):''}</div>
+          ${chip?'<div style="margin-top:5px">'+chip+'</div>':''}
+        </div></div>`;
+    });
+    uit+='</div>';
+  }
+  uit+=`<button class="mcr-knop" onclick="mcrGa('open')">Find more shifts</button>
+        <button class="mcr-knop licht" style="margin-top:9px" onclick="mcrGa('avail')">My availability</button>`;
+  m.innerHTML=uit;
+}
+
+// ─── Open diensten ─────────────────────────────────────────────────
+async function mcrOpenShifts(){
+  document.getElementById('mcrTitel').textContent='Open shifts';
+  document.getElementById('mcrSub').textContent='Put your name down; Bram confirms.';
+  const{data,error}=await sb.rpc('mcr_open_shifts',{p_dagen:60});
+  if(error)throw error;
+  const m=document.getElementById('mcrMain');
+  let uit=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="mcrGa('shifts')">&lsaquo; Back to my shifts</button>`;
+  if(!data||!data.length){
+    uit+=mcrLeeg('Nothing open at the moment. Check again in a day or two.');
+  }else{
+    uit+='<div class="mcr-kaart" style="padding:2px 15px">';
+    data.forEach(r=>{
+      const vrij=(r.nodig||0)-(r.bezet||0);
+      uit+=`<div class="mcr-rij">
+        <div class="mcr-dag"><i>${veiligTekst(mcrDagKort(r.datum))}</i><b>${mcrDagNr(r.datum)}</b></div>
+        <div style="flex-grow:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:7px">
+            <span style="width:8px;height:8px;border-radius:50%;background:${veiligTekst(r.kleur)};flex-shrink:0"></span>
+            <span style="font-size:14.5px;font-weight:600;color:#1A1917">${veiligTekst(r.kraam)}</span>
+          </div>
+          <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">From ${veiligTekst(mcrTijd(r.start_tijd))} till close &middot; ${vrij} place${vrij===1?'':'s'} left</div>
+        </div>
+        <div style="flex-shrink:0;align-self:center">${
+          r.aangemeld
+            ? `<button class="mcr-knop licht" style="width:auto;padding:8px 13px;font-size:12.5px" onclick="mcrAfmelden('${veiligJs(r.shift_id)}')">Asked &middot; cancel</button>`
+            : `<button class="mcr-knop" style="width:auto;padding:8px 15px;font-size:12.5px" onclick="mcrAanmelden('${veiligJs(r.shift_id)}')">Ask</button>`
+        }</div></div>`;
+    });
+    uit+='</div>';
+    uit+=`<div class="mcr-kaart"><div style="font-size:12.5px;color:#6B6A66;line-height:1.6">Asking is not a booking. Bram puts the rota together and you get a message for every shift he puts you on.</div></div>`;
+  }
+  m.innerHTML=uit;
+}
+async function mcrAanmelden(id){
+  try{ const{error}=await sb.rpc('mcr_aanmelden',{p_shift:id,p_notitie:null}); if(error)throw error; }
+  catch(e){ alert(mcrFout(e)); }
+  await mcrGa('open');
+}
+async function mcrAfmelden(id){
+  try{ const{error}=await sb.rpc('mcr_afmelden',{p_shift:id}); if(error)throw error; }
+  catch(e){ alert(mcrFout(e)); }
+  await mcrGa('open');
+}
+
+
+// ─── Beschikbaarheid ───────────────────────────────────────────────
+async function mcrBeschikbaarheid(){
+  document.getElementById('mcrTitel').textContent='My availability';
+  document.getElementById('mcrSub').textContent='Tap a day to switch it. This is not a booking.';
+  const nu = MCR_MAAND || new Date();
+  MCR_MAAND = new Date(nu.getFullYear(), nu.getMonth(), 1);
+  const eerste = MCR_MAAND;
+  const laatste = new Date(eerste.getFullYear(), eerste.getMonth()+1, 0);
+  const vanS = fmt(eerste), totS = fmt(laatste);
+
+  const [besch, voork] = await Promise.all([
+    sb.rpc('mcr_mijn_beschikbaarheid',{p_van:vanS,p_tot:totS}),
+    sb.from('gebruikers').select('max_dagen_per_week,vroegste_start,eigen_opmerking').eq('id',CURRENT_USER.id).single()
+  ]);
+  if(besch.error)throw besch.error;
+  const kaart={}; (besch.data||[]).forEach(r=>kaart[r.datum]=r.soort);
+  const v=(voork&&voork.data)||{};
+
+  const lead=(eerste.getDay()+6)%7;   // maandag eerst
+  let cellen='';
+  ['M','T','W','T','F','S','S'].forEach(k=>cellen+=`<b>${k}</b>`);
+  for(let i=0;i<lead;i++)cellen+='<div style="border:none;background:none;cursor:default"></div>';
+  for(let d=1;d<=laatste.getDate();d++){
+    const ds=fmt(new Date(eerste.getFullYear(),eerste.getMonth(),d));
+    const soort=kaart[ds];
+    const kl = soort==='beschikbaar' ? 'ja' : (soort==='onbeschikbaar' ? 'nee' : '');
+    cellen+=`<div class="${kl}" onclick="mcrDagWissel('${veiligJs(ds)}')">${d}</div>`;
+  }
+
+  const maandNaam=eerste.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
+  document.getElementById('mcrMain').innerHTML=`
+    <button class="mcr-knop licht" style="margin-bottom:12px" onclick="mcrGa('shifts')">&lsaquo; Back to my shifts</button>
+    <div class="mcr-kaart">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px">
+        <span style="font-size:13.5px;font-weight:700;color:#1A1917">${veiligTekst(maandNaam)}</span>
+        <span style="font-size:13px;color:#6B6A66">
+          <button class="mcr-knop licht" style="display:inline-block;width:auto;padding:5px 11px;font-size:13px" onclick="mcrMaand(-1)">&lsaquo;</button>
+          <button class="mcr-knop licht" style="display:inline-block;width:auto;padding:5px 11px;font-size:13px;margin-left:4px" onclick="mcrMaand(1)">&rsaquo;</button>
+        </span>
+      </div>
+      <div class="mcr-kal">${cellen}</div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:13px;padding-top:12px;border-top:1px solid #EFEDE7">
+        <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#6B6A66"><span style="width:13px;height:13px;border-radius:4px;background:#E9F7F0;border:1px solid #BFE6D4"></span>Available</span>
+        <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#6B6A66"><span style="width:13px;height:13px;border-radius:4px;background:#fff;border:1px solid #E6E4DE"></span>Not available</span>
+      </div>
+    </div>
+    <div class="mcr-kaart">
+      <label class="mcr-label">Most days a week</label>
+      <input class="mcr-veld" type="number" min="1" max="7" id="mcrMax" value="${v.max_dagen_per_week!=null?veiligTekst(v.max_dagen_per_week):''}">
+      <label class="mcr-label" style="margin-top:12px">Earliest I can start</label>
+      <input class="mcr-veld" type="time" id="mcrStart" value="${v.vroegste_start?veiligTekst(String(v.vroegste_start).slice(0,5)):''}">
+      <label class="mcr-label" style="margin-top:12px">Anything Bram should know</label>
+      <textarea class="mcr-veld" id="mcrOpm" rows="2" placeholder="Away 11-17 Nov. Uni on Mondays.">${veiligTekst(v.eigen_opmerking||'')}</textarea>
+      <button class="mcr-knop" style="margin-top:12px" onclick="mcrVoorkeuren()">Save</button>
+      <div id="mcrOpmOk" style="display:none;font-size:12.5px;color:#0F7A52;text-align:center;margin-top:9px">Saved.</div>
+    </div>`;
+}
+function mcrMaand(stap){
+  MCR_MAAND = new Date(MCR_MAAND.getFullYear(), MCR_MAAND.getMonth()+stap, 1);
+  mcrBeschikbaarheid();
+}
+async function mcrDagWissel(ds){
+  const el=[...document.querySelectorAll('.mcr-kal div')].find(x=>x.getAttribute('onclick')&&x.getAttribute('onclick').indexOf(ds)>=0);
+  let nieuw='beschikbaar';
+  if(el&&el.classList.contains('ja'))nieuw='onbeschikbaar';
+  else if(el&&el.classList.contains('nee'))nieuw='';
+  if(el){ el.className = nieuw==='beschikbaar'?'ja':(nieuw==='onbeschikbaar'?'nee':''); }
+  try{ const{error}=await sb.rpc('mcr_beschikbaarheid_zetten',{p_datum:ds,p_soort:nieuw||null}); if(error)throw error; }
+  catch(e){ alert(mcrFout(e)); mcrBeschikbaarheid(); }
+}
+async function mcrVoorkeuren(){
+  const max=parseInt(document.getElementById('mcrMax').value,10);
+  const start=document.getElementById('mcrStart').value;
+  const opm=document.getElementById('mcrOpm').value;
+  try{
+    const{error}=await sb.rpc('mcr_voorkeuren_zetten',{
+      p_max:isNaN(max)?null:max, p_start:start||null, p_opmerking:opm||null});
+    if(error)throw error;
+    const ok=document.getElementById('mcrOpmOk'); if(ok){ok.style.display='';setTimeout(()=>ok.style.display='none',2500);}
+  }catch(e){ alert(mcrFout(e)); }
+}
+
+// ─── In- en uitklokken ─────────────────────────────────────────────
+async function mcrKlok0(){
+  const{data,error}=await sb.rpc('mcr_status');
+  if(error)throw error;
+  MCR_STATUS=(data&&data[0])||{};
+  mcrKlokTeken();
+  if(MCR_STATUS.uren_id){
+    MCR_TIMER=setInterval(()=>{
+      const el=document.getElementById('mcrTeller');
+      if(!el){clearInterval(MCR_TIMER);MCR_TIMER=null;return;}
+      const min=Math.max(0,Math.round((Date.now()-new Date(MCR_STATUS.ingeklokt_op).getTime())/60000));
+      el.textContent=Math.floor(min/60)+':'+String(min%60).padStart(2,'0');
+    },15000);
+  }
+}
+function mcrKlokTeken(){
+  const st=MCR_STATUS||{};
+  const m=document.getElementById('mcrMain');
+  if(st.uren_id){
+    const min=Math.max(0,Math.round((Date.now()-new Date(st.ingeklokt_op).getTime())/60000));
+    document.getElementById('mcrSub').textContent=st.kraam||'';
+    m.innerHTML=`
+      <div style="text-align:center">
+        <div class="mcr-chip" style="background:#F2FBF6;color:#0F7A52;border:1px solid #0F7A52;padding:8px 15px;font-size:13px;display:inline-flex;align-items:center;gap:8px;margin-bottom:20px">
+          <span style="width:8px;height:8px;border-radius:50%;background:#0F7A52"></span>Clocked in at ${veiligTekst(st.kraam||'')}
+        </div>
+        <div id="mcrTeller" style="font-size:54px;font-weight:700;color:#1A1917;letter-spacing:-1.5px">${Math.floor(min/60)}:${String(min%60).padStart(2,'0')}</div>
+        <div style="font-size:13px;color:#6B6A66;margin-top:2px">since ${veiligTekst(mcrKlok(st.ingeklokt_op))}</div>
+        <div class="mcr-cirkel uit" style="margin-top:26px" onclick="mcrUitklokken()">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+          <span style="font-size:15px;font-weight:600">Clock out</span>
+        </div>
+      </div>
+      <div class="mcr-kaart" style="margin-top:24px">
+        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
+          <input type="checkbox" id="mcrGeenPauze" style="margin-top:3px;width:17px;height:17px;flex-shrink:0">
+          <span style="font-size:13px;color:#6B6A66;line-height:1.5">I did not take a break. <b style="color:#1A1917">A 30 minute break</b> comes off shifts over 6 hours.</span>
+        </label>
+        <label class="mcr-label" style="margin-top:12px">Anything Bram should know?</label>
+        <textarea class="mcr-veld" id="mcrKlokNotitie" rows="2" placeholder="Stayed on to help pack down&hellip;"></textarea>
+      </div>`;
+    return;
+  }
+
+  const vandaag = st.vandaag;
+  document.getElementById('mcrSub').textContent = vandaag
+    ? (st.volgende_kraam||'') + ' · from ' + mcrTijd(st.volgende_start)
+    : 'No shift today';
+  m.innerHTML=`
+    <div style="text-align:center">
+      <div style="font-size:13.5px;color:#6B6A66;line-height:1.6;margin-bottom:22px">
+        ${vandaag
+          ? 'Type the code from the card in the stall.'
+          : (st.volgende_datum
+              ? 'Your next shift is '+veiligTekst(mcrDatum(st.volgende_datum))+' at '+veiligTekst(st.volgende_kraam||'')+'.'
+              : 'You are not on the rota at the moment.')}
+      </div>
+      ${vandaag?`
+      <input class="mcr-veld" id="mcrCode" maxlength="8" autocapitalize="characters" autocomplete="off"
+             style="text-align:center;font-size:26px;letter-spacing:.32em;font-weight:700;padding:16px 13px"
+             placeholder="ABC123" onkeydown="if(event.key==='Enter')mcrInklokken()">
+      <button class="mcr-knop" style="margin-top:12px" onclick="mcrInklokken()">Clock in</button>`:''}
+      <div class="mcr-kaart" style="margin-top:22px;text-align:left">
+        <div style="font-size:12.5px;color:#6B6A66;line-height:1.6">
+          No card to hand, or the code will not work? Ask the stand manager to clock you in.
+          Your location is never used.
+        </div>
+      </div>
+    </div>`;
+  setTimeout(()=>{const c=document.getElementById('mcrCode'); if(c)c.focus();},150);
+}
+async function mcrInklokken(){
+  const el=document.getElementById('mcrCode'); if(!el)return;
+  const code=(el.value||'').trim();
+  if(code.length<4){ alert('Please type the six character code from the stall.'); return; }
+  try{
+    const{data,error}=await sb.rpc('code_inklokken',{p_code:code});
+    if(error)throw error;
+    await mcrGa('clock');
+  }catch(e){ alert(mcrFout(e)); }
+}
+async function mcrUitklokken(){
+  const geen=document.getElementById('mcrGeenPauze');
+  const not=document.getElementById('mcrKlokNotitie');
+  try{
+    const{data,error}=await sb.rpc('mcr_uitklokken',{
+      p_geen_pauze: !!(geen&&geen.checked),
+      p_notitie: (not&&not.value)||null});
+    if(error)throw error;
+    const r=(data&&data[0])||{};
+    if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
+    document.getElementById('mcrMain').innerHTML=`
+      <div style="text-align:center;padding-top:10px">
+        <div style="width:46px;height:46px;border-radius:50%;background:#ECFDF3;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F7A52" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+        </div>
+        <div style="font-size:34px;font-weight:700;color:#1A1917;letter-spacing:-.9px">${veiligTekst(Number(r.uren||0).toFixed(2))} hours</div>
+        <div style="font-size:13px;color:#6B6A66;margin-top:3px">${veiligTekst(r.kraam||'')}${r.pauze?' &middot; '+r.pauze+' min break off':' &middot; no break'}</div>
+      </div>
+      <div class="mcr-kaart" style="margin-top:20px;background:#FEF6E7;border-color:#F3D9A4">
+        <div style="font-size:12.5px;color:#8A5307;line-height:1.6">These hours go to Bram for approval. Once approved they land on your invoice.</div>
+      </div>
+      <button class="mcr-knop" style="margin-top:12px" onclick="mcrGa('hours')">See my hours</button>`;
+  }catch(e){ alert(mcrFout(e)); }
+}
+
+
+// ─── Mijn uren ─────────────────────────────────────────────────────
+async function mcrUren(){
+  const{data,error}=await sb.rpc('mcr_mijn_uren',{p_van:null,p_tot:null});
+  if(error)throw error;
+  const m=document.getElementById('mcrMain');
+  if(!data||!data.length){ m.innerHTML=mcrLeeg('Nothing here yet. Your hours appear as soon as you clock out.'); return; }
+  let goed=0, wacht=0, bedrag=0;
+  data.forEach(r=>{ const u=Number(r.uren)||0;
+    if(r.status==='goedgekeurd'){goed+=u;bedrag+=Number(r.bedrag)||0;} else if(r.status!=='afgewezen'){wacht+=u;} });
+  document.getElementById('mcrSub').textContent=`${goed.toFixed(2)} h approved · ${mcrGeld(bedrag)}`;
+  let uit=`<div class="mcr-kaart" style="display:flex;gap:0;text-align:center">
+    <div style="flex:1"><div style="font-size:11.5px;color:#8A8984">Approved</div><div style="font-size:19px;font-weight:700;color:#1A1917">${goed.toFixed(2)}</div></div>
+    <div style="width:1px;background:#EFEDE7"></div>
+    <div style="flex:1"><div style="font-size:11.5px;color:#8A8984">Waiting</div><div style="font-size:19px;font-weight:700;color:#B45309">${wacht.toFixed(2)}</div></div>
+    <div style="width:1px;background:#EFEDE7"></div>
+    <div style="flex:1"><div style="font-size:11.5px;color:#8A8984">Earned</div><div style="font-size:19px;font-weight:700;color:#1A1917">${veiligTekst(mcrGeld(bedrag))}</div></div>
+  </div><div class="mcr-kaart" style="padding:2px 15px">`;
+  data.forEach(r=>{
+    uit+=`<div class="mcr-rij">
+      <div class="mcr-dag"><i>${veiligTekst(mcrDagKort(r.datum))}</i><b>${mcrDagNr(r.datum)}</b></div>
+      <div style="flex-grow:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:7px">
+          <span style="width:8px;height:8px;border-radius:50%;background:${veiligTekst(r.kleur)};flex-shrink:0"></span>
+          <span style="font-size:14px;font-weight:600;color:#1A1917">${veiligTekst(r.kraam)}</span>
+        </div>
+        <div style="font-size:12px;color:#8A8984;margin-top:2px">${veiligTekst(mcrKlok(r.ingeklokt_op))} &rarr; ${veiligTekst(mcrKlok(r.uitgeklokt_op)||'&hellip;')}${r.pauze?' &middot; '+r.pauze+' min break':''}</div>
+        <div style="margin-top:5px">${mcrStatusChip(r.status)}</div>
+        ${r.notitie_beh?`<div style="font-size:11.5px;color:#B4472B;margin-top:4px">${veiligTekst(r.notitie_beh)}</div>`:''}
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:15px;font-weight:700;color:#1A1917">${veiligTekst(Number(r.uren||0).toFixed(2))}</div>
+        <div style="font-size:11.5px;color:#8A8984;margin-top:2px">${veiligTekst(mcrGeld(r.bedrag))}</div>
+      </div></div>`;
+  });
+  uit+='</div>';
+  m.innerHTML=uit;
+}
+
+// ─── Facturen ──────────────────────────────────────────────────────
+async function mcrFacturen(){
+  const{data,error}=await sb.rpc('mcr_betaalrondes');
+  if(error)throw error;
+  const m=document.getElementById('mcrMain');
+  const rondes=data||[];
+  const klaar=rondes.filter(r=>r.afgelopen&&Number(r.uren_goedgekeurd)>0&&!r.factuur_id);
+  const gemaakt=rondes.filter(r=>r.factuur_id);
+  const komt=rondes.filter(r=>!r.afgelopen);
+  let uit='';
+
+  if(klaar.length){
+    const r=klaar[0];
+    uit+=`<div class="mcr-kaart" style="border:1.5px solid #0F7A52">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:9px">
+        ${mcrChip('Ready','#0F7A52','#ECFDF3')}
+        <span style="font-size:11.5px;color:#6B6A66">Payment ${veiligTekst(mcrDatum(r.betaaldatum))}</span>
+      </div>
+      <div style="font-size:15.5px;font-weight:700;color:#1A1917">Week ${veiligTekst(r.nummer)} &middot; ${veiligTekst(mcrDatum(r.periode_van))} &ndash; ${veiligTekst(mcrDatum(r.periode_tot))}</div>
+      <div style="display:flex;align-items:baseline;justify-content:space-between;padding-top:12px;margin-top:10px;border-top:1px solid #E6E4DE">
+        <span style="font-size:12px;color:#6B6A66">${veiligTekst(Number(r.uren_goedgekeurd).toFixed(2))} hours</span>
+        <span style="font-size:23px;font-weight:700;color:#1A1917;letter-spacing:-.5px">${veiligTekst(mcrGeld(r.bedrag))}</span>
+      </div>
+      <button class="mcr-knop" style="margin-top:13px" onclick="mcrFactuurMaken('${veiligJs(r.ronde_id)}')">Download as PDF</button>
+      <div style="font-size:12px;color:#6B6A66;line-height:1.55;text-align:center;margin-top:10px">
+        Then email it yourself to <b style="color:#1A1917" id="mcrFactuurMail">&hellip;</b>
+      </div>
+      ${Number(r.uren_wachtend)>0?`<div style="background:#FEF6E7;border:1px solid #F3D9A4;border-radius:11px;padding:11px 13px;margin-top:12px;font-size:12.5px;color:#8A5307;line-height:1.55"><b>${veiligTekst(Number(r.uren_wachtend).toFixed(2))} hours are still waiting for approval.</b> They are not lost &mdash; they move to the next invoice on their own.</div>`:''}
+    </div>`;
+  }else{
+    const eerst=komt[0];
+    uit+=`<div class="mcr-kaart"><div style="font-size:13px;color:#6B6A66;line-height:1.6">
+      ${eerst?`Nothing to invoice yet. The next period ends ${veiligTekst(mcrDatum(eerst.periode_tot))} and is paid ${veiligTekst(mcrDatum(eerst.betaaldatum))}.`
+             :'Nothing to invoice yet.'}
+    </div></div>`;
+  }
+
+  if(gemaakt.length){
+    uit+='<div class="mcr-kaart" style="padding:2px 15px"><div class="mcr-kop">Earlier</div>';
+    gemaakt.slice().reverse().forEach(r=>{
+      const st = r.betaald_op ? mcrChip('Paid','#0F7A52','#ECFDF3')
+               : (r.ontvangen_op ? mcrChip('Received','#2A4EA8','#EEF4FF') : mcrChip('Downloaded','#6B6A66','#F3F2EE'));
+      uit+=`<div class="mcr-rij"><div style="flex-grow:1;min-width:0">
+        <div style="font-size:13.5px;font-weight:600;color:#1A1917">${veiligTekst(r.factuur_nummer||'')}</div>
+        <div style="font-size:11.5px;color:#8A8984;margin-top:1px">${veiligTekst(mcrDatum(r.periode_van))} &ndash; ${veiligTekst(mcrDatum(r.periode_tot))}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-size:13.5px;font-weight:600;color:#1A1917">${veiligTekst(mcrGeld(r.bedrag))}</div>
+          <div style="margin-top:3px">${st}</div>
+          <button class="mcr-knop licht" style="width:auto;padding:5px 10px;font-size:11.5px;margin-top:5px" onclick="mcrFactuurMaken('${veiligJs(r.ronde_id)}')">Again</button>
+        </div></div>`;
+    });
+    uit+='</div>';
+  }
+
+  uit+=`<div class="mcr-kaart"><div style="font-size:12.5px;color:#6B6A66;line-height:1.6">
+    Your invoice covers one payment period. Hours that are approved late move to the next one by themselves.
+  </div></div>`;
+  m.innerHTML=uit;
+  mcrFactuurMailZetten();
+}
+
+let MCR_INST=null;
+async function mcrInstellingen(){
+  if(MCR_INST)return MCR_INST;
+  const{data}=await sb.from('vestiging_instellingen').select('sleutel,waarde').eq('vestiging','MCR');
+  MCR_INST={}; (data||[]).forEach(r=>MCR_INST[r.sleutel]=r.waarde);
+  return MCR_INST;
+}
+async function mcrFactuurMailZetten(){
+  const el=document.getElementById('mcrFactuurMail'); if(!el)return;
+  const i=await mcrInstellingen();
+  el.textContent=i.factuur_email||'the office';
+}
+
+async function mcrFactuurMaken(ronde){
+  try{
+    const[{data,error},inst,{data:mij}]=await Promise.all([
+      sb.rpc('mcr_factuur_maken',{p_ronde:ronde}),
+      mcrInstellingen(),
+      sb.from('gebruikers').select('naam,straat,postcode,plaats,telefoon,email').eq('id',CURRENT_USER.id).single()
+    ]);
+    if(error)throw error;
+    const f=(data&&data[0])||null;
+    if(!f)throw new Error('No invoice could be made.');
+    mcrFactuurTonen(f, inst, (mij||{}));
+  }catch(e){ alert(mcrFout(e)); }
+}
+
+
+// ─── Een echte PDF, zonder hulpbibliotheek ─────────────────────────
+// Eén pagina, Helvetica, WinAnsi zodat het pond-teken klopt. Zo hoeft de app
+// niets van buiten te laden en werkt het ook zonder internet.
+function pdfTekens(t){
+  const kaart={'’':"'",'‘':"'",'“':'"','”':'"','–':'-','—':'-',' ':' '};
+  let uit='';
+  for(const ch of String(t==null?'':t)){
+    const v=kaart[ch]!==undefined?kaart[ch]:ch;
+    const c=v.charCodeAt(0);
+    uit += (c<256) ? v : '?';
+  }
+  return uit.replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)');
+}
+function pdfMaken(regels){
+  // regels: [{x,y,tekst,groot,vet,grijs}]
+  let stroom='';
+  regels.forEach(r=>{
+    const f=r.vet?'/F2':'/F1';
+    const g=r.grijs?'0.42 0.42 0.40 rg':'0.10 0.10 0.09 rg';
+    stroom+=`BT ${g} ${f} ${r.groot||10} Tf 1 0 0 1 ${r.x} ${r.y} Tm (${pdfTekens(r.tekst)}) Tj ET\n`;
+    if(r.lijn){
+      stroom+=`0.90 0.89 0.87 RG 0.7 w ${r.x} ${r.y-5} m ${r.lijn} ${r.y-5} l S\n`;
+    }
+  });
+  const obj=[];
+  obj[1]='<< /Type /Catalog /Pages 2 0 R >>';
+  obj[2]='<< /Type /Pages /Kids [3 0 R] /Count 1 >>';
+  obj[3]='<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> /Contents 4 0 R >>';
+  obj[4]='<< /Length '+stroom.length+' >>\nstream\n'+stroom+'endstream';
+  obj[5]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+  obj[6]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+  let pdf='%PDF-1.4\n'; const plek=[];
+  for(let i=1;i<=6;i++){ plek[i]=pdf.length; pdf+=i+' 0 obj\n'+obj[i]+'\nendobj\n'; }
+  const xref=pdf.length;
+  pdf+='xref\n0 7\n0000000000 65535 f \n';
+  for(let i=1;i<=6;i++) pdf+=String(plek[i]).padStart(10,'0')+' 00000 n \n';
+  pdf+='trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF';
+  const bytes=new Uint8Array(pdf.length);
+  for(let i=0;i<pdf.length;i++) bytes[i]=pdf.charCodeAt(i)&0xff;
+  return bytes;
+}
+
+function mcrFactuurRegels(f, inst, mij){
+  const R=[]; let y=790;
+  const zet=(x,t,o)=>{R.push(Object.assign({x,y,tekst:t},o||{}));};
+  zet(56,'INVOICE',{groot:20,vet:true}); y-=26;
+  zet(56, f.nummer, {groot:11,vet:true}); y-=30;
+
+  zet(56,'From',{groot:8,grijs:true}); zet(320,'To',{groot:8,grijs:true}); y-=13;
+  zet(56, mij.naam||'', {groot:10,vet:true});         zet(320, inst.factuur_naam||'', {groot:10,vet:true}); y-=13;
+  zet(56, [mij.straat,mij.postcode,mij.plaats].filter(Boolean).join(', '), {groot:9,grijs:true});
+  zet(320, inst.factuur_adres||'', {groot:9,grijs:true}); y-=12;
+  zet(56, mij.email||'', {groot:9,grijs:true});
+  zet(320, inst.factuur_kvk?('KvK '+inst.factuur_kvk):'', {groot:9,grijs:true}); y-=12;
+  zet(56, mij.telefoon||'', {groot:9,grijs:true});
+  zet(320, inst.factuur_btw||'', {groot:9,grijs:true}); y-=12;
+  zet(56, mij.utr?('UTR '+mij.utr):'', {groot:9,grijs:true}); y-=26;
+
+  zet(56,'Date',{groot:8,grijs:true}); zet(320,'Self-employed',{groot:8,grijs:true}); y-=12;
+  zet(56, new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}), {groot:9});
+  zet(320,'VAT not registered',{groot:9}); y-=28;
+
+  zet(56,'DATE',{groot:8,vet:true,grijs:true});
+  zet(120,'STALL',{groot:8,vet:true,grijs:true});
+  zet(300,'HOURS',{groot:8,vet:true,grijs:true});
+  zet(370,'BREAK',{groot:8,vet:true,grijs:true});
+  zet(440,'RATE',{groot:8,vet:true,grijs:true});
+  R[R.length-5].lijn=540; y-=16;
+
+  (f.regels||[]).forEach(r=>{
+    const d=new Date(String(r.datum)+'T00:00:00').toLocaleDateString('en-GB',{day:'2-digit',month:'short'});
+    zet(56,d,{groot:9});
+    zet(120,(r.kraam||'')+'  '+(r.van||'')+'-'+(r.tot||''),{groot:9});
+    zet(300,Number(r.uren||0).toFixed(2),{groot:9});
+    zet(370,(r.pauze||0)+' min',{groot:9,grijs:true});
+    zet(440,'£ '+Number(f.tarief||0).toFixed(2),{groot:9,grijs:true});
+    zet(505,'£ '+Number(r.bedrag||0).toFixed(2),{groot:9});
+    y-=15;
+    if(y<140){ y=140; }
+  });
+
+  y-=10;
+  R.push({x:56,y:y+5,tekst:'',lijn:540});
+  y-=14;
+  zet(370,'Total hours',{groot:9,grijs:true}); zet(480,Number(f.uren||0).toFixed(2),{groot:9}); y-=16;
+  zet(370,'Total',{groot:11,vet:true});        zet(480,'£ '+Number(f.bedrag||0).toFixed(2),{groot:13,vet:true}); y-=34;
+
+  zet(56,'Bank details',{groot:8,grijs:true}); y-=12;
+  zet(56, mij.iban ? mij.iban : '[add your bank details in the app]', {groot:9}); y-=26;
+  zet(56,'Breaks of 30 minutes come off shifts over six hours, as agreed in the house rules.',{groot:8,grijs:true});
+  return R;
+}
+
+async function mcrPdfDelen(bytes, naam){
+  // In de app: bestand wegschrijven en via het deelmenu naar de mail.
+  const C=window.Capacitor;
+  if(C&&C.Plugins&&C.Plugins.Filesystem&&C.Plugins.Share){
+    try{
+      let bin=''; bytes.forEach(b=>bin+=String.fromCharCode(b));
+      const b64=btoa(bin);
+      const res=await C.Plugins.Filesystem.writeFile({path:naam,data:b64,directory:'CACHE'});
+      await C.Plugins.Share.share({title:naam,files:[res.uri]});
+      return true;
+    }catch(e){ console.error('Delen mislukt:',e); }
+  }
+  try{
+    const blob=new Blob([bytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=naam; document.body.appendChild(a); a.click();
+    setTimeout(()=>{URL.revokeObjectURL(url);a.remove();},1500);
+    return true;
+  }catch(e){ console.error(e); return false; }
+}
+
+function mcrFactuurTonen(f, inst, mij){
+  const m=document.getElementById('mcrMain');
+  document.getElementById('mcrTitel').textContent='Your invoice';
+  document.getElementById('mcrSub').textContent=f.nummer;
+  let rijen='';
+  (f.regels||[]).forEach(r=>{
+    rijen+=`<div class="mcr-rij"><div style="flex-grow:1;min-width:0">
+      <div style="font-size:13px;color:#1A1917">${veiligTekst(mcrDatum(r.datum))} &middot; ${veiligTekst(r.kraam||'')}</div>
+      <div style="font-size:11px;color:#8A8984;margin-top:1px">${veiligTekst(r.van||'')} &ndash; ${veiligTekst(r.tot||'')}${r.pauze?' &middot; '+r.pauze+' min break':''}</div>
+      </div><div style="text-align:right;flex-shrink:0">
+      <div style="font-size:13px;font-weight:600;color:#1A1917">${veiligTekst(Number(r.uren||0).toFixed(2))}</div>
+      <div style="font-size:11px;color:#8A8984">${veiligTekst(mcrGeld(r.bedrag))}</div></div></div>`;
+  });
+  m.innerHTML=`
+    <button class="mcr-knop licht" style="margin-bottom:12px" onclick="mcrGa('invoice')">&lsaquo; Back</button>
+    <div class="mcr-kaart" style="padding:2px 15px">${rijen}</div>
+    <div class="mcr-kaart" style="display:flex;align-items:baseline;justify-content:space-between">
+      <span style="font-size:12.5px;color:#6B6A66">${veiligTekst(Number(f.uren||0).toFixed(2))} hours &times; ${veiligTekst(mcrGeld(f.tarief))}</span>
+      <span style="font-size:23px;font-weight:700;color:#1A1917;letter-spacing:-.5px">${veiligTekst(mcrGeld(f.bedrag))}</span>
+    </div>
+    <button class="mcr-knop" onclick="mcrPdfNu()">Save as PDF</button>
+    <div class="mcr-kaart" style="margin-top:12px"><div style="font-size:12.5px;color:#6B6A66;line-height:1.6">
+      Email the PDF yourself to <b style="color:#1A1917">${veiligTekst(inst.factuur_email||'the office')}</b>.
+      Your invoice is not sent from the app &mdash; it is your invoice, so it comes from you.
+    </div></div>`;
+  window.MCR_FACTUUR={f,inst,mij};
+}
+async function mcrPdfNu(){
+  const o=window.MCR_FACTUUR; if(!o)return;
+  const bytes=pdfMaken(mcrFactuurRegels(o.f,o.inst,o.mij));
+  const ok=await mcrPdfDelen(bytes,(o.f.nummer||'invoice')+'.pdf');
+  if(!ok)alert('Saving the PDF did not work. Try again, or ask Bram.');
+}
+
+
+// ─── Mijn gegevens ─────────────────────────────────────────────────
+async function mcrProfiel(){
+  const{data,error}=await sb.rpc('mcr_profiel');
+  if(error)throw error;
+  const g=(data&&data[0])||{};
+  document.getElementById('mcrSub').textContent=g.naam||'';
+  const veld=(id,lab,waarde,type,ph,hint)=>`
+    <label class="mcr-label" style="margin-top:12px">${lab}</label>
+    <input class="mcr-veld" id="${id}" type="${type||'text'}" value="${veiligTekst(waarde||'')}" placeholder="${veiligTekst(ph||'')}">
+    ${hint?`<div style="font-size:11.5px;color:#8A8984;margin-top:4px;line-height:1.45">${hint}</div>`:''}`;
+
+  const bank = (g.iban||'').trim();
+  document.getElementById('mcrMain').innerHTML=`
+    ${!bank?`<div class="mcr-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
+      <div style="font-size:12.5px;color:#8A5307;line-height:1.6"><b>Add your bank details.</b> Without them your invoice cannot be paid, and it moves to the next payment round.</div>
+    </div>`:''}
+    ${g.goedgekeurd===false?`<div class="mcr-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
+      <div style="font-size:14px;font-weight:700;color:#8A5307">Waiting for approval</div>
+      <div style="font-size:12.5px;color:#8A5307;line-height:1.6;margin-top:4px">Bram still has to set your stall and your rate. You can fill everything in already.</div>
+    </div>`:''}
+
+    <div class="mcr-kaart">
+      <div class="mcr-kop">You</div>
+      <div style="font-size:15px;font-weight:600;color:#1A1917">${veiligTekst(g.naam||'')}</div>
+      <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${veiligTekst(g.email||'')}</div>
+      ${g.uurloon?`<div style="font-size:12.5px;color:#6B6A66;margin-top:2px">Your rate: <b style="color:#1A1917">${veiligTekst(mcrGeld(g.uurloon))}</b> per hour</div>`:''}
+      ${veld('mcrPTel','Mobile',g.telefoon,'tel','07700 900000')}
+      ${veld('mcrPStraat','Address',g.straat,'text','14 Grosvenor St')}
+      <div style="display:flex;gap:10px">
+        <div style="flex:1">${veld('mcrPPost','Postcode',g.postcode,'text','M1 7HE')}</div>
+        <div style="flex:1">${veld('mcrPPlaats','Town',g.plaats,'text','Manchester')}</div>
+      </div>
+      ${veld('mcrPMaat','T-shirt size',g.shirtmaat,'text','M')}
+    </div>
+
+    <div class="mcr-kaart">
+      <div class="mcr-kop">Getting paid</div>
+      ${veld('mcrPIban','Bank details',g.iban,'text','GB29 NWBK 6016 1331 9268 19','Needed before you can be paid.')}
+      ${veld('mcrPUtr','UTR number &mdash; <span style="font-weight:500;color:#8A8984">optional</span>',g.utr,'text','1234567890','Your own tax affairs. Add it if you want it on your invoice.')}
+    </div>
+
+    <div class="mcr-kaart">
+      <div class="mcr-kop">In case of emergency</div>
+      ${veld('mcrPNoodNaam','Name',g.noodcontact_naam,'text','')}
+      ${veld('mcrPNoodTel','Number',g.noodcontact_tel,'tel','')}
+    </div>
+
+    <button class="mcr-knop" onclick="mcrProfielOpslaan()">Save</button>
+    <div id="mcrProfOk" style="display:none;font-size:12.5px;color:#0F7A52;text-align:center;margin-top:9px">Saved.</div>
+
+    <div class="mcr-kaart" style="margin-top:14px">
+      <div class="mcr-kop">House rules</div>
+      <div style="font-size:12.5px;color:#6B6A66;line-height:1.6">
+        ${g.huisregels_op?`You agreed to version ${veiligTekst(g.huisregels_versie||'')} on ${veiligTekst(new Date(g.huisregels_op).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}))}.`:'Not agreed yet.'}
+      </div>
+      <button class="mcr-knop licht" style="margin-top:10px" onclick="toonHuisregels()">Read them again</button>
+    </div>
+
+    <button class="mcr-knop licht" style="margin-top:12px" onclick="doLogout()">Sign out</button>`;
+}
+async function mcrProfielOpslaan(){
+  const v=id=>{const e=document.getElementById(id);return e?e.value:null;};
+  try{
+    const{error}=await sb.rpc('mcr_profiel_opslaan',{
+      p_telefoon:v('mcrPTel'), p_straat:v('mcrPStraat'), p_postcode:v('mcrPPost'),
+      p_plaats:v('mcrPPlaats'), p_iban:v('mcrPIban'), p_utr:v('mcrPUtr'),
+      p_nood_naam:v('mcrPNoodNaam'), p_nood_tel:v('mcrPNoodTel'), p_shirtmaat:v('mcrPMaat')});
+    if(error)throw error;
+    const ok=document.getElementById('mcrProfOk'); if(ok){ok.style.display='';setTimeout(()=>ok.style.display='none',2500);}
+  }catch(e){ alert(mcrFout(e)); }
+}
+
 // ══════════════════════════════════════════════════════════════════
 //  VESTIGINGEN — twee ingangen op hetzelfde inlogscherm
 //  De keuze bepaalt alleen de taal van het inlogscherm. Wat je te zien
@@ -3281,6 +4037,8 @@ function zetKlokkaartenTerug(){
 }
 
 async function doLogout(){
+  const mw=document.getElementById('mcrApp'); if(mw)mw.style.display='none';
+  if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
   await sb.auth.signOut();
   CURRENT_USER=null;CURRENT_ROL=null;
   document.getElementById('appWrap').style.display='none';
@@ -3430,6 +4188,13 @@ async function initApp(user){
     laadZones();
   }
   CURRENT_NAAM=naam;
+
+  // Engels personeel krijgt zijn eigen, losse app. Beheerders niet: die werken
+  // in het Nederlandse scherm en wisselen met de schakelaar bovenin.
+  if(MIJN_VESTIGING==='MCR' && rol!=='beheerder'){
+    return mcrStart();
+  }
+
   document.getElementById('authWrap').style.display='none';
   const w=document.getElementById('wachtWrap');
   if(w)w.style.display='none';
