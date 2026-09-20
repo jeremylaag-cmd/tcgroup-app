@@ -108,11 +108,12 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mb-wd{font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 .mb-wn{font-size:17px;font-weight:700;color:var(--text)}
 .mb-kraamcel{font-size:13px;font-weight:600;white-space:nowrap;width:150px}
-.mb-shift{display:flex;align-items:center;gap:6px;width:100%;text-align:left;background:var(--bg);border:1px solid transparent;border-radius:8px;padding:5px 7px;margin-bottom:4px;cursor:pointer;font-family:var(--font)}
+.mb-shift{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;width:100%;text-align:left;background:var(--bg);border:1px solid transparent;border-radius:8px;padding:5px 7px;margin-bottom:4px;cursor:pointer;font-family:var(--font)}
+.mb-shifttijdrij{display:flex;align-items:center;gap:6px;width:100%}
 .mb-shift:hover{border-color:var(--border)}
 .mb-shift.leeg{background:#FEF6E7}
 .mb-shift.nieuw{background:none;border:1px dashed var(--border);color:var(--muted);justify-content:center;font-size:11.5px}
-.mb-shifttijd{font-size:11.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.mb-shifttijd{font-size:11px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
 .mb-shiftnaam{font-size:12px;color:var(--text);flex-grow:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mb-shiftop{font-size:10.5px;font-weight:700;color:#B45309}
 .mb-dicht{font-size:11px;color:var(--muted);text-align:center;padding:8px 0}
@@ -3296,11 +3297,15 @@ async function mbShiftsPlannen(){
         c.shifts.sort((a,b)=>String(a.start_tijd).localeCompare(String(b.start_tijd))).forEach(sh=>{
           const namen=sh.namen||[];
           const vol=namen.length>=sh.nodig;
+          const tijd = mbUur(sh.start_tijd) + (sh.eind_tijd?'\u2013'+mbUur(sh.eind_tijd):'');
           uit+=`<button class="mb-shift${vol?'':' leeg'}" onclick="mbShiftOpen('${veiligJs(sh.shift_id)}')">
-            <span class="mb-shifttijd">${veiligTekst(mbUur(sh.start_tijd))}</span>
+            <span class="mb-shifttijdrij">
+              <span class="mb-shifttijd">${veiligTekst(tijd)}</span>
+              <span style="flex-grow:1"></span>
+              ${namen.length<sh.nodig?`<span class="mb-shiftop">${namen.length}/${sh.nodig}</span>`:''}
+              ${sh.aanmeldingen?`<span class="mb-shiftop" style="color:#2A4EA8">${sh.aanmeldingen}?</span>`:''}
+            </span>
             <span class="mb-shiftnaam">${namen.length?veiligTekst(namen.join(', ')):'+ iemand'}</span>
-            ${namen.length<sh.nodig?`<span class="mb-shiftop">${namen.length}/${sh.nodig}</span>`:''}
-            ${sh.aanmeldingen?`<span class="mb-shiftop" style="color:#2A4EA8">${sh.aanmeldingen}?</span>`:''}
           </button>`;
         });
         uit+=`<button class="mb-shift nieuw" onclick="mbDienstOpen('${veiligJs(k.id)}','${veiligJs(d)}')">+ dienst</button>`;
@@ -3508,11 +3513,23 @@ async function mbShiftOpen(id){
     sb.rpc('mcr_shift_mensen',{p_shift:id}), sb.rpc('mcr_kandidaten',{p_shift:id})]);
   const ing=(mensen.data||[]).filter(x=>x.soort==='ingedeeld');
   const aan=(mensen.data||[]).filter(x=>x.soort==='aangemeld');
+  // Welke dienst je open hebt staan hoort er gewoon boven te staan: kraam,
+  // dag en de tijden. Dat moest je eerst uit het rooster erboven afleiden.
+  const sh=(MB_WEEKRIJEN||[]).find(r=>r.shift_id===id)||{};
+  const shTijd = sh.start_tijd
+    ? mbUur(sh.start_tijd)+' \u2013 '+(sh.eind_tijd?mbUur(sh.eind_tijd):'sluit')
+    : '';
   let uit='<div class="mb-rij2" style="margin-top:14px">';
   uit+=`<div class="mb-kaart" style="flex:1;min-width:280px">
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px">
-      <div class="mb-kop" style="margin:0">Op deze dienst</div>
-      <div style="display:flex;gap:6px">
+      <div>
+        <div class="mb-kop" style="margin:0">${sh.kraam?veiligTekst(sh.kraam):'Op deze dienst'}</div>
+        ${sh.datum?`<div style="font-size:14px;font-weight:700;color:var(--text);margin-top:2px">
+          ${veiligTekst(mbLang(sh.datum))}${shTijd?' &middot; '+veiligTekst(shTijd):''}
+          ${sh.shift_naam?`<span style="font-weight:500;color:var(--muted)"> &middot; ${veiligTekst(sh.shift_naam)}</span>`:''}
+        </div>`:''}
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">
         <button class="mb-mini" onclick="mbShiftAanpassen('${veiligJs(id)}')">Tijd of aantal</button>
         <button class="mb-mini rood" onclick="mbShiftWeg('${veiligJs(id)}')">Verwijderen</button>
       </div></div><div id="mbShiftBewerk"></div>`;
@@ -4734,7 +4751,9 @@ async function mcrOpenShifts(){
             <span style="width:8px;height:8px;border-radius:50%;background:${veiligTekst(r.kleur)};flex-shrink:0"></span>
             <span style="font-size:14.5px;font-weight:600;color:#1A1917">${veiligTekst(r.kraam)}</span>
           </div>
-          <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">From ${veiligTekst(mcrTijd(r.start_tijd))} till close &middot; ${vrij} place${vrij===1?'':'s'} left</div>
+          <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${r.eind_tijd
+            ?veiligTekst(mcrTijd(r.start_tijd))+' &ndash; '+veiligTekst(mcrTijd(r.eind_tijd))
+            :'From '+veiligTekst(mcrTijd(r.start_tijd))+' till close'} &middot; ${vrij} place${vrij===1?'':'s'} left</div>
         </div>
         <div style="flex-shrink:0;align-self:center">${
           r.aangemeld
