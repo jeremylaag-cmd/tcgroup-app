@@ -51,6 +51,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mcr-dag{flex:0 0 44px;text-align:center}
 .mcr-dag b{display:block;font-size:19px;font-weight:700;color:#1A1917;line-height:1.15}
 .mcr-dag i{display:block;font-style:normal;font-size:10.5px;font-weight:600;color:#8A8984;text-transform:uppercase;letter-spacing:.04em}
+.mcr-dag u{display:block;text-decoration:none;font-size:10.5px;font-weight:600;color:#8A8984;text-transform:uppercase;letter-spacing:.04em}
 .mcr-knop{display:block;width:100%;text-align:center;background:#1A1917;color:#fff;font-size:15px;font-weight:600;padding:14px 0;border:none;border-radius:11px;cursor:pointer;font-family:var(--font)}
 .mcr-knop.licht{background:#fff;color:#1A1917;border:1px solid #D9D7D0}
 .mcr-knop[disabled]{opacity:.45;cursor:default}
@@ -109,7 +110,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mb-week th.mb-dagkop:hover{background:var(--bg)}
 .mb-week th.mb-dagkop.aan{background:var(--bg);box-shadow:inset 0 -2px 0 var(--text)}
 .mb-wd{font-size:11px;text-transform:uppercase;letter-spacing:.04em}
-.mb-wn{font-size:17px;font-weight:700;color:var(--text)}
+.mb-wn{font-size:17px;font-weight:700;color:var(--text);line-height:1.1}
+.mb-wm{font-size:10.5px;font-weight:600;color:var(--muted);text-transform:lowercase}
 .mb-kraamcel{font-size:13px;font-weight:600;white-space:nowrap;width:150px}
 .mb-shift{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;width:100%;text-align:left;background:var(--bg);border:1px solid transparent;border-radius:8px;padding:5px 7px;margin-bottom:4px;cursor:pointer;font-family:var(--font)}
 .mb-shifttijdrij{display:flex;align-items:center;gap:6px;width:100%}
@@ -3290,7 +3292,8 @@ async function mbShiftsPlannen(){
     uit+=`<th class="mb-dagkop${MB_DAG===d?' aan':''}" onclick="mbDagOpen('${veiligJs(d)}')"
             title="Bekijk wie er die dag werkt">
       <div class="mb-wd">${dt.toLocaleDateString('nl-NL',{weekday:'short'})}</div>
-      <div class="mb-wn">${dt.getDate()}</div></th>`;
+      <div class="mb-wn">${dt.getDate()}</div>
+      <div class="mb-wm">${dt.toLocaleDateString('nl-NL',{month:'short'}).replace('.','')}</div></th>`;
   });
   uit+='</tr></thead><tbody>';
   kramen.forEach(k=>{
@@ -4107,10 +4110,21 @@ async function mbInlezen(){
     <div style="font-size:12.5px;color:var(--muted);line-height:1.6">
       Alleen <b style="color:var(--text)">Betaling</b> met status <b style="color:var(--text)">Goedgekeurd</b> telt mee. Terugbetalingen gaan eraf,
       geweigerde transacties tellen niet. Dezelfde transactiereferentie twee keer inlezen kan niet &mdash; je omzet verdubbelt niet.
-      Het bestand wordt in je browser gelezen; kaartnummers gaan nooit naar de server.</div></div></div></div>`;
+      Het bestand wordt in je browser gelezen; kaartnummers gaan nooit naar de server.</div></div>
+    <div class="mb-kaart"><div class="mb-kop">Forecast inlezen</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:10px">
+      Kies je registratiebestand; de app pakt het blad <b style="color:var(--text)">Dagrapport</b> en leest de
+      kolommen <b style="color:var(--text)">Datum</b>, <b style="color:var(--text)">Locatie</b> en
+      <b style="color:var(--text)">Forecast</b>. Je ziet eerst wat er gaat gebeuren &mdash; pas daarna zet je het vast.
+      Een dag die er al staat wordt overschreven, de rest van het dagrapport blijft zoals het is.</div>
+    <input type="file" id="mbFcBestand" accept=".xls,.xlsx,.csv" style="display:none">
+    <button class="mb-mini" onclick="document.getElementById('mbFcBestand').click()">Forecastbestand kiezen</button>
+    <div id="mbFcUit" style="margin-top:10px"></div></div></div></div>`;
   document.getElementById('mbInhoud').innerHTML=uit;
   const inp=document.getElementById('mbBestanden');
   if(inp)inp.onchange=()=>mbImportStart();
+  const fc=document.getElementById('mbFcBestand');
+  if(fc)fc.onchange=()=>mbForecastLezen(fc.files&&fc.files[0]);
   const dz=document.getElementById('mbDrop');
   if(dz){
     dz.ondragover=e=>{e.preventDefault();dz.classList.add('over');};
@@ -4119,6 +4133,91 @@ async function mbInlezen(){
       if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length)mbImportStart(e.dataTransfer.files);};
   }
 }
+// ── Forecast uit het registratiebestand ──────────────────────────
+// Het blad "Dagrapport" heeft een regel per dag per stand. We zoeken de
+// koprij op de woorden zelf, niet op een vaste plek: schuift er ooit een
+// kolom op, dan blijft dit werken.
+let MB_FORECAST=null;
+function mbFcIso(v){
+  if(v instanceof Date && !isNaN(v))
+    return v.getFullYear()+'-'+String(v.getMonth()+1).padStart(2,'0')+'-'+String(v.getDate()).padStart(2,'0');
+  if(typeof v==='number' && v>20000 && v<80000){
+    const d=new Date(Date.UTC(1899,11,30)+v*86400000);
+    return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');
+  }
+  const t=String(v||'').trim();
+  let m=t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');
+  m=t.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})/);
+  if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');
+  return null;
+}
+function mbFcKoppen(rij){
+  const zoek=(...woorden)=>rij.findIndex(c=>{
+    const t=String(c||'').trim().toLowerCase();
+    return woorden.some(w=>t===w||t.indexOf(w)===0);
+  });
+  return {datum:zoek('datum'), kraam:zoek('locatie','kraam','stand'), bedrag:zoek('forecast')};
+}
+function mbFcRijen(wb){
+  const namen=wb.SheetNames.slice().sort((a,b)=>
+    (b.toLowerCase().indexOf('dagrapport')===0?1:0)-(a.toLowerCase().indexOf('dagrapport')===0?1:0));
+  for(const naam of namen){
+    const vel=XLSX.utils.sheet_to_json(wb.Sheets[naam],{header:1,raw:true,defval:''});
+    for(let i=0;i<Math.min(vel.length,40);i++){
+      const k=mbFcKoppen(vel[i]);
+      if(k.datum<0||k.kraam<0||k.bedrag<0)continue;
+      const rijen=[];
+      for(let j=i+1;j<vel.length;j++){
+        const r=vel[j]; if(!r)continue;
+        const ds=mbFcIso(r[k.datum]); const kr=String(r[k.kraam]||'').trim(); const bd=r[k.bedrag];
+        if(!ds||!kr||bd===''||bd==null)continue;
+        rijen.push({kraam:kr,datum:ds,forecast:String(bd)});
+      }
+      if(rijen.length)return{blad:naam,rijen:rijen};
+    }
+  }
+  return null;
+}
+async function mbForecastLezen(file){
+  const uit=document.getElementById('mbFcUit'); if(!uit)return;
+  MB_FORECAST=null;
+  if(!file){ uit.innerHTML=''; return; }
+  uit.innerHTML='<div style="font-size:13px;color:var(--muted)">Bezig met lezen&hellip;</div>';
+  try{
+    if(!await mbSheetJs())throw new Error('De rekenblad-lezer kon niet geladen worden. Controleer je internet.');
+    const wb=XLSX.read(await file.arrayBuffer(),{type:'array',cellDates:true});
+    const gevonden=mbFcRijen(wb);
+    if(!gevonden)throw new Error('Ik vind geen blad met de kolommen Datum, Locatie en Forecast.');
+    const{data,error}=await sb.rpc('mcr_forecast_zetten',{p_rijen:gevonden.rijen,p_alleen_kijken:true});
+    if(error)throw error;
+    const p=(data&&data[0])||{gezet:0,buiten_seizoen:0,overgeslagen:0,onbekende_kramen:null};
+    MB_FORECAST=gevonden.rijen;
+    const per={};
+    gevonden.rijen.forEach(r=>{ per[r.kraam]=(per[r.kraam]||0)+1; });
+    uit.innerHTML=`<div style="font-size:13px;line-height:1.7">
+      <div><b>${p.gezet}</b> dagen klaar om te zetten &mdash; uit blad &ldquo;${veiligTekst(gevonden.blad)}&rdquo;</div>
+      ${Object.keys(per).sort().map(k=>`<div style="color:var(--muted)">${veiligTekst(k)}: ${per[k]} ${per[k]===1?'regel':'regels'}</div>`).join('')}
+      ${p.buiten_seizoen?`<div style="color:#B45309">${p.buiten_seizoen} dagen vallen buiten het seizoen van hun kraam en worden overgeslagen.</div>`:''}
+      ${p.onbekende_kramen?`<div style="color:#B4472B">Onbekende kramen: ${veiligTekst(p.onbekende_kramen)}</div>`:''}
+      ${p.overgeslagen?`<div style="color:var(--muted)">${p.overgeslagen} regels overgeslagen.</div>`:''}
+    </div>
+    ${p.gezet?`<button class="mb-mini zwart" style="margin-top:10px" onclick="mbForecastZetten()">Forecast vastzetten</button>`:''}`;
+  }catch(e){ uit.innerHTML=`<div style="font-size:13px;color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
+}
+async function mbForecastZetten(){
+  const uit=document.getElementById('mbFcUit'); if(!uit)return;
+  if(!MB_FORECAST||!MB_FORECAST.length){ uit.innerHTML='<div style="font-size:13px;color:var(--muted)">Kies eerst een bestand.</div>'; return; }
+  uit.innerHTML='<div style="font-size:13px;color:var(--muted)">Bezig met wegschrijven&hellip;</div>';
+  try{
+    const{data,error}=await sb.rpc('mcr_forecast_zetten',{p_rijen:MB_FORECAST,p_alleen_kijken:false});
+    if(error)throw error;
+    const p=(data&&data[0])||{gezet:0};
+    MB_FORECAST=null;
+    uit.innerHTML=`<div style="font-size:13px;color:#0F7A52"><b>${p.gezet}</b> dagen forecast staan in het dagrapport.</div>`;
+  }catch(e){ uit.innerHTML=`<div style="font-size:13px;color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
+}
+
 async function mbTerminalToevoegen(){
   const uit=document.getElementById('mbTerminalUit');
   const v=id=>{const e=document.getElementById(id);return e?e.value.trim():'';};
@@ -4907,6 +5006,7 @@ function mcrDatum(d){
 }
 function mcrDagNr(d){ return new Date(String(d)+'T00:00:00').getDate(); }
 function mcrDagKort(d){ return new Date(String(d)+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'}); }
+function mcrMaandKort(d){ return new Date(String(d)+'T00:00:00').toLocaleDateString('en-GB',{month:'short'}); }
 function mcrTijd(t){ return t ? String(t).slice(0,5) : ''; }
 function mcrKlok(ts){
   if(!ts)return '';
@@ -5015,7 +5115,7 @@ async function mcrShifts(){
       const chip = r.uitgeklokt_op ? mcrStatusChip(r.status)
                  : (r.ingeklokt_op ? mcrChip('Clocked in','#0F7A52','#ECFDF3') : '');
       uit+=`<div class="mcr-rij">
-        <div class="mcr-dag"><i>${veiligTekst(mcrDagKort(r.datum))}</i><b>${mcrDagNr(r.datum)}</b></div>
+        <div class="mcr-dag"><i>${veiligTekst(mcrDagKort(r.datum))}</i><b>${mcrDagNr(r.datum)}</b><u>${veiligTekst(mcrMaandKort(r.datum))}</u></div>
         <div style="flex-grow:1;min-width:0">
           <div style="display:flex;align-items:center;gap:7px">
             <span style="width:8px;height:8px;border-radius:50%;background:${veiligTekst(r.kleur)};flex-shrink:0"></span>
@@ -5036,7 +5136,7 @@ async function mcrShifts(){
 async function mcrOpenShifts(){
   document.getElementById('mcrTitel').textContent='Open shifts';
   document.getElementById('mcrSub').textContent='Put your name down; Bram confirms.';
-  const{data,error}=await sb.rpc('mcr_open_shifts',{p_dagen:60});
+  const{data,error}=await sb.rpc('mcr_open_shifts',{p_dagen:75});
   if(error)throw error;
   const m=document.getElementById('mcrMain');
   let uit=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="mcrGa('shifts')">&lsaquo; Back to my shifts</button>`;
@@ -5047,7 +5147,7 @@ async function mcrOpenShifts(){
     data.forEach(r=>{
       const vrij=(r.nodig||0)-(r.bezet||0);
       uit+=`<div class="mcr-rij">
-        <div class="mcr-dag"><i>${veiligTekst(mcrDagKort(r.datum))}</i><b>${mcrDagNr(r.datum)}</b></div>
+        <div class="mcr-dag"><i>${veiligTekst(mcrDagKort(r.datum))}</i><b>${mcrDagNr(r.datum)}</b><u>${veiligTekst(mcrMaandKort(r.datum))}</u></div>
         <div style="flex-grow:1;min-width:0">
           <div style="display:flex;align-items:center;gap:7px">
             <span style="width:8px;height:8px;border-radius:50%;background:${veiligTekst(r.kleur)};flex-shrink:0"></span>
@@ -5393,7 +5493,7 @@ async function mcrUren(){
   </div><div class="mcr-kaart" style="padding:2px 15px">`;
   data.forEach(r=>{
     uit+=`<div class="mcr-rij">
-      <div class="mcr-dag"><i>${veiligTekst(mcrDagKort(r.datum))}</i><b>${mcrDagNr(r.datum)}</b></div>
+      <div class="mcr-dag"><i>${veiligTekst(mcrDagKort(r.datum))}</i><b>${mcrDagNr(r.datum)}</b><u>${veiligTekst(mcrMaandKort(r.datum))}</u></div>
       <div style="flex-grow:1;min-width:0">
         <div style="display:flex;align-items:center;gap:7px">
           <span style="width:8px;height:8px;border-radius:50%;background:${veiligTekst(r.kleur)};flex-shrink:0"></span>
