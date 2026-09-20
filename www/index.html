@@ -1163,26 +1163,27 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div style="font-size:11.5px;color:var(--muted);text-align:center;line-height:1.5;margin-top:.625rem">We will ask for your bank details once your account is open.</div>
     </div>
 
-    <!-- De huisregels, opgehaald uit de database -->
-    <div id="huisregelsOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center;padding:16px">
-      <div style="background:var(--card,#fff);border-radius:14px;max-width:560px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">
-        <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px">
-          <div style="font-size:15px;font-weight:700" id="huisregelsTitel">House rules</div>
-          <button type="button" onclick="sluitHuisregels()" style="background:none;border:none;font-size:22px;line-height:1;color:var(--muted);cursor:pointer">&times;</button>
-        </div>
-        <div id="huisregelsTekst" style="padding:16px 18px;overflow:auto;font-size:13.5px;line-height:1.6;color:var(--text)"></div>
-        <div style="padding:12px 18px;border-top:1px solid var(--border)">
-          <button class="auth-btn" style="margin:0" onclick="akkoordHuisregels()">Agree and continue</button>
-        </div>
-      </div>
-    </div>
-
     <div class="auth-err" id="authErr"></div>
     <div class="auth-msg" id="authMsg"></div>
   </div>
 </div>
 
 <!-- APP -->
+<!-- De huisregels, opgehaald uit de database. Staat met opzet los van het
+     inlogscherm: hij wordt ook geopend vanuit het profiel, als je al binnen bent. -->
+<div id="huisregelsOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9500;align-items:center;justify-content:center;padding:16px">
+  <div style="background:var(--card,#fff);border-radius:14px;max-width:560px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <div style="font-size:15px;font-weight:700" id="huisregelsTitel">House rules</div>
+      <button type="button" onclick="sluitHuisregels()" style="background:none;border:none;font-size:22px;line-height:1;color:var(--muted);cursor:pointer">&times;</button>
+    </div>
+    <div id="huisregelsTekst" style="padding:16px 18px;overflow:auto;font-size:13.5px;line-height:1.6;color:var(--text)"></div>
+    <div style="padding:12px 18px;border-top:1px solid var(--border)">
+      <button class="auth-btn" style="margin:0" id="huisregelsKnop" onclick="akkoordHuisregels()">Agree and continue</button>
+    </div>
+  </div>
+</div>
+
 <div class="auth-wrap" id="wachtWrap" style="display:none">
   <div class="auth-box">
     <div class="auth-logo" id="wachtLogo">TC Group <span>/ Planning</span></div>
@@ -5284,7 +5285,7 @@ async function mcrProfiel(){
       <div style="font-size:12.5px;color:#6B6A66;line-height:1.6">
         ${g.huisregels_op?`You agreed to version ${veiligTekst(g.huisregels_versie||'')} on ${veiligTekst(new Date(g.huisregels_op).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}))}.`:'Not agreed yet.'}
       </div>
-      <button class="mcr-knop licht" style="margin-top:10px" onclick="toonHuisregels()">Read them again</button>
+      <button class="mcr-knop licht" style="margin-top:10px" onclick="toonHuisregels(true)">Read them again</button>
     </div>
 
     <button class="mcr-knop licht" style="margin-top:12px" onclick="doLogout()">Sign out</button>`;
@@ -5410,14 +5411,22 @@ async function laadHuisregels(){
   return HUISREGELS;
 }
 
-async function toonHuisregels(){
+async function toonHuisregels(alleenLezen){
   const ov=document.getElementById('huisregelsOverlay'); if(!ov)return;
-  const hr=await laadHuisregels();
   const tk=document.getElementById('huisregelsTekst');
   const tt=document.getElementById('huisregelsTitel');
-  if(hr){ if(tt)tt.textContent=hr.titel; if(tk)tk.innerHTML=huisregelsNaarHtml(hr.tekst); }
-  else if(tk){ tk.textContent='The house rules could not be loaded. Please try again.'; }
+  const kn=document.getElementById('huisregelsKnop');
+  // Lees je ze nog eens vanuit je profiel, dan hoef je nergens mee akkoord te
+  // gaan; dat deed je al bij het aanmelden.
+  if(kn){
+    kn.textContent = alleenLezen ? 'Close' : 'Agree and continue';
+    kn.setAttribute('onclick', alleenLezen ? 'sluitHuisregels()' : 'akkoordHuisregels()');
+  }
+  if(tk)tk.textContent='Loading\u2026';
   ov.style.display='flex';
+  const hr=await laadHuisregels();
+  if(hr){ if(tt)tt.textContent=hr.titel||'House rules'; if(tk)tk.innerHTML=huisregelsNaarHtml(hr.tekst); }
+  else if(tk){ tk.textContent='The house rules could not be loaded. Check your connection and try again.'; }
 }
 function sluitHuisregels(){ const ov=document.getElementById('huisregelsOverlay'); if(ov)ov.style.display='none'; }
 function akkoordHuisregels(){
