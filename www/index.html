@@ -2955,6 +2955,92 @@ function closeDrawer(){
 
 
 // ══════════════════════════════════════════════════════════════════
+//  NFC — het echte werk gebeurt in de app, niet in de browser.
+//  De plug-in (@capgo/capacitor-nfc) zit alleen in de winkelversie.
+//  Staat hij er niet, dan blijft de zescijferige dagcode over; dat
+//  scherm verandert dan niet. Zo werkt dezelfde code overal.
+// ══════════════════════════════════════════════════════════════════
+let NFC_KAN=null;               // null = nog niet gevraagd
+function nfcPlugin(){
+  try{ return (window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.CapacitorNfc)||null; }
+  catch(e){ return null; }
+}
+async function nfcKan(){
+  if(NFC_KAN!==null)return NFC_KAN;
+  const p=nfcPlugin();
+  if(!p){ NFC_KAN=false; return false; }
+  try{
+    const r=await p.isSupported();
+    NFC_KAN=!!(r&&(r.supported===undefined?r:r.supported));
+  }catch(e){ NFC_KAN=false; }
+  return NFC_KAN;
+}
+// Zet de bytes van de tag om in de code waarmee hij gekoppeld is:
+// hoofdletters, hexadecimaal, zonder streepjes. Altijd dezelfde vorm,
+// anders herkent de database dezelfde tag de tweede keer niet.
+function nfcCode(id){
+  if(!id)return null;
+  const lijst=Array.isArray(id)?id:(id.length!=null?Array.from(id):null);
+  if(!lijst||!lijst.length)return null;
+  return lijst.map(b=>(Number(b)&255).toString(16).padStart(2,'0')).join('').toUpperCase();
+}
+// Wacht op één tag. Altijd opruimen: luisteraar weg en sessie dicht,
+// ook als het misgaat — anders blijft de telefoon scannen.
+function nfcLees(bericht, seconden){
+  const p=nfcPlugin();
+  if(!p)return Promise.reject(new Error('This phone cannot read tags. Type the code instead.'));
+  return new Promise((klaar,fout)=>{
+    let luister=null, klok=null, af=false;
+    const stop=async()=>{
+      if(af)return; af=true;
+      if(klok)clearTimeout(klok);
+      try{ if(luister&&luister.remove)await luister.remove(); }catch(e){}
+      try{ await p.stopScanning(); }catch(e){}
+    };
+    (async()=>{
+      try{
+        luister=await p.addListener('nfcEvent', async ev=>{
+          const code=nfcCode(ev&&ev.tag&&ev.tag.id);
+          if(!code)return;
+          await stop(); klaar(code);
+        });
+        await p.startScanning({iosSessionType:'tag', alertMessage:bericht||'Hold your phone against the tag'});
+        klok=setTimeout(async()=>{ await stop();
+          fout(new Error('No tag found. Hold the phone flat against the sticker, or type the code.')); },
+          (seconden||25)*1000);
+      }catch(e){ await stop(); fout(e); }
+    })();
+  });
+}
+
+// ─── Inklokken met een tag (personeel, Engels) ────────────────────
+async function mcrTagInklokken(){
+  const st=document.getElementById('mcrNfcUit');
+  const zet=(t,kl)=>{ if(st){st.style.color=kl||'#6B6A66'; st.textContent=t;} };
+  zet('Hold your phone against the sticker…');
+  try{
+    const code=await nfcLees('Hold your phone against the sticker in the stall');
+    zet('Clocking you in…');
+    const{error}=await sb.rpc('tag_inklokken',{p_code:code});
+    if(error)throw error;
+    await mcrGa('clock');
+  }catch(e){ zet(mcrFout(e),'#B4472B'); }
+}
+
+// ─── Een tag koppelen met NFC (beheer, Nederlands) ────────────────
+async function mbTagScannen(){
+  const uit=document.getElementById('mbTagUit');
+  const zet=(t,kl)=>{ if(uit)uit.innerHTML=`<span style="color:${kl||'var(--muted)'};font-size:13px">${veiligTekst(t)}</span>`; };
+  zet('Houd de telefoon tegen de tag…');
+  try{
+    const code=await nfcLees('Houd de telefoon tegen de tag');
+    const veld=document.getElementById('mbTagCode');
+    if(veld)veld.value=code;
+    zet('Gelezen. Kies de kraam en druk op Koppelen.','#0F7A52');
+  }catch(e){ zet(mbFout(e),'#B4472B'); }
+}
+
+// ══════════════════════════════════════════════════════════════════
 //  MANCHESTER — beheerscherm voor Bram (Nederlands)
 //  Opgebouwd naar de tekening "Manchester — schermen".
 // ══════════════════════════════════════════════════════════════════
@@ -4257,6 +4343,7 @@ async function mbInstellingenOpslaan(){
 }
 
 async function mbTags(){
+  await nfcKan();
   const [tags,kramen]=await Promise.all([sb.rpc('mcr_tags'), mbKramenLijst()]);
   if(tags.error)throw tags.error;
   const actief=(tags.data||[]).filter(t=>!t.ingetrokken_op);
@@ -4270,6 +4357,7 @@ async function mbTags(){
         <select class="mb-veld" id="mbTagKraam">${kramen.map(k=>`<option value="${veiligTekst(k.id)}">${veiligTekst(k.naam)}</option>`).join('')}</select></div>
       <div style="flex:1 1 210px"><label class="mb-lab">Code van de tag</label>
         <input class="mb-veld" id="mbTagCode" placeholder="minstens 8 tekens"></div>
+      ${NFC_KAN?`<div style="align-self:flex-end"><button class="mb-mini" onclick="mbTagScannen()">Tag scannen</button></div>`:''}
       <div style="flex:1 1 120px"><label class="mb-lab">Label</label>
         <input class="mb-veld" id="mbTagLabel" placeholder="Tag A"></div>
       <label style="font-size:12.5px;color:var(--muted);display:flex;align-items:center;gap:6px;align-self:flex-end;padding-bottom:9px">
@@ -4359,6 +4447,7 @@ async function mcrStart(){
   const av=document.getElementById('mcrAvatar');
   if(av)av.textContent=(CURRENT_NAAM||'').split(' ').filter(Boolean).map(x=>x[0]).slice(0,2).join('').toUpperCase();
   mcrNav();
+  nfcKan();          // vast opvragen; het inklokscherm heeft het antwoord nodig
   await mcrGa('shifts');
 }
 
@@ -4608,11 +4697,24 @@ function mcrKlokTeken(){
     <div style="text-align:center">
       <div style="font-size:13.5px;color:#6B6A66;line-height:1.6;margin-bottom:22px">
         ${vandaag
-          ? 'Type the code from the card in the stall.'
+          ? (NFC_KAN?'Hold your phone against the sticker in the stall. No sticker to hand? Type the code from the card.'
+                    :'Type the code from the card in the stall.')
           : (st.volgende_datum
               ? 'Your next shift is '+veiligTekst(mcrDatum(st.volgende_datum))+' at '+veiligTekst(st.volgende_kraam||'')+'.'
               : 'You are not on the rota at the moment.')}
       </div>
+      ${vandaag&&NFC_KAN?`
+      <div class="mcr-cirkel" onclick="mcrTagInklokken()">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 8.5a8 8 0 0 1 0 7M9.5 6a12 12 0 0 1 0 12M13 3.5a16 16 0 0 1 0 17"/><circle cx="3" cy="12" r="1.2" fill="#fff" stroke="none"/></svg>
+        <span style="font-size:15px;font-weight:600">Tap the tag</span>
+      </div>
+      <div id="mcrNfcUit" style="font-size:12.5px;color:#6B6A66;margin-top:10px;min-height:17px"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin:18px 0 14px">
+        <div style="flex:1;height:1px;background:#EFEDE7"></div>
+        <span style="font-size:11px;color:#8A8984">or type the code</span>
+        <div style="flex:1;height:1px;background:#EFEDE7"></div>
+      </div>`:''}
       ${vandaag?`
       <input class="mcr-veld" id="mcrCode" maxlength="8" autocapitalize="characters" autocomplete="off"
              style="text-align:center;font-size:26px;letter-spacing:.32em;font-weight:700;padding:16px 13px"
