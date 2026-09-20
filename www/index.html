@@ -3761,7 +3761,9 @@ async function mbUrenAkkoord(){
         <div class="mb-av">${veiligTekst(mbInit(r.naam))}</div>
         <div><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
         ${let_op?`<div style="font-size:11.5px;color:#B45309">${veiligTekst(let_op)}</div>`:''}
-        ${r.notitie_pers?`<div style="font-size:11.5px;color:var(--muted)">&ldquo;${veiligTekst(r.notitie_pers)}&rdquo;</div>`:''}</div>
+        ${r.notitie_pers?`<div style="font-size:11.5px;color:var(--muted)">&ldquo;${veiligTekst(r.notitie_pers)}&rdquo;</div>`:''}
+        ${r.auto_uitgeklokt?`<div style="font-size:11.5px;color:#B4472B;max-width:280px;white-space:normal">Automatisch uitgeklokt na 24 uur &mdash; eindtijd is een schatting, controleer voor je akkoord geeft.</div>`
+          :r.notitie_beh?`<div style="font-size:11.5px;color:var(--muted);max-width:280px;white-space:normal">${veiligTekst(r.notitie_beh)}</div>`:''}</div>
       </div></td>
       <td style="white-space:nowrap">${veiligTekst(mbKort(r.datum))}</td>
       <td><div style="display:flex;align-items:center;gap:7px">${mbStip(r.kleur)}${veiligTekst(r.kraam)}</div></td>
