@@ -24,6 +24,14 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .auth-sub{font-size:13px;color:var(--muted);margin-bottom:1.75rem}
 .auth-tabs{display:flex;gap:0;margin-bottom:1.5rem;background:var(--bg);border-radius:9px;padding:3px}
 .auth-tab{flex:1;padding:7px;font-size:13px;font-weight:500;color:var(--muted);background:none;border:none;cursor:pointer;border-radius:7px;font-family:var(--font);transition:.15s}
+.ingang{display:flex;gap:0;margin-bottom:1.25rem;background:var(--bg);border-radius:9px;padding:3px}
+.ingang button{flex:1;padding:8px;font-size:13px;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;border-radius:7px;font-family:var(--font);transition:.15s}
+.ingang button.active{background:var(--card,#fff);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.vest-switch{display:flex;gap:0;background:var(--bg);border-radius:8px;padding:2px;margin-right:6px}
+.vest-switch button{padding:5px 11px;font-size:12px;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;border-radius:6px;font-family:var(--font)}
+.vest-switch button.active{background:#B4472B;color:#fff}
+.vest-switch button.nl.active{background:var(--text);color:#fff}
+@media(max-width:820px){.vest-switch button{padding:5px 8px;font-size:11px}}
 .auth-tab.active{background:var(--surface);color:var(--text);box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .auth-field{margin-bottom:.875rem}
 .auth-label{font-size:11px;font-weight:500;color:var(--muted);margin-bottom:4px;display:block}
@@ -955,34 +963,38 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 <!-- AUTH -->
 <div class="auth-wrap" id="authWrap">
   <div class="auth-box">
-    <div class="auth-logo">TC Group <span>/ Planning</span></div>
+    <div class="ingang" id="ingangKeuze">
+      <button type="button" data-ingang="NL" onclick="kiesIngang('NL')">Nederland</button>
+      <button type="button" data-ingang="MCR" onclick="kiesIngang('MCR')">Manchester</button>
+    </div>
+    <div class="auth-logo" id="authLogo">TC Group <span>/ Planning</span></div>
     <div class="auth-sub" id="authSub">Log in of maak een account aan</div>
     <div class="auth-tabs">
-      <button class="auth-tab active" onclick="switchAuthTab('login')">Inloggen</button>
-      <button class="auth-tab" onclick="switchAuthTab('register')">Registreren</button>
+      <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Inloggen</button>
+      <button class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Registreren</button>
     </div>
     <div id="loginForm">
-      <div class="auth-field"><label class="auth-label">E-mailadres</label><input type="email" id="loginEmail" placeholder="naam@email.com"></div>
-      <div class="auth-field"><label class="auth-label">Wachtwoord</label><input type="password" id="loginPw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
-      <button class="auth-btn" onclick="doLogin()">Inloggen</button>
+      <div class="auth-field"><label class="auth-label" id="lblLoginEmail">E-mailadres</label><input type="email" id="loginEmail" placeholder="naam@email.com"></div>
+      <div class="auth-field"><label class="auth-label" id="lblLoginPw">Wachtwoord</label><input type="password" id="loginPw" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()"></div>
+      <button class="auth-btn" id="btnLogin" onclick="doLogin()">Inloggen</button>
       <div id="appleScheiding" style="display:flex;align-items:center;gap:10px;margin:.75rem 0">
         <div style="flex:1;height:1px;background:var(--border)"></div>
-        <span style="font-size:11px;color:var(--muted)">of</span>
+        <span style="font-size:11px;color:var(--muted)" id="txtOf">of</span>
         <div style="flex:1;height:1px;background:var(--border)"></div>
       </div>
       <button id="appleLoginKnop" onclick="doAppleLogin()" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:#000;color:#fff;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:500;cursor:pointer;font-family:var(--font)">
         <svg width="18" height="18" viewBox="0 0 814 1000" fill="white"><path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76 0-103.7 40.8-165.9 40.8s-105.6-57.8-155.5-127.4C46 790.7 0 663 0 541.8c0-207.3 135.3-317 269-317 71 0 130.5 46.4 174.5 46.4 42.8 0 109.7-49 192.5-49 31 0 108.2 2.6 168.2 80.1zm-198.5-167.3c31.3-37.5 53.3-89.9 53.3-142.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 84.9-55.1 138.6 0 8.4 1.3 16.8 1.9 19.5 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.3-72.8z"/></svg>
         Inloggen met Apple
       </button>
-      <button type="button" onclick="showForgotPw()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:.75rem;font-family:var(--font);text-decoration:underline;display:block;width:100%;text-align:center">Wachtwoord vergeten?</button>
+      <button type="button" id="lnkForgot" onclick="showForgotPw()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:.75rem;font-family:var(--font);text-decoration:underline;display:block;width:100%;text-align:center">Wachtwoord vergeten?</button>
     </div>
     <div id="forgotForm" style="display:none">
       <div class="auth-field">
-        <label class="auth-label">E-mailadres</label>
+        <label class="auth-label" id="lblForgotEmail">E-mailadres</label>
         <input type="email" id="forgotEmail" placeholder="naam@email.com">
       </div>
-      <button class="auth-btn" onclick="doForgotPw()">Reset link versturen</button>
-      <button type="button" onclick="showForgotPw(false)" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:.5rem;font-family:var(--font);text-decoration:underline;display:block;width:100%;text-align:center">Terug naar inloggen</button>
+      <button class="auth-btn" id="btnForgot" onclick="doForgotPw()">Reset link versturen</button>
+      <button type="button" id="lnkTerugLogin" onclick="showForgotPw(false)" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:.5rem;font-family:var(--font);text-decoration:underline;display:block;width:100%;text-align:center">Terug naar inloggen</button>
     </div>
     <div id="nieuwPwForm" style="display:none">
       <div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:1rem">
@@ -1033,6 +1045,42 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       </div>
       <button class="auth-btn" onclick="doRegister()">Account aanmaken</button>
     </div>
+
+    <!-- Aanmelden via de Manchester-ingang: Engels, en andere velden.
+         Geen shirtmaat of rijbewijs; wel geboortedatum en de huisregels. -->
+    <div id="registerFormMCR" style="display:none">
+      <div class="auth-field"><label class="auth-label">Full name <span style="color:#DC2626">*</span></label><input type="text" id="mcrNaam" placeholder="First name and surname"></div>
+      <div class="auth-field"><label class="auth-label">Mobile <span style="color:#DC2626">*</span></label><input type="tel" id="mcrTel" placeholder="07700 900000"></div>
+      <div class="auth-field"><label class="auth-label">Email <span style="color:#DC2626">*</span></label><input type="email" id="mcrEmail" placeholder="name@email.com"></div>
+      <div class="auth-field"><label class="auth-label">Date of birth <span style="color:#DC2626">*</span></label><input type="date" id="mcrGeb"></div>
+      <div class="auth-field"><label class="auth-label">Password <span style="color:#DC2626">*</span></label><input type="password" id="mcrPw" placeholder="At least 12 characters"></div>
+      <div class="auth-field"><label class="auth-label">Who told you about us? <span style="color:var(--muted);font-weight:400">&mdash; optional</span></label><input type="text" id="mcrVia" placeholder="A name, Instagram, a poster&hellip;"></div>
+      <div style="display:flex;gap:10px;align-items:flex-start;margin:.25rem 0 1rem">
+        <input type="checkbox" id="mcrAkkoord" style="margin-top:3px;width:17px;height:17px;flex-shrink:0">
+        <label for="mcrAkkoord" style="font-size:12.5px;color:var(--muted);line-height:1.5">
+          I have read and agree to the
+          <button type="button" onclick="toonHuisregels()" style="background:none;border:none;padding:0;color:var(--text);font-weight:600;text-decoration:underline;cursor:pointer;font-family:var(--font);font-size:12.5px">house rules</button>
+          &mdash; pay dates, cancelling a shift, uniform deposit.
+        </label>
+      </div>
+      <button class="auth-btn" onclick="doRegisterMCR()">Create account</button>
+      <div style="font-size:11.5px;color:var(--muted);text-align:center;line-height:1.5;margin-top:.625rem">We will ask for your bank details once your account is open.</div>
+    </div>
+
+    <!-- De huisregels, opgehaald uit de database -->
+    <div id="huisregelsOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center;padding:16px">
+      <div style="background:var(--card,#fff);border-radius:14px;max-width:560px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">
+        <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px">
+          <div style="font-size:15px;font-weight:700" id="huisregelsTitel">House rules</div>
+          <button type="button" onclick="sluitHuisregels()" style="background:none;border:none;font-size:22px;line-height:1;color:var(--muted);cursor:pointer">&times;</button>
+        </div>
+        <div id="huisregelsTekst" style="padding:16px 18px;overflow:auto;font-size:13.5px;line-height:1.6;color:var(--text)"></div>
+        <div style="padding:12px 18px;border-top:1px solid var(--border)">
+          <button class="auth-btn" style="margin:0" onclick="akkoordHuisregels()">Agree and continue</button>
+        </div>
+      </div>
+    </div>
+
     <div class="auth-err" id="authErr"></div>
     <div class="auth-msg" id="authMsg"></div>
   </div>
@@ -1041,16 +1089,16 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 <!-- APP -->
 <div class="auth-wrap" id="wachtWrap" style="display:none">
   <div class="auth-box">
-    <div class="auth-logo">TC Group <span>/ Planning</span></div>
-    <div style="font-size:15px;font-weight:600;color:var(--text);margin:1.25rem 0 .5rem">Je account wacht op goedkeuring</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6">
+    <div class="auth-logo" id="wachtLogo">TC Group <span>/ Planning</span></div>
+    <div style="font-size:15px;font-weight:600;color:var(--text);margin:1.25rem 0 .5rem" id="wachtKop">Je account wacht op goedkeuring</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6" id="wachtUitleg">
       Je aanmelding is binnen. Een beheerder zet je rol en je uurloon klaar en geeft je
       account vrij; daarna kun je meteen aan de slag. Duurt het lang, geef dan even een
       seintje op kantoor.
     </div>
     <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:.875rem" id="wachtNaam"></div>
-    <button class="auth-btn" style="margin-top:1.25rem" onclick="location.reload()">Opnieuw kijken</button>
-    <button class="btn-ghost" style="width:100%;margin-top:.5rem" onclick="doLogout()">Uitloggen</button>
+    <button class="auth-btn" id="wachtHerlaad" style="margin-top:1.25rem" onclick="location.reload()">Opnieuw kijken</button>
+    <button class="btn-ghost" id="wachtUitloggen" style="width:100%;margin-top:.5rem" onclick="doLogout()">Uitloggen</button>
   </div>
 </div>
 
@@ -1059,6 +1107,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div class="logo">TC Group <span>/ Planning</span></div>
     <div class="htabs" id="headerTabs"></div>
     <div class="header-right">
+      <div class="vest-switch" id="vestSwitch" style="display:none"></div>
       <span class="user-badge" id="userBadge"></span>
       <button id="addOptieBtnTop" style="display:none" class="btn-nav" onclick="openOptie()" title="Een klus die nog niet zeker is">+ Optie</button>
       <button id="addKlusBtnTop" style="display:none" class="btn-sm" onclick="openModal()" style="font-size:12px;padding:6px 14px">+ Klus aanmaken</button>
@@ -2788,11 +2837,218 @@ function closeDrawer(){
 }
 
 // ── AUTH ──
+
+// ══════════════════════════════════════════════════════════════════
+//  VESTIGINGEN — twee ingangen op hetzelfde inlogscherm
+//  De keuze bepaalt alleen de taal van het inlogscherm. Wat je te zien
+//  krijgt bepaalt je account; de database beslist, niet deze knop.
+// ══════════════════════════════════════════════════════════════════
+let INGANG = 'NL';
+let MIJN_VESTIGING = 'NL';
+let MAG_ALLE_VESTIGINGEN = false;
+let ACTIEVE_VESTIGING = 'NL';
+let VESTIGINGEN = [];
+let HUISREGELS = null;
+let HUISREGELS_AKKOORD = false;
+
+const AUTH_EN = {
+  authLogo:      {html:'TC Group <span>/ Manchester</span>'},
+  authSub:       {tekst:'Sign in or create an account'},
+  tabLogin:      {tekst:'Sign in'},
+  tabRegister:   {tekst:'Create account'},
+  lblLoginEmail: {tekst:'Email'},
+  lblLoginPw:    {tekst:'Password'},
+  btnLogin:      {tekst:'Sign in'},
+  txtOf:         {tekst:'or'},
+  lnkForgot:     {tekst:'Forgotten your password?'},
+  lblForgotEmail:{tekst:'Email'},
+  btnForgot:     {tekst:'Send me a reset link'},
+  lnkTerugLogin: {tekst:'Back to sign in'},
+  wachtLogo:     {html:'TC Group <span>/ Manchester</span>'},
+  wachtKop:      {tekst:'Waiting for approval'},
+  wachtUitleg:   {tekst:'Your account is in. Bram still has to set your stall and your rate; after that everything opens up. It usually takes less than a day.'},
+  wachtHerlaad:  {tekst:'Check again'},
+  wachtUitloggen:{tekst:'Sign out'},
+};
+const AUTH_PLAATS_EN = { loginEmail:'name@email.com', forgotEmail:'name@email.com' };
+let AUTH_NL_ORIGINEEL = null;
+
+function bewaarNederlandseTeksten(){
+  if(AUTH_NL_ORIGINEEL)return;
+  AUTH_NL_ORIGINEEL={};
+  Object.keys(AUTH_EN).forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el)return;
+    AUTH_NL_ORIGINEEL[id] = AUTH_EN[id].html!==undefined ? {html:el.innerHTML} : {tekst:el.textContent};
+  });
+  AUTH_NL_ORIGINEEL._plaats={};
+  Object.keys(AUTH_PLAATS_EN).forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)AUTH_NL_ORIGINEEL._plaats[id]=el.getAttribute('placeholder')||'';
+  });
+}
+
+function kiesIngang(code){
+  INGANG = (code==='MCR') ? 'MCR' : 'NL';
+  try{ localStorage.setItem('tc_ingang', INGANG); }catch(e){}
+  pasIngangToe();
+  switchAuthTab('login');
+}
+
+function pasIngangToe(){
+  bewaarNederlandseTeksten();
+  const eng = INGANG==='MCR';
+  document.querySelectorAll('#ingangKeuze button').forEach(b=>{
+    b.classList.toggle('active', b.getAttribute('data-ingang')===INGANG);
+  });
+  const bron = eng ? AUTH_EN : AUTH_NL_ORIGINEEL;
+  Object.keys(AUTH_EN).forEach(id=>{
+    const el=document.getElementById(id); if(!el||!bron[id])return;
+    if(bron[id].html!==undefined) el.innerHTML=bron[id].html;
+    else el.textContent=bron[id].tekst;
+  });
+  Object.keys(AUTH_PLAATS_EN).forEach(id=>{
+    const el=document.getElementById(id); if(!el)return;
+    el.setAttribute('placeholder', eng?AUTH_PLAATS_EN[id]:(AUTH_NL_ORIGINEEL._plaats[id]||''));
+  });
+  // Inloggen met Apple zet geen vestiging, dus die ingang laten we hier weg.
+  const ap=document.getElementById('appleLoginKnop'); if(ap)ap.style.display=eng?'none':'';
+  const sch=document.getElementById('appleScheiding'); if(sch&&eng)sch.style.display='none';
+}
+
+// ─── Huisregels ────────────────────────────────────────────────────
+function huisregelsNaarHtml(t){
+  const regels=String(t||'').split('\n'); let uit=''; let inTabel=false; let inLijst=false;
+  const sluit=()=>{ if(inTabel){uit+='</tbody></table>';inTabel=false;} if(inLijst){uit+='</ul>';inLijst=false;} };
+  for(let r of regels){
+    const rg=r.trim();
+    if(!rg){ sluit(); continue; }
+    if(/^\|[-\s|:]+\|$/.test(rg)) continue;
+    if(rg.startsWith('|')){
+      const cel=rg.split('|').slice(1,-1).map(c=>veiligTekst(c.trim()));
+      if(!inTabel){ sluit(); uit+='<table style="width:100%;border-collapse:collapse;margin:.5rem 0;font-size:12.5px"><tbody>'; inTabel=true; }
+      uit+='<tr>'+cel.map(c=>'<td style="padding:5px 8px;border-bottom:1px solid var(--border)">'+c+'</td>').join('')+'</tr>';
+      continue;
+    }
+    if(rg.startsWith('## ')){ sluit(); uit+='<div style="font-weight:700;margin:1rem 0 .35rem">'+veiligTekst(rg.slice(3))+'</div>'; continue; }
+    if(rg.startsWith('- ')){ if(!inLijst){ sluit(); uit+='<ul style="margin:.25rem 0 .25rem 1.1rem;padding:0">'; inLijst=true; } uit+='<li style="margin:.2rem 0">'+veiligTekst(rg.slice(2))+'</li>'; continue; }
+    sluit(); uit+='<p style="margin:.4rem 0">'+veiligTekst(rg)+'</p>';
+  }
+  sluit();
+  return uit;
+}
+
+async function laadHuisregels(){
+  if(HUISREGELS)return HUISREGELS;
+  try{
+    const{data}=await sb.rpc('huisregels_actief',{p_vestiging:'MCR',p_taal:'en'});
+    if(data&&data.length){ HUISREGELS=data[0]; }
+  }catch(e){ console.error('Huisregels ophalen mislukt:',e); }
+  return HUISREGELS;
+}
+
+async function toonHuisregels(){
+  const ov=document.getElementById('huisregelsOverlay'); if(!ov)return;
+  const hr=await laadHuisregels();
+  const tk=document.getElementById('huisregelsTekst');
+  const tt=document.getElementById('huisregelsTitel');
+  if(hr){ if(tt)tt.textContent=hr.titel; if(tk)tk.innerHTML=huisregelsNaarHtml(hr.tekst); }
+  else if(tk){ tk.textContent='The house rules could not be loaded. Please try again.'; }
+  ov.style.display='flex';
+}
+function sluitHuisregels(){ const ov=document.getElementById('huisregelsOverlay'); if(ov)ov.style.display='none'; }
+function akkoordHuisregels(){
+  const v=document.getElementById('mcrAkkoord'); if(v)v.checked=true;
+  sluitHuisregels();
+}
+
+// ─── Aanmelden via de Manchester-ingang ────────────────────────────
+async function doRegisterMCR(){
+  const naam=netteNaam(schoneInvoer(document.getElementById('mcrNaam').value,80));
+  const telefoon=schoneInvoer(document.getElementById('mcrTel').value,30);
+  const email=document.getElementById('mcrEmail').value.trim();
+  const geb=document.getElementById('mcrGeb').value;
+  const pw=document.getElementById('mcrPw').value;
+  const via=schoneInvoer(document.getElementById('mcrVia').value,120);
+  const akkoord=document.getElementById('mcrAkkoord').checked;
+  const err=document.getElementById('authErr');
+  const msg=document.getElementById('authMsg');
+  err.style.display='none'; msg.style.display='none';
+  const stop=t=>{err.textContent=t;err.style.display='block';};
+  if(!naam) return stop('Please fill in your full name.');
+  if(naam.split(' ').length<2) return stop('Please give your first name and surname.');
+  if(!telefoon) return stop('Please fill in your mobile number.');
+  if(!email) return stop('Please fill in your email address.');
+  if(!geb) return stop('Please fill in your date of birth.');
+  if(pw.length<12) return stop('Your password needs at least 12 characters. Three random words works well.');
+  if(!akkoord) return stop('Please read and agree to the house rules first.');
+
+  const hr=await laadHuisregels();
+  const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{naam}}});
+  if(error) return stop(error.message);
+  if(data.user){
+    const extra={telefoon,geboortedatum:geb,contractvorm:'zzp',vestiging:'MCR',aangebracht_door:via||null};
+    let gelukt=false;
+    for(let poging=0;poging<5&&!gelukt;poging++){
+      const{data:rij}=await sb.from('gebruikers').select('id').eq('id',data.user.id);
+      if(rij&&rij.length>0){
+        const{error:upErr}=await sb.from('gebruikers').update(extra).eq('id',data.user.id);
+        if(upErr){ console.error('Vestiging zetten mislukt:',upErr); }
+        gelukt=true;
+      }else{ await new Promise(r=>setTimeout(r,400)); }
+    }
+    if(!gelukt){
+      await sb.from('gebruikers').insert({id:data.user.id,rol:'part-timer',naam,email,...extra});
+    }
+    if(hr){
+      try{ await sb.from('huisregels_akkoord').insert({gebruiker_id:data.user.id,huisregels_id:hr.id,naam_getypt:naam}); }
+      catch(e){ console.error('Akkoord vastleggen mislukt:',e); }
+    }
+  }
+  msg.textContent='Account created. You can sign in now.';
+  msg.style.display='block';
+  switchAuthTab('login');
+}
+
+// ─── De schakelaar tussen vestigingen, alleen voor wie beide mag zien ──
+function zetVestigingSwitch(){
+  const el=document.getElementById('vestSwitch');
+  if(!el)return;
+  if(!MAG_ALLE_VESTIGINGEN){ el.style.display='none'; el.innerHTML=''; return; }
+  const keuzes=[{code:'NL',label:'Nederland',klasse:'nl'},{code:'MCR',label:'Manchester',klasse:''},{code:'*',label:'Beide',klasse:''}];
+  el.innerHTML=keuzes.map(k=>{
+    const aan=(ACTIEVE_VESTIGING===k.code);
+    return `<button type="button" class="${k.klasse}${aan?' active':''}" onclick="wisselVestiging('${k.code}')">${veiligTekst(k.label)}</button>`;
+  }).join('');
+  el.style.display='flex';
+}
+
+async function wisselVestiging(code){
+  if(ACTIEVE_VESTIGING===code)return;
+  const el=document.getElementById('vestSwitch');
+  if(el)el.style.opacity='.5';
+  try{
+    const{error}=await sb.rpc('vestiging_kiezen',{p_code: code==='*'?'*':code});
+    if(error)throw error;
+    ACTIEVE_VESTIGING=code;
+    try{ localStorage.setItem('tc_vestiging', code); }catch(e){}
+    location.reload();
+  }catch(e){
+    console.error('Wisselen van vestiging mislukt:',e);
+    if(el)el.style.opacity='1';
+    alert('Wisselen van vestiging is niet gelukt. Probeer het nog een keer.');
+  }
+}
+
 function switchAuthTab(tab){
   document.querySelectorAll('.auth-tab').forEach((t,i)=>t.classList.toggle('active',i===(tab==='login'?0:1)));
   document.getElementById('loginForm').style.display=tab==='login'?'':'none';
   document.getElementById('forgotForm').style.display='none';
-  document.getElementById('registerForm').style.display=tab==='register'?'':'none';
+  const nl=document.getElementById('registerForm');
+  const en=document.getElementById('registerFormMCR');
+  const toonReg=(tab==='register');
+  if(nl)nl.style.display=(toonReg&&INGANG!=='MCR')?'':'none';
+  if(en)en.style.display=(toonReg&&INGANG==='MCR')?'':'none';
   document.getElementById('authErr').style.display='none';
   document.getElementById('authMsg').style.display='none';
 }
@@ -2896,7 +3152,7 @@ async function doForgotPw(){
 // Scherm om een nieuw wachtwoord te kiezen, na het volgen van de herstellink.
 function toonNieuwWachtwoord(){
   const auth=document.getElementById('authWrap');
-  ['loginForm','forgotForm','registerForm'].forEach(id=>{
+  ['loginForm','forgotForm','registerForm','registerFormMCR'].forEach(id=>{
     const el=document.getElementById(id);if(el)el.style.display='none';
   });
   const tabs=document.querySelector('.auth-tabs');if(tabs)tabs.style.display='none';
@@ -3136,14 +3392,30 @@ async function initApp(user){
   // Haal rol op — probeer meerdere keren als nodig
   let rol='part-timer',naam=user.email,goedgekeurd=null,beheerRol=null;
   try{
-    const{data,error}=await sb.from('gebruikers').select('rol,naam,goedgekeurd,beheer_rol').eq('id',user.id).single();
-    if(data){rol=data.rol||'part-timer';naam=data.naam||user.email;goedgekeurd=data.goedgekeurd;beheerRol=data.beheer_rol||null;}
+    const velden='rol,naam,goedgekeurd,beheer_rol,vestiging,alle_vestigingen,actieve_vestiging';
+    const neem=r=>{
+      rol=r.rol||'part-timer';naam=r.naam||user.email;goedgekeurd=r.goedgekeurd;beheerRol=r.beheer_rol||null;
+      MIJN_VESTIGING=r.vestiging||'NL';
+      MAG_ALLE_VESTIGINGEN=!!r.alle_vestigingen;
+      ACTIEVE_VESTIGING=MAG_ALLE_VESTIGINGEN?(r.actieve_vestiging||MIJN_VESTIGING):MIJN_VESTIGING;
+    };
+    const{data,error}=await sb.from('gebruikers').select(velden).eq('id',user.id).single();
+    if(data){neem(data);}
     else if(error){
       // Probeer opnieuw zonder single()
-      const{data:rows}=await sb.from('gebruikers').select('rol,naam,goedgekeurd,beheer_rol').eq('id',user.id);
-      if(rows&&rows.length>0){rol=rows[0].rol||'part-timer';naam=rows[0].naam||user.email;goedgekeurd=rows[0].goedgekeurd;beheerRol=rows[0].beheer_rol||null;}
+      const{data:rows}=await sb.from('gebruikers').select(velden).eq('id',user.id);
+      if(rows&&rows.length>0){neem(rows[0]);}
     }
   }catch(e){console.error('Rol ophalen mislukt:',e);}
+
+  // Hoort iemand bij Manchester, dan staat de ingang daar voortaan ook op —
+  // ook als hij per ongeluk via Nederland inlogde.
+  if(MIJN_VESTIGING==='MCR'&&INGANG!=='MCR'){
+    INGANG='MCR';
+    try{ localStorage.setItem('tc_ingang','MCR'); }catch(e){}
+    pasIngangToe();
+  }
+  zetVestigingSwitch();
 
   // Een nieuwe aanmelding wacht op een beheerder. Tot die tijd is er bijna
   // niets te zien: alleen het eigen profiel, zodat iemand zijn gegevens alvast
@@ -3349,6 +3621,11 @@ function verbergAppleOpAndroid(){
   });
 }
 verbergAppleOpAndroid();
+
+// De gekozen ingang wordt onthouden op het toestel, zodat Engels personeel
+// hem maar een keer hoeft aan te tikken.
+try{ INGANG = (localStorage.getItem('tc_ingang')==='MCR') ? 'MCR' : 'NL'; }catch(e){ INGANG='NL'; }
+pasIngangToe();
 
 sb.auth.getSession().then(({data:{session}})=>{
   if(HERSTEL_MODUS){toonNieuwWachtwoord();return;}
