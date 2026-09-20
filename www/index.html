@@ -3392,13 +3392,17 @@ async function mbDienstTeken(){
       <div style="flex:1 1 110px"><label class="mb-lab">Starttijd</label>
         <input type="time" class="mb-veld" id="mbNstart" value="${veiligTekst(n.start)}"></div>
       <div style="flex:1 1 110px"><label class="mb-lab">Eindtijd</label>
-        <input type="time" class="mb-veld" id="mbNeind" value="${veiligTekst(n.eind)}"></div>
+        <input type="time" class="mb-veld" id="mbNeind" value="${veiligTekst(n.eind)}"
+               placeholder="${veiligTekst(mbStandaardEind(kramen,n.kramen))}"></div>
       <div style="flex:1 1 90px"><label class="mb-lab">Mensen</label>
         <input type="number" min="1" max="20" class="mb-veld" id="mbNaantal" value="${n.aantal}"></div>
       <div style="flex:1 1 140px"><label class="mb-lab">Naam (mag leeg)</label>
         <input class="mb-veld" id="mbNnaam" placeholder="bv. Avond" value="${veiligTekst(n.naam)}"></div>
     </div>
 
+    <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:6px">
+      Laat je de eindtijd leeg, dan loopt de dienst tot ${veiligTekst(mbStandaardEind(kramen,n.kramen))}
+      &mdash; sluitingstijd plus de tijd om op te ruimen. Dat staat bij Instellingen.</div>
     ${n.vast?'':`<label class="mb-lab" style="margin-top:12px">Op welke dagen</label>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
       ${[1,2,3,4,5,6,0].map(w=>`<button class="mb-mini${n.dagen.includes(w)?' zwart':''}"
@@ -3413,6 +3417,15 @@ async function mbDienstTeken(){
     </div>
     <div id="mbDienstUit" style="margin-top:12px"></div>
   </div>`;
+}
+// Tot hoe laat een dienst standaard loopt: sluitingstijd van de kraam plus de
+// opruimtijd. Staan er meerdere kramen aan met verschillende tijden, dan
+// noemen we dat.
+function mbStandaardEind(kramen, gekozen){
+  const lijst=(kramen||[]).filter(k=>!gekozen||gekozen.includes(k.id));
+  const tijden=[...new Set(lijst.map(k=>mbUur(k.eind_standaard||k.open_tot)).filter(Boolean))];
+  if(!tijden.length)return 'sluitingstijd';
+  return tijden.length===1 ? tijden[0] : 'de sluitingstijd van elke kraam';
 }
 function mbDienstLees(){
   const n=MB_NIEUW; if(!n)return;
@@ -4065,7 +4078,7 @@ async function mbInlezen(){
     <div id="mbImportUit"></div></div>`;
   uit+='<div style="flex:1;min-width:280px"><div class="mb-kaart"><div class="mb-kop">Terminals</div>';
   const tl=terminals.data||[];
-  if(!tl.length)uit+='<div style="font-size:13px;color:var(--muted)">Nog geen terminals gezien. Die verschijnen zodra je het eerste bestand inleest.</div>';
+  if(!tl.length)uit+='<div style="font-size:13px;color:var(--muted)">Nog geen terminals. Je kunt ze hieronder alvast klaarzetten, of wachten tot je het eerste bestand inleest.</div>';
   tl.forEach(t=>{
     uit+=`<div class="mb-persoon">
       <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(t.naam||('TID '+t.tid))}</div>
@@ -4075,8 +4088,21 @@ async function mbInlezen(){
         ${kramen.map(k=>`<option value="${veiligTekst(k.id)}"${k.id===t.kraam_id?' selected':''}>${veiligTekst(k.naam)}</option>`).join('')}
       </select></div>`;
   });
-  uit+=`<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px">
-    Wijs je een terminal later toe, dan schuiven alle eerder ingelezen dagen van dat nummer vanzelf op hun plaats.</div></div>
+  uit+=`<div class="mb-veldrij" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="flex:1 1 130px"><label class="mb-lab">TID</label>
+        <input class="mb-veld" id="mbNieuwTid" placeholder="bv. 71234567"></div>
+      <div style="flex:1 1 130px"><label class="mb-lab">Naam (mag leeg)</label>
+        <input class="mb-veld" id="mbNieuwTnaam" placeholder="myPOS 1"></div>
+      <div style="flex:1 1 150px"><label class="mb-lab">Kraam</label>
+        <select class="mb-veld" id="mbNieuwTkraam">
+          ${kramen.map(k=>`<option value="${veiligTekst(k.id)}">${veiligTekst(k.naam)}</option>`).join('')}</select></div>
+      <div style="align-self:flex-end"><button class="mb-mini zwart" onclick="mbTerminalToevoegen()">Klaarzetten</button></div>
+    </div>
+    <div id="mbTerminalUit" style="font-size:12.5px;margin-top:6px"></div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px">
+      Je hoeft niet te wachten op het eerste bestand: zet de nummers hier alvast klaar en de omzet
+      landt meteen goed. Wijs je een terminal pas later toe, dan schuiven alle eerder ingelezen dagen
+      van dat nummer vanzelf op hun plaats.</div></div>
     <div class="mb-kaart"><div class="mb-kop">Wat de app overslaat</div>
     <div style="font-size:12.5px;color:var(--muted);line-height:1.6">
       Alleen <b style="color:var(--text)">Betaling</b> met status <b style="color:var(--text)">Goedgekeurd</b> telt mee. Terugbetalingen gaan eraf,
@@ -4092,6 +4118,18 @@ async function mbInlezen(){
     dz.ondrop=e=>{e.preventDefault();dz.classList.remove('over');
       if(e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files.length)mbImportStart(e.dataTransfer.files);};
   }
+}
+async function mbTerminalToevoegen(){
+  const uit=document.getElementById('mbTerminalUit');
+  const v=id=>{const e=document.getElementById(id);return e?e.value.trim():'';};
+  const tid=v('mbNieuwTid');
+  if(!tid){ if(uit)uit.innerHTML='<span style="color:#B4472B">Vul het TID in zoals het op de bon staat.</span>'; return; }
+  try{
+    const{error}=await sb.rpc('terminal_koppelen',{p_tid:tid,p_kraam:v('mbNieuwTkraam'),
+      p_naam:v('mbNieuwTnaam')||null,p_vanaf:null,p_tot:null});
+    if(error)throw error;
+    mbNaar('inlezen');
+  }catch(e){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
 }
 async function mbTerminal(tid,kraam){
   if(!kraam)return;
@@ -4398,8 +4436,10 @@ async function mbMensen(){
   uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr>'
     +'<th style="min-width:210px">Naam</th><th style="text-align:right">Lft</th><th style="text-align:right">Tarief</th>'
     +'<th style="text-align:right">Shifts</th><th style="text-align:right">Uren</th>'
-    +'<th style="text-align:right">Verdiend</th><th>Beoordeling</th><th></th></tr></thead><tbody>';
-  if(!actief.length&&!nietmeer.length)uit+='<tr><td colspan="8" style="color:var(--muted)">Nog niemand vrijgegeven.</td></tr>';
+    +'<th style="text-align:right">Verdiend</th><th style="text-align:center">Kleding</th>'
+    +'<th style="text-align:center" title="Niet komen opdagen \u00b7 afgemeld \u00b7 te laat">Misgegaan</th>'
+    +'<th>Beoordeling</th><th></th></tr></thead><tbody>';
+  if(!actief.length&&!nietmeer.length)uit+='<tr><td colspan="10" style="color:var(--muted)">Nog niemand vrijgegeven.</td></tr>';
   actief.concat(nietmeer).forEach(m=>uit+=mbPersoonRij(m));
   uit+='</tbody></table></div>';
   if(uitDienst.length){
@@ -4450,9 +4490,11 @@ async function mbMensen(){
   viaLijst.forEach(([naam,n])=>boven+=`<div style="font-size:13px;color:var(--text);padding:4px 0">${veiligTekst(naam)} bracht <b>${n}</b> ${n===1?'iemand':'mensen'} aan</div>`);
   boven+='<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px">Je wierf vorig jaar vooral via je eigen mensen. De app houdt dat nu bij, zodat je ziet wie je goede krachten aanlevert.</div></div>';
 
+  uit+='<div id="mbPersoonPaneel"></div>';
   document.getElementById('mbInhoud').innerHTML=uit;
   const bovenEl=document.getElementById('mbMensenBoven');
   if(bovenEl)bovenEl.innerHTML='<div class="mb-rij2">'+boven+'</div>';
+  if(MB_PERSOON){ const w=MB_PERSOON; MB_PERSOON=null; mbPersoonOpen(w); }
 }
 function mbPersoonRij(m){
   const id=veiligTekst(m.id);
@@ -4471,9 +4513,14 @@ function mbPersoonRij(m){
     <td style="text-align:right;font-variant-numeric:tabular-nums">${m.shifts}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbNum(m.uren,1))}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(m.verdiend))}</td>
+    <td style="text-align:center">${m.kleding_uit?`<span title="borg ${veiligTekst(mbPond(m.borg||0))}">${m.kleding_uit}&times;</span>`:'<span style="color:var(--muted)">&mdash;</span>'}</td>
+    <td style="text-align:center">${(m.niet_gekomen||m.afgemeld||m.te_laat)
+      ? `<span style="color:#B4472B;font-weight:700" title="${m.niet_gekomen||0} keer niet gekomen, ${m.afgemeld||0} keer afgemeld, ${m.te_laat||0} keer te laat">${(m.niet_gekomen||0)+(m.afgemeld||0)+(m.te_laat||0)}</span>`
+      : '<span style="color:var(--muted)">&mdash;</span>'}</td>
     <td><select class="mb-getal" style="width:118px;text-align:left" id="mbPB${id}"><option value="">&mdash;</option>
       ${MB_OORDELEN.map(o=>`<option value="${o}"${m.beoordeling===o?' selected':''}>${o}</option>`).join('')}</select></td>
     <td style="white-space:nowrap"><button class="mb-mini" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',false)">Opslaan</button>
+      <button class="mb-mini" onclick="mbPersoonOpen('${veiligJs(m.id)}')">Meer</button>
       <button class="mb-mini rood" onclick="mbPersoonWeg('${veiligJs(m.id)}')" title="Weghalen">Weghalen</button></td></tr>`;
 }
 // Weghalen betekent niet altijd wissen: heeft iemand uren geklokt, dan moeten
@@ -4517,11 +4564,155 @@ async function mbPersoonTerug(id){
   catch(e){ alert(mbFout(e)); }
 }
 
+// ── Eén persoon: kleding, borg en wat er misging ──────────────────
+let MB_PERSOON=null;
+
+function mbPersoonDicht(){ MB_PERSOON=null; mbNaar('mensen'); }
+async function mbPersoonOpen(id){
+  if(MB_PERSOON===id){ MB_PERSOON=null; const el=document.getElementById('mbPersoonPaneel'); if(el)el.innerHTML=''; return; }
+  MB_PERSOON=id;
+  const el=document.getElementById('mbPersoonPaneel'); if(!el)return;
+  el.innerHTML='<div class="mb-kaart" style="margin-top:14px;color:var(--muted)">Bezig&hellip;</div>';
+  try{
+    const [mensen, voorvallen] = await Promise.all([
+      sb.rpc('mcr_mensen'), sb.rpc('mcr_voorvallen_van',{p_gebruiker:id})]);
+    if(mensen.error)throw mensen.error;
+    const m=(mensen.data||[]).find(x=>x.id===id);
+    if(!m){ el.innerHTML='<div class="mb-kaart" style="margin-top:14px">Die persoon staat er niet meer.</div>'; return; }
+    el.innerHTML=mbPersoonHtml(m, voorvallen.data||[]);
+    el.scrollIntoView({behavior:'smooth',block:'nearest'});
+  }catch(e){
+    el.innerHTML=`<div class="mb-kaart" style="margin-top:14px;color:#B4472B">${veiligTekst(mbFout(e))}</div>`;
+  }
+}
+const MB_SOORTEN=[['niet_gekomen','Niet komen opdagen'],['afgemeld','Afgemeld'],
+                  ['te_laat','Te laat'],['anders','Anders'],['goed','Compliment']];
+function mbSoortLabel(s){ const x=MB_SOORTEN.find(y=>y[0]===s); return x?x[1]:s; }
+function mbSoortKleur(s){
+  return s==='niet_gekomen' ? ['#B4472B','#FBEDE9']
+       : s==='afgemeld'     ? ['#B45309','#FEF6E7']
+       : s==='te_laat'      ? ['#B45309','#FEF6E7']
+       : s==='goed'         ? ['#0F7A52','#F2FBF6']
+       : ['#6B6A66','#F3F2EE'];
+}
+function mbPersoonHtml(m, vv){
+  const id=veiligTekst(m.id);
+  let uit=`<div class="mb-kaart" style="margin-top:14px">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:11px">
+        <div class="mb-av" style="width:38px;height:38px;font-size:13px">${veiligTekst(mbInit(m.naam))}</div>
+        <div><div style="font-size:16px;font-weight:700">${veiligTekst(m.naam)}</div>
+          <div style="font-size:12.5px;color:var(--muted)">${veiligTekst(m.telefoon||'')}${m.email?' &middot; '+veiligTekst(m.email):''}</div></div>
+      </div>
+      <button class="mb-mini" onclick="mbPersoonOpen('${veiligJs(m.id)}')">Sluiten</button>
+    </div>
+
+    <div class="mb-rij2" style="margin-top:14px">
+      <div style="flex:1;min-width:280px;border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+        <div class="mb-kop">Kleding en borg</div>
+        <div class="mb-veldrij">
+          <div style="flex:1 1 130px"><label class="mb-lab">Stuks van ons</label>
+            <input class="mb-veld" type="number" min="0" max="10" id="mbKl${id}" value="${m.kleding_uit||0}"></div>
+          <div style="flex:1 1 130px"><label class="mb-lab">Borg</label>
+            <div class="mb-veld vast">${veiligTekst(mbPond(m.borg||0))}</div></div>
+          <div style="align-self:flex-end"><button class="mb-mini zwart" onclick="mbKledingOpslaan('${veiligJs(m.id)}')">Opslaan</button></div>
+        </div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px">
+          ${m.kleding_op?`Meegegeven op ${veiligTekst(mbDatum(String(m.kleding_op).slice(0,10)))}. `:''}
+          Het eerste stuk kost de borg uit je instellingen, elk volgend stuk het bedrag daaronder.
+          Zet het op 0 zodra je de kleding terug hebt.</div>
+        <div id="mbKlUit${id}" style="font-size:12.5px;margin-top:6px"></div>
+      </div>
+
+      <div style="flex:1;min-width:280px;border:1px solid var(--border);border-radius:12px;padding:12px 14px">
+        <div class="mb-kop">Hoe vaak ging het mis</div>
+        <div class="mb-rij4" style="gap:10px">
+          ${[['niet_gekomen','Niet gekomen',m.niet_gekomen],['afgemeld','Afgemeld',m.afgemeld],['te_laat','Te laat',m.te_laat]]
+            .map(([s,l,n])=>`<div style="flex:1 1 84px">
+              <div style="font-size:22px;font-weight:700;color:${n?mbSoortKleur(s)[0]:'var(--muted)'};font-variant-numeric:tabular-nums">${n||0}</div>
+              <div style="font-size:11.5px;color:var(--muted)">${l}</div></div>`).join('')}
+          <div style="flex:1 1 84px">
+            <div style="font-size:22px;font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(m.boete_open||0))}</div>
+            <div style="font-size:11.5px;color:var(--muted)">aan boetes</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:12px">
+      <div class="mb-kop">Iets vastleggen</div>
+      <div class="mb-veldrij">
+        <div style="flex:1 1 150px"><label class="mb-lab">Wanneer</label>
+          <input class="mb-veld" type="date" id="mbVvDatum${id}" value="${veiligTekst(mbVandaagStr())}"></div>
+        <div style="flex:1 1 180px"><label class="mb-lab">Wat</label>
+          <select class="mb-veld" id="mbVvSoort${id}" onchange="mbVoorvalSoort('${veiligJs(m.id)}')">
+            ${MB_SOORTEN.map(([s,l])=>`<option value="${s}">${l}</option>`).join('')}</select></div>
+        <div style="flex:1 1 110px"><label class="mb-lab">Boete</label>
+          <input class="mb-veld" type="number" step="0.01" min="0" id="mbVvBoete${id}" placeholder="vanzelf"></div>
+        <div style="flex:2 1 220px"><label class="mb-lab">Toelichting</label>
+          <input class="mb-veld" id="mbVvNot${id}" placeholder="bv. zonder bericht weggebleven"></div>
+        <div style="align-self:flex-end"><button class="mb-mini zwart" onclick="mbVoorvalOpslaan('${veiligJs(m.id)}')">Vastleggen</button></div>
+      </div>
+      <div id="mbVvUit${id}" style="font-size:12.5px;margin-top:6px"></div>
+    </div>`;
+
+  if(vv.length){
+    uit+='<div style="margin-top:12px">';
+    vv.forEach(v=>{
+      const kl=mbSoortKleur(v.soort);
+      uit+=`<div class="mb-persoon">
+        <div style="flex:0 0 96px;font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums">${veiligTekst(mbDatum(String(v.datum).slice(0,10)))}</div>
+        ${mbChip(mbSoortLabel(v.soort),kl[0],kl[1])}
+        <div style="flex-grow:1;font-size:12.5px;color:var(--text)">${veiligTekst(v.notitie||'')}${v.kraam?` <span style="color:var(--muted)">&middot; ${veiligTekst(v.kraam)}</span>`:''}</div>
+        ${Number(v.boete)>0?`<span style="font-size:12.5px;font-weight:600">${veiligTekst(mbPond(v.boete))}</span>`:''}
+        <button class="mb-mini" onclick="mbVoorvalWeg('${veiligJs(v.id)}','${veiligJs(m.id)}')">&times;</button></div>`;
+    });
+    uit+='</div>';
+  }else{
+    uit+='<div style="font-size:12.5px;color:var(--muted);margin-top:12px">Nog niets vastgelegd.</div>';
+  }
+  uit+='</div>';
+  return uit;
+}
+function mbVoorvalSoort(id){
+  // Bij "niet komen opdagen" vult de database zelf de boete uit je instellingen
+  // in; bij de rest staat er standaard niets.
+  const s=document.getElementById('mbVvSoort'+id), b=document.getElementById('mbVvBoete'+id);
+  if(s&&b)b.placeholder = (s.value==='niet_gekomen') ? 'vanzelf uit je instellingen' : 'geen';
+}
+async function mbKledingOpslaan(id){
+  const uit=document.getElementById('mbKlUit'+id);
+  const n=parseInt((document.getElementById('mbKl'+id)||{}).value,10);
+  try{
+    const{error}=await sb.rpc('mcr_persoon_opslaan',
+      {p_id:id,p_uurloon:null,p_beoordeling:null,p_goedkeuren:false,p_kleding:isNaN(n)?0:n});
+    if(error)throw error;
+    MB_PERSOON=null; await mbPersoonOpen(id);
+  }catch(e){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
+}
+async function mbVoorvalOpslaan(id){
+  const uit=document.getElementById('mbVvUit'+id);
+  const v=x=>{const e=document.getElementById(x+id);return e?e.value:'';};
+  const boete=v('mbVvBoete');
+  try{
+    const{error}=await sb.rpc('mcr_voorval_zetten',{
+      p_gebruiker:id, p_datum:v('mbVvDatum')||mbVandaagStr(), p_soort:v('mbVvSoort'),
+      p_notitie:v('mbVvNot')||null, p_boete:boete===''?null:Number(boete), p_shift:null});
+    if(error)throw error;
+    MB_PERSOON=null; await mbPersoonOpen(id);
+  }catch(e){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
+}
+async function mbVoorvalWeg(vid, id){
+  if(!confirm('Dit voorval weghalen?'))return;
+  try{ const{error}=await sb.rpc('mcr_voorval_weg',{p_id:vid}); if(error)throw error;
+       MB_PERSOON=null; await mbPersoonOpen(id); }
+  catch(e){ alert(mbFout(e)); }
+}
+
 async function mbPersoonOpslaan(id,vrijgeven){
   const l=(document.getElementById('mbPL'+id)||{}).value;
   const b=(document.getElementById('mbPB'+id)||{}).value;
   try{
-    const{error}=await sb.rpc('mcr_persoon_opslaan',{p_id:id,
+    const{error}=await sb.rpc('mcr_persoon_opslaan',{p_id:id,p_kleding:null,
       p_uurloon:(l===''||l==null)?null:Number(l), p_beoordeling:b||null, p_goedkeuren:vrijgeven?true:null});
     if(error)throw error; mbNaar('mensen');
   }catch(e){ alert(mbFout(e)); }
