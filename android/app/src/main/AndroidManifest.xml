@@ -37,4 +37,9 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <!-- Meldingen: vanaf Android 13 moet je hier zelf om vragen. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- NFC: inklokken door de telefoon tegen de sticker in de kraam te houden.
+         required="false" zodat de app ook op toestellen zonder NFC te
+         installeren blijft; daar blijft de zescijferige dagcode over. -->
+    <uses-permission android:name="android.permission.NFC" />
+    <uses-feature android:name="android.hardware.nfc" android:required="false" />
 </manifest>
