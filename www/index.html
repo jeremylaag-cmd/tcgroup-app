@@ -87,6 +87,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mb-linktekst{background:none;border:none;padding:0;color:#2563EB;text-decoration:underline;cursor:pointer;font-family:var(--font);font-size:inherit}
 .mb-mini{font-size:12.5px;padding:7px 12px;border-radius:9px;border:1px solid var(--border);background:var(--card,#fff);cursor:pointer;font-family:var(--font);color:var(--text);font-weight:600}
 .mb-mini.zwart{background:var(--text);color:#fff;border-color:var(--text)}
+.mb-mini.rood{color:#B4472B;border-color:#E8CFC7}
+.mb-mini.rood:hover{background:#FBEDE9}
 .mb-getal{text-align:center;font-size:13px;padding:7px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--card,#fff);color:var(--text)}
 .mb-lab{display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px}
 .mb-veld{width:100%;box-sizing:border-box;font-family:var(--font);font-size:13.5px;padding:9px 11px;border:1px solid var(--border);border-radius:9px;background:var(--card,#fff);color:var(--text)}
@@ -1745,7 +1747,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
   <div id="verwijderAccountOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;align-items:center;justify-content:center;padding:1.25rem">
     <div style="background:var(--surface);border-radius:14px;max-width:380px;width:100%;padding:1.5rem;box-shadow:0 10px 40px rgba(0,0,0,.3)">
       <div style="font-size:17px;font-weight:600;color:var(--text);margin-bottom:8px">Account permanent verwijderen</div>
-      <div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px">
+      <div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px" id="verwijderUitleg">
         Hiermee worden je account en alle bijbehorende gegevens (beschikbaarheid, schema's, urenregistraties) <strong>permanent verwijderd</strong>. Dit kan niet ongedaan worden gemaakt.
       </div>
       <div style="font-size:13px;color:var(--text);margin-bottom:6px">Typ <strong>VERWIJDER</strong> om te bevestigen:</div>
@@ -4090,28 +4092,45 @@ async function mbMensen(){
   const{data,error}=await sb.rpc('mcr_mensen');
   if(error)throw error;
   const alle=data||[];
-  const wacht=alle.filter(m=>!m.goedgekeurd);
+  const uitDienst=alle.filter(m=>m.gearchiveerd_op);
+  const wacht=alle.filter(m=>!m.goedgekeurd&&!m.gearchiveerd_op);
   const actief=alle.filter(m=>m.goedgekeurd&&m.beoordeling!=='niet meer');
   const nietmeer=alle.filter(m=>m.goedgekeurd&&m.beoordeling==='niet meer');
   const via={}; alle.forEach(m=>{ if(m.aangebracht_door){ const k=m.aangebracht_door.trim(); via[k]=(via[k]||0)+1; } });
 
   let uit=mbKop('Mensen',
-    `${actief.length} actief &middot; ${wacht.length} wachten &middot; ${nietmeer.length} niet meer uitnodigen`);
-  uit+='<div class="mb-rij2"><div style="flex:1.5;min-width:340px">';
+    `${actief.length} actief &middot; ${wacht.length} wachten &middot; ${nietmeer.length} niet meer uitnodigen`
+    +`${uitDienst.length?' &middot; '+uitDienst.length+' uit dienst':''}`);
+  uit+='<div id="mbMensenBoven"></div>';
   uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr>'
     +'<th style="min-width:210px">Naam</th><th style="text-align:right">Lft</th><th style="text-align:right">Tarief</th>'
     +'<th style="text-align:right">Shifts</th><th style="text-align:right">Uren</th>'
     +'<th style="text-align:right">Verdiend</th><th>Beoordeling</th><th></th></tr></thead><tbody>';
   if(!actief.length&&!nietmeer.length)uit+='<tr><td colspan="8" style="color:var(--muted)">Nog niemand vrijgegeven.</td></tr>';
   actief.concat(nietmeer).forEach(m=>uit+=mbPersoonRij(m));
-  uit+='</tbody></table></div></div>';
+  uit+='</tbody></table></div>';
+  if(uitDienst.length){
+    uit+='<div class="mb-kaart"><div class="mb-kop">Uit dienst</div>'
+       +'<div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:8px">'
+       +'Deze mensen kunnen niet meer inloggen en staan nergens meer tussen. Hun uren en '
+       +'facturen zijn bewaard gebleven.</div>';
+    uitDienst.forEach(m=>{
+      uit+=`<div class="mb-persoon"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
+        <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
+          <div style="font-size:11.5px;color:var(--muted)">uit dienst sinds ${veiligTekst(mbDatum(String(m.gearchiveerd_op).slice(0,10)))}${m.archief_reden?' &middot; '+veiligTekst(m.archief_reden):''} &middot; ${veiligTekst(mbNum(m.uren,1))} uur bewaard</div></div>
+        <button class="mb-mini" onclick="mbPersoonTerug('${veiligJs(m.id)}')">Terughalen</button></div>`;
+    });
+    uit+='</div>';
+  }
 
-  uit+='<div style="flex:1;min-width:280px">';
+  // De aanmeldingen en het werfoverzicht komen hierboven te staan; hieronder
+  // worden ze opgebouwd en daarna op hun plek gezet.
+  let boven='';
   if(wacht.length){
     wacht.forEach(m=>{
       const id=veiligTekst(m.id);
       const band = m.leeftijd==null?null:(m.leeftijd<18?['16–17','7,55','8,00']:(m.leeftijd<21?['18–20','10,00','10,00']:['21+','12,21','12,50']));
-      uit+=`<div class="mb-kaart" style="border:1.5px solid #B4472B">
+      boven+=`<div class="mb-kaart" style="flex:1 1 320px;border:1.5px solid #B4472B">
         <div class="mb-kop" style="color:#B4472B">Nieuwe aanmelding</div>
         <div style="font-size:18px;font-weight:700">${veiligTekst(m.naam)}</div>
         <div style="font-size:12.5px;color:var(--muted);margin-top:2px">
@@ -4125,21 +4144,22 @@ async function mbMensen(){
         </div>
         ${band?`<div style="font-size:12px;color:var(--muted);margin-top:8px">Bij ${m.leeftijd} jaar hoort band ${band[0]}: minimaal &pound; ${band[1]}.</div>`:''}
         ${!m.iban?'<div style="font-size:12px;color:#B45309;margin-top:4px">Heeft nog geen bankrekening ingevuld.</div>':''}
-        <div style="display:flex;gap:8px;margin-top:12px">
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           <button class="mb-mini" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',false)">Opslaan</button>
-          <button class="mb-mini zwart" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',true)">Vrijgeven</button></div>
+          <button class="mb-mini zwart" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',true)">Vrijgeven</button>
+          <button class="mb-mini rood" onclick="mbPersoonWeg('${veiligJs(m.id)}')">Weghalen</button></div>
       </div>`;
     });
-  }else{
-    uit+='<div class="mb-kaart"><div class="mb-kop">Nieuwe aanmeldingen</div><div style="font-size:13px;color:var(--muted)">Er wacht niemand.</div></div>';
   }
   const viaLijst=Object.entries(via).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  uit+='<div class="mb-kaart"><div class="mb-kop">Waar mensen vandaan komen</div>';
-  if(!viaLijst.length)uit+='<div style="font-size:13px;color:var(--muted)">Nog niemand heeft ingevuld hoe hij hier kwam.</div>';
-  viaLijst.forEach(([naam,n])=>uit+=`<div style="font-size:13px;color:var(--text);padding:4px 0">${veiligTekst(naam)} bracht <b>${n}</b> ${n===1?'iemand':'mensen'} aan</div>`);
-  uit+='<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px">Je wierf vorig jaar vooral via je eigen mensen. De app houdt dat nu bij, zodat je ziet wie je goede krachten aanlevert.</div></div>';
-  uit+='</div></div>';
+  boven+='<div class="mb-kaart" style="flex:1 1 300px"><div class="mb-kop">Waar mensen vandaan komen</div>';
+  if(!viaLijst.length)boven+='<div style="font-size:13px;color:var(--muted)">Nog niemand heeft ingevuld hoe hij hier kwam.</div>';
+  viaLijst.forEach(([naam,n])=>boven+=`<div style="font-size:13px;color:var(--text);padding:4px 0">${veiligTekst(naam)} bracht <b>${n}</b> ${n===1?'iemand':'mensen'} aan</div>`);
+  boven+='<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px">Je wierf vorig jaar vooral via je eigen mensen. De app houdt dat nu bij, zodat je ziet wie je goede krachten aanlevert.</div></div>';
+
   document.getElementById('mbInhoud').innerHTML=uit;
+  const bovenEl=document.getElementById('mbMensenBoven');
+  if(bovenEl)bovenEl.innerHTML='<div class="mb-rij2">'+boven+'</div>';
 }
 function mbPersoonRij(m){
   const id=veiligTekst(m.id);
@@ -4154,14 +4174,56 @@ function mbPersoonRij(m){
       <div><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
       ${extra.length?`<div style="font-size:11.5px;color:var(--muted)">${extra.map(veiligTekst).join(' &middot; ')}</div>`:''}</div></div></td>
     <td style="text-align:right">${m.leeftijd||'&mdash;'}</td>
-    <td style="text-align:right"><input class="mb-getal" type="number" step="0.25" style="width:76px" id="mbPL${id}" value="${m.uurloon!=null?veiligTekst(m.uurloon):''}"></td>
+    <td style="text-align:right"><input class="mb-getal" type="number" step="0.25" style="width:68px" id="mbPL${id}" value="${m.uurloon!=null?veiligTekst(m.uurloon):''}"></td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${m.shifts}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbNum(m.uren,1))}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(m.verdiend))}</td>
-    <td><select class="mb-getal" style="width:160px;text-align:left" id="mbPB${id}"><option value="">&mdash;</option>
+    <td><select class="mb-getal" style="width:118px;text-align:left" id="mbPB${id}"><option value="">&mdash;</option>
       ${MB_OORDELEN.map(o=>`<option value="${o}"${m.beoordeling===o?' selected':''}>${o}</option>`).join('')}</select></td>
-    <td><button class="mb-mini" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',false)">Opslaan</button></td></tr>`;
+    <td style="white-space:nowrap"><button class="mb-mini" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',false)">Opslaan</button>
+      <button class="mb-mini rood" onclick="mbPersoonWeg('${veiligJs(m.id)}')" title="Weghalen">Weghalen</button></td></tr>`;
 }
+// Weghalen betekent niet altijd wissen: heeft iemand uren geklokt, dan moeten
+// die zeven jaar bewaard blijven. De database vertelt wat er kan.
+async function mbPersoonWeg(id){
+  let k;
+  try{
+    const{data,error}=await sb.rpc('account_kan_weg',{p_id:id});
+    if(error)throw error;
+    k=(data&&data[0])||{};
+  }catch(e){ alert(mbFout(e)); return; }
+  if(!k.mag){ alert(k.reden||'Dit account kan niet worden weggehaald.'); return; }
+
+  if(k.actie==='verwijderen'){
+    if(!confirm(`${k.naam} verwijderen?\n\nDeze persoon heeft nog nooit uren geklokt, dus er is niets te bewaren. `
+      +`Het account, de inlog en de aanmeldingen gaan definitief weg. Hij kan zich daarna opnieuw aanmelden.`))return;
+    try{
+      const{data,error}=await sb.functions.invoke('delete-account',{body:{userId:id}});
+      if(error||(data&&data.error))throw new Error((data&&data.error)||error.message);
+      toast('Account verwijderd');
+    }catch(e){ alert(mbFout(e)); return; }
+  }else{
+    const reden=prompt(`${k.naam} uit dienst zetten?\n\n`
+      +`Er staan ${k.uren} urenregistraties${k.facturen?` en ${k.facturen} facturen`:''} op naam van deze persoon. `
+      +`Die blijven bewaard \u2014 dat moet, zeven jaar lang. Hij kan niet meer inloggen, verdwijnt uit je lijsten `
+      +`en gaat van alle diensten vanaf vandaag af.\n\nReden (mag leeg):`, '');
+    if(reden===null)return;
+    try{
+      const{data,error}=await sb.rpc('account_afsluiten',{p_id:id,p_reden:reden||null});
+      if(error)throw error;
+      const r=(data&&data[0])||{};
+      toast(`${r.naam||k.naam} staat uit dienst${r.shifts_weg?` \u00b7 ${r.shifts_weg} dienst(en) vrijgekomen`:''}`);
+    }catch(e){ alert(mbFout(e)); return; }
+  }
+  mbNaar('mensen');
+}
+async function mbPersoonTerug(id){
+  if(!confirm('Dit account terughalen? Daarna moet je het nog wel opnieuw vrijgeven.'))return;
+  try{ const{error}=await sb.rpc('account_terughalen',{p_id:id}); if(error)throw error;
+       toast('Teruggehaald. Geef het account hierboven weer vrij.'); mbNaar('mensen'); }
+  catch(e){ alert(mbFout(e)); }
+}
+
 async function mbPersoonOpslaan(id,vrijgeven){
   const l=(document.getElementById('mbPL'+id)||{}).value;
   const b=(document.getElementById('mbPB'+id)||{}).value;
@@ -4445,6 +4507,26 @@ function mcrStatusChip(st){
   return mcrChip('Waiting for approval','#B45309','#FEF6E7');
 }
 function mcrLeeg(t){ return `<div class="mcr-leeg">${veiligTekst(t)}</div>`; }
+// Het scherm voor een account dat uit dienst is gezet. Hetzelfde kader als de
+// wachtkamer, maar met een eerlijk verhaal: hier komt niemand meer langs.
+function toonAfgesloten(naam){
+  const en = (MIJN_VESTIGING==='MCR') || (function(){try{return localStorage.getItem('tc_ingang')==='MCR';}catch(e){return false;}})();
+  document.getElementById('authWrap').style.display='none';
+  document.getElementById('appWrap').style.display='none';
+  const mcrApp=document.getElementById('mcrApp'); if(mcrApp)mcrApp.style.display='none';
+  const bn=document.getElementById('bottomNav'); if(bn)bn.classList.remove('visible');
+  const zet=(id,t)=>{const e=document.getElementById(id); if(e)e.textContent=t;};
+  zet('wachtKop', en?'This account is closed':'Dit account is afgesloten');
+  zet('wachtUitleg', en
+    ?'You can no longer sign in. Your hours and invoices are kept, because we have to keep those records. If you think this is a mistake, please contact Bram.'
+    :'Inloggen kan niet meer. Je uren en facturen blijven bewaard \u2014 die moeten we bewaren. Klopt dit niet? Neem dan contact op met kantoor.');
+  zet('wachtNaam', naam||'');
+  const herlaad=document.getElementById('wachtHerlaad'); if(herlaad)herlaad.style.display='none';
+  const uit=document.getElementById('wachtUitloggen');
+  if(uit)uit.textContent = en?'Sign out':'Uitloggen';
+  const w=document.getElementById('wachtWrap'); if(w)w.style.display='flex';
+}
+
 function mcrFout(e){
   const m = (e && (e.message||e.hint||e.details)) ? String(e.message||e.hint||e.details) : 'Something went wrong.';
   return m.replace(/^.*?:\s*/,'');
@@ -5601,12 +5683,27 @@ function openPrivacy(){
   window.open(PRIVACY_URL,'_blank');
 }
 
-function openVerwijderAccount(){
+// Heeft iemand uren geklokt, dan kan zijn account niet zomaar verdwijnen: die
+// uren zijn loonadministratie en horen zeven jaar bewaard te blijven. Het
+// account wordt dan afgesloten. Dat hoort in de tekst te staan vóórdat iemand
+// op de knop drukt, niet in een foutmelding erna.
+let EIGEN_UREN=null;
+async function openVerwijderAccount(){
   const inp=document.getElementById('verwijderBevestigInput');
   const err=document.getElementById('verwijderAccountErr');
   if(inp)inp.value='';
   if(err)err.style.display='none';
   document.getElementById('verwijderAccountOverlay').style.display='flex';
+  try{
+    const{count}=await sb.from('urenregistraties').select('id',{count:'exact',head:true});
+    EIGEN_UREN=count||0;
+  }catch(e){ EIGEN_UREN=null; }
+  const uitleg=document.getElementById('verwijderUitleg');
+  if(uitleg&&EIGEN_UREN>0){
+    uitleg.innerHTML='Je hebt <b>'+EIGEN_UREN+' urenregistraties</b> staan. Die moeten zeven jaar bewaard '
+      +'blijven, dus ze worden niet gewist. Je account wordt afgesloten: inloggen kan daarna niet meer '
+      +'en je staat nergens meer tussen.';
+  }
 }
 
 function closeVerwijderAccount(){
@@ -5634,8 +5731,14 @@ async function bevestigVerwijderAccount(){
         'Content-Type':'application/json'
       }
     });
-    const result=await resp.json().catch(()=>({}));
-    if(!resp.ok||result.error){
+    let result=await resp.json().catch(()=>({}));
+    if(resp.status===409||result.bewaren){
+      // Er valt iets te bewaren. Dan sluiten we het account af in plaats van
+      // het te wissen; dat mag de gebruiker zelf doen.
+      const{error:afErr}=await sb.rpc('eigen_account_afsluiten');
+      if(afErr)throw new Error(afErr.message);
+      result={success:true};
+    }else if(!resp.ok||result.error){
       throw new Error(result.error||('Verwijderen mislukt (status '+resp.status+').'));
     }
     // Account is verwijderd — uitloggen en terug naar inlogscherm
@@ -5646,7 +5749,9 @@ async function bevestigVerwijderAccount(){
     document.getElementById('authWrap').style.display='flex';
     const authMsg=document.getElementById('authMsg');
     if(authMsg){
-      authMsg.textContent='Je account is permanent verwijderd.';
+      authMsg.textContent=(EIGEN_UREN>0)
+        ?'Je account is afgesloten. Je uren blijven bewaard voor de administratie.'
+        :'Je account is permanent verwijderd.';
       authMsg.style.display='block';
     }
   }catch(e){
@@ -5691,11 +5796,12 @@ async function initApp(user){
     }
   }, 1000);
   // Haal rol op — probeer meerdere keren als nodig
-  let rol='part-timer',naam=user.email,goedgekeurd=null,beheerRol=null;
+  let rol='part-timer',naam=user.email,goedgekeurd=null,beheerRol=null,gearchiveerd=null;
   try{
-    const velden='rol,naam,goedgekeurd,beheer_rol,vestiging,alle_vestigingen,actieve_vestiging';
+    const velden='rol,naam,goedgekeurd,beheer_rol,vestiging,alle_vestigingen,actieve_vestiging,gearchiveerd_op';
     const neem=r=>{
       rol=r.rol||'part-timer';naam=r.naam||user.email;goedgekeurd=r.goedgekeurd;beheerRol=r.beheer_rol||null;
+      gearchiveerd=r.gearchiveerd_op||null;
       MIJN_VESTIGING=r.vestiging||'NL';
       MAG_ALLE_VESTIGINGEN=!!r.alle_vestigingen;
       ACTIEVE_VESTIGING=MAG_ALLE_VESTIGINGEN?(r.actieve_vestiging||MIJN_VESTIGING):MIJN_VESTIGING;
@@ -5717,6 +5823,10 @@ async function initApp(user){
     pasIngangToe();
   }
   zetVestigingSwitch();
+
+  // Is het account afgesloten, dan hoort daar niet "wacht op goedkeuring" te
+  // staan — er komt namelijk niemand meer langs om het goed te keuren.
+  if(gearchiveerd){ return toonAfgesloten(naam); }
 
   // Een nieuwe aanmelding wacht op een beheerder. Tot die tijd is er bijna
   // niets te zien: alleen het eigen profiel, zodat iemand zijn gegevens alvast
@@ -9629,15 +9739,39 @@ async function maakBeheerder(id){
 // Verwijderen gaat via de server, want alleen daar kan ook de inlog worden
 // weggehaald. Deed de app dat zelf, dan bleef het e-mailadres bezet en kon
 // diegene zich nooit meer aanmelden met datzelfde adres.
+// Iemand die nooit uren heeft geklokt mag echt weg. Heeft hij wel uren, dan
+// moeten die zeven jaar bewaard blijven; dan gaat het account uit dienst.
+// De database bepaalt welk van de twee het wordt, niet dit scherm.
 async function verwijderAccount(id){
-  const wie=(PERSONEEL.find(p=>p.id===id)||{}).naam||'dit account';
-  if(!confirm(`${wie} verwijderen?\n\nHet account, de uren, de beschikbaarheid en de inlog worden definitief verwijderd. Diegene kan zich daarna wel opnieuw aanmelden met hetzelfde e-mailadres.`))return;
-  const{data,error}=await sb.functions.invoke('delete-account',{body:{userId:id}});
-  if(error||(data&&data.error)){
-    toast('Verwijderen mislukt: '+((data&&data.error)||error.message),'fout');
-    return;
+  let k;
+  try{
+    const{data,error}=await sb.rpc('account_kan_weg',{p_id:id});
+    if(error)throw error;
+    k=(data&&data[0])||{};
+  }catch(e){ toast('Kon dit account niet nakijken: '+(e.message||e),'fout'); return; }
+  if(!k.mag){ toast(k.reden||'Dit account kan niet worden weggehaald.','fout'); return; }
+
+  if(k.actie==='verwijderen'){
+    if(!confirm(`${k.naam} verwijderen?\n\nDeze persoon heeft nooit uren geklokt, dus er is niets te bewaren. `
+      +`Het account, de beschikbaarheid en de inlog gaan definitief weg. Hij kan zich daarna opnieuw aanmelden `
+      +`met hetzelfde e-mailadres.`))return;
+    const{data,error}=await sb.functions.invoke('delete-account',{body:{userId:id}});
+    if(error||(data&&data.error)){
+      toast('Verwijderen mislukt: '+((data&&data.error)||error.message),'fout');
+      return;
+    }
+    toast('Account verwijderd');
+  }else{
+    const reden=prompt(`${k.naam} uit dienst zetten?\n\n`
+      +`Er staan ${k.uren} urenregistraties${k.facturen?` en ${k.facturen} facturen`:''} op naam van deze persoon. `
+      +`Die blijven bewaard \u2014 dat moet, zeven jaar lang. Hij kan niet meer inloggen, verdwijnt uit je lijsten `
+      +`en gaat van alle diensten vanaf vandaag af.\n\nReden (mag leeg):`, '');
+    if(reden===null)return;
+    const{data,error}=await sb.rpc('account_afsluiten',{p_id:id,p_reden:reden||null});
+    if(error){ toast('Uit dienst zetten mislukt: '+error.message,'fout'); return; }
+    const r=(data&&data[0])||{};
+    toast(`${r.naam||k.naam} staat uit dienst${r.shifts_weg?` \u00b7 ${r.shifts_weg} dienst(en) vrijgekomen`:''}`);
   }
-  toast('Account verwijderd');
   await loadAll();
   loadAccounts();
 }
