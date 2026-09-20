@@ -3060,6 +3060,7 @@ async function mbTagScannen(){
 // ══════════════════════════════════════════════════════════════════
 let MB_TAB='overzicht', MB_DATUM=null, MB_WEEK=null, MB_SHIFT=null, MB_KRAAM=null;
 let MB_UREN_TAB='akkoord', MB_INST='kramen', MB_CIJ_VAN=null, MB_CIJ_TOT=null;
+let MB_WEEKRIJEN=null;   // de diensten van de week die nu op het scherm staat
 let MB_DAG_KRAAM=null, MB_KRAMEN=null, MB_INST_DATA=null;
 const MB_WEEKDAGEN=['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
 const MB_TABS=[['overzicht','Overzicht'],['shifts','Shifts'],['uren','Uren'],['dagrapport','Dagrapport'],
@@ -3257,6 +3258,7 @@ async function mbShiftsPlannen(){
   if(!MB_WEEK)MB_WEEK=mbMaandag(MB_DATUM||await mbPeil());
   const{data,error}=await sb.rpc('mcr_week',{p_van:MB_WEEK});
   if(error)throw error;
+  MB_WEEKRIJEN=(data||[]).filter(r=>r.shift_id);
   const dagen=[]; for(let i=0;i<7;i++){ const d=new Date(MB_WEEK+'T00:00:00'); d.setDate(d.getDate()+i); dagen.push(fmt(d)); }
   const kramen=[]; const cel={};
   (data||[]).forEach(r=>{
@@ -3267,10 +3269,11 @@ async function mbShiftsPlannen(){
   });
 
   let uit=mbKop('Shifts &middot; week van '+veiligTekst(mbKort(MB_WEEK)),
-    'Iedereen werkt tot sluit &mdash; je zet alleen de <b>starttijd</b>',
+    'Diensten met een start- en een eindtijd. Laat je de eindtijd leeg, dan loopt hij tot sluit.',
     `<button class="mb-mini" onclick="mbWeek(-7)">&lsaquo; vorige</button>
      <button class="mb-mini" onclick="mbWeek(7)">volgende &rsaquo;</button>
-     <button class="mb-mini" onclick="mbWeekKopieren()">Deze week kopi&euml;ren naar volgende</button>`);
+     <button class="mb-mini" onclick="mbWeekKopieren()">Deze week kopi&euml;ren naar volgende</button>
+     <button class="mb-mini zwart" onclick="mbDienstOpen(null,null)">+ Diensten toevoegen</button>`);
 
   uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-week">'
      +'<colgroup><col class="kraam">'+'<col class="dag">'.repeat(7)+'</colgroup>'
@@ -3297,15 +3300,16 @@ async function mbShiftsPlannen(){
             ${sh.aanmeldingen?`<span class="mb-shiftop" style="color:#2A4EA8">${sh.aanmeldingen}?</span>`:''}
           </button>`;
         });
-        uit+=`<button class="mb-shift nieuw" onclick="mbShiftNieuw('${veiligJs(k.id)}','${veiligJs(d)}')">+ dienst</button>`;
+        uit+=`<button class="mb-shift nieuw" onclick="mbDienstOpen('${veiligJs(k.id)}','${veiligJs(d)}')">+ dienst</button>`;
       }
       uit+='</td>';
     });
     uit+='</tr>';
   });
   uit+='</tbody></table></div>';
-  uit+=`<div id="mbShiftDetail"></div>`;
+  uit+=`<div id="mbDienstForm"></div><div id="mbShiftDetail"></div>`;
   document.getElementById('mbInhoud').innerHTML=uit;
+  if(MB_NIEUW)mbDienstTeken();
   if(MB_SHIFT)mbShiftOpen(MB_SHIFT);
 }
 function mbWeek(stap){
@@ -3320,16 +3324,179 @@ async function mbWeekKopieren(){
     mbNaar('shifts');
   }catch(e){ alert(mbFout(e)); }
 }
-async function mbShiftNieuw(kraam,datum){
-  const t=prompt('Starttijd van de nieuwe dienst (bijvoorbeeld 15:00)','15:00');
-  if(!t)return;
-  const a=prompt('Hoeveel mensen?','2');
-  try{
-    const{error}=await sb.rpc('mcr_shift_opslaan',{p_shift:null,p_kraam:kraam,p_datum:datum,
-      p_start:t,p_eind:null,p_aantal:parseInt(a,10)||1,p_naam:null});
-    if(error)throw error; mbNaar('shifts');
-  }catch(e){ alert(mbFout(e)); }
+// ── Diensten aanmaken ─────────────────────────────────────────────
+// Eén formulier voor alles: één dienst op één dag, of een hele periode in één
+// keer. Dit verving het aparte scherm met dagpatronen; daar kon je niet zien
+// wat er zou gebeuren en het maakte niets aan.
+let MB_NIEUW=null;   // null = het formulier staat dicht
+
+function mbDienstOpen(kraam, datum){
+  const vast = !!datum;
+  MB_NIEUW={
+    kramen: kraam?[kraam]:null,          // null = alle kramen aanvinken
+    van: datum||MB_WEEK,
+    tot: datum||fmt((d=>{d.setDate(d.getDate()+6);return d;})(new Date(MB_WEEK+'T00:00:00'))),
+    dagen: vast?null:[0,1,2,3,4,5,6],    // null = elke dag in de periode
+    start:'11:00', eind:'', aantal:2, naam:'', vast:vast,
+  };
+  mbDienstTeken();
 }
+function mbDienstSluit(){ MB_NIEUW=null; mbDienstTeken(); }
+
+async function mbDienstTeken(){
+  const el=document.getElementById('mbDienstForm'); if(!el)return;
+  if(!MB_NIEUW){ el.innerHTML=''; return; }
+  const n=MB_NIEUW;
+  const kramen=await mbKramenLijst();
+  if(!n.kramen)n.kramen=kramen.map(k=>k.id);
+  const dag=['zo','ma','di','wo','do','vr','za'];
+  el.innerHTML=`<div class="mb-kaart" style="border:1.5px solid var(--text);margin-top:14px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px">
+      <div style="font-size:15px;font-weight:700">${n.vast?'Dienst toevoegen':'Diensten toevoegen'}</div>
+      <button class="mb-mini" onclick="mbDienstSluit()">Sluiten</button></div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:12px">
+      ${n.vast?'Je maakt één dienst aan op deze dag.'
+             :'Kies de kramen, de periode en de dagen van de week. Kijk eerst met de proefronde wat er zou gebeuren.'}</div>
+
+    ${n.vast?'':`<label class="mb-lab">Kramen</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+      ${kramen.map(k=>`<button class="mb-mini${n.kramen.includes(k.id)?' zwart':''}"
+        onclick="mbDienstKraam('${veiligJs(k.id)}')">${veiligTekst(k.naam)}</button>`).join('')}
+    </div>`}
+
+    <div class="mb-veldrij">
+      <div style="flex:1 1 150px"><label class="mb-lab">${n.vast?'Datum':'Van'}</label>
+        <input type="date" class="mb-veld" id="mbNvan" value="${veiligTekst(n.van)}"></div>
+      ${n.vast?'':`<div style="flex:1 1 150px"><label class="mb-lab">Tot en met</label>
+        <input type="date" class="mb-veld" id="mbNtot" value="${veiligTekst(n.tot)}"></div>`}
+      <div style="flex:1 1 110px"><label class="mb-lab">Starttijd</label>
+        <input type="time" class="mb-veld" id="mbNstart" value="${veiligTekst(n.start)}"></div>
+      <div style="flex:1 1 110px"><label class="mb-lab">Eindtijd</label>
+        <input type="time" class="mb-veld" id="mbNeind" value="${veiligTekst(n.eind)}"></div>
+      <div style="flex:1 1 90px"><label class="mb-lab">Mensen</label>
+        <input type="number" min="1" max="20" class="mb-veld" id="mbNaantal" value="${n.aantal}"></div>
+      <div style="flex:1 1 140px"><label class="mb-lab">Naam (mag leeg)</label>
+        <input class="mb-veld" id="mbNnaam" placeholder="bv. Avond" value="${veiligTekst(n.naam)}"></div>
+    </div>
+
+    ${n.vast?'':`<label class="mb-lab" style="margin-top:12px">Op welke dagen</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+      ${[1,2,3,4,5,6,0].map(w=>`<button class="mb-mini${n.dagen.includes(w)?' zwart':''}"
+        onclick="mbDienstDag(${w})" style="text-transform:capitalize;min-width:46px">${dag[w]}</button>`).join('')}
+      <button class="mb-mini" onclick="mbDienstDagen('alle')">alle</button>
+      <button class="mb-mini" onclick="mbDienstDagen('weekend')">weekend</button>
+    </div>`}
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+      ${n.vast?'':'<button class="mb-mini" onclick="mbDienstMaken(true)">Proefronde</button>'}
+      <button class="mb-mini zwart" onclick="mbDienstMaken(false)">${n.vast?'Toevoegen':'Nu aanmaken'}</button>
+    </div>
+    <div id="mbDienstUit" style="margin-top:12px"></div>
+  </div>`;
+}
+function mbDienstLees(){
+  const n=MB_NIEUW; if(!n)return;
+  const v=id=>{const e=document.getElementById(id);return e?e.value:'';};
+  n.van=v('mbNvan')||n.van;
+  n.tot=n.vast?n.van:(v('mbNtot')||n.tot);
+  n.start=v('mbNstart')||n.start;
+  n.eind=v('mbNeind');
+  n.aantal=parseInt(v('mbNaantal'),10)||1;
+  n.naam=v('mbNnaam');
+}
+function mbDienstKraam(id){
+  mbDienstLees();
+  const n=MB_NIEUW; if(!n)return;
+  n.kramen = n.kramen.includes(id) ? n.kramen.filter(x=>x!==id) : n.kramen.concat([id]);
+  mbDienstTeken();
+}
+function mbDienstDag(w){
+  mbDienstLees();
+  const n=MB_NIEUW; if(!n)return;
+  n.dagen = n.dagen.includes(w) ? n.dagen.filter(x=>x!==w) : n.dagen.concat([w]);
+  mbDienstTeken();
+}
+function mbDienstDagen(wat){
+  mbDienstLees();
+  const n=MB_NIEUW; if(!n)return;
+  n.dagen = wat==='weekend' ? [0,6] : [0,1,2,3,4,5,6];
+  mbDienstTeken();
+}
+async function mbDienstMaken(proef){
+  mbDienstLees();
+  const n=MB_NIEUW; if(!n)return;
+  const uit=document.getElementById('mbDienstUit');
+  if(!n.kramen.length){ uit.innerHTML='<span style="color:#B4472B;font-size:13px">Kies minstens één kraam.</span>'; return; }
+  if(!n.vast&&!n.dagen.length){ uit.innerHTML='<span style="color:#B4472B;font-size:13px">Kies minstens één dag van de week.</span>'; return; }
+  uit.innerHTML='<span style="color:var(--muted);font-size:13px">Bezig&hellip;</span>';
+  try{
+    const{data,error}=await sb.rpc('mcr_shifts_toevoegen',{
+      p_kramen:n.kramen, p_van:n.van, p_tot:n.tot,
+      p_weekdagen:n.vast?null:n.dagen,
+      p_start:n.start, p_eind:n.eind||null,
+      p_aantal:n.aantal, p_naam:n.naam||null, p_alleen_kijken:!!proef});
+    if(error)throw error;
+    const rijen=data||[];
+    const totaal=rijen.reduce((a,r)=>a+(r.diensten_nieuw||0),0);
+    if(!proef&&totaal===0){
+      uit.innerHTML='<span style="color:#B45309;font-size:13px">Er is niets aangemaakt &mdash; '
+        +'op die dagen staat al een dienst op die tijd, of ze vallen buiten het seizoen.</span>';
+      return;
+    }
+    let t='<table class="mb-tabel2" style="margin-top:4px"><thead><tr><th>Kraam</th>'
+      +'<th style="text-align:right">Dagen</th><th style="text-align:right">Nieuw</th>'
+      +'<th style="text-align:right">Plekken</th><th style="text-align:right">Overgeslagen</th></tr></thead><tbody>';
+    rijen.forEach(r=>{
+      t+=`<tr><td>${veiligTekst(r.kraam)}</td>
+        <td style="text-align:right">${r.dagen}</td>
+        <td style="text-align:right;font-weight:600">${r.diensten_nieuw}</td>
+        <td style="text-align:right">${r.plekken}</td>
+        <td style="text-align:right;color:var(--muted)">${r.overgeslagen}${r.reden?' ('+veiligTekst(r.reden)+')':''}</td></tr>`;
+    });
+    t+='</tbody></table>';
+    t+=`<div style="font-size:12.5px;margin-top:10px;color:${proef?'var(--muted)':'#0F7A52'}">${
+      proef?'Dit is alleen een proefronde &mdash; er is nog niets aangemaakt.'
+           :'Aangemaakt.'}</div>`;
+    uit.innerHTML=t;
+    if(!proef){ MB_NIEUW=null; setTimeout(()=>mbNaar('shifts'),1400); }
+  }catch(e){ uit.innerHTML=`<span style="color:#B4472B;font-size:13px">${veiligTekst(mbFout(e))}</span>`; }
+}
+
+// ── Een bestaande dienst aanpassen ────────────────────────────────
+function mbShiftAanpassen(id){
+  const sh=(MB_WEEKRIJEN||[]).find(r=>r.shift_id===id) || {};
+  const el=document.getElementById('mbShiftBewerk'); if(!el)return;
+  el.innerHTML=`<div class="mb-veldrij" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)">
+    <div style="flex:1 1 110px"><label class="mb-lab">Starttijd</label>
+      <input type="time" class="mb-veld" id="mbBstart" value="${veiligTekst(mbUur(sh.start_tijd))}"></div>
+    <div style="flex:1 1 110px"><label class="mb-lab">Eindtijd</label>
+      <input type="time" class="mb-veld" id="mbBeind" value="${veiligTekst(mbUur(sh.eind_tijd))}"></div>
+    <div style="flex:1 1 90px"><label class="mb-lab">Mensen</label>
+      <input type="number" min="1" max="20" class="mb-veld" id="mbBaantal" value="${sh.nodig||1}"></div>
+    <div style="flex:1 1 140px"><label class="mb-lab">Naam</label>
+      <input class="mb-veld" id="mbBnaam" value="${veiligTekst(sh.shift_naam||'')}"></div>
+    <div style="align-self:flex-end;display:flex;gap:6px">
+      <button class="mb-mini zwart" onclick="mbShiftBewaren('${veiligJs(id)}')">Opslaan</button>
+      <button class="mb-mini" onclick="document.getElementById('mbShiftBewerk').innerHTML=''">Annuleren</button></div>
+    </div><div id="mbBewerkUit" style="font-size:13px;margin-top:6px"></div>`;
+}
+async function mbShiftBewaren(id){
+  const v=x=>{const e=document.getElementById(x);return e?e.value:'';};
+  const uit=document.getElementById('mbBewerkUit');
+  const start=v('mbBstart'), eind=v('mbBeind');
+  if(eind&&start&&eind<=start){
+    if(uit)uit.innerHTML='<span style="color:#B4472B">De eindtijd moet na de starttijd liggen.</span>';
+    return;
+  }
+  try{
+    const{error}=await sb.rpc('mcr_shift_opslaan',{p_shift:id,p_kraam:null,p_datum:null,
+      p_start:start||null,p_eind:eind||null,
+      p_aantal:parseInt(v('mbBaantal'),10)||null,p_naam:v('mbBnaam')||null});
+    if(error)throw error;
+    mbNaar('shifts');
+  }catch(e){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
+}
+
 async function mbShiftOpen(id){
   MB_SHIFT=id;
   const el=document.getElementById('mbShiftDetail'); if(!el)return;
@@ -3344,8 +3511,8 @@ async function mbShiftOpen(id){
       <div class="mb-kop" style="margin:0">Op deze dienst</div>
       <div style="display:flex;gap:6px">
         <button class="mb-mini" onclick="mbShiftAanpassen('${veiligJs(id)}')">Tijd of aantal</button>
-        <button class="mb-mini" onclick="mbShiftWeg('${veiligJs(id)}')">Verwijderen</button>
-      </div></div>`;
+        <button class="mb-mini rood" onclick="mbShiftWeg('${veiligJs(id)}')">Verwijderen</button>
+      </div></div><div id="mbShiftBewerk"></div>`;
   if(!ing.length)uit+='<div style="font-size:13px;color:var(--muted)">Nog niemand ingedeeld.</div>';
   ing.forEach(m=>{
     uit+=`<div class="mb-persoon">
@@ -3383,16 +3550,6 @@ async function mbShiftOpen(id){
   uit+='</div></div>';
   el.innerHTML=uit;
   el.scrollIntoView({behavior:'smooth',block:'nearest'});
-}
-async function mbShiftAanpassen(id){
-  const t=prompt('Nieuwe starttijd (leeg laten = niet wijzigen)','');
-  const a=prompt('Hoeveel mensen? (leeg laten = niet wijzigen)','');
-  if(!t&&!a)return;
-  try{
-    const{error}=await sb.rpc('mcr_shift_opslaan',{p_shift:id,p_kraam:null,p_datum:null,
-      p_start:t||null,p_eind:null,p_aantal:a?parseInt(a,10):null,p_naam:null});
-    if(error)throw error; mbNaar('shifts');
-  }catch(e){ alert(mbFout(e)); }
 }
 async function mbShiftWeg(id){
   if(!confirm('Deze dienst verwijderen?'))return;
@@ -4236,7 +4393,7 @@ async function mbPersoonOpslaan(id,vrijgeven){
 
 // ── INSTELLINGEN ──────────────────────────────────────────────────
 async function mbInstellingen(){
-  const onder=[['kramen','Kramen & seizoen'],['patronen','Dagpatronen'],
+  const onder=[['kramen','Kramen & seizoen'],
                ['gegevens','Factuurgegevens & bedragen'],['tags','NFC-tags']];
   document.getElementById('mbInhoud').innerHTML=
     mbKop('Instellingen &middot; Manchester','Elke kraam heeft zijn eigen seizoen en eigen openingstijden')
@@ -4253,7 +4410,6 @@ async function mbInstGa(k){
   if(el)el.innerHTML='<div class="mb-kaart" style="color:var(--muted)">Bezig&hellip;</div>';
   try{
     if(k==='kramen')  return await mbKramen();
-    if(k==='patronen')return await mbPatronen();
     if(k==='tags')    return await mbTags();
     return await mbGegevens();
   }catch(e){ console.error(e); if(el)el.innerHTML=`<div class="mb-kaart" style="color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
@@ -4280,17 +4436,11 @@ async function mbKramen(){
   });
   uit+=`<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
     Shifts worden alleen aangemaakt binnen het seizoen van die kraam. Uitzonderingen &mdash; eerste kerstdag dicht, oudjaar korter &mdash; zet je per dag bij Shifts.</div></div>`;
-  uit+=`<div class="mb-kaart"><div style="font-size:15px;font-weight:700;margin-bottom:6px">Het seizoen klaarzetten</div>
-    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px">
-      Maakt per kraam elke dag binnen zijn eigen seizoen aan, met de diensten uit het dagpatroon.
-      Wat er al staat blijft staan. Kijk eerst met de proefronde wat hij zou doen.</div>
-    <label style="display:flex;gap:9px;align-items:center;font-size:13px;margin-bottom:12px;cursor:pointer">
-      <input type="checkbox" id="mbBijwerken" style="width:16px;height:16px">
-      Bestaande dagen ook bijwerken als ik het dagpatroon heb veranderd</label>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="mb-mini" onclick="mbKlaarzetten(true)">Proefronde</button>
-      <button class="mb-mini zwart" onclick="mbKlaarzetten(false)">Nu klaarzetten</button></div>
-    <div id="mbKlaarUit" style="margin-top:12px"></div></div>`;
+  uit+=`<div class="mb-kaart" style="background:var(--bg)">
+    <div style="font-size:13px;color:var(--muted);line-height:1.6">
+      Diensten maak je bij <button class="mb-linktekst" onclick="mbNaar('shifts')">Shifts</button>.
+      Daar kun je in één keer een hele periode vullen &mdash; per kraam, op de dagen die je aanvinkt,
+      met een start- en een eindtijd.</div></div>`;
   mbZet(uit);
 }
 async function mbKraamOpslaan(id){
@@ -4301,71 +4451,6 @@ async function mbKraamOpslaan(id){
     if(error)throw error; MB_KRAMEN=null; mbInstGa('kramen');
   }catch(e){ alert(mbFout(e)); }
 }
-async function mbKlaarzetten(proef){
-  const bij=document.getElementById('mbBijwerken');
-  const uit=document.getElementById('mbKlaarUit');
-  uit.innerHTML='<span style="color:var(--muted);font-size:13px">Bezig&hellip;</span>';
-  try{
-    const{data,error}=await sb.rpc('kramen_klaarzetten',{p_kraam:null,p_van:null,p_tot:null,
-      p_alleen_kijken:proef,p_bijwerken:!!(bij&&bij.checked)});
-    if(error)throw error;
-    let t='<table class="mb-tabel2"><tr><th>Kraam</th><th>Nieuwe dagen</th><th>Bestond al</th><th>Nieuwe diensten</th><th>Gewijzigd</th><th>Plekken</th></tr>';
-    (data||[]).forEach(r=>t+=`<tr><td>${veiligTekst(r.kraam)}</td><td>${r.dagen_nieuw}</td><td>${r.dagen_bestaand}</td><td>${r.diensten_nieuw}</td><td>${r.diensten_gewijzigd}</td><td>${r.plekken_nieuw}</td></tr>`);
-    t+='</table>';
-    t+=`<div style="font-size:12.5px;color:${proef?'var(--muted)':'#0F7A52'};margin-top:10px">${proef?'Dit is alleen een proefronde &mdash; er is nog niets aangemaakt.':'Klaargezet.'}</div>`;
-    uit.innerHTML=t;
-    if(!proef){ MB_KRAMEN=null; setTimeout(()=>mbInstGa('kramen'),1600); }
-  }catch(e){ uit.innerHTML=`<span style="color:#B4472B;font-size:13px">${veiligTekst(mbFout(e))}</span>`; }
-}
-
-async function mbPatronen(){
-  const kramen=await mbKramenLijst();
-  if(!kramen.length){ mbZet('<div class="mb-kaart">Er staan nog geen kramen.</div>'); return; }
-  if(!MB_KRAAM||!kramen.some(k=>k.id===MB_KRAAM))MB_KRAAM=kramen[0].id;
-  const{data:pat}=await sb.rpc('mcr_patronen',{p_kraam:MB_KRAAM});
-  const kaart={}; (pat||[]).forEach(r=>{ (kaart[r.weekdag]=kaart[r.weekdag]||[]).push(r); });
-  let uit=`<div class="mb-kaart" style="background:var(--bg)"><div style="font-size:13px;color:var(--muted);line-height:1.6">
-    Iedereen werkt tot sluit, dus je zet alleen de starttijd en hoeveel mensen er dan bij komen.
-    Dit is het patroon waarmee het seizoen wordt klaargezet; losse dagen pas je aan bij Shifts.</div></div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">`;
-  kramen.forEach(k=>uit+=`<button class="mb-mini${k.id===MB_KRAAM?' zwart':''}" onclick="MB_KRAAM='${veiligJs(k.id)}';mbInstGa('patronen')">${veiligTekst(k.naam)}</button>`);
-  uit+='</div><div class="mb-rij3">';
-  [1,2,3,4,5,6,0].forEach(wd=>{
-    const rijen=(kaart[wd]||[]).sort((a,b)=>String(a.start_tijd).localeCompare(String(b.start_tijd)));
-    const totaal=rijen.reduce((s,r)=>s+(r.personeel_nodig||0),0);
-    uit+=`<div class="mb-kaart" style="flex:1 1 230px;padding:13px 15px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
-        <span style="font-size:14px;font-weight:700;text-transform:capitalize">${MB_WEEKDAGEN[wd]}</span>
-        <span style="font-size:12px;color:var(--muted)">${totaal} ${totaal===1?'plek':'plekken'}</span></div>`;
-    if(!rijen.length)uit+='<div style="font-size:12.5px;color:var(--muted)">Nog geen diensten.</div>';
-    rijen.forEach(r=>{
-      uit+=`<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-top:1px solid var(--border)">
-        <span style="font-size:14px;font-weight:600;font-variant-numeric:tabular-nums;width:52px">${veiligTekst(mbUur(r.start_tijd))}</span>
-        <span style="font-size:12px;color:var(--muted);flex-grow:1">${veiligTekst(r.naam||'tot sluit')}</span>
-        <input class="mb-getal" type="number" min="0" max="20" style="width:52px" value="${r.personeel_nodig}"
-          onchange="mbPatroon('${veiligJs(MB_KRAAM)}',${wd},'${veiligJs(mbUur(r.start_tijd))}',this.value)"></div>`;
-    });
-    uit+=`<div style="display:flex;align-items:center;gap:6px;margin-top:9px;padding-top:8px;border-top:1px solid var(--border)">
-      <input type="time" class="mb-getal" style="width:88px" id="mbNT${wd}">
-      <input class="mb-getal" type="number" min="1" max="20" value="1" style="width:48px" id="mbNA${wd}">
-      <button class="mb-mini" onclick="mbPatroonNieuw(${wd})">erbij</button></div></div>`;
-  });
-  uit+='</div>';
-  mbZet(uit);
-}
-async function mbPatroon(kraam,wd,start,aantal){
-  try{ const{error}=await sb.rpc('mcr_patroon_zetten',{p_kraam:kraam,p_weekdag:wd,p_start:start,
-      p_aantal:parseInt(aantal,10)||0,p_naam:null});
-    if(error)throw error; mbInstGa('patronen'); }
-  catch(e){ alert(mbFout(e)); }
-}
-async function mbPatroonNieuw(wd){
-  const t=document.getElementById('mbNT'+wd).value;
-  const a=parseInt(document.getElementById('mbNA'+wd).value,10);
-  if(!t){ alert('Vul eerst een starttijd in.'); return; }
-  await mbPatroon(MB_KRAAM,wd,t,a||1);
-}
-
 const MB_SLEUTELS=[
   ['factuur_naam','Bedrijfsnaam'],['factuur_kvk','KvK'],['factuur_adres','Adres'],
   ['factuur_btw','Btw-nummer'],['factuur_email','Facturen binnen op'],
@@ -4484,6 +4569,8 @@ const MCR_ICO = {
 };
 const MCR_TITELS = {shifts:['My shifts',''],clock:['Clock in',''],hours:['My hours',''],
                     invoice:['Invoice',''],me:['My details','']};
+// Nog niet goedgekeurd? Dan is er één tabblad: je eigen gegevens.
+let MCR_WACHT=false;
 
 function mcrGeld(n){ return '£' + (Number(n)||0).toFixed(2); }
 function mcrDatum(d){
@@ -4533,6 +4620,8 @@ function mcrFout(e){
 }
 
 async function mcrStart(){
+  MCR_WACHT = (CURRENT_ROL==='wachtend');
+  if(MCR_WACHT)MCR_TAB='me';
   document.getElementById('appWrap').style.display='none';
   const w=document.getElementById('wachtWrap'); if(w)w.style.display='none';
   document.getElementById('authWrap').style.display='none';
@@ -4541,13 +4630,14 @@ async function mcrStart(){
   const av=document.getElementById('mcrAvatar');
   if(av)av.textContent=(CURRENT_NAAM||'').split(' ').filter(Boolean).map(x=>x[0]).slice(0,2).join('').toUpperCase();
   mcrNav();
-  nfcKan();          // vast opvragen; het inklokscherm heeft het antwoord nodig
-  await mcrGa('shifts');
+  if(!MCR_WACHT)nfcKan();   // vast opvragen; het inklokscherm heeft het antwoord nodig
+  await mcrGa(MCR_WACHT?'me':'shifts');
 }
 
 function mcrNav(){
   const nav=document.getElementById('mcrNav'); if(!nav)return;
-  const items=[['shifts','Shifts'],['clock','Clock in'],['hours','Hours'],['invoice','Invoice'],['me','Me']];
+  const items=MCR_WACHT?[['me','My details']]
+    :[['shifts','Shifts'],['clock','Clock in'],['hours','Hours'],['invoice','Invoice'],['me','Me']];
   nav.innerHTML=items.map(([k,l])=>{
     const aan=(MCR_TAB===k);
     return `<button class="${aan?'aan':''}" onclick="mcrGa('${k}')">
@@ -4557,6 +4647,9 @@ function mcrNav(){
 }
 
 async function mcrGa(tab){
+  // Er is maar één scherm zolang het account niet is vrijgegeven. Tikt iemand
+  // toch ergens anders op, dan komt hij gewoon weer bij zijn eigen gegevens uit.
+  if(MCR_WACHT && tab!=='me')tab='me';
   MCR_TAB=tab; mcrNav();
   if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
   const t=MCR_TITELS[tab]||['',''];
