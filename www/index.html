@@ -64,6 +64,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mcr-kal div{height:38px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:13.5px;cursor:pointer;border:1px solid #E6E4DE;background:#fff;color:#6B6A66}
 .mcr-kal div.ja{background:#E9F7F0;color:#0F7A52;font-weight:700;border-color:#BFE6D4}
 .mcr-kal div.nee{color:#C2C0BA;text-decoration:line-through}
+.mcr-kal div.ja.deels{position:relative}
+.mcr-kal div.ja.deels::after{content:'';position:absolute;right:5px;bottom:5px;width:5px;height:5px;border-radius:50%;background:#0F7A52}
 .mcr-kal div.uit{background:#F3F2EE;color:#C2C0BA;border-color:#F3F2EE;cursor:default}
 .mcr-kal b{font-size:10.5px;font-weight:600;color:#8A8984;text-transform:uppercase;height:auto;background:none;border:none;display:flex;align-items:center;justify-content:center}
 .mb-tabs{display:none}
@@ -3537,13 +3539,18 @@ async function mbShiftOpen(id){
     <div class="mb-kop">Wie kan er nog</div>
     <div style="font-size:12px;color:var(--muted);margin:-4px 0 6px">Op volgorde van beschikbaarheid. Wie die dag al ergens staat, staat grijs.</div>`;
   (kand.data||[]).filter(k=>!ing.some(i=>i.gebruiker_id===k.gebruiker_id)).slice(0,40).forEach(k=>{
+    const venster = (k.besch_van||k.besch_tot)
+      ? (k.besch_van&&k.besch_tot ? mbUur(k.besch_van)+'\u2013'+mbUur(k.besch_tot)
+         : (k.besch_van ? 'vanaf '+mbUur(k.besch_van) : 'tot '+mbUur(k.besch_tot)))
+      : '';
     const kl = k.beschikbaar==='beschikbaar' ? ['#0F7A52','#F2FBF6','beschikbaar']
-             : (k.beschikbaar==='onbeschikbaar' ? ['#B4472B','#FBEDE9','niet beschikbaar'] : ['#6B6A66','#F3F2EE','niet ingevuld']);
+             : (k.beschikbaar==='deels' ? ['#B45309','#FEF6E7', venster||'deels']
+             : (k.beschikbaar==='onbeschikbaar' ? ['#B4472B','#FBEDE9','niet beschikbaar'] : ['#6B6A66','#F3F2EE','niet ingevuld']));
     uit+=`<div class="mb-persoon"${k.al_bezet?' style="opacity:.5"':''}>
       <div class="mb-av" style="background:#8A8984">${veiligTekst(mbInit(k.naam))}</div>
       <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(k.naam)}</div>
         <div style="font-size:11.5px;color:var(--muted);margin-top:2px">
-          ${mbChip(kl[2],kl[0],kl[1])}${k.al_bezet?' staat vandaag al ergens':''}
+          ${mbChip(kl[2],kl[0],kl[1])}${(k.beschikbaar==='beschikbaar'&&venster)?' '+mbChip(venster,'#0F7A52','#F2FBF6'):''}${k.al_bezet?' staat vandaag al ergens':''}
           ${k.shifts_deze_week?' &middot; '+k.shifts_deze_week+' diensten in twee weken':''}</div>
         ${k.opmerking?`<div style="font-size:11.5px;color:var(--muted);margin-top:2px">${veiligTekst(k.opmerking)}</div>`:''}</div>
       <button class="mb-mini" onclick="mbIndelen('${veiligJs(id)}','${veiligJs(k.gebruiker_id)}')">Indelen</button></div>`;
@@ -4560,6 +4567,7 @@ let MCR_TAB = 'shifts';
 let MCR_STATUS = null;
 let MCR_TIMER = null;
 let MCR_MAAND = null;   // eerste dag van de maand in het beschikbaarheidsscherm
+let MCR_BESCH = {};     // wat er per dag is ingevuld, inclusief tijden
 
 const MCR_ICO = {
   shifts:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/>',
@@ -4754,7 +4762,7 @@ async function mcrAfmelden(id){
 // ─── Beschikbaarheid ───────────────────────────────────────────────
 async function mcrBeschikbaarheid(){
   document.getElementById('mcrTitel').textContent='My availability';
-  document.getElementById('mcrSub').textContent='Tap a day to switch it. This is not a booking.';
+  document.getElementById('mcrSub').textContent='Tap a day to set it. You can give a time as well.';
   const nu = MCR_MAAND || new Date();
   MCR_MAAND = new Date(nu.getFullYear(), nu.getMonth(), 1);
   const eerste = MCR_MAAND;
@@ -4766,18 +4774,23 @@ async function mcrBeschikbaarheid(){
     sb.from('gebruikers').select('max_dagen_per_week,vroegste_start,eigen_opmerking').eq('id',CURRENT_USER.id).single()
   ]);
   if(besch.error)throw besch.error;
-  const kaart={}; (besch.data||[]).forEach(r=>kaart[r.datum]=r.soort);
+  const kaart={}; (besch.data||[]).forEach(r=>kaart[r.datum]=r);
+  MCR_BESCH=kaart;
   const v=(voork&&voork.data)||{};
 
   const lead=(eerste.getDay()+6)%7;   // maandag eerst
   let cellen='';
   ['M','T','W','T','F','S','S'].forEach(k=>cellen+=`<b>${k}</b>`);
   for(let i=0;i<lead;i++)cellen+='<div style="border:none;background:none;cursor:default"></div>';
+  const deels=[];
   for(let d=1;d<=laatste.getDate();d++){
     const ds=fmt(new Date(eerste.getFullYear(),eerste.getMonth(),d));
-    const soort=kaart[ds];
-    const kl = soort==='beschikbaar' ? 'ja' : (soort==='onbeschikbaar' ? 'nee' : '');
-    cellen+=`<div class="${kl}" onclick="mcrDagWissel('${veiligJs(ds)}')">${d}</div>`;
+    const r=kaart[ds]||null;
+    const soort=r&&r.soort;
+    const tijden=!!(r&&(r.tijd_van||r.tijd_tot));
+    if(soort==='beschikbaar'&&tijden)deels.push({ds:ds,dag:d,r:r});
+    const kl = soort==='beschikbaar' ? (tijden?'ja deels':'ja') : (soort==='onbeschikbaar' ? 'nee' : '');
+    cellen+=`<div class="${kl}" onclick="mcrDagWissel('${veiligJs(ds)}')" title="${veiligTekst(mcrBeschTekst(r))}">${d}</div>`;
   }
 
   const maandNaam=eerste.toLocaleDateString('en-GB',{month:'long',year:'numeric'});
@@ -4794,8 +4807,14 @@ async function mcrBeschikbaarheid(){
       <div class="mcr-kal">${cellen}</div>
       <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:13px;padding-top:12px;border-top:1px solid #EFEDE7">
         <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#6B6A66"><span style="width:13px;height:13px;border-radius:4px;background:#E9F7F0;border:1px solid #BFE6D4"></span>Available</span>
+        <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#6B6A66"><span style="width:13px;height:13px;border-radius:4px;background:#E9F7F0;border:1px solid #BFE6D4;position:relative"><span style="position:absolute;right:1px;bottom:1px;width:5px;height:5px;border-radius:50%;background:#0F7A52"></span></span>Part of the day</span>
         <span style="display:flex;align-items:center;gap:6px;font-size:11.5px;color:#6B6A66"><span style="width:13px;height:13px;border-radius:4px;background:#fff;border:1px solid #E6E4DE"></span>Not available</span>
       </div>
+      ${deels.length?`<div style="margin-top:12px;padding-top:12px;border-top:1px solid #EFEDE7">
+        ${deels.map(x=>`<div style="display:flex;justify-content:space-between;gap:10px;font-size:12.5px;padding:3px 0">
+          <span style="color:#6B6A66">${veiligTekst(new Date(x.ds+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}))}</span>
+          <span style="color:#1A1917;font-weight:600">${veiligTekst(mcrBeschTekst(x.r))}</span></div>`).join('')}
+      </div>`:''}
     </div>
     <div class="mcr-kaart">
       <label class="mcr-label">Most days a week</label>
@@ -4812,14 +4831,95 @@ function mcrMaand(stap){
   MCR_MAAND = new Date(MCR_MAAND.getFullYear(), MCR_MAAND.getMonth()+stap, 1);
   mcrBeschikbaarheid();
 }
-async function mcrDagWissel(ds){
-  const el=[...document.querySelectorAll('.mcr-kal div')].find(x=>x.getAttribute('onclick')&&x.getAttribute('onclick').indexOf(ds)>=0);
-  let nieuw='beschikbaar';
-  if(el&&el.classList.contains('ja'))nieuw='onbeschikbaar';
-  else if(el&&el.classList.contains('nee'))nieuw='';
-  if(el){ el.className = nieuw==='beschikbaar'?'ja':(nieuw==='onbeschikbaar'?'nee':''); }
-  try{ const{error}=await sb.rpc('mcr_beschikbaarheid_zetten',{p_datum:ds,p_soort:nieuw||null}); if(error)throw error; }
-  catch(e){ alert(mcrFout(e)); mcrBeschikbaarheid(); }
+// ── Beschikbaarheid per dag, met tijden ───────────────────────────
+// Tikken op een dag opent een vel: hele dag beschikbaar, vanaf een tijd, tot
+// een tijd, tussen twee tijden, of helemaal niet. Daarvoor was het een
+// aan-uitknop, en dan moest "ik kan pas vanaf vier" in het opmerkingenveld.
+let MCR_DAGVEL=null;
+
+function mcrDagWissel(ds){ mcrDagVel(ds); }
+
+function mcrDagVel(ds){
+  const huidig=(MCR_BESCH&&MCR_BESCH[ds])||{};
+  MCR_DAGVEL={datum:ds, soort:huidig.soort||'', van:huidig.tijd_van?String(huidig.tijd_van).slice(0,5):'',
+              tot:huidig.tijd_tot?String(huidig.tijd_tot).slice(0,5):''};
+  mcrDagVelTeken();
+}
+function mcrDagVelSluit(){
+  MCR_DAGVEL=null;
+  const ov=document.getElementById('mcrDagOverlay'); if(ov)ov.remove();
+}
+function mcrDagVelKies(soort){
+  if(!MCR_DAGVEL)return;
+  MCR_DAGVEL.soort=soort;
+  if(soort!=='beschikbaar'){ MCR_DAGVEL.van=''; MCR_DAGVEL.tot=''; }
+  mcrDagVelTeken();
+}
+function mcrDagVelLees(){
+  if(!MCR_DAGVEL)return;
+  const v=id=>{const e=document.getElementById(id);return e?e.value:'';};
+  if(document.getElementById('mcrDagVan')){ MCR_DAGVEL.van=v('mcrDagVan'); MCR_DAGVEL.tot=v('mcrDagTot'); }
+}
+function mcrDagVelTeken(){
+  const d=MCR_DAGVEL; if(!d)return;
+  let ov=document.getElementById('mcrDagOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='mcrDagOverlay'; document.body.appendChild(ov);
+           ov.onclick=e=>{ if(e.target===ov)mcrDagVelSluit(); }; }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9500;display:flex;align-items:flex-end;justify-content:center';
+  const dag=new Date(d.datum+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+  const knop=(s,l)=>`<button class="mcr-knop ${d.soort===s?'':'licht'}" style="margin-top:8px"
+      onclick="mcrDagVelKies('${s}')">${l}</button>`;
+  ov.innerHTML=`<div style="background:var(--card,#fff);width:100%;max-width:460px;border-radius:16px 16px 0 0;padding:16px 18px 26px;max-height:86vh;overflow:auto">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:4px">
+      <div style="font-size:15px;font-weight:700;color:#1A1917">${veiligTekst(dag)}</div>
+      <button type="button" onclick="mcrDagVelSluit()" style="background:none;border:none;font-size:22px;line-height:1;color:#8A8984;cursor:pointer">&times;</button>
+    </div>
+    <div style="font-size:12.5px;color:#6B6A66;line-height:1.5">This is not a booking &mdash; it tells Bram when he can ask you.</div>
+    ${knop('beschikbaar','Available')}
+    ${knop('onbeschikbaar','Not available')}
+    ${knop('','Clear this day')}
+    ${d.soort==='beschikbaar'?`
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <div style="flex:1"><label class="mcr-label">From (optional)</label>
+          <input class="mcr-veld" type="time" id="mcrDagVan" value="${veiligTekst(d.van)}"></div>
+        <div style="flex:1"><label class="mcr-label">Until (optional)</label>
+          <input class="mcr-veld" type="time" id="mcrDagTot" value="${veiligTekst(d.tot)}"></div>
+      </div>
+      <div style="font-size:12px;color:#8A8984;line-height:1.5;margin-top:6px">
+        Leave both empty if you can do the whole day.</div>`:''}
+    <div id="mcrDagFout" style="font-size:12.5px;color:#B4472B;margin-top:10px;display:none"></div>
+    <button class="mcr-knop" style="margin-top:14px" onclick="mcrDagBewaren()">Save</button>
+  </div>`;
+}
+async function mcrDagBewaren(){
+  mcrDagVelLees();
+  const d=MCR_DAGVEL; if(!d)return;
+  const fout=document.getElementById('mcrDagFout');
+  const zegFout=t=>{ if(fout){fout.textContent=t;fout.style.display='block';} };
+  if(fout)fout.style.display='none';
+  if(d.soort==='beschikbaar'&&d.van&&d.tot&&d.tot<=d.van){
+    return zegFout('The end time has to be after the start time.');
+  }
+  try{
+    const{error}=await sb.rpc('mcr_beschikbaarheid_zetten',{
+      p_datum:d.datum, p_soort:d.soort||null,
+      p_van:(d.soort==='beschikbaar'&&d.van)?d.van:null,
+      p_tot:(d.soort==='beschikbaar'&&d.tot)?d.tot:null});
+    if(error)throw error;
+    mcrDagVelSluit();
+    await mcrBeschikbaarheid();
+  }catch(e){ zegFout(mcrFout(e)); }
+}
+// Hoe een dag in het rijtje onder de kalender komt te staan.
+function mcrBeschTekst(r){
+  if(!r)return '';
+  if(r.soort==='onbeschikbaar')return 'not available';
+  const van=r.tijd_van?String(r.tijd_van).slice(0,5):'';
+  const tot=r.tijd_tot?String(r.tijd_tot).slice(0,5):'';
+  if(van&&tot)return van+' – '+tot;
+  if(van)return 'from '+van;
+  if(tot)return 'until '+tot;
+  return 'all day';
 }
 async function mcrVoorkeuren(){
   const max=parseInt(document.getElementById('mcrMax').value,10);
