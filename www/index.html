@@ -3767,7 +3767,8 @@ async function mbUrenAkkoord(){
       <td><div style="display:flex;align-items:center;gap:7px">${mbStip(r.kleur)}${veiligTekst(r.kraam)}</div></td>
       <td style="white-space:nowrap;font-variant-numeric:tabular-nums">${veiligTekst(mbKlokT(r.ingeklokt_op))} &ndash;
         ${open?`<input type="time" class="mb-getal" style="width:86px" id="mbUT${id}">`
-               :`<span id="mbUTs${id}">${veiligTekst(mbKlokT(r.uitgeklokt_op))}</span>`}</td>
+               :`<span id="mbUTs${id}">${veiligTekst(mbKlokT(r.uitgeklokt_op))}</span>`}
+        ${r.uit_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.uit_op))}">eindtijd door ${veiligTekst(r.uit_door)}</div>`:''}</td>
       <td><input type="number" min="0" max="180" class="mb-getal" style="width:58px" id="mbUP${id}" value="${r.pauze}">
         ${r.pauze_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.pauze_op))}">door ${veiligTekst(r.pauze_door)}</div>`:''}</td>
       <td style="font-variant-numeric:tabular-nums;font-weight:600">${open?'&mdash;':veiligTekst(mbNum(r.uren,2))}</td>
@@ -3791,7 +3792,7 @@ async function mbWijzigingen(){
   const rijen=data||[];
   const kop=document.getElementById('mbUrenKop');
   if(kop)kop.innerHTML=mbKop('Wat de kraammanagers veranderden',
-    'Elke pauze en elke beoordeling die een manager aanpast, met naam en tijdstip &middot; laatste 90 dagen');
+    'Elke uitkloktijd, pauze en beoordeling die een manager aanpast, met naam en tijdstip &middot; laatste 90 dagen');
   if(!rijen.length){ mbZet('<div class="mb-kaart" style="color:var(--muted)">Nog niets aangepast door een manager.</div>'); return; }
   let uit='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2">'
     +'<thead><tr><th>Wanneer</th><th>Door</th><th>Wie</th><th>Wat</th><th>Van &rarr; naar</th><th>Reden</th></tr></thead><tbody>';
@@ -3801,8 +3802,8 @@ async function mbWijzigingen(){
       <td style="white-space:nowrap;font-variant-numeric:tabular-nums">${veiligTekst(mbKlokDatum(r.op))}</td>
       <td style="font-weight:600">${veiligTekst(r.door)}</td>
       <td>${veiligTekst(r.naam)}${r.datum?`<div style="font-size:11.5px;color:var(--muted)">${veiligTekst(mbKort(r.datum))}${r.kraam?' &middot; '+veiligTekst(r.kraam):''}</div>`:''}</td>
-      <td>${pauze?'Pauze':'Beoordeling'}</td>
-      <td style="white-space:nowrap">${pauze?`${veiligTekst(r.van||'0')} &rarr; <b>${veiligTekst(r.naar)}</b> min`:`${r.van?veiligTekst(r.van):'&mdash;'} &rarr; <b>${r.naar?veiligTekst(r.naar):'&mdash;'}</b>`}</td>
+      <td>${pauze?'Pauze':r.soort==='uitkloktijd'?'Uitkloktijd':'Beoordeling'}</td>
+      <td style="white-space:nowrap">${pauze?`${veiligTekst(r.van||'0')} &rarr; <b>${veiligTekst(r.naar)}</b> min`:`${r.van?veiligTekst(r.van):(r.soort==='uitkloktijd'?'niet uitgeklokt':'&mdash;')} &rarr; <b>${r.naar?veiligTekst(r.naar):'&mdash;'}</b>`}</td>
       <td style="font-size:12.5px;color:var(--muted)">${veiligTekst(r.reden||'')}</td></tr>`;
   });
   uit+='</tbody></table></div>';
@@ -4645,7 +4646,7 @@ function mbPersoonRij(m){
   const kl={'topper':['#0F7A52','#F2FBF6'],'goed':['#0F7A52','#F2FBF6'],'prima':['#2A4EA8','#EEF4FF'],
             'minder dan verwacht':['#B45309','#FEF6E7'],'niet meer':['#B4472B','#FBEDE9']}[m.beoordeling]||['#6B6A66','#F3F2EE'];
   const extra=[];
-  if(m.kraammanager)extra.push('kraammanager');
+  if(m.kraammanager)extra.push('kraammanager'+(m.manager_kraam?' '+m.manager_kraam:''));
   if(m.aangebracht_door)extra.push('via '+m.aangebracht_door);
   if(m.eigen_opmerking)extra.push(m.eigen_opmerking);
   if(!m.iban)extra.push('geen bankrekening');
@@ -4721,7 +4722,7 @@ async function mbPersoonOpen(id){
   el.innerHTML='<div class="mb-kaart" style="margin-top:14px;color:var(--muted)">Bezig&hellip;</div>';
   try{
     const [mensen, voorvallen] = await Promise.all([
-      sb.rpc('mcr_mensen'), sb.rpc('mcr_voorvallen_van',{p_gebruiker:id})]);
+      sb.rpc('mcr_mensen'), sb.rpc('mcr_voorvallen_van',{p_gebruiker:id}), mbKramenLijst()]);
     if(mensen.error)throw mensen.error;
     const m=(mensen.data||[]).find(x=>x.id===id);
     if(!m){ el.innerHTML='<div class="mb-kaart" style="margin-top:14px">Die persoon staat er niet meer.</div>'; return; }
@@ -4754,10 +4755,15 @@ function mbPersoonHtml(m, vv){
     </div>
 
     <label style="display:flex;align-items:flex-start;gap:9px;margin-top:14px;padding:11px 13px;border:1px solid var(--border);border-radius:12px;cursor:pointer;background:${m.kraammanager?'var(--bg)':'#fff'}">
-      <input type="checkbox" id="mbMgr${id}" ${m.kraammanager?'checked':''} onchange="mbManagerZetten('${veiligJs(m.id)}',this.checked)" style="margin-top:3px">
-      <span style="font-size:13px;line-height:1.5"><b>Kraammanager</b> &mdash; ziet het rooster van alle kramen, wie er is ingeklokt, en de telefoonnummers.
-        Mag pauzes corrigeren op uren die nog op jouw akkoord wachten en mensen een beoordeling geven.
+      <input type="checkbox" id="mbMgr${id}" ${m.kraammanager?'checked':''} onchange="mbManagerZetten('${veiligJs(m.id)}')" style="margin-top:3px">
+      <span style="font-size:13px;line-height:1.5;flex:1"><b>Kraammanager</b> &mdash; werkt niet zelf mee, maar ziet het rooster van alle kramen met telefoonnummers en kloktijden,
+        en mag op zijn eigen kraam de uitkloktijd en de pauze bijstellen zolang jij de uren nog niet hebt goedgekeurd. Mag ook beoordelen.
         Geen uurloon, geen facturen, niets aan het rooster. Alles wat een manager verandert staat bij Uren &rsaquo; Managerwijzigingen.
+        <span style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <span style="font-size:12.5px;color:var(--muted)">Kraam:</span>
+          <select class="mb-veld" id="mbMgrK${id}" style="width:auto;padding:6px 9px" onchange="mbManagerZetten('${veiligJs(m.id)}')" ${m.kraammanager?'':'disabled'}>
+            <option value="">alle kramen</option>
+            ${(MB_KRAMEN||[]).map(k=>`<option value="${veiligTekst(k.id)}"${m.manager_kraam_id===k.id?' selected':''}>${veiligTekst(k.naam)}</option>`).join('')}</select></span>
         <span id="mbMgrUit${id}" style="display:block;font-size:12px;margin-top:3px"></span></span>
     </label>
 
@@ -4833,15 +4839,18 @@ function mbVoorvalSoort(id){
   const s=document.getElementById('mbVvSoort'+id), b=document.getElementById('mbVvBoete'+id);
   if(s&&b)b.placeholder = (s.value==='niet_gekomen') ? 'vanzelf uit je instellingen' : 'geen';
 }
-async function mbManagerZetten(id,aan){
+async function mbManagerZetten(id){
   const uit=document.getElementById('mbMgrUit'+id);
+  const cb=document.getElementById('mbMgr'+id), sel=document.getElementById('mbMgrK'+id);
+  const aan=!!(cb&&cb.checked);
+  if(sel)sel.disabled=!aan;
   try{
-    const{error}=await sb.rpc('mcr_manager_zetten',{p_id:id,p_aan:!!aan});
+    const{error}=await sb.rpc('mcr_manager_zetten',{p_id:id,p_aan:aan,p_kraam:(aan&&sel&&sel.value)||null});
     if(error)throw error;
-    if(uit)uit.innerHTML=`<span style="color:#0F7A52">${aan?'Is nu kraammanager. Het tabblad Rota verschijnt zodra hij de app opnieuw opent.':'Is geen kraammanager meer.'}</span>`;
+    if(uit)uit.innerHTML=`<span style="color:#0F7A52">${aan?'Is nu kraammanager'+(sel&&sel.value?' van '+veiligTekst(sel.options[sel.selectedIndex].text):' van alle kramen')+'. De app schakelt om zodra hij hem opnieuw opent.':'Is geen kraammanager meer.'}</span>`;
     MB_PERSOON=id; mbMensen();
   }catch(e){
-    const cb=document.getElementById('mbMgr'+id); if(cb)cb.checked=!aan;
+    if(cb)cb.checked=!aan;
     if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`;
   }
 }
@@ -5169,9 +5178,10 @@ const MCR_ICO = {
   invoice:'<path d="M6 2h9l5 5v15H6z"/><path d="M15 2v5h5"/><path d="M9 13h6M9 17h4"/>',
   me:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
   rota:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 10h18M9 4v17M15 4v17"/>',
+  stall:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
 };
 const MCR_TITELS = {shifts:['My shifts',''],clock:['Clock in',''],hours:['My hours',''],
-                    invoice:['Invoice',''],me:['My details',''],rota:['Rota','']};
+                    invoice:['Invoice',''],me:['My details',''],rota:['Rota',''],stall:['Hours','']};
 // Nog niet goedgekeurd? Dan is er één tabblad: je eigen gegevens.
 let MCR_WACHT=false;
 
@@ -5233,17 +5243,21 @@ async function mcrStart(){
   document.getElementById('mcrApp').style.display='flex';
   const av=document.getElementById('mcrAvatar');
   if(av)av.textContent=(CURRENT_NAAM||'').split(' ').filter(Boolean).map(x=>x[0]).slice(0,2).join('').toUpperCase();
-  MCR_MGR=false; MGR_WEEK=null; MGR_DAG=null;
-  if(!MCR_WACHT){ try{ const{data}=await sb.rpc('mgr_ben_ik'); MCR_MGR=(data===true); }catch(e){ MCR_MGR=false; } }
+  MCR_MGR=false; MGR_KRAAM=null; MGR_WEEK=null; MGR_UWEEK=null; MGR_DAG=null;
+  if(!MCR_WACHT){
+    try{ const{data}=await sb.rpc('mgr_ik'); const ik=(data&&data[0])||{};
+         MCR_MGR=(ik.manager===true); MGR_KRAAM=MCR_MGR?{id:ik.kraam_id||null,naam:ik.kraam||null}:null; }
+    catch(e){ MCR_MGR=false; }
+  }
   mcrNav();
-  if(!MCR_WACHT)nfcKan();   // vast opvragen; het inklokscherm heeft het antwoord nodig
-  await mcrGa(MCR_WACHT?'me':'shifts');
+  if(!MCR_WACHT&&!MCR_MGR)nfcKan();   // vast opvragen; het inklokscherm heeft het antwoord nodig
+  await mcrGa(MCR_WACHT?'me':(MCR_MGR?'rota':'shifts'));
 }
 
 function mcrNav(){
   const nav=document.getElementById('mcrNav'); if(!nav)return;
   const items=MCR_WACHT?[['me','My details']]
-    :MCR_MGR?[['shifts','Shifts'],['rota','Rota'],['clock','Clock in'],['hours','Hours'],['invoice','Invoice'],['me','Me']]
+    :MCR_MGR?[['rota','Rota'],['stall','Hours'],['me','Me']]
     :[['shifts','Shifts'],['clock','Clock in'],['hours','Hours'],['invoice','Invoice'],['me','Me']];
   nav.innerHTML=items.map(([k,l])=>{
     const aan=(MCR_TAB===k);
@@ -5257,7 +5271,9 @@ async function mcrGa(tab){
   // Er is maar één scherm zolang het account niet is vrijgegeven. Tikt iemand
   // toch ergens anders op, dan komt hij gewoon weer bij zijn eigen gegevens uit.
   if(MCR_WACHT && tab!=='me')tab='me';
-  if(tab==='rota' && !MCR_MGR)tab='shifts';
+  if((tab==='rota'||tab==='stall') && !MCR_MGR)tab='shifts';
+  // Een manager werkt niet zelf: geen inklokken, eigen uren of facturen.
+  if(MCR_MGR && ['shifts','open','avail','clock','hours','invoice'].includes(tab))tab='rota';
   if(tab==='rota' && MCR_TAB!=='rota')MGR_DAG=null;   // via de balk kom je altijd bij de week uit
   MCR_TAB=tab; mcrNav();
   if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
@@ -5276,6 +5292,7 @@ async function mcrGa(tab){
     if(tab==='invoice') return await mcrFacturen();
     if(tab==='me')      return await mcrProfiel();
     if(tab==='rota')    return await mcrRota();
+    if(tab==='stall')   return await mcrStallUren();
   }catch(e){
     console.error(e);
     m.innerHTML=mcrLeeg('Could not load this screen. Check your connection and try again.');
@@ -6030,35 +6047,96 @@ async function mcrRotaDag(ds){
         const status=!m.ingeklokt_op?'<span style="color:#8A8984">not clocked in</span>'
           :!m.uitgeklokt_op?`<span style="color:#0F7A52">in since ${veiligTekst(mgrKlok(m.ingeklokt_op))}</span>`
           :`${veiligTekst(mgrKlok(m.ingeklokt_op))} → ${veiligTekst(mgrKlok(m.uitgeklokt_op))}`;
-        const magPauze=m.uren_id&&m.uitgeklokt_op&&m.uren_status==='wacht'&&m.gebruiker_id!==(CURRENT_USER&&CURRENT_USER.id);
         uit+=`<div style="padding:9px 0;border-top:1px solid #EFEDE7">
           <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
             <span style="font-size:14px;font-weight:600">${veiligTekst(m.naam)}${m.beoordeling?` <span class="mcr-chip" style="background:#F3F2EE;color:#6B6A66">${veiligTekst(mgrOordeel(m.beoordeling))}</span>`:''}</span>
             <span style="font-size:12.5px">${mgrTel(m.telefoon)}</span></div>
           <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${status}${m.uitgeklokt_op?` &middot; ${m.pauze||0} min break`:''}${m.uren_status==='goedgekeurd'?' &middot; approved by Bram':''}</div>
           ${m.pauze_door?`<div style="font-size:11.5px;color:#8A8984">Break set by ${veiligTekst(m.pauze_door)}, ${veiligTekst(mgrWanneer(m.pauze_op))}</div>`:''}
-          ${magPauze?`<div style="display:flex;gap:6px;margin-top:7px;align-items:center;flex-wrap:wrap">
-            <input class="mcr-veld" type="number" min="0" max="240" step="5" inputmode="numeric" id="mgrP${uid}" value="${m.pauze||0}" style="width:76px;padding:8px 10px;font-size:14px">
-            <span style="font-size:12.5px;color:#6B6A66">min break</span>
-            <input class="mcr-veld" id="mgrR${uid}" placeholder="why? (optional)" maxlength="80" style="flex:1 1 120px;padding:8px 10px;font-size:13px">
-            <button class="mcr-knop" style="width:auto;padding:9px 14px;font-size:13px" onclick="mgrPauze('${veiligJs(m.uren_id)}')">Save</button></div>
-            <div id="mgrU${uid}" style="font-size:12px;margin-top:4px"></div>`:''}
         </div>`;
       });
     });
     uit+='</div>';
   });
-  uit+=`<div class="mcr-kaart"><div style="font-size:12.5px;color:#6B6A66;line-height:1.6">You can set a break once someone has clocked out and before Bram has approved the hours. Every change is recorded with your name.</div></div>`;
+  uit+=`<div class="mcr-kaart"><div style="font-size:12.5px;color:#6B6A66;line-height:1.6">Finish times and breaks are changed under <b>Hours</b>.</div></div>`;
   document.getElementById('mcrMain').innerHTML=uit;
 }
-async function mgrPauze(id){
-  const p=document.getElementById('mgrP'+id), r=document.getElementById('mgrR'+id), u=document.getElementById('mgrU'+id);
+
+// ─── Hours: de uren van de eigen kraam ────────────────────────────
+// Een manager ziet de klokkingen van zijn kraam (of van alle kramen als Bram
+// geen kraam heeft gekozen) en mag de uitkloktijd en de pauze bijstellen
+// zolang Bram de uren nog niet heeft goedgekeurd. Vergeten uit te klokken is
+// het gewone geval: dan vult hij de eindtijd in.
+let MGR_KRAAM=null, MGR_UWEEK=null;
+async function mcrStallUren(){
+  if(!MGR_UWEEK){
+    const{data:pd}=await sb.rpc('mcr_peildatum');
+    MGR_UWEEK=mgrMaandag(pd?new Date(String(pd)+'T00:00:00'):new Date());
+  }
+  const tot=new Date(MGR_UWEEK); tot.setDate(tot.getDate()+6);
+  const{data,error}=await sb.rpc('mgr_uren',{p_van:fmt(MGR_UWEEK),p_tot:fmt(tot)});
+  if(error)throw error;
+  document.getElementById('mcrTitel').textContent=MGR_KRAAM&&MGR_KRAAM.naam?'Hours · '+MGR_KRAAM.naam:'Hours · all stalls';
+  document.getElementById('mcrSub').textContent=
+    MGR_UWEEK.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+tot.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+  const rijen=data||[];
+  let uit=`<div style="display:flex;gap:8px;margin-bottom:12px">
+    <button class="mcr-knop licht" style="flex:1" onclick="mgrUWeek(-7)">&lsaquo; Previous</button>
+    <button class="mcr-knop licht" style="flex:1" onclick="mgrUWeek(7)">Next &rsaquo;</button></div>`;
+  if(!rijen.length)uit+=mcrLeeg('Nobody clocked in at your stall this week.');
+  const dagen={};
+  rijen.forEach(r=>(dagen[r.datum]=dagen[r.datum]||[]).push(r));
+  Object.keys(dagen).sort().reverse().forEach(ds=>{
+    const d=new Date(ds+'T00:00:00');
+    uit+=`<div class="mcr-kaart"><div class="mcr-kop">${veiligTekst(d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}</div>`;
+    dagen[ds].forEach(r=>{
+      const id=veiligTekst(r.uren_id);
+      const open=!r.uitgeklokt_op;
+      const mag=(r.status==='wacht'||r.status==='lopend')&&r.gebruiker_id!==(CURRENT_USER&&CURRENT_USER.id);
+      const chip=r.status==='goedgekeurd'?['Approved','#0F7A52','#E9F7F0']:r.status==='afgewezen'?['Queried','#B4472B','#FBEDE9']
+                :open?['Still clocked in','#B45309','#FEF6E7']:['Waiting for Bram','#6B6A66','#F3F2EE'];
+      uit+=`<div style="padding:10px 0;border-top:1px solid #EFEDE7">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:14px;font-weight:600">${veiligTekst(r.naam)}${!MGR_KRAAM||!MGR_KRAAM.id?` <span style="font-size:12px;color:#6B6A66;font-weight:500">&middot; ${veiligTekst(r.kraam)}</span>`:''}</span>
+          <span class="mcr-chip" style="background:${chip[2]};color:${chip[1]}">${chip[0]}</span></div>
+        <div style="font-size:12.5px;color:#6B6A66;margin-top:3px;font-variant-numeric:tabular-nums">
+          ${veiligTekst(mgrKlok(r.ingeklokt_op))} &rarr; ${open?'&hellip;':veiligTekst(mgrKlok(r.uitgeklokt_op))}
+          ${open?'':` &middot; ${r.pauze||0} min break &middot; <b style="color:#1A1917">${Number(r.uren||0).toFixed(2)} h</b>`}
+          ${r.ingeroosterd?` &middot; rota ${veiligTekst(mcrTijd(r.ingeroosterd))}`:''}</div>
+        ${r.notitie_pers?`<div style="font-size:12px;color:#6B6A66;margin-top:2px">&ldquo;${veiligTekst(r.notitie_pers)}&rdquo;</div>`:''}
+        ${r.uit_door?`<div style="font-size:11.5px;color:#8A8984;margin-top:2px">Finish time set by ${veiligTekst(r.uit_door)}, ${veiligTekst(mgrWanneer(r.uit_op))}</div>`:''}
+        ${r.pauze_door?`<div style="font-size:11.5px;color:#8A8984">Break set by ${veiligTekst(r.pauze_door)}, ${veiligTekst(mgrWanneer(r.pauze_op))}</div>`:''}
+        ${mag?`<div style="display:flex;gap:6px;margin-top:8px;align-items:flex-end;flex-wrap:wrap">
+          <div><label class="mcr-label">Finished at</label>
+            <input class="mcr-veld" type="time" id="mgrT${id}" value="${open?'':veiligTekst(mgrKlok(r.uitgeklokt_op))}" style="width:128px;padding:8px 10px;font-size:14px"></div>
+          <div><label class="mcr-label">Break (min)</label>
+            <input class="mcr-veld" type="number" min="0" max="240" step="5" inputmode="numeric" id="mgrP${id}" value="${r.pauze||0}" style="width:76px;padding:8px 10px;font-size:14px"></div>
+          <div style="flex:1 1 130px"><label class="mcr-label">Why? (optional)</label>
+            <input class="mcr-veld" id="mgrR${id}" maxlength="80" style="padding:8px 10px;font-size:13px"></div>
+          <button class="mcr-knop" style="width:auto;padding:9px 14px;font-size:13px" onclick="mgrUur('${veiligJs(r.uren_id)}','${veiligJs(r.datum)}')">Save</button></div>
+          <div id="mgrU${id}" style="font-size:12px;margin-top:4px"></div>`:''}
+      </div>`;
+    });
+    uit+='</div>';
+  });
+  uit+=`<div class="mcr-kaart"><div style="font-size:12.5px;color:#6B6A66;line-height:1.6">You can change the finish time and the break until Bram approves the hours. Every change is recorded with your name and shown to Bram.</div></div>`;
+  document.getElementById('mcrMain').innerHTML=uit;
+}
+function mgrUWeek(n){ MGR_UWEEK.setDate(MGR_UWEEK.getDate()+n); MGR_UWEEK=new Date(MGR_UWEEK); mcrGa('stall'); }
+async function mgrUur(id,datum){
+  const t=document.getElementById('mgrT'+id), p=document.getElementById('mgrP'+id), r=document.getElementById('mgrR'+id), u=document.getElementById('mgrU'+id);
   const min=parseInt(p&&p.value,10);
   if(isNaN(min)||min<0){ if(u)u.innerHTML='<span style="color:#B4472B">Enter the break in minutes.</span>'; return; }
+  let uitTijd=null;
+  if(t&&t.value){
+    // De tijd is lokale tijd op de dag van de dienst; na middernacht valt hij op de dag erna.
+    const d=new Date(datum+'T'+t.value+':00');
+    uitTijd=d.toISOString();
+  }
   try{
-    const{error}=await sb.rpc('mgr_pauze_zetten',{p_uren:id,p_minuten:min,p_reden:(r&&r.value.trim())||null});
+    const{error}=await sb.rpc('mgr_uur_zetten',{p_uren:id,p_uit:uitTijd,p_pauze:min,p_reden:(r&&r.value.trim())||null});
     if(error)throw error;
-    await mcrRotaDag(MGR_DAG);
+    await mcrStallUren();
   }catch(e){ if(u)u.innerHTML=`<span style="color:#B4472B">${veiligTekst(mcrFout(e))}</span>`; }
 }
 
