@@ -4758,7 +4758,8 @@ function mbPersoonHtml(m, vv){
       <input type="checkbox" id="mbMgr${id}" ${m.kraammanager?'checked':''} onchange="mbManagerZetten('${veiligJs(m.id)}')" style="margin-top:3px">
       <span style="font-size:13px;line-height:1.5;flex:1"><b>Kraammanager</b> &mdash; werkt niet zelf mee, maar ziet het rooster van alle kramen met telefoonnummers en kloktijden,
         en mag op zijn eigen kraam de uitkloktijd en de pauze bijstellen zolang jij de uren nog niet hebt goedgekeurd. Mag ook beoordelen.
-        Geen uurloon, geen facturen, niets aan het rooster. Alles wat een manager verandert staat bij Uren &rsaquo; Managerwijzigingen.
+        Geen uurloon, geen facturen, niets aan het rooster. Hij staat niet in de kandidatenlijst en kan niet worden ingedeeld;
+        staat hij al op diensten, dan gaat hij daar vanaf. Alles wat een manager verandert staat bij Uren &rsaquo; Managerwijzigingen.
         <span style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">
           <span style="font-size:12.5px;color:var(--muted)">Kraam:</span>
           <select class="mb-veld" id="mbMgrK${id}" style="width:auto;padding:6px 9px" onchange="mbManagerZetten('${veiligJs(m.id)}')" ${m.kraammanager?'':'disabled'}>
@@ -4845,9 +4846,11 @@ async function mbManagerZetten(id){
   const aan=!!(cb&&cb.checked);
   if(sel)sel.disabled=!aan;
   try{
-    const{error}=await sb.rpc('mcr_manager_zetten',{p_id:id,p_aan:aan,p_kraam:(aan&&sel&&sel.value)||null});
+    const{data,error}=await sb.rpc('mcr_manager_zetten',{p_id:id,p_aan:aan,p_kraam:(aan&&sel&&sel.value)||null});
     if(error)throw error;
-    if(uit)uit.innerHTML=`<span style="color:#0F7A52">${aan?'Is nu kraammanager'+(sel&&sel.value?' van '+veiligTekst(sel.options[sel.selectedIndex].text):' van alle kramen')+'. De app schakelt om zodra hij hem opnieuw opent.':'Is geen kraammanager meer.'}</span>`;
+    const weg=Number(data)||0;
+    if(uit)uit.innerHTML=`<span style="color:#0F7A52">${aan?'Is nu kraammanager'+(sel&&sel.value?' van '+veiligTekst(sel.options[sel.selectedIndex].text):' van alle kramen')+'. De app schakelt om zodra hij hem opnieuw opent.'
+      +(weg?` Van ${weg} ${weg===1?'dienst':'diensten'} vanaf vandaag gehaald: een manager werkt niet zelf mee.`:''):'Is geen kraammanager meer.'}</span>`;
     MB_PERSOON=id; mbMensen();
   }catch(e){
     if(cb)cb.checked=!aan;
