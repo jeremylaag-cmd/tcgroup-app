@@ -10,3 +10,9 @@ tcgroup-app.bundle
 ios/App/.git-oud-backup/
 /assets/
 /*.sh
+*.log
+*-log.txt
+bouw-log.txt
+bouwlog.txt
+herbouw.txt
+Claude outputs/
