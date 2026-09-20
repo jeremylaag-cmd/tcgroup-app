@@ -4157,7 +4157,14 @@ function mbFcKoppen(rij){
     const t=String(c||'').trim().toLowerCase();
     return woorden.some(w=>t===w||t.indexOf(w)===0);
   });
-  return {datum:zoek('datum'), kraam:zoek('locatie','kraam','stand'), bedrag:zoek('forecast')};
+  return {datum:zoek('datum'), kraam:zoek('locatie','kraam','stand'), bedrag:zoek('forecast'),
+          van:zoek('open van'), tot:zoek('open tot'), opm:zoek('opmerking')};
+}
+function mbFcTijd(v){
+  if(v instanceof Date && !isNaN(v))return String(v.getHours()).padStart(2,'0')+':'+String(v.getMinutes()).padStart(2,'0');
+  if(typeof v==='number' && v>=0 && v<1){ const m=Math.round(v*1440); return String(Math.floor(m/60)%24).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+  const m=String(v||'').trim().match(/^(\d{1,2}):(\d{2})/);
+  return m?m[1].padStart(2,'0')+':'+m[2]:'';
 }
 function mbFcRijen(wb){
   const namen=wb.SheetNames.slice().sort((a,b)=>
@@ -4171,8 +4178,15 @@ function mbFcRijen(wb){
       for(let j=i+1;j<vel.length;j++){
         const r=vel[j]; if(!r)continue;
         const ds=mbFcIso(r[k.datum]); const kr=String(r[k.kraam]||'').trim(); const bd=r[k.bedrag];
-        if(!ds||!kr||bd===''||bd==null)continue;
-        rijen.push({kraam:kr,datum:ds,forecast:String(bd)});
+        if(!ds||!kr)continue;
+        const rij={kraam:kr,datum:ds,forecast:(bd===''||bd==null)?'':String(bd)};
+        if(k.van>=0&&k.tot>=0){
+          // Openingstijden staan erbij: leeg = dicht, anders de tijden van die dag.
+          rij.open_van=mbFcTijd(r[k.van]); rij.open_tot=mbFcTijd(r[k.tot]);
+          if(!rij.open_van&&!rij.open_tot&&k.opm>=0&&r[k.opm])rij.reden=String(r[k.opm]).slice(0,80);
+        }
+        if(rij.forecast===''&&!('open_van' in rij))continue;
+        rijen.push(rij);
       }
       if(rijen.length)return{blad:naam,rijen:rijen};
     }
@@ -4198,6 +4212,8 @@ async function mbForecastLezen(file){
     uit.innerHTML=`<div style="font-size:13px;line-height:1.7">
       <div><b>${p.gezet}</b> dagen klaar om te zetten &mdash; uit blad &ldquo;${veiligTekst(gevonden.blad)}&rdquo;</div>
       ${Object.keys(per).sort().map(k=>`<div style="color:var(--muted)">${veiligTekst(k)}: ${per[k]} ${per[k]===1?'regel':'regels'}</div>`).join('')}
+      ${p.afwijkend?`<div style="color:var(--muted)">${p.afwijkend} dagen met andere openingstijden dan normaal</div>`:''}
+      ${p.dicht_dagen?`<div style="color:var(--muted)">${p.dicht_dagen} ${p.dicht_dagen===1?'dag':'dagen'} dicht</div>`:''}
       ${p.buiten_seizoen?`<div style="color:#B45309">${p.buiten_seizoen} dagen vallen buiten het seizoen van hun kraam en worden overgeslagen.</div>`:''}
       ${p.onbekende_kramen?`<div style="color:#B4472B">Onbekende kramen: ${veiligTekst(p.onbekende_kramen)}</div>`:''}
       ${p.overgeslagen?`<div style="color:var(--muted)">${p.overgeslagen} regels overgeslagen.</div>`:''}
@@ -4214,7 +4230,10 @@ async function mbForecastZetten(){
     if(error)throw error;
     const p=(data&&data[0])||{gezet:0};
     MB_FORECAST=null;
-    uit.innerHTML=`<div style="font-size:13px;color:#0F7A52"><b>${p.gezet}</b> dagen forecast staan in het dagrapport.</div>`;
+    uit.innerHTML=`<div style="font-size:13px;color:#0F7A52"><b>${p.gezet}</b> dagen forecast staan in het dagrapport.</div>
+      ${(p.afwijkend||p.dicht_dagen)?`<div style="font-size:12.5px;color:var(--muted);margin-top:6px;line-height:1.6">De afwijkende openingstijden staan bij
+        <button class="mb-linktekst" onclick="MB_INST='kramen';mbNaar('instellingen')">Instellingen &rsaquo; Kramen</button>.
+        Diensten die er al stonden pas je daar aan met &ldquo;diensten gelijktrekken&rdquo;.</div>`:''}`;
   }catch(e){ uit.innerHTML=`<div style="font-size:13px;color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
 }
 
@@ -4861,7 +4880,8 @@ async function mbKramen(){
       <div style="font-size:12px;color:var(--muted);margin-top:7px">${veiligTekst(r.adres||'')}</div></div>`;
   });
   uit+=`<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-    Shifts worden alleen aangemaakt binnen het seizoen van die kraam. Uitzonderingen &mdash; eerste kerstdag dicht, oudjaar korter &mdash; zet je per dag bij Shifts.</div></div>`;
+    Shifts worden alleen aangemaakt binnen het seizoen van die kraam. Een dag die anders is &mdash; eerste kerstdag dicht, na de kerst korter open &mdash; zet je hieronder.</div></div>`;
+  uit+=await mbUitzonderingenHtml(kramen);
   uit+=`<div class="mb-kaart" style="background:var(--bg)">
     <div style="font-size:13px;color:var(--muted);line-height:1.6">
       Diensten maak je bij <button class="mb-linktekst" onclick="mbNaar('shifts')">Shifts</button>.
@@ -4869,6 +4889,113 @@ async function mbKramen(){
       met een start- en een eindtijd.</div></div>`;
   mbZet(uit);
 }
+// ── Afwijkende dagen: dicht, of andere openingstijden ─────────────
+let MB_UITZ_VRAAG=null;   // {kraam,datum} waarvoor "diensten gelijktrekken" openstaat
+async function mbUitzonderingenHtml(kramen){
+  const{data,error}=await sb.rpc('mcr_uitzonderingen',{p_kraam:null});
+  if(error)throw error;
+  const rijen=data||[];
+  const totaalAfw=rijen.reduce((n,r)=>n+(r.diensten_afwijkend||0),0);
+  let uit=`<div class="mb-kaart"><div class="mb-kop">Afwijkende dagen</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:10px">
+      Een dag die dicht is, of andere openingstijden heeft dan normaal. Nieuwe diensten op zo'n dag
+      krijgen vanzelf de juiste eindtijd. Diensten die er al stonden pas je aan met &ldquo;diensten gelijktrekken&rdquo;.</div>
+    <div class="mb-veldrij">
+      <div style="flex:1 1 150px"><label class="mb-lab">Kraam</label>
+        <select class="mb-veld" id="mbUzK">${kramen.map(k=>`<option value="${veiligTekst(k.id)}">${veiligTekst(k.naam)}</option>`).join('')}</select></div>
+      <div style="flex:1 1 140px"><label class="mb-lab">Datum</label><input type="date" class="mb-veld" id="mbUzD"></div>
+      <div style="flex:0 0 auto;align-self:flex-end;padding-bottom:9px"><label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer">
+        <input type="checkbox" id="mbUzDicht" onchange="mbUzDichtWissel()"> Dicht</label></div>
+      <div style="flex:1 1 100px"><label class="mb-lab">Open van</label><input type="time" class="mb-veld" id="mbUzVan"></div>
+      <div style="flex:1 1 100px"><label class="mb-lab">Open tot</label><input type="time" class="mb-veld" id="mbUzTot"></div>
+      <div style="flex:2 1 160px"><label class="mb-lab">Reden (mag leeg)</label><input class="mb-veld" id="mbUzReden" maxlength="80" placeholder="bv. eerste kerstdag"></div>
+      <div style="align-self:flex-end"><button class="mb-mini zwart" onclick="mbUitzOpslaan()">Opslaan</button></div>
+    </div>
+    <div id="mbUzUit" style="font-size:12.5px;margin-top:6px"></div>`;
+  if(!rijen.length){
+    uit+=`<div style="font-size:13px;color:var(--muted);margin-top:10px">Nog geen afwijkende dagen: elke kraam is open volgens zijn gewone tijden.</div>`;
+  }else{
+    uit+=`<div style="margin-top:12px;border-top:1px solid var(--border)">`;
+    rijen.forEach(r=>{
+      const sleutel=r.kraam_id+'|'+r.datum;
+      const open=MB_UITZ_VRAAG&&MB_UITZ_VRAAG.sleutel===sleutel?MB_UITZ_VRAAG:null;
+      uit+=`<div class="mb-persoon" style="flex-wrap:wrap">
+        <div style="flex:1 1 220px">
+          <div style="font-size:13.5px;font-weight:600">${veiligTekst(mbLang(r.datum))} &middot; ${veiligTekst(r.kraam)}</div>
+          <div style="font-size:12px;color:${r.dicht?'#B4472B':'var(--muted)'}">${r.dicht?'Dicht':veiligTekst(mbUur(r.open_van))+' &ndash; '+veiligTekst(mbUur(r.open_tot))}${r.reden?' &middot; '+veiligTekst(r.reden):''}</div>
+          ${r.diensten_afwijkend?`<div style="font-size:12px;color:#B45309;margin-top:2px">${r.diensten_afwijkend} ${r.diensten_afwijkend===1?'dienst loopt':'diensten lopen'} nog volgens de oude tijden</div>`:''}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${r.diensten_afwijkend?`<button class="mb-mini" onclick="mbGelijktrekken('${veiligJs(r.kraam_id)}','${veiligJs(r.datum)}')">Diensten gelijktrekken</button>`:''}
+          <button class="mb-mini" onclick="mbUitzWeg('${veiligJs(r.kraam_id)}','${veiligJs(r.datum)}')">Gewone tijden</button>
+        </div>
+        ${open?`<div style="flex-basis:100%;font-size:12.5px;padding:8px 10px;margin-top:4px;background:var(--bg);border-radius:8px">
+          ${open.tekst}
+          ${open.iets?`<button class="mb-mini zwart" style="margin-left:8px" onclick="mbGelijktrekkenDoen('${veiligJs(r.kraam_id)}','${veiligJs(r.datum)}')">Doen</button>`:''}
+          <button class="mb-mini" style="margin-left:4px" onclick="MB_UITZ_VRAAG=null;mbInstGa('kramen')">Laat maar</button></div>`:''}
+      </div>`;
+    });
+    uit+='</div>';
+    if(totaalAfw>1)uit+=`<div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <button class="mb-mini" onclick="mbGelijktrekken(null,null)">Alle diensten gelijktrekken</button>
+      <span style="font-size:12px;color:var(--muted)">Alleen diensten waar nog niemand op staat; de rest wordt overgeslagen en geteld.</span></div>`;
+    if(MB_UITZ_VRAAG&&MB_UITZ_VRAAG.sleutel==='*'){
+      uit+=`<div style="font-size:12.5px;padding:8px 10px;margin-top:8px;background:var(--bg);border-radius:8px">${MB_UITZ_VRAAG.tekst}
+        ${MB_UITZ_VRAAG.iets?`<button class="mb-mini zwart" style="margin-left:8px" onclick="mbGelijktrekkenDoen(null,null)">Doen</button>`:''}
+        <button class="mb-mini" style="margin-left:4px" onclick="MB_UITZ_VRAAG=null;mbInstGa('kramen')">Laat maar</button></div>`;
+    }
+  }
+  uit+='</div>';
+  return uit;
+}
+function mbUzDichtWissel(){
+  const d=document.getElementById('mbUzDicht');
+  ['mbUzVan','mbUzTot'].forEach(id=>{const e=document.getElementById(id); if(e){e.disabled=!!(d&&d.checked); if(e.disabled)e.value='';}});
+}
+async function mbUitzOpslaan(){
+  const v=id=>{const e=document.getElementById(id);return e?e.value.trim():'';};
+  const uit=document.getElementById('mbUzUit');
+  const dicht=!!(document.getElementById('mbUzDicht')||{}).checked;
+  if(!v('mbUzD')){ if(uit)uit.innerHTML='<span style="color:#B4472B">Kies een datum.</span>'; return; }
+  if(!dicht&&!v('mbUzVan')&&!v('mbUzTot')){ if(uit)uit.innerHTML='<span style="color:#B4472B">Vink &ldquo;dicht&rdquo; aan, of vul de openingstijden van die dag in.</span>'; return; }
+  try{
+    const{error}=await sb.rpc('mcr_uitzondering',{p_kraam:v('mbUzK'),p_datum:v('mbUzD'),p_dicht:dicht,
+      p_van:dicht?null:(v('mbUzVan')||null),p_tot:dicht?null:(v('mbUzTot')||null),p_reden:v('mbUzReden')||null});
+    if(error)throw error;
+    MB_UITZ_VRAAG=null; mbInstGa('kramen');
+  }catch(e){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
+}
+async function mbUitzWeg(kraam,datum){
+  try{
+    const{error}=await sb.rpc('mcr_uitzondering',{p_kraam:kraam,p_datum:datum,p_dicht:false,p_van:null,p_tot:null,p_reden:null});
+    if(error)throw error;
+    MB_UITZ_VRAAG=null; mbInstGa('kramen');
+  }catch(e){ alert(mbFout(e)); }
+}
+function mbGelijkTekst(p){
+  const delen=[];
+  if(p.ingekort)delen.push(`${p.ingekort} ${p.ingekort===1?'dienst krijgt':'diensten krijgen'} een vroegere eindtijd`);
+  if(p.verwijderd)delen.push(`${p.verwijderd} ${p.verwijderd===1?'dienst op een dichte dag gaat':'diensten op dichte dagen gaan'} weg`);
+  if(p.overgeslagen)delen.push(`${p.overgeslagen} ${p.overgeslagen===1?'dienst blijft':'diensten blijven'} staan omdat er al iemand op staat`);
+  return delen.length?delen.join(', ')+'.':'Er hoeft niets te veranderen.';
+}
+async function mbGelijktrekken(kraam,datum){
+  try{
+    const{data,error}=await sb.rpc('mcr_diensten_gelijktrekken',{p_kraam:kraam,p_datum:datum,p_alleen_kijken:true});
+    if(error)throw error;
+    const p=(data&&data[0])||{};
+    MB_UITZ_VRAAG={sleutel:kraam?kraam+'|'+datum:'*', tekst:veiligTekst(mbGelijkTekst(p)), iets:!!(p.ingekort||p.verwijderd)};
+    mbInstGa('kramen');
+  }catch(e){ alert(mbFout(e)); }
+}
+async function mbGelijktrekkenDoen(kraam,datum){
+  try{
+    const{error}=await sb.rpc('mcr_diensten_gelijktrekken',{p_kraam:kraam,p_datum:datum,p_alleen_kijken:false});
+    if(error)throw error;
+    MB_UITZ_VRAAG=null; MB_WEEK=null; mbInstGa('kramen');
+  }catch(e){ alert(mbFout(e)); }
+}
+
 async function mbKraamOpslaan(id){
   const v=x=>{const e=document.getElementById(x+id);return e?e.value:null;};
   try{
