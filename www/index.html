@@ -2925,6 +2925,7 @@ function mbFout(e){ const m=(e&&(e.message||e.details))?String(e.message||e.deta
 function loadMcrBeheer(){
   const t=document.getElementById('mbTabs');
   const items=[['vandaag','Vandaag'],['kramen','Kramen & seizoen'],['patronen','Dagpatronen'],
+               ['dagrapport','Dagrapport'],['inlezen','Pinomzet inlezen'],['cijfers','Cijfers'],
                ['rondes','Betaalrondes'],['instellingen','Instellingen']];
   t.innerHTML=items.map(([k,l])=>`<button class="${MB_TAB===k?'aan':''}" onclick="mbGa('${k}')">${l}</button>`).join('');
   mbGa(MB_TAB);
@@ -2936,7 +2937,8 @@ function mbGa(tab){
   });
   const el=document.getElementById('mbInhoud');
   el.innerHTML='<div class="mb-kaart" style="text-align:center;color:var(--muted)">Bezig&hellip;</div>';
-  const f={vandaag:mbVandaag,kramen:mbKramen,patronen:mbPatronen,rondes:mbRondes,instellingen:mbInstellingen}[tab];
+  const f={vandaag:mbVandaag,kramen:mbKramen,patronen:mbPatronen,dagrapport:mbDagrapport,
+           inlezen:mbInlezen,cijfers:mbCijfers,rondes:mbRondes,instellingen:mbInstellingen}[tab];
   if(f)f().catch(e=>{console.error(e);el.innerHTML=`<div class="mb-kaart">Dit scherm kon niet geladen worden.<br><span style="color:var(--muted);font-size:12.5px">${veiligTekst(mbFout(e))}</span></div>`;});
 }
 
@@ -3235,6 +3237,371 @@ async function mbInstellingenOpslaan(){
     MCR_INST=null;
     const ok=document.getElementById('mbInstOk'); if(ok){ok.style.display='';setTimeout(()=>ok.style.display='none',2500);}
   }catch(e){ alert(mbFout(e)); }
+}
+
+
+// ─── Dagrapport ────────────────────────────────────────────────────
+let MB_DAG_KRAAM=null, MB_DAG_VAN=null, MB_DAG_TOT=null;
+async function mbDagrapport(){
+  const{data:kramen}=await sb.rpc('mcr_kramen');
+  if(!kramen||!kramen.length){ document.getElementById('mbInhoud').innerHTML='<div class="mb-kaart">Er staan nog geen kramen.</div>'; return; }
+  if(!MB_DAG_KRAAM||!kramen.some(k=>k.id===MB_DAG_KRAAM))MB_DAG_KRAAM=kramen[0].id;
+  const k=kramen.find(x=>x.id===MB_DAG_KRAAM);
+  if(!MB_DAG_VAN)MB_DAG_VAN=k.seizoen_start;
+  if(!MB_DAG_TOT){
+    const d=new Date(MB_DAG_VAN+'T00:00:00'); d.setDate(d.getDate()+13);
+    MB_DAG_TOT=fmt(d)>k.seizoen_eind?k.seizoen_eind:fmt(d);
+  }
+  const{data,error}=await sb.rpc('mcr_dagrapport',{p_van:MB_DAG_VAN,p_tot:MB_DAG_TOT,p_kraam:MB_DAG_KRAAM});
+  if(error)throw error;
+
+  let uit='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">';
+  kramen.forEach(x=>uit+=`<button class="mb-mini${x.id===MB_DAG_KRAAM?' zwart':''}" onclick="MB_DAG_KRAAM='${veiligJs(x.id)}';MB_DAG_VAN=null;MB_DAG_TOT=null;mbGa('dagrapport')">${veiligTekst(x.naam)}</button>`);
+  uit+=`</div><div class="mb-kaart" style="padding:12px 16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div><label style="display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px">Van</label>
+      <input type="date" class="mb-getal" style="width:150px" id="mbDagVan" value="${veiligTekst(MB_DAG_VAN)}"></div>
+    <div><label style="display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px">Tot en met</label>
+      <input type="date" class="mb-getal" style="width:150px" id="mbDagTot" value="${veiligTekst(MB_DAG_TOT)}"></div>
+    <button class="mb-mini" onclick="MB_DAG_VAN=document.getElementById('mbDagVan').value;MB_DAG_TOT=document.getElementById('mbDagTot').value;mbGa('dagrapport')">Tonen</button>
+  </div>`;
+
+  (data||[]).forEach(r=>{
+    const id=veiligTekst(r.datum);
+    uit+=`<div class="mb-kaart" style="padding:13px 16px${r.dicht?';opacity:.55':''}">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div style="font-size:14.5px;font-weight:700">${veiligTekst(mbDatum(r.datum))} <span style="font-weight:500;color:var(--muted)">${veiligTekst(r.weekdag)}</span></div>
+        <div style="font-size:12.5px;color:var(--muted)">
+          ${r.dicht?'dicht':`${veiligTekst(String(r.open_van).slice(0,5))}&ndash;${veiligTekst(String(r.open_tot).slice(0,5))} &middot; ${veiligTekst(r.uren_open)} uur open`}
+        </div>
+      </div>
+      ${r.dicht?'':`
+      <div style="display:flex;gap:18px;flex-wrap:wrap;margin:11px 0 12px">
+        ${[['Pin',mbPond(r.omzet_pin)],['Totaal',mbPond(r.omzet_totaal)],['Bonnen',r.transacties||0],
+           ['Gem. bon',r.gem_bon?mbPond(r.gem_bon):'&mdash;'],['Porties',r.porties!=null?r.porties:'&mdash;'],
+           ['Toppings',r.toppings!=null?r.toppings:'&mdash;'],['Uren',r.personeelsuren],
+           ['Bezetting',r.gem_bezetting!=null?r.gem_bezetting:'&mdash;'],
+           ['Per uur',r.omzet_per_uur?mbPond(r.omzet_per_uur):'&mdash;'],
+           ['Loon %',r.loon_pct!=null?r.loon_pct+'%':'&mdash;']
+          ].map(([l,v])=>`<div><div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">${l}</div>
+             <div style="font-size:15px;font-weight:600;font-variant-numeric:tabular-nums">${v}</div></div>`).join('')}
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        ${[['Forecast','mbF','number',r.forecast],['Contant','mbC','number',r.omzet_contant],
+           ['Weer','mbW','text',r.weer],['Temp','mbT','number',r.temperatuur],
+           ['Wachtrij','mbQ','text',r.wachtrij_piek],['Incident','mbI','text',r.incident],
+           ['Event','mbE','text',r.event_stad],['Voorraad op','mbV','text',r.voorraad_op]
+          ].map(([l,pre,ty,val])=>`<div><label style="display:block;font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:3px">${l}</label>
+            <input class="mb-getal" style="width:${ty==='number'?'86px':'112px'};text-align:left" type="${ty}" id="${pre}${id}" value="${val!=null?veiligTekst(val):''}"></div>`).join('')}
+        <div style="flex:1 1 180px"><label style="display:block;font-size:10.5px;font-weight:600;color:var(--muted);margin-bottom:3px">Opmerking</label>
+          <input class="mb-getal" style="width:100%;text-align:left" id="mbO${id}" value="${r.opmerking?veiligTekst(r.opmerking):''}"></div>
+        <button class="mb-mini zwart" onclick="mbDagOpslaan('${veiligJs(MB_DAG_KRAAM)}','${veiligJs(r.datum)}')">Opslaan</button>
+      </div>`}
+    </div>`;
+  });
+  document.getElementById('mbInhoud').innerHTML=uit;
+}
+async function mbDagOpslaan(kraam,datum){
+  const g=pre=>{const e=document.getElementById(pre+datum);return e?e.value:null;};
+  const n=pre=>{const v=g(pre);return v===''||v==null?null:Number(v);};
+  try{
+    const{error}=await sb.rpc('mcr_dagrapport_opslaan',{
+      p_kraam:kraam,p_datum:datum,p_forecast:n('mbF'),p_contant:n('mbC'),
+      p_weer:g('mbW'),p_temp:n('mbT'),p_neerslag:null,p_wachtrij:g('mbQ'),
+      p_incident:g('mbI'),p_event:g('mbE'),p_voorraad:g('mbV'),p_opmerking:g('mbO')});
+    if(error)throw error;
+    mbGa('dagrapport');
+  }catch(e){ alert(mbFout(e)); }
+}
+
+// ─── myPOS-bestanden inlezen ───────────────────────────────────────
+function mbSheetJs(){
+  if(window.XLSX)return Promise.resolve(true);
+  return new Promise(res=>{
+    const sc=document.createElement('script');
+    sc.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    sc.onload=()=>res(true); sc.onerror=()=>res(false);
+    document.head.appendChild(sc);
+  });
+}
+function mbKolommen(rij){
+  const vind=n=>rij.findIndex(c=>String(c||'').trim().toLowerCase()===n);
+  return {
+    datum: vind('datum en tijd'), tid: vind('tid'), naam: vind('terminalnaam'),
+    type: vind('transactietype'), ref: vind('transactiereferentie'),
+    status: vind('transactiestatus'), verwerker: vind('transactieverwerker'),
+    transactie: vind('transactie'), afschrift: vind('afschrift'), fooi: vind('fooi'),
+  };
+}
+function mbDatumTijd(t){
+  const m=String(t||'').match(/^(\d{2})[.\-\/](\d{2})[.\-\/](\d{4})\s+(\d{1,2}):(\d{2})/);
+  if(!m)return null;
+  return {dag:`${m[3]}-${m[2]}-${m[1]}`, uur:parseInt(m[4],10)};
+}
+function mbGetal(v){
+  if(v==null||v==='')return 0;
+  const n=Number(String(v).replace(/\s/g,'').replace(',','.'));
+  return isNaN(n)?0:n;
+}
+async function mbLeesBestand(file){
+  const buf=await file.arrayBuffer();
+  const wb=XLSX.read(buf,{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rijen=XLSX.utils.sheet_to_json(ws,{header:1,raw:false,defval:''});
+  let h=-1;
+  for(let i=0;i<Math.min(rijen.length,30);i++){
+    if(rijen[i].some(c=>String(c||'').trim().toUpperCase()==='TID')){h=i;break;}
+  }
+  if(h<0)throw new Error('Dit ziet er niet uit als een myPOS-export: ik kan de kolom TID niet vinden.');
+  const k=mbKolommen(rijen[h]);
+  if(k.tid<0||k.datum<0)throw new Error('De kolommen TID of Datum ontbreken.');
+  const uit=[]; let over=0, geweigerd=0;
+  for(let i=h+1;i<rijen.length;i++){
+    const r=rijen[i];
+    const tid=String(r[k.tid]||'').trim();
+    if(!/^\d{5,}$/.test(tid))continue;
+    const dt=mbDatumTijd(r[k.datum]); if(!dt)continue;
+    const type=String(r[k.type]||'').trim().toLowerCase();
+    const status=String(r[k.status]||'').trim().toLowerCase();
+    if(status && !/goedgekeurd|approved/.test(status)){ geweigerd++; continue; }
+    if(type && !/betaling|payment|sale/.test(type)){ over++; continue; }
+    uit.push({
+      ref: String(r[k.ref]||'').trim() || (tid+'-'+dt.dag+'-'+i),
+      tid, dag: dt.dag, uur: dt.uur,
+      bedrag: mbGetal(k.transactie>=0 ? r[k.transactie] : 0),
+      kosten: mbGetal(k.afschrift>=0 ? r[k.afschrift+2] : 0),
+      fooi:   mbGetal(k.fooi>=0 ? r[k.fooi] : 0),
+      merk:   String(k.verwerker>=0 ? r[k.verwerker] : '').trim(),
+    });
+  }
+  return {rijen:uit, overgeslagen:over, geweigerd};
+}
+async function mbInlezen(){
+  const{data:kramen}=await sb.rpc('mcr_kramen');
+  const{data:terminals}=await sb.rpc('terminals_lijst');
+  let uit=`<div class="mb-kaart">
+    <div style="font-size:15px;font-weight:700;margin-bottom:6px">myPOS-bestanden inlezen</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.6;margin-bottom:12px">
+      Gooi alle bestanden er in een keer in; sorteren hoeft niet. De app leest het terminalnummer
+      en de datum uit elke transactie zelf. Hetzelfde bestand twee keer inlezen verdubbelt niets.
+      Het bestand wordt in je browser gelezen &mdash; kaartnummers gaan nooit naar de server.
+    </div>
+    <input type="file" id="mbBestanden" multiple accept=".xls,.xlsx,.csv" style="font-size:13px">
+    <button class="mb-mini zwart" style="margin-left:8px" onclick="mbImportStart()">Inlezen</button>
+    <div id="mbImportUit" style="margin-top:12px"></div>
+  </div>`;
+
+  uit+='<div class="mb-kaart"><div style="font-size:15px;font-weight:700;margin-bottom:8px">Terminals</div>';
+  if(!terminals||!terminals.length){
+    uit+='<div style="font-size:13px;color:var(--muted)">Nog geen terminals gezien. Die verschijnen zodra je het eerste bestand inleest.</div>';
+  }else{
+    uit+='<table class="mb-tabel"><tr><th>TID</th><th>Naam</th><th>Dagen</th><th>Omzet</th><th>Kraam</th></tr>';
+    terminals.forEach(t=>{
+      uit+=`<tr><td style="font-variant-numeric:tabular-nums">${veiligTekst(t.tid)}</td>
+        <td>${veiligTekst(t.naam||'')}</td><td>${t.dagen}</td><td>${veiligTekst(mbPond(t.omzet))}</td>
+        <td><select class="mb-getal" style="width:170px;text-align:left" onchange="mbTerminal('${veiligJs(t.tid)}',this.value)">
+          <option value="">— nog niet toegewezen —</option>
+          ${(kramen||[]).map(k=>`<option value="${veiligTekst(k.id)}"${k.id===t.kraam_id?' selected':''}>${veiligTekst(k.naam)}</option>`).join('')}
+        </select></td></tr>`;
+    });
+    uit+='</table><div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px">Wijs je een terminal later toe, dan schuiven alle eerder ingelezen dagen van dat nummer vanzelf op hun plaats.</div>';
+  }
+  uit+='</div>';
+  document.getElementById('mbInhoud').innerHTML=uit;
+}
+async function mbTerminal(tid,kraam){
+  if(!kraam)return;
+  try{ const{error}=await sb.rpc('terminal_koppelen',{p_tid:tid,p_kraam:kraam,p_naam:null,p_vanaf:null,p_tot:null});
+    if(error)throw error; mbGa('inlezen'); }
+  catch(e){ alert(mbFout(e)); }
+}
+async function mbImportStart(){
+  const inp=document.getElementById('mbBestanden');
+  const uit=document.getElementById('mbImportUit');
+  if(!inp.files||!inp.files.length){ uit.innerHTML='<span style="color:var(--muted);font-size:13px">Kies eerst een of meer bestanden.</span>'; return; }
+  uit.innerHTML='<span style="color:var(--muted);font-size:13px">Bezig met lezen&hellip;</span>';
+  if(!await mbSheetJs()){ uit.innerHTML='<span style="color:#B4472B;font-size:13px">De leesmodule kon niet geladen worden. Controleer je internetverbinding.</span>'; return; }
+  let alle=[], over=0, gew=0, fouten=[];
+  for(const f of inp.files){
+    try{ const r=await mbLeesBestand(f); alle=alle.concat(r.rijen); over+=r.overgeslagen; gew+=r.geweigerd; }
+    catch(e){ fouten.push(f.name+': '+mbFout(e)); }
+  }
+  if(!alle.length){
+    uit.innerHTML=`<span style="color:#B4472B;font-size:13px">Geen transacties gevonden.${fouten.length?'<br>'+veiligTekst(fouten.join(' | ')):''}</span>`;
+    return;
+  }
+  uit.innerHTML=`<span style="color:var(--muted);font-size:13px">${alle.length} transacties gelezen, nu wegschrijven&hellip;</span>`;
+  try{
+    let tot={dagen:0,nieuw:0,dubbel:0,omzet:0,kosten:0}; let onbekend=new Set();
+    for(let i=0;i<alle.length;i+=800){
+      const{data,error}=await sb.rpc('pin_import',{p_rijen:alle.slice(i,i+800)});
+      if(error)throw error;
+      const r=(data&&data[0])||{};
+      tot.dagen+=r.dagen||0; tot.nieuw+=r.transacties||0; tot.dubbel+=r.dubbel||0;
+      tot.omzet+=Number(r.omzet)||0; tot.kosten+=Number(r.kosten)||0;
+      if(r.onbekende_tids)String(r.onbekende_tids).split(', ').filter(Boolean).forEach(x=>onbekend.add(x));
+    }
+    uit.innerHTML=`<div style="font-size:13px;line-height:1.7">
+      <b>${tot.nieuw} transacties ingelezen</b> over ${tot.dagen} terminaldagen.<br>
+      Omzet ${veiligTekst(mbPond(tot.omzet))} &middot; myPOS-kosten ${veiligTekst(mbPond(tot.kosten))}
+      ${tot.omzet>0?`(${(tot.kosten/tot.omzet*100).toFixed(2)}%)`:''}<br>
+      ${tot.dubbel?`${tot.dubbel} waren al ingelezen en zijn overgeslagen.<br>`:''}
+      ${gew?`${gew} geweigerde transacties niet meegeteld.<br>`:''}
+      ${over?`${over} regels die geen betaling waren (bijvoorbeeld terugbetalingen) overgeslagen.<br>`:''}
+      ${onbekend.size?`<span style="color:#B45309">Nog niet toegewezen terminals: ${veiligTekst([...onbekend].join(', '))} &mdash; zet ze hieronder op een kraam.</span>`:''}
+      ${fouten.length?`<span style="color:#B4472B">${veiligTekst(fouten.join(' | '))}</span>`:''}
+    </div>`;
+    setTimeout(()=>mbGa('inlezen'),2500);
+  }catch(e){ uit.innerHTML=`<span style="color:#B4472B;font-size:13px">${veiligTekst(mbFout(e))}</span>`; }
+}
+
+
+// ─── Cijfers en bezetting ──────────────────────────────────────────
+let MB_CIJ_VAN=null, MB_CIJ_TOT=null;
+async function mbCijfers(){
+  if(!MB_CIJ_VAN){
+    const{data:kr}=await sb.rpc('mcr_kramen');
+    if(kr&&kr.length){
+      MB_CIJ_VAN=kr.reduce((a,k)=>k.seizoen_start<a?k.seizoen_start:a,kr[0].seizoen_start);
+      MB_CIJ_TOT=kr.reduce((a,k)=>k.seizoen_eind>a?k.seizoen_eind:a,kr[0].seizoen_eind);
+    }
+  }
+  const [cij,bez,uur]=await Promise.all([
+    sb.rpc('mcr_cijfers',{p_van:MB_CIJ_VAN,p_tot:MB_CIJ_TOT}),
+    sb.rpc('mcr_bezetting',{p_van:MB_CIJ_VAN,p_tot:MB_CIJ_TOT}),
+    sb.rpc('mcr_uuromzet',{p_van:MB_CIJ_VAN,p_tot:MB_CIJ_TOT,p_kraam:null}),
+  ]);
+  if(cij.error)throw cij.error;
+  const rows=cij.data||[];
+  const tot=rows.reduce((a,r)=>({
+    omzet:a.omzet+Number(r.omzet||0), forecast:a.forecast+Number(r.forecast||0),
+    uren:a.uren+Number(r.personeelsuren||0), loon:a.loon+Number(r.loonkosten||0),
+    porties:a.porties+Number(r.porties||0), trans:a.trans+Number(r.transacties||0),
+    kosten:a.kosten+Number(r.mypos_kosten||0)
+  }),{omzet:0,forecast:0,uren:0,loon:0,porties:0,trans:0,kosten:0});
+
+  const kop=(l,v,extra)=>`<div style="flex:1 1 150px">
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em">${l}</div>
+    <div style="font-size:24px;font-weight:700;letter-spacing:-.4px;font-variant-numeric:tabular-nums">${v}</div>
+    ${extra?`<div style="font-size:11.5px;color:var(--muted);margin-top:2px">${extra}</div>`:''}</div>`;
+
+  let uit=`<div class="mb-kaart" style="padding:12px 16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap">
+    <div><label style="display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px">Van</label>
+      <input type="date" class="mb-getal" style="width:150px" id="mbCijVan" value="${veiligTekst(MB_CIJ_VAN||'')}"></div>
+    <div><label style="display:block;font-size:11px;font-weight:600;color:var(--muted);margin-bottom:4px">Tot en met</label>
+      <input type="date" class="mb-getal" style="width:150px" id="mbCijTot" value="${veiligTekst(MB_CIJ_TOT||'')}"></div>
+    <button class="mb-mini" onclick="MB_CIJ_VAN=document.getElementById('mbCijVan').value;MB_CIJ_TOT=document.getElementById('mbCijTot').value;mbGa('cijfers')">Tonen</button>
+  </div>
+  <div class="mb-kaart" style="display:flex;gap:20px;flex-wrap:wrap">
+    ${kop('Omzet',veiligTekst(mbPond(tot.omzet)), tot.forecast>0?`${Math.round(tot.omzet/tot.forecast*100)}% van de forecast`:'')}
+    ${kop('Per personeelsuur', tot.uren>0?veiligTekst(mbPond(tot.omzet/tot.uren)):'&mdash;', `${tot.uren.toFixed(1)} uur ingezet`)}
+    ${kop('Loon als deel van de omzet', tot.omzet>0?((tot.loon/tot.omzet*100).toFixed(1)+'%'):'&mdash;', veiligTekst(mbPond(tot.loon)))}
+    ${kop('Porties', tot.porties?tot.porties.toLocaleString('nl-NL'):'&mdash;', tot.trans?`${tot.trans} bonnen`:'')}
+    ${kop('myPOS-kosten', veiligTekst(mbPond(tot.kosten)), tot.omzet>0?`${(tot.kosten/tot.omzet*100).toFixed(2)}% van de omzet`:'')}
+  </div>`;
+
+  uit+='<div class="mb-kaart"><div style="font-size:15px;font-weight:700;margin-bottom:8px">Per kraam</div><table class="mb-tabel">'
+     +'<tr><th>Kraam</th><th style="text-align:right">Dagen</th><th style="text-align:right">Omzet</th>'
+     +'<th style="text-align:right">Forecast</th><th style="text-align:right">%</th>'
+     +'<th style="text-align:right">Uren</th><th style="text-align:right">Per uur</th><th style="text-align:right">Loon %</th></tr>';
+  rows.forEach(r=>{
+    const pct=(r.forecast&&Number(r.forecast)>0)?Math.round(Number(r.omzet)/Number(r.forecast)*100):null;
+    uit+=`<tr>
+      <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${veiligTekst(r.kleur)};margin-right:7px"></span>${veiligTekst(r.kraam)}</td>
+      <td style="text-align:right">${r.dagen}</td>
+      <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(r.omzet))}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${r.forecast?veiligTekst(mbPond(r.forecast)):'&mdash;'}</td>
+      <td style="text-align:right;color:${pct==null?'var(--muted)':(pct>=100?'#0F7A52':'#B45309')}">${pct==null?'&mdash;':pct+'%'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${Number(r.personeelsuren||0).toFixed(1)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${r.omzet_per_uur?veiligTekst(mbPond(r.omzet_per_uur)):'&mdash;'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${r.loon_pct!=null?r.loon_pct+'%':'&mdash;'}</td></tr>`;
+  });
+  uit+='</table></div>';
+
+  // Omzet per uur — één reeks, dus geen legenda nodig
+  const ur=(uur.data||[]).filter(u=>Number(u.omzet)>0);
+  if(ur.length){
+    const max=Math.max(...ur.map(u=>Number(u.omzet)));
+    uit+=`<div class="mb-kaart"><div style="font-size:15px;font-weight:700">Omzet per uur</div>
+      <div style="font-size:12.5px;color:var(--muted);margin:2px 0 14px">Alle kramen samen, over de gekozen periode. Hier zie je wanneer het druk is, niet alleen dát het druk was.</div>
+      <div style="display:flex;align-items:flex-end;gap:6px;height:150px">`;
+    ur.forEach(u=>{
+      const h=Math.max(3, Math.round(Number(u.omzet)/max*130));
+      uit+=`<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:5px" title="${veiligTekst(String(u.uur)+':00 — '+mbPond(u.omzet))}">
+        <div style="font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums">${Number(u.omzet)>=max*0.9?veiligTekst(Math.round(u.omzet)):''}</div>
+        <div style="width:100%;height:${h}px;background:#B4472B;border-radius:4px 4px 0 0"></div>
+        <div style="font-size:10.5px;color:var(--muted)">${u.uur}</div></div>`;
+    });
+    uit+='</div></div>';
+  }
+
+  // Bezetting
+  const bz=bez.data||[];
+  if(bz.length){
+    uit+=`<div class="mb-kaart"><div style="font-size:15px;font-weight:700">Meer of minder mensen</div>
+      <div style="font-size:12.5px;color:var(--muted);margin:2px 0 12px">Omzet per personeelsuur zegt alleen iets naast de wachtrij die jij noteerde. Die twee samen staan hier.</div>
+      <table class="mb-tabel"><tr><th>Kraam</th><th>Dag</th><th style="text-align:right">Dagen</th>
+      <th style="text-align:right">Per uur</th><th style="text-align:right">Lange rij</th><th>Advies</th></tr>`;
+    bz.forEach(r=>{
+      const kl = /bij/.test(r.advies)?'#B4472B':(/af/.test(r.advies)?'#2A4EA8':'var(--muted)');
+      uit+=`<tr><td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${veiligTekst(r.kleur)};margin-right:7px"></span>${veiligTekst(r.kraam)}</td>
+        <td style="text-transform:capitalize">${veiligTekst(r.weekdag)}</td>
+        <td style="text-align:right">${r.dagen}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${r.per_uur?veiligTekst(mbPond(r.per_uur)):'&mdash;'}</td>
+        <td style="text-align:right">${r.lange_rij||0}&times;</td>
+        <td style="color:${kl}">${veiligTekst(r.advies)}</td></tr>`;
+    });
+    uit+='</table></div>';
+  }else{
+    uit+='<div class="mb-kaart"><div style="font-size:13px;color:var(--muted);line-height:1.6">Het bezettingsadvies verschijnt zodra er omzet en geklokte uren zijn. Vul in het dagrapport ook de wachtrij in &mdash; zonder dat getal zegt de omzet per personeelsuur te weinig.</div></div>';
+  }
+
+  uit+=`<button class="mb-mini" onclick="mbExport()">Exporteren naar Excel</button>
+        <span id="mbExportUit" style="font-size:12.5px;color:var(--muted);margin-left:10px"></span>`;
+  document.getElementById('mbInhoud').innerHTML=uit;
+}
+
+// ─── Export naar Excel ─────────────────────────────────────────────
+async function mbExport(){
+  const uit=document.getElementById('mbExportUit');
+  uit.textContent='Bezig…';
+  if(!await mbSheetJs()){ uit.textContent='De exportmodule kon niet geladen worden.'; return; }
+  try{
+    const [dag,cij,bez,uur,ronden]=await Promise.all([
+      sb.rpc('mcr_dagrapport',{p_van:MB_CIJ_VAN,p_tot:MB_CIJ_TOT,p_kraam:null}),
+      sb.rpc('mcr_cijfers',{p_van:MB_CIJ_VAN,p_tot:MB_CIJ_TOT}),
+      sb.rpc('mcr_bezetting',{p_van:MB_CIJ_VAN,p_tot:MB_CIJ_TOT}),
+      sb.rpc('mcr_uuromzet',{p_van:MB_CIJ_VAN,p_tot:MB_CIJ_TOT,p_kraam:null}),
+      sb.rpc('mcr_rondes'),
+    ]);
+    const wb=XLSX.utils.book_new();
+    const blad=(naam,rijen)=>{ if(rijen&&rijen.length)XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rijen), naam); };
+    blad('Dagrapport',(dag.data||[]).map(r=>({
+      Datum:r.datum, Weekdag:r.weekdag, Kraam:r.kraam, 'Open van':r.open_van, 'Open tot':r.open_tot,
+      'Uren open':r.uren_open, Dicht:r.dicht?'ja':'', Forecast:r.forecast,
+      'Omzet pin':r.omzet_pin, 'Omzet contant':r.omzet_contant, 'Omzet totaal':r.omzet_totaal,
+      Transacties:r.transacties, 'Gem. bon':r.gem_bon, Porties:r.porties, Toppings:r.toppings,
+      'myPOS kosten':r.mypos_kosten, Personeelsuren:r.personeelsuren, 'Gem. bezetting':r.gem_bezetting,
+      'Omzet per personeelsuur':r.omzet_per_uur, Loonkosten:r.loonkosten, 'Loon %':r.loon_pct,
+      Weer:r.weer, Temperatuur:r.temperatuur, 'Wachtrij piek':r.wachtrij_piek,
+      Incident:r.incident, 'Event in de stad':r.event_stad, 'Voorraad op':r.voorraad_op, Opmerking:r.opmerking})));
+    blad('Per kraam',(cij.data||[]).map(r=>({
+      Kraam:r.kraam, Dagen:r.dagen, Omzet:r.omzet, Forecast:r.forecast, Pin:r.pin, Contant:r.contant,
+      Transacties:r.transacties, Porties:r.porties, Toppings:r.toppings,
+      Personeelsuren:r.personeelsuren, Loonkosten:r.loonkosten,
+      'Omzet per uur':r.omzet_per_uur, 'Loon %':r.loon_pct, 'myPOS kosten':r.mypos_kosten})));
+    blad('Bezetting',(bez.data||[]).map(r=>({
+      Kraam:r.kraam, Weekdag:r.weekdag, Dagen:r.dagen, Omzet:r.omzet, Uren:r.uren,
+      'Per uur':r.per_uur, 'Lange rij':r.lange_rij, Advies:r.advies})));
+    blad('Omzet per uur',(uur.data||[]).map(r=>({Uur:r.uur, Omzet:r.omzet, Transacties:r.transacties, Dagen:r.dagen})));
+    blad('Betaalrondes',(ronden.data||[]).map(r=>({
+      Ronde:r.nummer, Van:r.periode_van, 'Tot en met':r.periode_tot, Betaaldatum:r.betaaldatum,
+      Mensen:r.mensen, 'Goedgekeurde uren':r.uren, Bedrag:r.bedrag,
+      Facturen:r.facturen, Ontvangen:r.ontvangen, 'Uren die nog wachten':r.wachtende_uren})));
+    const naam='Manchester '+(MB_CIJ_VAN||'')+' tot '+(MB_CIJ_TOT||'')+'.xlsx';
+    XLSX.writeFile(wb, naam);
+    uit.textContent='Geexporteerd.';
+    setTimeout(()=>uit.textContent='',3000);
+  }catch(e){ uit.textContent=mbFout(e); }
 }
 
 // ══════════════════════════════════════════════════════════════════
