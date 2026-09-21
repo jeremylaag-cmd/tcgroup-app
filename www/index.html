@@ -1958,8 +1958,8 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         <input type="date" id="hmDatum" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
       </div>
       <div class="four">
-        <div><span class="fl" style="font-size:10px">Van <span style="color:#DC2626">*</span></span><input type="text" class="tijd-input" id="hmVan" placeholder="09.00" maxlength="5" oninput="formatTijd(this);hmBereken()"></div>
-        <div><span class="fl" style="font-size:10px">Tot <span style="color:#DC2626">*</span></span><input type="text" class="tijd-input" id="hmTot" placeholder="17.00" maxlength="5" oninput="formatTijd(this);hmBereken()"></div>
+        <div><span class="fl" style="font-size:10px">Van</span><input type="text" class="tijd-input" id="hmVan" placeholder="09.00" maxlength="5" oninput="formatTijd(this);hmBereken()"></div>
+        <div><span class="fl" style="font-size:10px">Tot</span><input type="text" class="tijd-input" id="hmTot" placeholder="17.00" maxlength="5" oninput="formatTijd(this);hmBereken()"></div>
         <div><span class="fl" style="font-size:10px">Pauze (min)</span><input type="number" id="hmPauze" min="0" max="600" step="5" inputmode="numeric" value="0" oninput="hmBereken()" style="width:100%;font-size:14px;padding:9px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"></div>
       </div>
       <div class="fr"><span class="fl">Klus (optioneel)</span>
@@ -12116,7 +12116,11 @@ function hmBereken(){
   const r=hmMinuten();
   const km=hmKmWaarde();
   const kmRegel=km?`<br>Plus <b>${km} km</b> vergoeding: ${lkEuro(kmBedrag(km))} (${lkEuro(kmTarief())} per km).`:'';
-  if(!r){el.innerHTML=km?kmRegel.replace(/^<br>/,''):'';return;}
+  if(!r){
+    el.innerHTML=km?`Alleen <b>${km} km</b> vergoeding: ${lkEuro(kmBedrag(km))} (${lkEuro(kmTarief())} per km), zonder uren. Vul tijden in als er ook is gewerkt.`
+                   :'Vul een begin- en eindtijd in, of alleen kilometers.';
+    return;
+  }
   const nodig=minimumPauze(r.geklokt);
   el.innerHTML=`Dat is <b>${minToStr(r.gewerkt)}</b> gewerkt (${minToStr(r.geklokt)} min ${r.pauze} min pauze).`+
     (r.pauze<nodig?`<br><span style="color:#B45309">Bij deze lengte hoort normaal ${nodig} minuten pauze.</span>`:'')+kmRegel;
@@ -12136,35 +12140,45 @@ async function bewaarHandmatig(){
 
   if(!gebruiker_id){toonFout('Kies eerst een medewerker.');return;}
   if(!datum){toonFout('Vul een datum in.');return;}
-  if(!r){toonFout('Vul een geldige begin- en eindtijd in.');return;}
+  const tijdenIngevuld=!!((document.getElementById('hmVan').value||'').trim()||(document.getElementById('hmTot').value||'').trim());
+  if(!r&&tijdenIngevuld){toonFout('Vul een geldige begin- en eindtijd in, of maak beide leeg voor alleen kilometers.');return;}
+  if(!r&&!km){toonFout('Vul een begin- en eindtijd in, of alleen een aantal kilometers.');return;}
 
-  const naarTijd=v=>{const c=(v||'').replace(/[^0-9]/g,'');
-    return c.slice(0,c.length-2).padStart(2,'0')+':'+c.slice(-2);};
-  const van=naarTijd(document.getElementById('hmVan').value);
-  const tot=naarTijd(document.getElementById('hmTot').value);
-
-  const ingeklokt=new Date(`${datum}T${van}:00`);
-  const uitgeklokt=new Date(`${datum}T${tot}:00`);
-  if(uitgeklokt<=ingeklokt)uitgeklokt.setDate(uitgeklokt.getDate()+1);  // over middernacht
+  // Alleen kilometers: een regel van nul minuten op het middaguur van die dag,
+  // zodat hij gewoon bij die datum staat en in de export en de loonkosten meetelt.
+  let ingeklokt, uitgeklokt, pauze=0, gewerkt=0;
+  if(r){
+    const naarTijd=v=>{const c=(v||'').replace(/[^0-9]/g,'');
+      return c.slice(0,c.length-2).padStart(2,'0')+':'+c.slice(-2);};
+    const van=naarTijd(document.getElementById('hmVan').value);
+    const tot=naarTijd(document.getElementById('hmTot').value);
+    ingeklokt=new Date(`${datum}T${van}:00`);
+    uitgeklokt=new Date(`${datum}T${tot}:00`);
+    if(uitgeklokt<=ingeklokt)uitgeklokt.setDate(uitgeklokt.getDate()+1);  // over middernacht
+    pauze=r.pauze; gewerkt=r.gewerkt;
+  }else{
+    ingeklokt=new Date(`${datum}T12:00:00`);
+    uitgeklokt=new Date(ingeklokt);
+  }
 
   const{error}=await sb.from('urenregistraties').insert({
     gebruiker_id,
     klus_id,
     ingeklokt_op:ingeklokt.toISOString(),
     uitgeklokt_op:uitgeklokt.toISOString(),
-    pauze_minuten:r.pauze,
-    totaal_minuten:r.gewerkt,
+    pauze_minuten:pauze,
+    totaal_minuten:gewerkt,
     km,
     status:'goedgekeurd',
     handmatig:true,
-    locatie_in:'Handmatig toegevoegd',
-    locatie_uit:'Handmatig toegevoegd',
-    notitie_beh:(notitie?notitie+' — ':'')+'handmatig toegevoegd door '+CURRENT_NAAM,
+    locatie_in:r?'Handmatig toegevoegd':'Alleen kilometers',
+    locatie_uit:r?'Handmatig toegevoegd':'Alleen kilometers',
+    notitie_beh:(notitie?notitie+' — ':'')+(r?'handmatig toegevoegd door ':'alleen kilometervergoeding, toegevoegd door ')+CURRENT_NAAM,
   });
   if(error){toonFout('Toevoegen mislukt: '+error.message);return;}
 
   sluitHandmatig();
-  toast(minToStr(r.gewerkt)+(km?' + '+km+' km':'')+' toegevoegd');
+  toast(r?minToStr(gewerkt)+(km?' + '+km+' km':'')+' toegevoegd':km+' km toegevoegd');
   loadUrenBeheer();
 }
 
