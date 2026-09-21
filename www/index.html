@@ -2409,6 +2409,20 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           </div>
           <div id="urenMaandList"><div class="spin">Laden...</div></div>
         </div>
+        <div class="sc" id="urenGoedgekeurdCard" style="display:none">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.5rem;flex-wrap:wrap">
+            <div class="st">Goedgekeurd &middot; terugdraaien of verwijderen</div>
+            <span style="font-size:11px;color:var(--muted)">alleen jij als administrator</span>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:.75rem">
+            <input type="date" id="gkVan" onchange="laadGoedgekeurd()" style="font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+            <span style="font-size:11px;color:var(--muted)">t/m</span>
+            <input type="date" id="gkTot" onchange="laadGoedgekeurd()" style="font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
+            <select id="gkWie" onchange="laadGoedgekeurd()" style="font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)"><option value="">Iedereen</option></select>
+            <button class="btn-sm" onclick="laadGoedgekeurd()" style="font-size:11px;padding:5px 12px">Zoeken</button>
+          </div>
+          <div id="urenGoedgekeurdList"><div class="empty" style="padding:.5rem 0;font-size:12px">Kies een periode en klik op Zoeken.</div></div>
+        </div>
       </div>
     </div>
   </div>
@@ -3720,6 +3734,7 @@ async function mbUitdelen(shift,wie){
 // ── UREN — met Betaalrondes en Aandacht nodig als kopjes ──────────
 async function mbUren(){
   const onder=[['akkoord','Te accorderen'],['rondes','Betaalrondes'],['aandacht','Aandacht nodig'],['wijzigingen','Managerwijzigingen']];
+  if(typeof isAdmin==='function'&&isAdmin())onder.push(['goedgekeurd','Goedgekeurd']);
   document.getElementById('mbInhoud').innerHTML=
     `<div id="mbUrenKop"></div><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${
       onder.map(([k,l])=>`<button class="mb-mini${MB_UREN_TAB===k?' zwart':''}" onclick="mbUrenGa('${k}')">${l}</button>`).join('')
@@ -3736,6 +3751,7 @@ async function mbUrenGa(k){
     if(k==='rondes')  return await mbRondes();
     if(k==='aandacht')return await mbAandacht();
     if(k==='wijzigingen')return await mbWijzigingen();
+    if(k==='goedgekeurd')return await mbGoedgekeurd();
     return await mbUrenAkkoord();
   }catch(e){ console.error(e); if(el)el.innerHTML=`<div class="mb-kaart" style="color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
 }
@@ -3788,6 +3804,51 @@ async function mbUrenAkkoord(){
   mbZet(uit);
 }
 function mbKlokDatum(t){ return t?new Date(t).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''; }
+let MB_GK_VAN=null, MB_GK_TOT=null;
+async function mbGoedgekeurd(){
+  if(!MB_GK_VAN){ const d=new Date(); d.setDate(d.getDate()-30); MB_GK_VAN=fmt(d); MB_GK_TOT=fmt(new Date()); }
+  const{data,error}=await sb.rpc('uren_goedgekeurd',{p_van:MB_GK_VAN,p_tot:MB_GK_TOT,p_gebruiker:null});
+  if(error)throw error;
+  const rijen=data||[];
+  const kop=document.getElementById('mbUrenKop');
+  if(kop)kop.innerHTML=mbKop('Goedgekeurde uren',
+    'Terugdraaien zet ze terug bij Te accorderen; verwijderen haalt ze uit de administratie. Alleen jij als administrator kunt dit, en nooit bij een factuur die al is ontvangen.');
+  let uit=`<div class="mb-kaart"><div class="mb-veldrij">
+    <div style="flex:0 1 150px"><label class="mb-lab">Van</label><input type="date" class="mb-veld" value="${veiligTekst(MB_GK_VAN)}" onchange="MB_GK_VAN=this.value;mbUrenGa('goedgekeurd')"></div>
+    <div style="flex:0 1 150px"><label class="mb-lab">Tot en met</label><input type="date" class="mb-veld" value="${veiligTekst(MB_GK_TOT)}" onchange="MB_GK_TOT=this.value;mbUrenGa('goedgekeurd')"></div>
+  </div></div>`;
+  if(!rijen.length){ mbZet(uit+'<div class="mb-kaart" style="color:var(--muted)">Geen goedgekeurde uren in deze periode.</div>'); return; }
+  uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2">'
+    +'<thead><tr><th>Wie</th><th>Datum</th><th>Kraam</th><th>Geklokt</th><th>Pauze</th><th>Uren</th><th>Factuur</th><th></th></tr></thead><tbody>';
+  rijen.forEach(r=>{
+    const dicht=!!r.factuur_ontvangen;
+    uit+=`<tr>
+      <td><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>${r.notitie_beh?`<div style="font-size:11px;color:var(--muted);max-width:260px;white-space:normal">${veiligTekst(r.notitie_beh)}</div>`:''}</td>
+      <td style="white-space:nowrap">${veiligTekst(mbKort(r.datum))}</td>
+      <td>${veiligTekst(r.kraam||r.klus||'')}</td>
+      <td style="white-space:nowrap;font-variant-numeric:tabular-nums">${veiligTekst(mbKlokT(r.ingeklokt_op))} &ndash; ${veiligTekst(mbKlokT(r.uitgeklokt_op))}</td>
+      <td>${r.pauze} min</td>
+      <td style="font-variant-numeric:tabular-nums;font-weight:600">${veiligTekst(mbNum((r.minuten||0)/60,2))}</td>
+      <td style="white-space:nowrap">${r.factuur_nummer?veiligTekst(r.factuur_nummer)+(dicht?' <span style="color:#B4472B">ontvangen</span>':''):'<span style="color:var(--muted)">&mdash;</span>'}</td>
+      <td style="white-space:nowrap">${dicht?'<span style="font-size:12px;color:var(--muted)">dicht</span>':`
+        <button class="mb-mini" onclick="mbGkTerug('${veiligJs(r.uren_id)}')">Terugdraaien</button>
+        <button class="mb-mini rood" onclick="mbGkWeg('${veiligJs(r.uren_id)}')">Verwijderen</button>`}</td></tr>`;
+  });
+  uit+='</tbody></table></div>';
+  mbZet(uit);
+}
+async function mbGkTerug(id){
+  const reden=prompt('Waarom draai je deze goedkeuring terug? Dit komt bij de registratie te staan.');
+  if(reden===null)return;
+  try{ const{error}=await sb.rpc('uur_terugdraaien',{p_uren:id,p_reden:reden||null}); if(error)throw error; mbUrenGa('goedgekeurd'); }
+  catch(e){ alert(mbFout(e)); }
+}
+async function mbGkWeg(id){
+  const reden=prompt('Deze registratie verdwijnt uit de administratie; in het logboek blijft staan dat jij dat deed. Reden:');
+  if(reden===null)return;
+  try{ const{error}=await sb.rpc('uur_verwijderen',{p_uren:id,p_reden:reden||null}); if(error)throw error; mbUrenGa('goedgekeurd'); }
+  catch(e){ alert(mbFout(e)); }
+}
 async function mbWijzigingen(){
   const{data,error}=await sb.rpc('mcr_wijzigingen_lijst',{p_dagen:90});
   if(error)throw error;
@@ -11815,7 +11876,74 @@ function planVerschil(reg){
   };
 }
 
+// ── GOEDGEKEURDE UREN TERUGDRAAIEN (alleen de administrator) ────────────
+// Goedgekeurd is dicht: de database laat alleen de administrator er nog aan
+// komen, en nooit als de factuur al als ontvangen is gestempeld. Terugdraaien
+// zet de regel terug op "wacht" zodat hij weer in de accordeerlijst staat.
+let GK_VAN=null, GK_TOT=null;
+function gkKaartTonen(){
+  const el=document.getElementById('urenGoedgekeurdCard'); if(!el)return;
+  el.style.display=(typeof isAdmin==='function'&&isAdmin())?'':'none';
+}
+async function laadGoedgekeurd(){
+  const lijst=document.getElementById('urenGoedgekeurdList'); if(!lijst)return;
+  if(!(typeof isAdmin==='function'&&isAdmin())){lijst.innerHTML='';return;}
+  const van=document.getElementById('gkVan'), tot=document.getElementById('gkTot'), wie=document.getElementById('gkWie');
+  if(van&&!van.value){const d=new Date();d.setDate(d.getDate()-30);van.value=fmt(d);}
+  if(tot&&!tot.value)tot.value=fmt(new Date());
+  lijst.innerHTML='<div class="spin">Laden...</div>';
+  const{data,error}=await sb.rpc('uren_goedgekeurd',{p_van:van?van.value:null,p_tot:tot?tot.value:null,p_gebruiker:(wie&&wie.value)||null});
+  if(error){lijst.innerHTML=`<div class="empty" style="color:#B91C1C">${veiligTekst(error.message)}</div>`;return;}
+  const rijen=data||[];
+  if(wie&&wie.options.length<=1){
+    const namen=[...new Map(rijen.map(r=>[r.gebruiker_id,r.naam])).entries()].sort((a,b)=>a[1].localeCompare(b[1]));
+    wie.innerHTML='<option value="">Iedereen</option>'+namen.map(([id,n])=>`<option value="${veiligTekst(id)}">${veiligTekst(n)}</option>`).join('');
+  }
+  if(!rijen.length){lijst.innerHTML='<div class="empty" style="padding:.75rem 0;font-size:12px">Geen goedgekeurde uren in deze periode.</div>';return;}
+  lijst.innerHTML=rijen.map(r=>{
+    const in_t=new Date(r.ingeklokt_op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
+    const uit_t=r.uitgeklokt_op?new Date(r.uitgeklokt_op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'–';
+    const datum=new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
+    const dicht=!!r.factuur_ontvangen;
+    return `<div class="uur-item" id="gk-${veiligTekst(r.uren_id)}">
+      <div style="flex-grow:1;min-width:0">
+        <div class="uur-item-naam">${veiligTekst(r.naam)}</div>
+        <div class="uur-item-sub">${veiligTekst(datum)} · ${veiligTekst(r.kraam||r.klus||'zonder klus')}</div>
+        <div class="uur-item-sub" style="margin-top:2px;color:var(--text)">${r.minuten?`${in_t} – ${uit_t} · pauze ${r.pauze} min`:'alleen kilometers'}${Number(r.km)>0?` · ${String(Number(r.km)).replace('.',',')} km`:''}${r.handmatig?' · handmatig':''}</div>
+        ${r.factuur_nummer?`<div class="uur-item-sub" style="margin-top:2px;${dicht?'color:#B91C1C;font-weight:600':''}">Factuur ${veiligTekst(r.factuur_nummer)}${dicht?' — al ontvangen, dicht':''}</div>`:''}
+        ${r.notitie_beh?`<div class="uur-item-sub" style="margin-top:2px;font-style:italic">${veiligTekst(r.notitie_beh)}</div>`:''}
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">
+        <div class="uur-item-tijd">${minToStr(r.minuten||0)}</div>
+        ${dicht?'':`<div class="uur-acc-btns">
+          <button class="btn-sm" style="padding:5px 10px;font-size:11px" onclick="gkTerugdraaien('${veiligJs(r.uren_id)}')">Terugdraaien</button>
+          <button class="btn-uur-af" style="padding:5px 10px;font-size:11px" onclick="gkVerwijderen('${veiligJs(r.uren_id)}')">Verwijderen</button>
+        </div>`}
+      </div></div>`;
+  }).join('');
+}
+async function gkTerugdraaien(id){
+  const reden=prompt('Waarom draai je deze goedkeuring terug? Dit komt bij de registratie te staan.');
+  if(reden===null)return;
+  const{error}=await sb.rpc('uur_terugdraaien',{p_uren:id,p_reden:reden||null});
+  if(error){toast('Terugdraaien mislukt: '+error.message,'fout');return;}
+  toast('Teruggezet naar "wacht"');
+  laadGoedgekeurd(); if(typeof loadUrenBeheer==='function')loadUrenBeheer();
+}
+async function gkVerwijderen(id){
+  const ok=await vraagBevestiging('Registratie verwijderen?',
+    'De uren en kilometers van deze regel verdwijnen uit de administratie. Dit is niet terug te draaien; in het logboek blijft staan dat jij hem hebt verwijderd.','Ja, verwijderen');
+  if(!ok)return;
+  const reden=prompt('Reden (komt in het logboek):');
+  if(reden===null)return;
+  const{error}=await sb.rpc('uur_verwijderen',{p_uren:id,p_reden:reden||null});
+  if(error){toast('Verwijderen mislukt: '+error.message,'fout');return;}
+  toast('Verwijderd');
+  laadGoedgekeurd(); if(typeof loadUrenBeheer==='function')loadUrenBeheer();
+}
+
 async function loadUrenBeheer(){
+  gkKaartTonen();
   // Beheerders klokken op dit tabblad ook zelf in en uit.
   if(CURRENT_ROL==='beheerder'){loadUrenPersoneel();laadNuIngeklokt();laadLoonkosten();}
 
