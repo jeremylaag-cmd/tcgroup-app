@@ -7169,6 +7169,7 @@ async function initApp(user){
       <button class="htab active" onclick="showPage('beschikbaarheid',this)">Mijn schema</button>
       <button class="htab" onclick="showPage('uren',this)">Uren</button>
       ${(isFullTimer||isManagerFr)?`<button class="htab" onclick="showPage('taken',this)">Taken</button>`:''}
+      ${isManagerFr?`<button class="htab" onclick="showPage('planning-beheer',this)">Planning</button>`:''}
       ${laatsteTab}`;
     ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   }
@@ -7212,9 +7213,9 @@ async function initApp(user){
     }else if(isManagerFr){
       bn.innerHTML=
         bnavItem('beschikbaarheid','Mijn schema',ico.rooster,true)+
+        bnavItem('planning-beheer','Planning',ico.schema)+
         bnavItem('uren','Uren',ico.uren)+
         bnavItem('taken','Taken',ico.taken)+
-        bnavItem('open-klussen','Franklins',ico.schema)+
         bnavItem('profiel','Profiel',ico.profiel);
     }else{
       // Part-timer
@@ -15216,9 +15217,17 @@ const PB_MAANDEN=['Januari','Februari','Maart','April','Mei','Juni','Juli','Augu
 const PB_DAGEN_KORT=['MA','DI','WO','DO','VR','ZA','ZO'];
 const PB_DAGEN_LANG=['Zondag','Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag'];
 
+function pbFranklinsModus(){ return CURRENT_ROL==='manager-franklins'; }
 function pbInit(){
   pbViewYear=new Date().getFullYear();pbViewMonth=new Date().getMonth();
-  pbSelDate=new Date();pbFilter='alle';pbOpenDrop=null;
+  pbSelDate=new Date();pbFilter=pbFranklinsModus()?'franklins':'alle';pbOpenDrop=null;
+  // De manager Franklins plant alleen Franklins: filterknoppen weg, en de
+  // pil zegt wat er gebeurt.
+  const fm=pbFranklinsModus();
+  document.querySelectorAll('#page-planning-beheer .pb-filter').forEach(el=>el.style.display=fm?'none':'');
+  document.querySelectorAll('#page-planning-beheer .pb-admin-pill').forEach(el=>{
+    if(fm)el.innerHTML='Franklins-planning';
+  });
   pbMobWeekStart=pbGetMondayOf(pbSelDate);
   pbRenderKal();pbRenderContent();
 }
@@ -15287,7 +15296,7 @@ function pbSelectDay(y,m,d){
   pbOpenDrop=null;
   pbRenderKal();pbRenderContent();
 }
-function pbSetFilter(f,btn){pbFilter=f;document.querySelectorAll('.pb-fbtn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');pbRenderKal();pbRenderContent();}
+function pbSetFilter(f,btn){if(pbFranklinsModus())f='franklins';pbFilter=f;document.querySelectorAll('.pb-fbtn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');pbRenderKal();pbRenderContent();}
 function pbToggleDrop(id){pbOpenDrop=pbOpenDrop===id?null:id;pbRenderContent();}
 async function pbWijsToe(klusId,mwId,gekozenShift){
   const klus=KLUSSEN.find(k=>k.id===klusId);const mw=PERSONEEL.find(p=>p.id===mwId);
