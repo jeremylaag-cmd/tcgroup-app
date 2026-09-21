@@ -2280,16 +2280,20 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
             <button class="btn-nav" onclick="finMaandWissel(1)">&#8594;</button>
           </div>
         </div>
+        <div style="display:flex;gap:6px;margin-bottom:.75rem" id="finDelen">
+          <button class="pb-fbtn on" onclick="finDeel('klussen',this)" style="padding:7px 16px">Klussen</button>
+          <button class="pb-fbtn" onclick="finDeel('franklins',this)" style="padding:7px 16px;border-color:#F59E0B">Franklins</button>
+        </div>
         <div class="pb-sum" id="finSom" style="margin-bottom:.75rem;grid-template-columns:repeat(4,1fr)"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:.75rem" id="finFilters">
           <button class="pb-fbtn on" onclick="finFilter('alle',this)">Alle</button>
-          <button class="pb-fbtn" onclick="finFilter('open',this)">Nog te factureren</button>
-          <button class="pb-fbtn" onclick="finFilter('gefactureerd',this)">Gefactureerd</button>
+          <button class="pb-fbtn fin-alleen-klus" onclick="finFilter('open',this)">Nog te factureren</button>
+          <button class="pb-fbtn fin-alleen-klus" onclick="finFilter('gefactureerd',this)">Gefactureerd</button>
           <button class="pb-fbtn" onclick="finFilter('zonder',this)">Zonder omzet</button>
           <input id="finZoek" placeholder="Zoek klus" oninput="FIN_ZOEK=this.value;finTeken()" style="margin-left:auto;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:20px;font-family:var(--font);background:var(--surface);color:var(--text);min-width:140px">
         </div>
         <div id="finLijst"><div class="spin">Laden...</div></div>
-        <div style="font-size:11px;color:var(--muted);margin-top:.75rem;line-height:1.6">Omzet en kosten typ je in de regel en worden opgeslagen zodra je het veld verlaat. Loon = goedgekeurde uren &times; uurloon plus werkgeverslasten, en loopt op zolang er uren worden goedgekeurd. Marge = omzet &minus; kosten &minus; loon.</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:.75rem;line-height:1.6">Omzet en kosten typ je in de regel en worden opgeslagen zodra je het veld verlaat. Franklins staat apart: daar vul je per dag omzet en kosten in, zonder facturatie. Loon = goedgekeurde uren &times; uurloon plus werkgeverslasten, en loopt op zolang er uren worden goedgekeurd. Marge = omzet &minus; kosten &minus; loon.</div>
       </div>
     </div>
   </div>
@@ -12081,7 +12085,14 @@ async function gkVerwijderen(id){
 // regel zelf; de loonkosten komen uit de goedgekeurde uren. Het vinkje zegt
 // of de klus is gefactureerd, met wie en wanneer. Alleen wie de cijfers
 // mag zien (dashboardrechten, groep Cijfers) komt hier binnen.
-let FIN_MAAND=null, FIN_FILTER='alle', FIN_RIJEN=[], FIN_ZOEK='';
+let FIN_MAAND=null, FIN_FILTER='alle', FIN_RIJEN=[], FIN_ZOEK='', FIN_DEEL='klussen';
+function finDeel(d,btn){
+  FIN_DEEL=d; FIN_FILTER='alle';
+  document.querySelectorAll('#finDelen .pb-fbtn').forEach(b=>b.classList.remove('on')); if(btn)btn.classList.add('on');
+  document.querySelectorAll('#finFilters .pb-fbtn').forEach(b=>b.classList.toggle('on',b.getAttribute('onclick').indexOf("'alle'")>=0));
+  document.querySelectorAll('#finFilters .fin-alleen-klus').forEach(b=>b.style.display=d==='franklins'?'none':'');
+  finTeken();
+}
 function finMaandLabel(){ return FIN_MAAND.toLocaleDateString('nl-NL',{month:'long',year:'numeric'}); }
 function finMaandWissel(n){ FIN_MAAND=new Date(FIN_MAAND.getFullYear(),FIN_MAAND.getMonth()+n,1); loadFinance(); }
 function finFilter(f,btn){ FIN_FILTER=f; document.querySelectorAll('#finFilters .pb-fbtn').forEach(b=>b.classList.remove('on')); if(btn)btn.classList.add('on'); finTeken(); }
@@ -12104,42 +12115,47 @@ async function loadFinance(){
 function finTeken(){
   const lijst=document.getElementById('finLijst'); if(!lijst)return;
   const zoek=FIN_ZOEK.toLowerCase();
-  const rijen=FIN_RIJEN.filter(r=>{
+  const fr=FIN_DEEL==='franklins';
+  const basis=FIN_RIJEN.filter(r=>(r.categorie==='franklins')===fr);
+  const rijen=basis.filter(r=>{
     if(FIN_FILTER==='open'&&r.gefactureerd)return false;
     if(FIN_FILTER==='gefactureerd'&&!r.gefactureerd)return false;
     if(FIN_FILTER==='zonder'&&(r.omzet!=null))return false;
     if(zoek&&String(r.naam||'').toLowerCase().indexOf(zoek)<0&&String(r.adres||'').toLowerCase().indexOf(zoek)<0)return false;
     return true;
   });
-  const tot={omzet:0,kosten:0,loon:0,marge:0,open:0};
-  FIN_RIJEN.forEach(r=>{ tot.omzet+=Number(r.omzet||0); tot.kosten+=Number(r.kosten||0); tot.loon+=Number(r.loonkosten||0); tot.marge+=Number(r.marge||0); if(!r.gefactureerd&&Number(r.omzet||0)>0)tot.open+=Number(r.omzet||0); });
+  const tot={omzet:0,kosten:0,loon:0,marge:0,open:0,dagen:0,zonder:0};
+  basis.forEach(r=>{ tot.omzet+=Number(r.omzet||0); tot.kosten+=Number(r.kosten||0); tot.loon+=Number(r.loonkosten||0); tot.marge+=Number(r.marge||0);
+    if(!r.gefactureerd&&Number(r.omzet||0)>0)tot.open+=Number(r.omzet||0); if(r.omzet!=null)tot.dagen++; else tot.zonder++; });
   const som=document.getElementById('finSom');
   if(som)som.innerHTML=`
     <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.omzet))}</div><div class="pb-sum-lbl">Omzet</div></div>
     <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.kosten+tot.loon))}</div><div class="pb-sum-lbl">Kosten incl. loon</div></div>
     <div class="pb-sum-card"><div class="pb-sum-num" style="color:${tot.marge>=0?'#059669':'#B91C1C'}">${veiligTekst(lkEuroKort(tot.marge))}</div><div class="pb-sum-lbl">Marge</div></div>
-    <div class="pb-sum-card"><div class="pb-sum-num" style="color:#B45309">${veiligTekst(lkEuroKort(tot.open))}</div><div class="pb-sum-lbl">Nog te factureren</div></div>`;
-  if(!rijen.length){lijst.innerHTML='<div class="empty" style="padding:1rem 0;font-size:12px">Geen klussen'+(FIN_FILTER!=='alle'||zoek?' voor dit filter':'')+' in '+veiligTekst(finMaandLabel())+'.</div>';return;}
+    ${fr?`<div class="pb-sum-card"><div class="pb-sum-num" style="color:${tot.zonder?'#B45309':'var(--text)'}">${tot.dagen}/${basis.length}</div><div class="pb-sum-lbl">Dagen met omzet ingevuld</div></div>`
+         :`<div class="pb-sum-card"><div class="pb-sum-num" style="color:#B45309">${veiligTekst(lkEuroKort(tot.open))}</div><div class="pb-sum-lbl">Nog te factureren</div></div>`}`;
+  if(!rijen.length){lijst.innerHTML='<div class="empty" style="padding:1rem 0;font-size:12px">Geen '+(fr?'Franklins-dagen':'klussen')+(FIN_FILTER!=='alle'||zoek?' voor dit filter':'')+' in '+veiligTekst(finMaandLabel())+'.</div>';return;}
+  if(fr)rijen.sort((a,b)=>String(a.datum).localeCompare(String(b.datum)));
   let html='<div style="overflow-x:auto"><table class="uur-tbl fin-tbl"><thead><tr>'
-    +'<th>Datum</th><th>Klus</th><th style="text-align:right">Omzet</th><th style="text-align:right">Kosten</th><th style="text-align:right">Loon</th><th style="text-align:right">Marge</th><th style="text-align:center">Gefactureerd</th></tr></thead><tbody>';
+    +'<th>Datum</th><th>'+(fr?'Dag':'Klus')+'</th><th style="text-align:right">Omzet</th><th style="text-align:right">Kosten</th><th style="text-align:right">Loon</th><th style="text-align:right">Marge</th>'+(fr?'':'<th style="text-align:center">Gefactureerd</th>')+'</tr></thead><tbody>';
   rijen.forEach(r=>{
     const id=veiligTekst(r.klus_id);
     const d=new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
     const meer=r.datum_eind&&r.datum_eind!==r.datum?' – '+new Date(r.datum_eind+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):'';
     const marge=Number(r.marge||0);
     const geen=r.omzet==null&&r.kosten==null;
-    html+=`<tr id="fin-${id}"${r.gefactureerd?' style="background:#F2FBF6"':''}>
+    html+=`<tr id="fin-${id}"${r.gefactureerd&&!fr?' style="background:#F2FBF6"':''}>
       <td style="white-space:nowrap;color:var(--muted)">${veiligTekst(d)}${veiligTekst(meer)}</td>
-      <td><div style="font-weight:600">${veiligTekst(r.naam)}${r.is_optie?' <span style="font-size:10px;color:#B45309;font-weight:600">optie</span>':''}</div>
-          <div style="font-size:11px;color:var(--muted)">${veiligTekst(r.categorie==='franklins'?'Franklins':(r.adres||''))}${r.personen?' · '+r.personen+' pers.':''}${Number(r.uren)>0?' · '+String(Number(r.uren)).replace('.',',')+' u goedgekeurd':''}</div>
+      <td><div style="font-weight:600">${veiligTekst(fr?new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'long'}):r.naam)}${r.is_optie?' <span style="font-size:10px;color:#B45309;font-weight:600">optie</span>':''}</div>
+          <div style="font-size:11px;color:var(--muted)">${fr?'':veiligTekst(r.adres||'')}${!fr&&r.personen?' · '+r.personen+' pers.':''}${Number(r.uren)>0?(fr?'':' · ')+String(Number(r.uren)).replace('.',',')+' u goedgekeurd':''}</div>
           ${r.gefactureerd&&r.gefactureerd_op?`<div style="font-size:11px;color:#059669">Gefactureerd ${veiligTekst(new Date(r.gefactureerd_op).toLocaleDateString('nl-NL',{day:'numeric',month:'short'}))}${r.gefactureerd_door?' door '+veiligTekst(r.gefactureerd_door):''}</div>`:''}</td>
       <td style="text-align:right"><input class="fin-veld" id="finO-${id}" value="${veiligTekst(finBedrag(r.omzet))}" placeholder="—" inputmode="decimal" onchange="finBedragen('${veiligJs(r.klus_id)}')"></td>
       <td style="text-align:right"><input class="fin-veld" id="finK-${id}" value="${veiligTekst(finBedrag(r.kosten))}" placeholder="—" inputmode="decimal" onchange="finBedragen('${veiligJs(r.klus_id)}')"></td>
       <td style="text-align:right;color:var(--muted);white-space:nowrap">${Number(r.loonkosten)>0?veiligTekst(lkEuro(r.loonkosten)):'—'}</td>
       <td style="text-align:right;white-space:nowrap;font-weight:600;color:${geen?'var(--muted)':(marge>=0?'#059669':'#B91C1C')}">${geen?'—':veiligTekst(lkEuro(marge))}</td>
-      <td style="text-align:center"><input type="checkbox" ${r.gefactureerd?'checked':''} onchange="finVinkje('${veiligJs(r.klus_id)}',this.checked)" style="width:18px;height:18px;cursor:pointer" title="Gefactureerd"></td></tr>`;
+      ${fr?'':`<td style="text-align:center"><input type="checkbox" ${r.gefactureerd?'checked':''} onchange="finVinkje('${veiligJs(r.klus_id)}',this.checked)" style="width:18px;height:18px;cursor:pointer" title="Gefactureerd"></td>`}</tr>`;
   });
-  html+=`<tr class="totaal"><td colspan="2">Totaal ${rijen.length} klussen</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.omzet||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.kosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.loonkosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.marge||0),0)))}</td><td style="text-align:center">${rijen.filter(r=>r.gefactureerd).length}/${rijen.length}</td></tr>`;
+  html+=`<tr class="totaal"><td colspan="2">Totaal ${rijen.length} ${fr?'dagen':'klussen'}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.omzet||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.kosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.loonkosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.marge||0),0)))}</td>${fr?'':`<td style="text-align:center">${rijen.filter(r=>r.gefactureerd).length}/${rijen.length}</td>`}</tr>`;
   html+='</tbody></table></div>';
   lijst.innerHTML=html;
 }
