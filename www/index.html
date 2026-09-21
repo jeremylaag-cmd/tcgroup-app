@@ -6774,6 +6774,7 @@ function zetKlokkaartenTerug(){
 }
 
 async function doLogout(){
+  liveStop();
   const mw=document.getElementById('mcrApp'); if(mw)mw.style.display='none';
   if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
   await sb.auth.signOut();
@@ -6897,8 +6898,112 @@ async function zorgVoorGebruikersRij(user){
   }catch(e){console.error('Aanmaken gebruikers-rij mislukt:',e);}
 }
 
+// ── LIVE BIJWERKEN ─────────────────────────────────────────────────
+// Verandert iemand iets in de planning, dan zet de database één signaal in
+// wijziging_signalen. Elke open app luistert daarop en haalt zijn scherm
+// opnieuw op — niet meteen, maar anderhalve seconde na het laatste signaal,
+// en nooit terwijl je zelf iets aan het invullen hebt. Valt de verbinding
+// weg, dan kijkt de app elke minuut zelf even of er iets nieuws is.
+let LIVE_KANAAL=null, LIVE_TIMER=null, LIVE_POLL=null, LIVE_LAATSTE_ID=0, LIVE_BEZIG=false, LIVE_POGING=0, LIVE_VERBONDEN=false;
+
+function liveMagNu(){
+  if(document.hidden)return false;
+  if(document.querySelector('.modal-overlay.open'))return false;
+  const a=document.activeElement;
+  if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return false;
+  // Manchester-beheer: een open paneel of formulier laten we met rust.
+  if(typeof MB_NIEUW!=='undefined'&&MB_NIEUW)return false;
+  if(typeof MB_PERSOON!=='undefined'&&MB_PERSOON)return false;
+  if(typeof MB_UITZ_VRAAG!=='undefined'&&MB_UITZ_VRAAG)return false;
+  if(typeof MB_FORECAST!=='undefined'&&MB_FORECAST)return false;
+  // Crew: niet midden in het inklokken of een open beschikbaarheidsvel.
+  if(typeof MCR_DAGVEL!=='undefined'&&MCR_DAGVEL)return false;
+  if(typeof MCR_TAB!=='undefined'&&MCR_TAB==='clock'&&document.getElementById('mcrApp')&&document.getElementById('mcrApp').style.display!=='none')return false;
+  return true;
+}
+
+async function liveHerlaad(){
+  if(LIVE_BEZIG)return;
+  if(!liveMagNu()){
+    // Even wachten en nog eens proberen; na een paar keer laten we het rusten
+    // tot het volgende signaal.
+    if(LIVE_POGING<12){LIVE_POGING++;clearTimeout(LIVE_TIMER);LIVE_TIMER=setTimeout(liveHerlaad,5000);}
+    return;
+  }
+  LIVE_POGING=0; LIVE_BEZIG=true;
+  try{
+    const crew=document.getElementById('mcrApp')&&document.getElementById('mcrApp').style.display!=='none';
+    if(crew){
+      if(typeof mcrGa==='function'&&MCR_TAB)await mcrGa(MCR_TAB);
+      return;
+    }
+    const actief=document.querySelector('.page.active');
+    const id=actief?actief.id.replace(/^page-/,''):'';
+    if(id==='mcrbeheer'){
+      if(typeof mbNaar==='function'&&typeof MB_TAB!=='undefined'&&MB_TAB)await mbNaar(MB_TAB);
+      return;
+    }
+    if(typeof loadAll==='function')await loadAll();
+    if(id==='dashboard'&&typeof laadDashboard==='function')laadDashboard();
+    if(id==='accounts'&&typeof loadAccounts==='function')loadAccounts();
+    if(id==='beschikbaarheid'&&typeof loadPersoonlijkSchema==='function')loadPersoonlijkSchema();
+    if(id==='beschikbaarheid-beheer'&&typeof loadAlleBeschikbaarheid==='function')loadAlleBeschikbaarheid();
+    if(id==='open-klussen'&&typeof loadOpenKlussen==='function')loadOpenKlussen();
+    if(id==='uren'&&typeof loadUrenPersoneel==='function')loadUrenPersoneel();
+    if(id==='uren-beheer'&&typeof loadUrenBeheer==='function')loadUrenBeheer();
+    if(id==='taken'&&typeof loadTaken==='function')loadTaken();
+    if(id==='planning-beheer'){ if(typeof pbRenderKal==='function')pbRenderKal(); if(typeof pbRenderContent==='function')pbRenderContent(); if(typeof loadAanmeldingen==='function')loadAanmeldingen(); }
+  }catch(e){ console.warn('Live bijwerken mislukt:',e); }
+  finally{ LIVE_BEZIG=false; }
+}
+
+function liveSignaal(rij){
+  if(rij&&rij.id&&Number(rij.id)>LIVE_LAATSTE_ID)LIVE_LAATSTE_ID=Number(rij.id);
+  // Je eigen wijziging heb je al op je scherm; die hoeft niet nog een keer.
+  if(rij&&rij.door&&CURRENT_USER&&rij.door===CURRENT_USER.id)return;
+  clearTimeout(LIVE_TIMER);
+  LIVE_TIMER=setTimeout(liveHerlaad,1500);
+}
+
+async function livePeil(){
+  // Vangnet voor als de live-verbinding er niet is: is er een nieuwer
+  // signaal dan het laatste dat we zagen, dan bijwerken.
+  if(!CURRENT_USER||document.hidden)return;
+  try{
+    const{data}=await sb.from('wijziging_signalen').select('id,door').order('id',{ascending:false}).limit(1);
+    const r=data&&data[0]; if(!r)return;
+    if(Number(r.id)>LIVE_LAATSTE_ID){
+      const eerste=LIVE_LAATSTE_ID===0;
+      LIVE_LAATSTE_ID=Number(r.id);
+      if(!eerste&&!(r.door&&CURRENT_USER&&r.door===CURRENT_USER.id)){clearTimeout(LIVE_TIMER);LIVE_TIMER=setTimeout(liveHerlaad,500);}
+    }
+  }catch(e){}
+}
+
+function liveStart(){
+  if(!CURRENT_USER||!sb||typeof sb.channel!=='function')return;
+  liveStop();
+  livePeil();   // onthoudt waar we staan, zodat de peiling straks alleen nieuwe signalen ziet
+  try{
+    LIVE_KANAAL=sb.channel('wijzigingen-'+CURRENT_USER.id)
+      .on('postgres_changes',{event:'INSERT',schema:'public',table:'wijziging_signalen'},p=>liveSignaal(p.new))
+      .subscribe(status=>{ LIVE_VERBONDEN=(status==='SUBSCRIBED'); });
+  }catch(e){ console.warn('Live-verbinding niet gelukt:',e); }
+  LIVE_POLL=setInterval(livePeil, LIVE_VERBONDEN?120000:60000);
+  document.addEventListener('visibilitychange',liveZichtbaar);
+}
+function liveZichtbaar(){ if(!document.hidden)livePeil(); }
+function liveStop(){
+  if(LIVE_KANAAL){ try{sb.removeChannel(LIVE_KANAAL);}catch(e){} LIVE_KANAAL=null; }
+  if(LIVE_POLL){clearInterval(LIVE_POLL);LIVE_POLL=null;}
+  clearTimeout(LIVE_TIMER); LIVE_TIMER=null; LIVE_VERBONDEN=false;
+  document.removeEventListener('visibilitychange',liveZichtbaar);
+}
+
 async function initApp(user){
   CURRENT_USER=user;
+  // Vanaf nu luisteren we naar wijzigingen van anderen.
+  setTimeout(liveStart,1500);
   // Zorg dat er een gebruikers-rij bestaat (vangnet voor o.a. Apple login)
   await zorgVoorGebruikersRij(user);
   // Initialiseer push notificaties na inloggen
