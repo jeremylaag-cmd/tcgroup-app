@@ -6939,12 +6939,19 @@ async function zorgVoorGebruikersRij(user){
 // en nooit terwijl je zelf iets aan het invullen hebt. Valt de verbinding
 // weg, dan kijkt de app elke minuut zelf even of er iets nieuws is.
 let LIVE_KANAAL=null, LIVE_TIMER=null, LIVE_POLL=null, LIVE_LAATSTE_ID=0, LIVE_BEZIG=false, LIVE_POGING=0, LIVE_VERBONDEN=false;
+// Welke tabellen sinds de laatste herlaad zijn geraakt. Alleen deze vragen om
+// de volledige planning opnieuw (loadAll, zeventien vragen); de rest is per scherm.
+let LIVE_TABELLEN=new Set();
+const LIVE_PLANNING=new Set(['klussen','klus_shifts','klus_gebruikers','klus_aanmeldingen','klus_losse_personen','klus_trucks',
+  'klus_ritten','klus_rit_personen','klus_soorten','klus_truck_soorten','vaste_diensten','beschikbaarheid','mededelingen']);
 
 function liveMagNu(){
   if(document.hidden)return false;
   if(document.querySelector('.modal-overlay.open'))return false;
   const a=document.activeElement;
   if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return false;
+  const fin=document.getElementById('page-finance');
+  if(fin&&fin.classList.contains('active')&&FIN_BEZIG_TOT&&Date.now()<FIN_BEZIG_TOT)return false;
   // Manchester-beheer: een open paneel of formulier laten we met rust.
   if(typeof MB_NIEUW!=='undefined'&&MB_NIEUW)return false;
   if(typeof MB_PERSOON!=='undefined'&&MB_PERSOON)return false;
@@ -6977,7 +6984,9 @@ async function liveHerlaad(){
       if(typeof mbNaar==='function'&&typeof MB_TAB!=='undefined'&&MB_TAB)await mbNaar(MB_TAB);
       return;
     }
-    if(typeof loadAll==='function')await loadAll();
+    const geraakt=new Set(LIVE_TABELLEN); LIVE_TABELLEN=new Set();
+    const planning=geraakt.size===0||[...geraakt].some(t=>LIVE_PLANNING.has(t));
+    if(planning&&typeof loadAll==='function')await loadAll();
     if(id==='dashboard'&&typeof laadDashboard==='function')laadDashboard();
     if(id==='accounts'&&typeof loadAccounts==='function')loadAccounts();
     if(id==='beschikbaarheid'&&typeof loadPersoonlijkSchema==='function')loadPersoonlijkSchema();
@@ -6996,6 +7005,7 @@ function liveSignaal(rij){
   if(rij&&rij.id&&Number(rij.id)>LIVE_LAATSTE_ID)LIVE_LAATSTE_ID=Number(rij.id);
   // Je eigen wijziging heb je al op je scherm; die hoeft niet nog een keer.
   if(rij&&rij.door&&CURRENT_USER&&rij.door===CURRENT_USER.id)return;
+  if(rij&&rij.tabel)LIVE_TABELLEN.add(rij.tabel);
   clearTimeout(LIVE_TIMER);
   LIVE_TIMER=setTimeout(liveHerlaad,1500);
 }
@@ -7005,11 +7015,12 @@ async function livePeil(){
   // signaal dan het laatste dat we zagen, dan bijwerken.
   if(!CURRENT_USER||document.hidden)return;
   try{
-    const{data}=await sb.from('wijziging_signalen').select('id,door').order('id',{ascending:false}).limit(1);
+    const{data}=await sb.from('wijziging_signalen').select('id,door,tabel').order('id',{ascending:false}).limit(1);
     const r=data&&data[0]; if(!r)return;
     if(Number(r.id)>LIVE_LAATSTE_ID){
       const eerste=LIVE_LAATSTE_ID===0;
       LIVE_LAATSTE_ID=Number(r.id);
+      if(!eerste)LIVE_TABELLEN.add('*');   // via de peiling weten we niet precies wat: dan alles
       if(!eerste&&!(r.door&&CURRENT_USER&&r.door===CURRENT_USER.id)){clearTimeout(LIVE_TIMER);LIVE_TIMER=setTimeout(liveHerlaad,500);}
     }
   }catch(e){}
@@ -12300,7 +12311,7 @@ async function gkVerwijderen(id){
 // regel zelf; de loonkosten komen uit de goedgekeurde uren. Het vinkje zegt
 // of de klus is gefactureerd, met wie en wanneer. Alleen wie de cijfers
 // mag zien (dashboardrechten, groep Cijfers) komt hier binnen.
-let FIN_MAAND=null, FIN_FILTER='alle', FIN_RIJEN=[], FIN_ZOEK='', FIN_DEEL='klussen';
+let FIN_MAAND=null, FIN_FILTER='alle', FIN_RIJEN=[], FIN_ZOEK='', FIN_DEEL='klussen', FIN_BEZIG_TOT=0;
 function finDeel(d,btn){
   FIN_DEEL=d; FIN_FILTER='alle';
   document.querySelectorAll('#finDelen .pb-fbtn').forEach(b=>b.classList.remove('on')); if(btn)btn.classList.add('on');
@@ -12376,6 +12387,7 @@ function finTeken(){
 }
 
 async function finBedragen(klusId){
+  FIN_BEZIG_TOT=Date.now()+20000;   // je bent aan het invullen: even geen herlaad van buitenaf
   const o=finGetal((document.getElementById('finO-'+klusId)||{}).value);
   const k=finGetal((document.getElementById('finK-'+klusId)||{}).value);
   if(Number.isNaN(o)||Number.isNaN(k)||(o!=null&&o<0)||(k!=null&&k<0)){toast('Omzet of kosten klopt niet','fout');return;}
@@ -12383,7 +12395,41 @@ async function finBedragen(klusId){
   if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
   const r=FIN_RIJEN.find(x=>x.klus_id===klusId);
   if(r){ r.omzet=o; r.kosten=k; r.marge=(o||0)-(k||0)-Number(r.loonkosten||0); }
-  finTeken();
+  finRijBijwerken(klusId);
+}
+// Alleen de marge van die regel, de totaalregel en de tegels: de tabel zelf
+// blijft staan, zodat je met Tab gewoon door kunt naar het volgende veld.
+function finRijBijwerken(klusId){
+  const r=FIN_RIJEN.find(x=>x.klus_id===klusId); if(!r)return;
+  const tr=document.getElementById('fin-'+klusId); if(!tr){finTeken();return;}
+  const cellen=tr.querySelectorAll('td');
+  const geen=r.omzet==null&&r.kosten==null; const marge=Number(r.marge||0);
+  const margeCel=cellen[5];
+  if(margeCel){ margeCel.style.color=geen?'var(--muted)':(marge>=0?'#059669':'#B91C1C'); margeCel.textContent=geen?'—':lkEuro(marge); }
+  const o=document.getElementById('finO-'+klusId), k=document.getElementById('finK-'+klusId);
+  if(o&&document.activeElement!==o)o.value=finBedrag(r.omzet);
+  if(k&&document.activeElement!==k)k.value=finBedrag(r.kosten);
+  // tegels en totaalregel opnieuw
+  const fr=FIN_DEEL==='franklins';
+  const basis=FIN_RIJEN.filter(x=>(x.categorie==='franklins')===fr);
+  const zichtbaar=[...document.querySelectorAll('#finLijst tbody tr[id^="fin-"]')].map(t=>FIN_RIJEN.find(x=>'fin-'+x.klus_id===t.id)).filter(Boolean);
+  const tot={omzet:0,kosten:0,loon:0,marge:0,open:0,dagen:0,zonder:0};
+  basis.forEach(x=>{ tot.omzet+=Number(x.omzet||0); tot.kosten+=Number(x.kosten||0); tot.loon+=Number(x.loonkosten||0); tot.marge+=Number(x.marge||0);
+    if(!x.gefactureerd&&Number(x.omzet||0)>0)tot.open+=Number(x.omzet||0); if(x.omzet!=null)tot.dagen++; else tot.zonder++; });
+  const som=document.getElementById('finSom');
+  if(som)som.innerHTML=`
+    <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.omzet))}</div><div class="pb-sum-lbl">Omzet</div></div>
+    <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.kosten+tot.loon))}</div><div class="pb-sum-lbl">Kosten incl. loon</div></div>
+    <div class="pb-sum-card"><div class="pb-sum-num" style="color:${tot.marge>=0?'#059669':'#B91C1C'}">${veiligTekst(lkEuroKort(tot.marge))}</div><div class="pb-sum-lbl">Marge</div></div>
+    ${fr?`<div class="pb-sum-card"><div class="pb-sum-num" style="color:${tot.zonder?'#B45309':'var(--text)'}">${tot.dagen}/${basis.length}</div><div class="pb-sum-lbl">Dagen met omzet ingevuld</div></div>`
+         :`<div class="pb-sum-card"><div class="pb-sum-num" style="color:#B45309">${veiligTekst(lkEuroKort(tot.open))}</div><div class="pb-sum-lbl">Nog te factureren</div></div>`}`;
+  const totaal=document.querySelector('#finLijst tr.totaal');
+  if(totaal){
+    const tds=totaal.querySelectorAll('td');
+    if(tds[1])tds[1].textContent=lkEuro(zichtbaar.reduce((a,x)=>a+Number(x.omzet||0),0));
+    if(tds[2])tds[2].textContent=lkEuro(zichtbaar.reduce((a,x)=>a+Number(x.kosten||0),0));
+    if(tds[4])tds[4].textContent=lkEuro(zichtbaar.reduce((a,x)=>a+Number(x.marge||0),0));
+  }
 }
 async function finVinkje(klusId,aan){
   const{error}=await sb.rpc('finance_zetten',{p_klus:klusId,p_omzet:null,p_kosten:null,p_gefactureerd:!!aan,p_notitie:null});
