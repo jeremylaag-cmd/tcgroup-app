@@ -710,6 +710,11 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 .uur-tbl .totaal{font-weight:600;background:var(--bg)}
 .fin-veld{width:96px;text-align:right;font-size:12.5px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;font-family:var(--font);background:var(--surface);color:var(--text);font-variant-numeric:tabular-nums}
 .fin-veld:focus{outline:none;border-color:#888}
+.fin-cel{text-align:right;cursor:text}
+.fin-waarde{display:inline-block;min-width:96px;box-sizing:border-box;text-align:right;font-size:12.5px;padding:5px 7px;border:1px solid var(--border);border-radius:7px;background:var(--surface);color:var(--text);font-variant-numeric:tabular-nums;white-space:nowrap}
+.fin-waarde.leeg{color:var(--muted)}
+.fin-vink{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:1.5px solid var(--border);border-radius:5px;cursor:pointer;font-size:13px;color:transparent;background:var(--surface);user-select:none}
+.fin-vink.aan{background:#059669;border-color:#059669;color:#fff}
 @media(max-width:767px){
   #urenBeheerGrid{grid-template-columns:1fr !important}
   .uur-item{flex-wrap:wrap}
@@ -2297,7 +2302,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <input id="finZoek" placeholder="Zoek klus" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" writingsuggestions="false" data-1p-ignore data-lpignore="true" data-bwignore oninput="FIN_ZOEK=this.value;clearTimeout(window.FIN_ZOEK_T);window.FIN_ZOEK_T=setTimeout(finTeken,180)" style="margin-left:auto;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:20px;font-family:var(--font);background:var(--surface);color:var(--text);min-width:140px">
         </div>
         <div id="finLijst"><div class="spin">Laden...</div></div>
-        <div style="font-size:11px;color:var(--muted);margin-top:.75rem;line-height:1.6">Omzet en kosten typ je in de regel en worden opgeslagen zodra je het veld verlaat. Franklins staat apart: daar vul je per dag omzet en kosten in, zonder facturatie. Loon = goedgekeurde uren &times; uurloon plus werkgeverslasten, en loopt op zolang er uren worden goedgekeurd. Marge = omzet &minus; kosten &minus; loon.</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:.75rem;line-height:1.6">Klik op een bedrag om omzet of kosten in te vullen; met Tab of Enter ga je naar het volgende veld en wordt het opgeslagen. Franklins staat apart: daar vul je per dag omzet en kosten in, zonder facturatie. Loon = goedgekeurde uren &times; uurloon plus werkgeverslasten, en loopt op zolang er uren worden goedgekeurd. Marge = omzet &minus; kosten &minus; loon.</div>
       </div>
     </div>
   </div>
@@ -12482,8 +12487,70 @@ async function loadFinance(){
   finTeken();
 }
 
+// ─── Omzet en kosten: één invoerveld tegelijk ─────────────────────
+// De tabel toont bedragen als tekst; pas als je op een bedrag klikt komt er
+// een invoerveld. Zo staan er geen honderden velden tegelijk op de pagina,
+// wat Safari per toetsaanslag seconden kostte. Tab en Enter lopen door de
+// regels heen zoals je gewend bent.
+let FIN_OPEN=null;
+function finCelHtml(soort,r){
+  const veld=soort==='O'?'omzet':'kosten';
+  const leeg=r[veld]==null;
+  return `<td class="fin-cel" onclick="finBewerk('${soort}','${veiligJs(r.klus_id)}')"><span class="fin-waarde${leeg?' leeg':''}" id="fin${soort}-${veiligJs(r.klus_id)}">${leeg?'—':veiligTekst(finBedrag(r[veld]))}</span></td>`;
+}
+function finBewerk(soort,klusId){
+  if(FIN_OPEN&&FIN_OPEN.klusId===klusId&&FIN_OPEN.soort===soort)return;
+  if(FIN_OPEN)finSluit(true);
+  const r=FIN_RIJEN.find(x=>x.klus_id===klusId); if(!r)return;
+  const span=document.getElementById('fin'+soort+'-'+klusId); if(!span)return;
+  const veld=soort==='O'?'omzet':'kosten';
+  const inp=document.createElement('input');
+  inp.className='fin-veld';
+  inp.value=finBedrag(r[veld]);
+  ['inputmode','decimal','autocomplete','off','autocorrect','off','autocapitalize','off','spellcheck','false','writingsuggestions','false','data-1p-ignore','','data-lpignore','true','data-bwignore',''].forEach((v,i,a)=>{ if(i%2===0)inp.setAttribute(v,a[i+1]); });
+  inp.placeholder='—';
+  span.style.display='none';
+  span.parentNode.appendChild(inp);
+  FIN_OPEN={soort,klusId,veld,inp,span,oud:r[veld],klaar:false};
+  inp.addEventListener('keydown',finToets);
+  inp.addEventListener('blur',()=>{ if(FIN_OPEN&&FIN_OPEN.inp===inp)finSluit(true); });
+  FIN_BEZIG_TOT=Date.now()+20000;
+  inp.focus(); inp.select();
+}
+function finToets(e){
+  if(!FIN_OPEN)return;
+  const {soort,klusId}=FIN_OPEN;
+  if(e.key==='Escape'){ e.preventDefault(); finSluit(false); return; }
+  if(e.key!=='Enter'&&e.key!=='Tab')return;
+  e.preventDefault();
+  const rijen=[...document.querySelectorAll('#finLijst tbody tr[id^="fin-"]')].map(t=>t.id.slice(4));
+  const i=rijen.indexOf(klusId);
+  let volgende=null;
+  if(e.key==='Enter'){ if(i>=0&&i<rijen.length-1)volgende=[soort,rijen[i+1]]; }
+  else if(e.shiftKey){ volgende=soort==='K'?['O',klusId]:(i>0?['K',rijen[i-1]]:null); }
+  else{ volgende=soort==='O'?['K',klusId]:(i>=0&&i<rijen.length-1?['O',rijen[i+1]]:null); }
+  finSluit(true);
+  if(volgende)finBewerk(volgende[0],volgende[1]);
+}
+// Sluit het open veld. bewaren=false zet het oude bedrag terug.
+function finSluit(bewaren){
+  const o=FIN_OPEN; if(!o||o.klaar)return; o.klaar=true; FIN_OPEN=null;
+  const r=FIN_RIJEN.find(x=>x.klus_id===o.klusId);
+  let opslaan=false;
+  if(bewaren&&r){
+    const n=finGetal(o.inp.value);
+    if(Number.isNaN(n)||(n!=null&&n<0)){ toast('Bedrag klopt niet: '+o.inp.value,'fout'); }
+    else if(n!==o.oud){ r[o.veld]=n; opslaan=true; }
+  }
+  o.inp.removeEventListener('keydown',finToets);
+  o.inp.remove(); o.span.style.display='';
+  if(r){ const leeg=r[o.veld]==null; o.span.textContent=leeg?'—':finBedrag(r[o.veld]); o.span.classList.toggle('leeg',leeg); }
+  if(opslaan)finBedragen(o.klusId);
+}
+
 function finTeken(){
   const lijst=document.getElementById('finLijst'); if(!lijst)return;
+  if(FIN_OPEN)finSluit(true);
   const zoek=FIN_ZOEK.toLowerCase();
   const fr=FIN_DEEL==='franklins';
   const basis=FIN_RIJEN.filter(r=>(r.categorie==='franklins')===fr);
@@ -12519,11 +12586,11 @@ function finTeken(){
       <td><div style="font-weight:600">${veiligTekst(fr?new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'long'}):r.naam)}${r.is_optie?' <span style="font-size:10px;color:#B45309;font-weight:600">optie</span>':''}</div>
           <div style="font-size:11px;color:var(--muted)">${fr?'':veiligTekst(r.adres||'')}${!fr&&r.personen?' · '+r.personen+' pers.':''}${Number(r.uren)>0?(fr?'':' · ')+String(Number(r.uren)).replace('.',',')+' u goedgekeurd':''}</div>
           ${r.gefactureerd&&r.gefactureerd_op?`<div style="font-size:11px;color:#059669">Gefactureerd ${veiligTekst(new Date(r.gefactureerd_op).toLocaleDateString('nl-NL',{day:'numeric',month:'short'}))}${r.gefactureerd_door?' door '+veiligTekst(r.gefactureerd_door):''}</div>`:''}</td>
-      <td style="text-align:right"><input class="fin-veld" id="finO-${id}" value="${veiligTekst(finBedrag(r.omzet))}" placeholder="—" inputmode="decimal" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" writingsuggestions="false" data-1p-ignore data-lpignore="true" data-bwignore onchange="finBedragen('${veiligJs(r.klus_id)}')"></td>
-      <td style="text-align:right"><input class="fin-veld" id="finK-${id}" value="${veiligTekst(finBedrag(r.kosten))}" placeholder="—" inputmode="decimal" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" writingsuggestions="false" data-1p-ignore data-lpignore="true" data-bwignore onchange="finBedragen('${veiligJs(r.klus_id)}')"></td>
+      ${finCelHtml('O',r)}
+      ${finCelHtml('K',r)}
       <td style="text-align:right;color:var(--muted);white-space:nowrap">${Number(r.loonkosten)>0?veiligTekst(lkEuro(r.loonkosten)):'—'}</td>
       <td style="text-align:right;white-space:nowrap;font-weight:600;color:${geen?'var(--muted)':(marge>=0?'#059669':'#B91C1C')}">${geen?'—':veiligTekst(lkEuro(marge))}</td>
-      ${fr?'':`<td style="text-align:center"><input type="checkbox" ${r.gefactureerd?'checked':''} onchange="finVinkje('${veiligJs(r.klus_id)}',this.checked)" style="width:18px;height:18px;cursor:pointer" title="Gefactureerd"></td>`}</tr>`;
+      ${fr?'':`<td style="text-align:center"><span class="fin-vink${r.gefactureerd?' aan':''}" role="checkbox" aria-checked="${r.gefactureerd?'true':'false'}" tabindex="0" onclick="finVinkje('${veiligJs(r.klus_id)}',${r.gefactureerd?'false':'true'})" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();this.click();}" title="Gefactureerd">✓</span></td>`}</tr>`;
   });
   html+=`<tr class="totaal"><td colspan="2">Totaal ${rijen.length} ${fr?'dagen':'klussen'}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.omzet||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.kosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.loonkosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.marge||0),0)))}</td>${fr?'':`<td style="text-align:center">${rijen.filter(r=>r.gefactureerd).length}/${rijen.length}</td>`}</tr>`;
   html+='</tbody></table></div>';
@@ -12532,13 +12599,12 @@ function finTeken(){
 
 async function finBedragen(klusId){
   FIN_BEZIG_TOT=Date.now()+20000;   // je bent aan het invullen: even geen herlaad van buitenaf
-  const o=finGetal((document.getElementById('finO-'+klusId)||{}).value);
-  const k=finGetal((document.getElementById('finK-'+klusId)||{}).value);
+  const r=FIN_RIJEN.find(x=>x.klus_id===klusId); if(!r)return;
+  const o=r.omzet==null?null:Number(r.omzet), k=r.kosten==null?null:Number(r.kosten);
   if(Number.isNaN(o)||Number.isNaN(k)||(o!=null&&o<0)||(k!=null&&k<0)){toast('Omzet of kosten klopt niet','fout');return;}
   const{error}=await sb.rpc('finance_zetten',{p_klus:klusId,p_omzet:o,p_kosten:k,p_gefactureerd:null,p_notitie:null});
-  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
-  const r=FIN_RIJEN.find(x=>x.klus_id===klusId);
-  if(r){ r.omzet=o; r.kosten=k; r.marge=(o||0)-(k||0)-Number(r.loonkosten||0); }
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');loadFinance();return;}
+  r.omzet=o; r.kosten=k; r.marge=(o||0)-(k||0)-Number(r.loonkosten||0);
   finRijBijwerken(klusId);
 }
 // Alleen de marge van die regel, de totaalregel en de tegels: de tabel zelf
@@ -12551,8 +12617,8 @@ function finRijBijwerken(klusId){
   const margeCel=cellen[5];
   if(margeCel){ margeCel.style.color=geen?'var(--muted)':(marge>=0?'#059669':'#B91C1C'); margeCel.textContent=geen?'—':lkEuro(marge); }
   const o=document.getElementById('finO-'+klusId), k=document.getElementById('finK-'+klusId);
-  if(o&&document.activeElement!==o)o.value=finBedrag(r.omzet);
-  if(k&&document.activeElement!==k)k.value=finBedrag(r.kosten);
+  if(o){ o.textContent=r.omzet==null?'—':finBedrag(r.omzet); o.classList.toggle('leeg',r.omzet==null); }
+  if(k){ k.textContent=r.kosten==null?'—':finBedrag(r.kosten); k.classList.toggle('leeg',r.kosten==null); }
   // tegels en totaalregel opnieuw
   const fr=FIN_DEEL==='franklins';
   const basis=FIN_RIJEN.filter(x=>(x.categorie==='franklins')===fr);
