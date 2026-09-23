@@ -13323,7 +13323,7 @@ function tekenLoonkosten(){
     const lijst=rijen.slice().sort((a,b)=>
       (Number(b.kosten_goedgekeurd)+Number(b.kosten_wacht)+Number(b.kosten_gepland))
       -(Number(a.kosten_goedgekeurd)+Number(a.kosten_wacht)+Number(a.kosten_gepland)));
-    tabel=lkTabel(['Klus','Mensen','Gepland','Goedgekeurd','Te accorderen'],
+    tabel=lkTabel(['Klus','Mensen','Gepland','Goedgekeurd','KM\u2019s','Te accorderen'],
       lijst.map(r=>`<tr${r.klus_id?` style="cursor:pointer" onclick="openDetail('${r.klus_id}')"`:''}>
         <td style="${td}">
           <div style="font-weight:600;color:var(--text)">${veiligTekst(r.klus||'Klus')}</div>
@@ -13332,6 +13332,7 @@ function tekenLoonkosten(){
         <td style="${tdR}">${r.aantal_mensen||0}</td>
         <td style="${tdR}">${lkEuroKort(r.kosten_gepland)}<div style="font-size:11px;color:var(--muted)">${lkUren(r.uren_gepland)}</div></td>
         <td style="${tdR}">${lkEuroKort(r.kosten_goedgekeurd)}<div style="font-size:11px;color:var(--muted)">${lkUren(r.uren_goedgekeurd)}</div></td>
+        <td style="${tdR}">${Number(r.km)>0?lkEuroKort(r.km_bedrag)+`<div style="font-size:11px;color:var(--muted)">${String(Number(r.km)).replace('.',',')} km</div>`:'<span style="color:var(--muted)">&mdash;</span>'}</td>
         <td style="${tdR}">${lkEuroKort(r.kosten_wacht)}<div style="font-size:11px;color:var(--muted)">${lkUren(r.uren_wacht)}</div></td>
       </tr>`));
   }else if(LK_WEERGAVE==='maand'||LK_WEERGAVE==='week'){
@@ -13341,19 +13342,21 @@ function tekenLoonkosten(){
       if(!r.datum)return;
       const sleutel=perWeek?lkWeekSleutel(r.datum):r.datum.slice(0,7);
       const g=groepen[sleutel]=groepen[sleutel]||{label:perWeek?lkWeekLabel(r.datum):lkMaandLabel(r.datum),
-        kg:0,ug:0,kw:0,uw:0,kp:0,up:0,n:0};
+        kg:0,ug:0,kw:0,uw:0,kp:0,up:0,n:0,km:0,kmb:0};
+      g.km+=Number(r.km||0); g.kmb+=Number(r.km_bedrag||0);
       g.kg+=Number(r.kosten_goedgekeurd||0); g.ug+=Number(r.uren_goedgekeurd||0);
       g.kw+=Number(r.kosten_wacht||0);       g.uw+=Number(r.uren_wacht||0);
       g.kp+=Number(r.kosten_gepland||0);     g.up+=Number(r.uren_gepland||0);
       g.n++;
     });
     const sleutels=Object.keys(groepen).sort();
-    tabel=lkTabel([perWeek?'Week':'Maand','Klussen','Gepland','Goedgekeurd','Te accorderen'],
+    tabel=lkTabel([perWeek?'Week':'Maand','Klussen','Gepland','Goedgekeurd','KM\u2019s','Te accorderen'],
       sleutels.map(k=>{const g=groepen[k];return`<tr>
         <td style="${td}"><div style="font-weight:600;color:var(--text);text-transform:capitalize">${g.label}</div></td>
         <td style="${tdR}">${g.n}</td>
         <td style="${tdR}">${lkEuroKort(g.kp)}<div style="font-size:11px;color:var(--muted)">${lkUren(g.up)}</div></td>
         <td style="${tdR}">${lkEuroKort(g.kg)}<div style="font-size:11px;color:var(--muted)">${lkUren(g.ug)}</div></td>
+        <td style="${tdR}">${g.km>0?lkEuroKort(g.kmb)+`<div style="font-size:11px;color:var(--muted)">${String(Math.round(g.km*10)/10).replace('.',',')} km</div>`:'<span style="color:var(--muted)">&mdash;</span>'}</td>
         <td style="${tdR}">${lkEuroKort(g.kw)}<div style="font-size:11px;color:var(--muted)">${lkUren(g.uw)}</div></td>
       </tr>`;}));
   }else{
@@ -13383,6 +13386,10 @@ function tekenLoonkosten(){
       ${lkTegel('Goedgekeurd',kGoed,uGoed,'var(--text)','betaald werk')}
       ${lkTegel('Nog te accorderen',kWacht,uWacht,'#B45309','wacht op jou')}
       ${lkTegel('Gepland',kPlan,uPlan,'#1D4ED8','volgens rooster')}
+      ${som('km')>0?`<div style="flex:1;min-width:150px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
+        <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">KM-vergoeding</div>
+        <div style="font-size:20px;font-weight:700;margin-top:3px">${lkEuroKort(som('km_bedrag'))}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${String(Math.round(som('km')*10)/10).replace('.',',')} km &middot; goedgekeurd, bovenop het loon</div></div>`:''}
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:.75rem;line-height:1.5">
       Bedragen zijn inclusief werkgeverslasten. Dat percentage en het standaard uurloon voor
