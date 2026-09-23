@@ -2277,7 +2277,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div style="padding:1rem;max-width:1100px;margin:0 auto">
       <div class="sc">
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:.75rem">
-          <div class="st">Finance &middot; omzet, kosten en facturatie per klus</div>
+          <div class="st" onclick="diagTik()">Finance &middot; omzet, kosten en facturatie per klus</div>
           <div class="week-nav">
             <button class="btn-nav" onclick="finMaandWissel(-1)">&#8592;</button>
             <span class="week-nav-label" id="finMaandLabel" style="min-width:130px"></span>
@@ -2294,7 +2294,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <button class="pb-fbtn fin-alleen-klus" onclick="finFilter('open',this)">Nog te factureren</button>
           <button class="pb-fbtn fin-alleen-klus" onclick="finFilter('gefactureerd',this)">Gefactureerd</button>
           <button class="pb-fbtn" onclick="finFilter('zonder',this)">Zonder omzet</button>
-          <input id="finZoek" placeholder="Zoek klus" oninput="FIN_ZOEK=this.value;finTeken()" style="margin-left:auto;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:20px;font-family:var(--font);background:var(--surface);color:var(--text);min-width:140px">
+          <input id="finZoek" placeholder="Zoek klus" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" writingsuggestions="false" data-1p-ignore data-lpignore="true" data-bwignore oninput="FIN_ZOEK=this.value;clearTimeout(window.FIN_ZOEK_T);window.FIN_ZOEK_T=setTimeout(finTeken,180)" style="margin-left:auto;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:20px;font-family:var(--font);background:var(--surface);color:var(--text);min-width:140px">
         </div>
         <div id="finLijst"><div class="spin">Laden...</div></div>
         <div style="font-size:11px;color:var(--muted);margin-top:.75rem;line-height:1.6">Omzet en kosten typ je in de regel en worden opgeslagen zodra je het veld verlaat. Franklins staat apart: daar vul je per dag omzet en kosten in, zonder facturatie. Loon = goedgekeurde uren &times; uurloon plus werkgeverslasten, en loopt op zolang er uren worden goedgekeurd. Marge = omzet &minus; kosten &minus; loon.</div>
@@ -6944,6 +6944,97 @@ let LIVE_KANAAL=null, LIVE_TIMER=null, LIVE_POLL=null, LIVE_LAATSTE_ID=0, LIVE_B
 let LIVE_TABELLEN=new Set();
 const LIVE_PLANNING=new Set(['klussen','klus_shifts','klus_gebruikers','klus_aanmeldingen','klus_losse_personen','klus_trucks',
   'klus_ritten','klus_rit_personen','klus_soorten','klus_truck_soorten','vaste_diensten','beschikbaarheid','mededelingen']);
+
+// ─── Diagnose (traagheid) ─────────────────────────────────────────
+// Aanzetten: app.html#diag openen, of vijf keer snel op de titel "Finance"
+// tikken. Er verschijnt een klein paneel dat per toetsaanslag meet hoe lang
+// het duurt tot het teken op het scherm staat, en wat er intussen in de app
+// gebeurt. Uitzetten: nog eens vijf keer tikken of het kruisje.
+let DIAG=null;
+function diagAan(){
+  if(DIAG){diagUit();return;}
+  DIAG={toetsen:[],stallen:[],tellers:{},focusWeg:0,start:Date.now(),laatsteTik:0};
+  const p=document.createElement('div');
+  p.id='diagPaneel';
+  p.style.cssText='position:fixed;left:8px;bottom:70px;z-index:99999;background:#111;color:#eee;font:11px/1.5 -apple-system,Menlo,monospace;padding:8px 10px;border-radius:8px;max-width:340px;box-shadow:0 4px 18px rgba(0,0,0,.4);white-space:pre-wrap';
+  p.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:4px"><b>Diagnose</b><span><button onclick="diagKopieer()" style="font-size:11px;padding:1px 7px;margin-right:6px">kopieer</button><button onclick="diagUit()" style="font-size:11px;padding:1px 7px">×</button></span></div><div id="diagInhoud">Typ een cijfer in een veld…</div>';
+  document.body.appendChild(p);
+  // 1. Toetsaanslag → teken op het scherm.
+  DIAG.onKey=e=>{ if(!/^(INPUT|TEXTAREA)$/.test((e.target||{}).tagName))return; DIAG.laatsteTik=performance.now(); DIAG.laatsteToets=e.key; };
+  DIAG.onInput=e=>{
+    if(!DIAG.laatsteTik)return;
+    const t0=DIAG.laatsteTik; DIAG.laatsteTik=0;
+    const tInput=performance.now();
+    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+      const tPaint=performance.now();
+      DIAG.toetsen.push({toets:DIAG.laatsteToets,naarInput:Math.round(tInput-t0),naarScherm:Math.round(tPaint-t0),veld:(e.target||{}).id||(e.target||{}).className||'?'});
+      if(DIAG.toetsen.length>8)DIAG.toetsen.shift();
+      diagTeken();
+    }));
+  };
+  document.addEventListener('keydown',DIAG.onKey,true);
+  document.addEventListener('input',DIAG.onInput,true);
+  // 2. Blokkades van de hoofdthread (een timer die te laat afgaat).
+  let vorige=performance.now();
+  DIAG.timer=setInterval(()=>{
+    const nu=performance.now(), te=nu-vorige-100; vorige=nu;
+    if(te>250){ DIAG.stallen.push({om:new Date().toLocaleTimeString('nl-NL'),ms:Math.round(te),bezig:document.activeElement?document.activeElement.id||document.activeElement.tagName:'-'}); if(DIAG.stallen.length>6)DIAG.stallen.shift(); diagTeken(); }
+  },100);
+  // 3. Wat de app intussen doet: tellers om verdachte functies heen.
+  DIAG.orig={};
+  ['finTeken','loadFinance','loadAll','liveHerlaad','livePeil','zetCijferToetsenbord','finRijBijwerken','finBedragen','laadDashboard','loadUrenBeheer','pbRenderContent'].forEach(n=>{
+    if(typeof window[n]!=='function')return;
+    DIAG.orig[n]=window[n];
+    window[n]=function(){ DIAG.tellers[n]=(DIAG.tellers[n]||0)+1; const t=performance.now(); const r=DIAG.orig[n].apply(this,arguments);
+      const klaar=()=>{ const d=performance.now()-t; DIAG.tellers[n+'_ms']=Math.round((DIAG.tellers[n+'_ms']||0)+d); diagTeken(); };
+      if(r&&typeof r.then==='function')r.then(klaar,klaar); else klaar(); return r; };
+  });
+  if(window.sb){
+    DIAG.orig.rpc=sb.rpc; DIAG.orig.from=sb.from;
+    sb.rpc=function(naam){ DIAG.tellers['rpc:'+naam]=(DIAG.tellers['rpc:'+naam]||0)+1; diagTeken(); return DIAG.orig.rpc.apply(sb,arguments); };
+    sb.from=function(t){ DIAG.tellers['from:'+t]=(DIAG.tellers['from:'+t]||0)+1; diagTeken(); return DIAG.orig.from.apply(sb,arguments); };
+  }
+  // 4. Raakt het veld zijn focus kwijt (tabel opnieuw getekend)?
+  DIAG.onBlur=e=>{ if(e.target&&/^fin[OK]-/.test(e.target.id||'')&&!e.relatedTarget&&!document.activeElement){DIAG.focusWeg++;diagTeken();} };
+  document.addEventListener('focusout',DIAG.onBlur,true);
+  // 5. Mutaties in de pagina terwijl je typt.
+  DIAG.mut=0;
+  try{ DIAG.mo=new MutationObserver(m=>{DIAG.mut+=m.length;}); DIAG.mo.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true}); }catch(e){}
+  diagTeken();
+}
+function diagTeken(){
+  const el=document.getElementById('diagInhoud'); if(!el||!DIAG)return;
+  const r=[];
+  r.push('browser: '+(navigator.userAgent.match(/(CriOS|Chrome|Safari|Firefox|Version)\/[\d.]+/g)||[]).join(' ')+(navigator.standalone||window.Capacitor?' (app)':''));
+  r.push('pagina: '+((document.querySelector('.page.active')||{}).id||'-')+'  velden: '+document.querySelectorAll('input').length+'  knopen: '+document.getElementsByTagName('*').length);
+  if(DIAG.toetsen.length){ r.push('toets → scherm (ms): '+DIAG.toetsen.map(t=>t.naarScherm+(t.naarInput>50?'('+t.naarInput+' tot input)':'')).join(', ')); }
+  if(DIAG.stallen.length){ r.push('blokkades: '+DIAG.stallen.map(s=>s.om+' '+s.ms+'ms').join(', ')); }
+  const tel=Object.entries(DIAG.tellers).filter(([k])=>!k.endsWith('_ms')).map(([k,v])=>k+'×'+v+(DIAG.tellers[k+'_ms']?' '+DIAG.tellers[k+'_ms']+'ms':'')).join(', ');
+  r.push('app deed: '+(tel||'niets'));
+  r.push('mutaties: '+DIAG.mut+'  focus kwijt: '+DIAG.focusWeg+'  sinds: '+Math.round((Date.now()-DIAG.start)/1000)+'s');
+  el.textContent=r.join('\n');
+}
+function diagKopieer(){
+  const el=document.getElementById('diagInhoud'); if(!el)return;
+  const t=el.textContent;
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>toast('Gekopieerd'),()=>prompt('Kopieer:',t));
+  else prompt('Kopieer:',t);
+}
+function diagUit(){
+  if(!DIAG)return;
+  document.removeEventListener('keydown',DIAG.onKey,true);
+  document.removeEventListener('input',DIAG.onInput,true);
+  document.removeEventListener('focusout',DIAG.onBlur,true);
+  clearInterval(DIAG.timer);
+  if(DIAG.mo)DIAG.mo.disconnect();
+  Object.entries(DIAG.orig||{}).forEach(([n,f])=>{ if(n==='rpc'||n==='from'){ if(window.sb)sb[n]=f; } else window[n]=f; });
+  const p=document.getElementById('diagPaneel'); if(p)p.remove();
+  DIAG=null;
+}
+// Vijf tikken op een titel zet de diagnose aan of uit.
+let DIAG_TIKS=[];
+function diagTik(){ const nu=Date.now(); DIAG_TIKS=DIAG_TIKS.filter(t=>nu-t<2500); DIAG_TIKS.push(nu); if(DIAG_TIKS.length>=5){DIAG_TIKS=[];diagAan();} }
+document.addEventListener('DOMContentLoaded',()=>{ if(location.hash==='#diag')setTimeout(diagAan,1500); });
 
 function liveMagNu(){
   if(document.hidden)return false;
@@ -12375,8 +12466,8 @@ function finTeken(){
       <td><div style="font-weight:600">${veiligTekst(fr?new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'long'}):r.naam)}${r.is_optie?' <span style="font-size:10px;color:#B45309;font-weight:600">optie</span>':''}</div>
           <div style="font-size:11px;color:var(--muted)">${fr?'':veiligTekst(r.adres||'')}${!fr&&r.personen?' · '+r.personen+' pers.':''}${Number(r.uren)>0?(fr?'':' · ')+String(Number(r.uren)).replace('.',',')+' u goedgekeurd':''}</div>
           ${r.gefactureerd&&r.gefactureerd_op?`<div style="font-size:11px;color:#059669">Gefactureerd ${veiligTekst(new Date(r.gefactureerd_op).toLocaleDateString('nl-NL',{day:'numeric',month:'short'}))}${r.gefactureerd_door?' door '+veiligTekst(r.gefactureerd_door):''}</div>`:''}</td>
-      <td style="text-align:right"><input class="fin-veld" id="finO-${id}" value="${veiligTekst(finBedrag(r.omzet))}" placeholder="—" inputmode="decimal" onchange="finBedragen('${veiligJs(r.klus_id)}')"></td>
-      <td style="text-align:right"><input class="fin-veld" id="finK-${id}" value="${veiligTekst(finBedrag(r.kosten))}" placeholder="—" inputmode="decimal" onchange="finBedragen('${veiligJs(r.klus_id)}')"></td>
+      <td style="text-align:right"><input class="fin-veld" id="finO-${id}" value="${veiligTekst(finBedrag(r.omzet))}" placeholder="—" inputmode="decimal" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" writingsuggestions="false" data-1p-ignore data-lpignore="true" data-bwignore onchange="finBedragen('${veiligJs(r.klus_id)}')"></td>
+      <td style="text-align:right"><input class="fin-veld" id="finK-${id}" value="${veiligTekst(finBedrag(r.kosten))}" placeholder="—" inputmode="decimal" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" writingsuggestions="false" data-1p-ignore data-lpignore="true" data-bwignore onchange="finBedragen('${veiligJs(r.klus_id)}')"></td>
       <td style="text-align:right;color:var(--muted);white-space:nowrap">${Number(r.loonkosten)>0?veiligTekst(lkEuro(r.loonkosten)):'—'}</td>
       <td style="text-align:right;white-space:nowrap;font-weight:600;color:${geen?'var(--muted)':(marge>=0?'#059669':'#B91C1C')}">${geen?'—':veiligTekst(lkEuro(marge))}</td>
       ${fr?'':`<td style="text-align:center"><input type="checkbox" ${r.gefactureerd?'checked':''} onchange="finVinkje('${veiligJs(r.klus_id)}',this.checked)" style="width:18px;height:18px;cursor:pointer" title="Gefactureerd"></td>`}</tr>`;
