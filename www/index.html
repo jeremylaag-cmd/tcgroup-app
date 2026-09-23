@@ -491,7 +491,7 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .pd-zij{background:var(--bg);border-right:1px solid var(--border);padding:2rem 1.5rem;overflow-y:auto;min-width:0}
 .pd-hoofd{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
 .pd-tabs{display:flex;gap:2px;border-bottom:1px solid var(--border);padding:0 .75rem;background:var(--bg);flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
-.pd-tab{background:none;border:none;border-bottom:2px solid transparent;padding:16px 20px;font-size:14px;font-family:var(--font);color:var(--muted);cursor:pointer;white-space:nowrap;flex-shrink:0}
+.pd-tab{background:none;border:none;border-bottom:2px solid transparent;padding:16px 13px;font-size:13px;font-family:var(--font);color:var(--muted);cursor:pointer;white-space:nowrap;flex-shrink:0}
 .pd-tab.on{color:var(--text);font-weight:600;border-bottom-color:var(--text);background:var(--surface)}
 .pd-body{padding:1.75rem;overflow-y:auto;-webkit-overflow-scrolling:touch;flex:1 1 0;min-width:0;min-height:0}
 .pd-av{width:120px;height:120px;border-radius:50%;background:var(--text);color:#fff;display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:600;margin:0 auto 1.25rem}
@@ -1930,6 +1930,8 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
             <button class="pd-tab" id="pdTabVerlof" onclick="pdToon('verlof',this)">Verlof</button>
             <button class="pd-tab" onclick="pdToon('skills',this)">Vaardigheden</button>
             <button class="pd-tab" onclick="pdToon('gegevens',this)">Gegevens</button>
+            <button class="pd-tab" id="pdTabSpullen" onclick="pdToon('spullen',this)">Spullen</button>
+            <button class="pd-tab" id="pdTabUitdienst" style="display:none;color:#B45309" onclick="pdToon('uitdienst',this)">Uit dienst</button>
             <button class="btn-ghost" onclick="closePersDetail()" style="padding:5px 10px;margin-left:auto;align-self:center">&#x2715;</button>
           </div>
           <div class="pd-body">
@@ -1938,6 +1940,8 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
             <div id="pdVak-verlof" style="display:none"></div>
             <div id="pdVak-skills" style="display:none"></div>
             <div id="pdVak-gegevens" style="display:none"></div>
+            <div id="pdVak-spullen" style="display:none"></div>
+            <div id="pdVak-uitdienst" style="display:none"></div>
           </div>
         </div>
       </div>
@@ -8110,12 +8114,15 @@ async function openPersDetail(uid){
   pdRenderVerlof();
   pdRenderSkills();
   pdRenderGegevens();
+  PD_UITD=null; const tu=document.getElementById('pdTabUitdienst'); if(tu)tu.style.display='none';
+  const ts=document.getElementById('pdTabSpullen'); if(ts)ts.style.display=CURRENT_ROL==='beheerder'?'':'none';
   pdToon('algemeen',document.querySelectorAll('.pd-tab')[0]);
   document.getElementById('persDetailOverlay').classList.add('open');
+  if(CURRENT_ROL==='beheerder'){ pdRenderSpullen(); pdUitdienstLaden().then(()=>{ pdRenderZij(); if(PD_UITD&&PD_UITD.traject_gestart)pdRenderUitdienst(); }); }
 }
 
 function pdToon(vak,btn){
-  ['algemeen','agenda','verlof','skills','gegevens'].forEach(v=>{
+  ['algemeen','agenda','verlof','skills','gegevens','spullen','uitdienst'].forEach(v=>{
     const el=document.getElementById('pdVak-'+v);
     if(el)el.style.display=v===vak?'':'none';
   });
@@ -8127,6 +8134,213 @@ function pdSkillIds(){
   let ids=[];
   try{const rauw=PD.u.skills;ids=rauw?(typeof rauw==='string'?JSON.parse(rauw):rauw):[];}catch(e){ids=[];}
   return Array.isArray(ids)?ids:[];
+}
+
+// ── SPULLEN VAN ONS EN UIT DIENST ─────────────────────────────────────
+// In het persoonsvenster: tabblad Spullen (kleding, tags, sleutels, met
+// borg) en tabblad Uit dienst (de checklist zodra het traject gestart is).
+let PD_SOORTEN=null, PD_SPULLEN=[], PD_UITD=null;
+function pdVeldStijl(){ return 'font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%'; }
+function pdEuro(n){ return '€ '+Number(n||0).toFixed(2).replace('.',','); }
+function pdDatumKort(d){ return d?new Date(String(d).slice(0,10)+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}):''; }
+
+async function pdRenderSpullen(){
+  const vak=document.getElementById('pdVak-spullen');
+  if(!vak||!PD||!PD.u)return;
+  if(CURRENT_ROL!=='beheerder'){vak.innerHTML='';return;}
+  vak.innerHTML='<div class="spin">Laden...</div>';
+  const[{data:soorten},{data:spullen,error}]=await Promise.all([
+    PD_SOORTEN?Promise.resolve({data:PD_SOORTEN}):sb.from('uitgifte_soorten').select('*').eq('actief',true).order('volgorde'),
+    sb.rpc('uitgiftes_van',{p_gebruiker:PD.u.id}),
+  ]);
+  if(error){vak.innerHTML=`<div class="pers-leeg" style="color:#B91C1C">${veiligTekst(error.message)}</div>`;return;}
+  PD_SOORTEN=soorten||[]; PD_SPULLEN=spullen||[];
+  const uit=PD_SPULLEN.filter(s=>!s.ingeleverd_op), terug=PD_SPULLEN.filter(s=>s.ingeleverd_op);
+  const borgOpen=uit.filter(s=>Number(s.borg)>0&&!s.borg_ontvangen).reduce((a,s)=>a+Number(s.borg),0);
+  const borgTerug=PD_SPULLEN.filter(s=>Number(s.borg)>0&&s.borg_ontvangen&&!s.borg_terug_op).reduce((a,s)=>a+Number(s.borg),0);
+  const regel=s=>`<div class="pd-stat" style="align-items:flex-start">
+      <div style="min-width:0">
+        <div><b>${veiligTekst(s.soort)}</b>${s.aantal>1?' &times; '+s.aantal:''}${s.maat?' <span style="color:var(--muted)">maat '+veiligTekst(s.maat)+'</span>':''}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Meegegeven ${veiligTekst(pdDatumKort(s.uitgegeven_op))}${s.door?' door '+veiligTekst(s.door):''}${s.opmerking?' &middot; '+veiligTekst(s.opmerking):''}</div>
+        <div style="font-size:12px;margin-top:2px;color:${Number(s.borg)>0?(s.borg_ontvangen?(s.borg_terug_op?'#059669':'#B45309'):'#B91C1C'):'var(--muted)'}">
+          ${Number(s.borg)>0?`Borg ${pdEuro(s.borg)} &middot; ${s.borg_ontvangen?(s.borg_terug_op?'terugbetaald '+veiligTekst(pdDatumKort(s.borg_terug_op)):'ontvangen, nog terug te geven'):'nog niet ontvangen'}`:'Geen borg'}
+        </div>
+        ${s.ingeleverd_op?`<div style="font-size:12px;color:#059669;margin-top:2px">Ingeleverd ${veiligTekst(pdDatumKort(s.ingeleverd_op))}</div>`:''}
+      </div>
+      <div style="display:flex;flex-direction:column;gap:5px;flex-shrink:0;align-items:flex-end">
+        ${!s.ingeleverd_op?`<button class="btn-sm" style="font-size:11px;padding:5px 10px" onclick="pdSpulIngeleverd('${veiligJs(s.id)}')">Ingeleverd</button>`:''}
+        ${Number(s.borg)>0&&!s.borg_ontvangen?`<button class="btn-ghost" style="font-size:11px;padding:5px 10px" onclick="pdSpulBorg('${veiligJs(s.id)}','ontvangen')">Borg ontvangen</button>`:''}
+        ${Number(s.borg)>0&&s.borg_ontvangen&&!s.borg_terug_op?`<button class="btn-ghost" style="font-size:11px;padding:5px 10px" onclick="pdSpulBorg('${veiligJs(s.id)}','terug')">Borg terugbetaald</button>`:''}
+        <button class="btn-ghost" style="font-size:11px;padding:5px 10px;color:#991B1B" onclick="pdSpulWeg('${veiligJs(s.id)}')">&times;</button>
+      </div></div>`;
+  const kaart=(label,waarde,kl)=>`<div style="flex:1;min-width:120px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px 12px">
+      <div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em">${label}</div>
+      <div style="font-size:17px;font-weight:700;margin-top:3px;color:${kl||'var(--text)'}">${waarde}</div></div>`;
+  vak.innerHTML=`
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:1.25rem">
+      ${kaart('In bezit',uit.reduce((a,s)=>a+s.aantal,0)+' stuks')}
+      ${kaart('Borg nog te ontvangen',pdEuro(borgOpen),borgOpen?'#B91C1C':'var(--text)')}
+      ${kaart('Borg terug te geven',pdEuro(borgTerug),borgTerug?'#B45309':'var(--text)')}
+    </div>
+    <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Van ons in bezit</div>
+    ${uit.length?uit.map(regel).join(''):'<div class="pers-leeg" style="padding:.75rem 0">Niets van ons in bezit.</div>'}
+    <div style="margin-top:1.25rem;padding:12px 14px;border:1px solid var(--border);border-radius:10px;background:var(--bg)">
+      <div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Iets meegeven</div>
+      <div class="two">
+        <div class="fr"><span class="fl">Wat</span>
+          <select id="pdSpSoort" style="${pdVeldStijl()}" onchange="pdSpulSoortGekozen()">
+            ${PD_SOORTEN.map(s=>`<option value="${veiligTekst(s.id)}" data-borg="${veiligTekst(s.borg_standaard)}">${veiligTekst(s.naam)}</option>`).join('')}</select></div>
+        <div class="fr"><span class="fl">Aantal</span><input type="number" id="pdSpAantal" value="1" min="1" max="20" style="${pdVeldStijl()}"></div>
+      </div>
+      <div class="two">
+        <div class="fr"><span class="fl">Maat <span style="color:var(--muted);font-weight:400">(mag leeg)</span></span><input id="pdSpMaat" placeholder="${veiligTekst(PD.u.shirtmaat||'M')}" style="${pdVeldStijl()}"></div>
+        <div class="fr"><span class="fl">Borg (&euro;)</span><input type="number" id="pdSpBorg" value="0" min="0" step="0.01" inputmode="decimal" style="${pdVeldStijl()}"></div>
+      </div>
+      <div class="fr"><span class="fl">Opmerking <span style="color:var(--muted);font-weight:400">(mag leeg)</span></span><input id="pdSpOpm" maxlength="120" style="${pdVeldStijl()}"></div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0 10px;cursor:pointer"><input type="checkbox" id="pdSpBorgOk"> Borg is al ontvangen</label>
+      <div id="pdSpFout" style="font-size:12px;color:#B91C1C;margin-bottom:6px"></div>
+      <button class="btn-sm" onclick="pdSpulToevoegen()">Meegeven</button>
+    </div>
+    ${terug.length?`<details style="margin-top:1.25rem"><summary style="font-size:12px;color:var(--muted);cursor:pointer">Eerder ingeleverd (${terug.length})</summary>${terug.map(regel).join('')}</details>`:''}`;
+  pdSpulSoortGekozen();
+}
+function pdSpulSoortGekozen(){
+  const sel=document.getElementById('pdSpSoort'), b=document.getElementById('pdSpBorg');
+  if(!sel||!b)return;
+  const opt=sel.options[sel.selectedIndex];
+  if(opt)b.value=Number(opt.getAttribute('data-borg')||0).toFixed(2);
+}
+async function pdSpulToevoegen(){
+  const fout=document.getElementById('pdSpFout'); if(fout)fout.textContent='';
+  const soort=document.getElementById('pdSpSoort').value;
+  const aantal=parseInt(document.getElementById('pdSpAantal').value,10)||1;
+  const borg=Number(String(document.getElementById('pdSpBorg').value||'0').replace(',','.'))||0;
+  if(!soort){if(fout)fout.textContent='Kies wat je meegeeft.';return;}
+  if(aantal<1||aantal>20||borg<0){if(fout)fout.textContent='Aantal of borg klopt niet.';return;}
+  const{error}=await sb.from('uitgiftes').insert({gebruiker_id:PD.u.id,soort_id:soort,aantal,
+    maat:(document.getElementById('pdSpMaat').value||'').trim()||null,
+    opmerking:schoneInvoer(document.getElementById('pdSpOpm').value,120)||null,
+    borg,borg_ontvangen:!!document.getElementById('pdSpBorgOk').checked,door:CURRENT_USER.id});
+  if(error){if(fout)fout.textContent='Opslaan mislukt: '+error.message;return;}
+  toast('Meegegeven'); pdRenderSpullen(); pdUitdienstVerversen();
+}
+async function pdSpulIngeleverd(id){
+  const{error}=await sb.from('uitgiftes').update({ingeleverd_op:fmt(new Date())}).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  pdRenderSpullen(); pdUitdienstVerversen();
+}
+async function pdSpulBorg(id,wat){
+  const velden=wat==='ontvangen'?{borg_ontvangen:true}:{borg_terug_op:fmt(new Date())};
+  const{error}=await sb.from('uitgiftes').update(velden).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  pdRenderSpullen(); pdUitdienstVerversen();
+}
+async function pdSpulWeg(id){
+  const ok=await vraagBevestiging('Regel weghalen?','Alleen voor een vergissing. Is het ingeleverd, gebruik dan "Ingeleverd", dan blijft de geschiedenis staan.','Ja, weghalen');
+  if(!ok)return;
+  const{error}=await sb.from('uitgiftes').delete().eq('id',id);
+  if(error){toast('Weghalen mislukt: '+error.message,'fout');return;}
+  pdRenderSpullen(); pdUitdienstVerversen();
+}
+
+// ── Uit dienst ────────────────────────────────────────────────────────
+function pdUitdienstKnop(){
+  const u=PD&&PD.u; if(!u||CURRENT_ROL!=='beheerder')return '';
+  if(u.gearchiveerd_op)return `<div style="margin-top:1rem;font-size:12px;color:#991B1B;text-align:center">Uit dienst sinds ${veiligTekst(pdDatumKort(u.gearchiveerd_op))}</div>`;
+  const loopt=PD_UITD&&PD_UITD.traject_gestart;
+  return `<button class="btn-ghost" style="width:100%;margin-top:.5rem;justify-content:center;color:${loopt?'#B45309':'#991B1B'}" onclick="pdUitdienstStart()">${loopt?'Uit dienst · checklist':'Gaat uit dienst'}</button>`;
+}
+async function pdUitdienstLaden(){
+  if(!PD||!PD.u||CURRENT_ROL!=='beheerder'){PD_UITD=null;return;}
+  const{data}=await sb.rpc('uitdienst_overzicht',{p_gebruiker:PD.u.id});
+  PD_UITD=(data&&data[0])||null;
+  const tab=document.getElementById('pdTabUitdienst');
+  if(tab)tab.style.display=(PD_UITD&&PD_UITD.traject_gestart)?'':'none';
+}
+async function pdUitdienstVerversen(){
+  await pdUitdienstLaden();
+  if(PD_UITD&&PD_UITD.traject_gestart)pdRenderUitdienst();
+  pdRenderZij();
+}
+async function pdUitdienstStart(){
+  if(!PD_UITD||!PD_UITD.traject_gestart){
+    const ok=await vraagBevestiging(`${PD.u.naam} gaat uit dienst?`,
+      'Er verandert nog niets aan het account. Je krijgt een checklist met wat er nog moet gebeuren: verlof verrekenen, spullen en borg, open uren, komende diensten. Pas onderaan die lijst sluit je het account echt af.','Ja, checklist maken');
+    if(!ok)return;
+    const{error}=await sb.rpc('uitdienst_zetten',{p_gebruiker:PD.u.id});
+    if(error){toast('Mislukt: '+error.message,'fout');return;}
+  }
+  await pdUitdienstLaden();
+  pdRenderUitdienst(); pdRenderZij();
+  pdToon('uitdienst',document.getElementById('pdTabUitdienst'));
+}
+function pdRenderUitdienst(){
+  const vak=document.getElementById('pdVak-uitdienst'); if(!vak)return;
+  const d=PD_UITD; if(!d||!d.traject_gestart){vak.innerHTML='';return;}
+  const u=PD.u;
+  const stap=(klaar,titel,tekst,actie)=>`<div class="pd-stat" style="align-items:flex-start;gap:12px">
+      <div style="width:22px;height:22px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;${klaar?'background:#D1FAE5;color:#065F46':'background:#FEE2E2;color:#991B1B'}">${klaar?'✓':'!'}</div>
+      <div style="flex:1;min-width:0"><div style="font-weight:600">${titel}</div><div style="font-size:12.5px;color:var(--muted);margin-top:2px;line-height:1.5">${tekst}</div>${actie||''}</div></div>`;
+  const vast=!!d.verlof_bijgehouden;
+  const saldo=d.verlof_saldo_nu!=null?Number(d.verlof_saldo_nu):(d.verlof_saldo_vast!=null?Number(d.verlof_saldo_vast):null);
+  const verlofKlaar=!vast||!!d.verlof_verrekend_op||(saldo!==null&&Math.abs(saldo)<0.01);
+  const urenKlaar=!d.uren_wacht&&!d.uren_lopend;
+  const dienstenKlaar=!d.diensten_komend&&!d.aanmeldingen_open;
+  const spullenKlaar=!d.spullen_uit&&!Number(d.borg_terug_te_geven);
+  const werkdagKlaar=!!d.laatste_werkdag;
+  const alles=verlofKlaar&&urenKlaar&&dienstenKlaar&&spullenKlaar&&werkdagKlaar;
+  vak.innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:1rem">
+      <div><div style="font-size:15px;font-weight:600">Uit dienst &middot; wat moet er nog gebeuren</div>
+        <div style="font-size:12px;color:var(--muted)">Traject gestart ${veiligTekst(pdDatumKort(d.traject_gestart))}${d.traject_door?' door '+veiligTekst(d.traject_door):''}</div></div>
+      <button class="btn-ghost" style="font-size:12px" onclick="pdUitdienstAnnuleren()">Toch niet uit dienst</button>
+    </div>
+    ${stap(werkdagKlaar,'Laatste werkdag',werkdagKlaar?'Laatste werkdag '+veiligTekst(pdDatumKort(d.laatste_werkdag))+'. Vanaf die dag stopt de verlofopbouw.':'Vul de laatste werkdag in; daarmee stopt de verlofopbouw en weet de planning tot wanneer hij kan.',
+      `<div style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="date" id="pdUdWerkdag" value="${veiligTekst(d.laatste_werkdag||u.uit_dienst_op||'')}" style="${pdVeldStijl()};width:auto"><button class="btn-sm" style="font-size:11px;padding:6px 10px" onclick="pdUitdienstBewaar('werkdag')">Opslaan</button></div>`)}
+    ${stap(verlofKlaar,'Verlof verrekenen',!vast?'Niet van toepassing: voor deze rol wordt geen verlof bijgehouden.'
+        :`Saldo nu <b style="color:${saldo<0?'#B91C1C':'var(--text)'}">${saldo!==null?String(saldo.toFixed(2)).replace('.',','):'?'} uur</b>${d.verlof_saldo_vast!=null?' (bij de start van het traject '+String(Number(d.verlof_saldo_vast).toFixed(2)).replace('.',',')+')':''}. `
+         +(saldo>0?'Uitbetalen bij de eindafrekening of laten opnemen vóór de laatste werkdag.':saldo<0?'Te veel opgenomen: verrekenen met het laatste loon.':'Niets te verrekenen.')
+         +(d.verlof_verrekend_op?' <span style="color:#059669">Verrekend op '+veiligTekst(pdDatumKort(d.verlof_verrekend_op))+'.</span>':''),
+      vast?`<div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap"><input type="date" id="pdUdVerlofOp" value="${veiligTekst(d.verlof_verrekend_op||'')}" style="${pdVeldStijl()};width:auto"><input id="pdUdVerlofNot" placeholder="bv. 12,5 uur uitbetaald in oktober" value="${veiligTekst(d.verlof_notitie||'')}" style="${pdVeldStijl()};flex:1;min-width:160px"><button class="btn-sm" style="font-size:11px;padding:6px 10px" onclick="pdUitdienstBewaar('verlof')">Verrekend</button></div>`:'')}
+    ${stap(urenKlaar,'Uren',urenKlaar?'Geen open urenregistraties.':`${d.uren_wacht?d.uren_wacht+' registratie(s) wachten op akkoord':''}${d.uren_wacht&&d.uren_lopend?', ':''}${d.uren_lopend?d.uren_lopend+' staat nog ingeklokt':''}. Accordeer of wijs af bij Uren, anders klopt het laatste loon niet.`,
+      urenKlaar?'':`<button class="btn-ghost" style="font-size:11px;padding:5px 10px;margin-top:6px" onclick="closePersDetail();showPage('uren-beheer',null)">Naar Uren</button>`)}
+    ${stap(dienstenKlaar,'Planning',dienstenKlaar?'Staat op geen enkele komende dienst.':`Staat nog op ${d.diensten_komend} komende dienst(en)${d.aanmeldingen_open?' en heeft '+d.aanmeldingen_open+' open aanmelding(en)':''}. Bij het afsluiten gaat hij van alle diensten vanaf die dag af; wil je dat eerder, doe het dan in de planning.`,
+      dienstenKlaar?'':`<button class="btn-ghost" style="font-size:11px;padding:5px 10px;margin-top:6px" onclick="closePersDetail();showPage('planning-beheer',null)">Naar Planning</button>`)}
+    ${stap(spullenKlaar,'Spullen en borg',spullenKlaar?'Alles ingeleverd en geen borg meer open.':`${d.spullen_uit?d.spullen_uit+' regel(s) nog in bezit':''}${d.spullen_uit&&Number(d.borg_terug_te_geven)?', ':''}${Number(d.borg_terug_te_geven)?'borg terug te geven '+pdEuro(d.borg_terug_te_geven):''}. Zet elk stuk op Ingeleverd en de borg op Terugbetaald.`,
+      spullenKlaar?'':`<button class="btn-ghost" style="font-size:11px;padding:5px 10px;margin-top:6px" onclick="pdToon('spullen',document.getElementById('pdTabSpullen'))">Naar Spullen</button>`)}
+    ${d.vrije_dagen_aangevraagd?stap(false,'Verlofaanvragen','Er staan nog '+d.vrije_dagen_aangevraagd+' aanvraag/aanvragen open voor na vandaag. Wijs ze af of keur ze goed bij Beschikbaarheid.',''):''}
+    <div class="fr" style="margin-top:1rem"><span class="fl">Opmerking</span>
+      <input id="pdUdOpm" value="${veiligTekst(d.opmerking||'')}" placeholder="bv. sleutel Franklins nog bij Joost" maxlength="200" style="${pdVeldStijl()}" onchange="pdUitdienstBewaar('opmerking')"></div>
+    <div style="margin-top:1.25rem;padding:14px;border:1px solid ${alles?'#BBF7D0':'#FCD34D'};border-radius:10px;background:${alles?'#F0FDF4':'#FFFBEB'}">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px">${alles?'Alles is afgehandeld.':'Nog niet alles is afgehandeld.'}</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px">Afsluiten zet het account uit dienst: inloggen kan niet meer, hij verdwijnt uit de lijsten en gaat van alle diensten vanaf vandaag af. Uren en facturen blijven bewaard. Dat kan ook als hierboven nog iets openstaat, maar dan zie je het straks niet meer terug in deze lijst.</div>
+      <button class="btn-sm" style="background:#991B1B;border-color:#991B1B" onclick="pdUitdienstAfsluiten()">Account afsluiten</button>
+    </div>`;
+}
+async function pdUitdienstBewaar(wat){
+  const p={p_gebruiker:PD.u.id};
+  if(wat==='werkdag'){ const v=(document.getElementById('pdUdWerkdag')||{}).value; if(!v){toast('Kies een datum','fout');return;} p.p_laatste_werkdag=v; }
+  if(wat==='verlof'){ const v=(document.getElementById('pdUdVerlofOp')||{}).value||fmt(new Date()); p.p_verlof_verrekend_op=v; p.p_verlof_notitie=(document.getElementById('pdUdVerlofNot')||{}).value||''; }
+  if(wat==='opmerking'){ p.p_opmerking=(document.getElementById('pdUdOpm')||{}).value||''; }
+  const{error}=await sb.rpc('uitdienst_zetten',p);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  if(wat==='werkdag'&&PD&&PD.u)PD.u.uit_dienst_op=p.p_laatste_werkdag;
+  await pdUitdienstVerversen();
+}
+async function pdUitdienstAnnuleren(){
+  const ok=await vraagBevestiging('Toch niet uit dienst?','De checklist verdwijnt en de uit-dienst-datum gaat van het account af. Spullen en borg blijven staan zoals ze zijn.','Ja, blijft in dienst');
+  if(!ok)return;
+  const{error}=await sb.rpc('uitdienst_annuleren',{p_gebruiker:PD.u.id});
+  if(error){toast('Mislukt: '+error.message,'fout');return;}
+  if(PD&&PD.u)PD.u.uit_dienst_op=null;
+  PD_UITD=null; await pdUitdienstVerversen();
+  pdToon('algemeen',document.querySelectorAll('.pd-tab')[0]);
+}
+async function pdUitdienstAfsluiten(){
+  const id=PD.u.id;
+  await sb.rpc('uitdienst_zetten',{p_gebruiker:id,p_afgerond:true});
+  closePersDetail();
+  await verwijderAccount(id);
 }
 
 function pdRenderZij(){
@@ -8152,7 +8366,8 @@ function pdRenderZij(){
      ${rij('&#128085;',veiligTekst(u.shirtmaat))}
      ${rij('&#128663;',rijbewijsTekst(u.rijbewijs))}
      ${namen.length?`<div style="margin-top:1rem;display:flex;flex-wrap:wrap;gap:4px">${namen.map(n=>`<span style="font-size:10px;background:#F0FDF4;color:#166534;border:1px solid #BBF7D0;border-radius:20px;padding:2px 8px;font-weight:500">${veiligTekst(n)}</span>`).join('')}</div>`:''}
-     <button class="btn-ghost" style="width:100%;margin-top:1.25rem;justify-content:center" onclick="pdToon('gegevens',document.querySelectorAll('.pd-tab')[3])">Gegevens bewerken</button>`;
+     <button class="btn-ghost" style="width:100%;margin-top:1.25rem;justify-content:center" onclick="pdToon('gegevens',document.querySelectorAll('.pd-tab')[4])">Gegevens bewerken</button>
+     ${pdUitdienstKnop()}`;
 }
 
 // Registraties die meetellen: geen afgewezen uren en niets wat nog loopt.
