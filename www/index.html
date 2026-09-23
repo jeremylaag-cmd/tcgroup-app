@@ -6970,12 +6970,18 @@ function diagAan(){
     if(!DIAG.laatsteTik)return;
     const t0=DIAG.laatsteTik; DIAG.laatsteTik=0;
     const tInput=performance.now();
-    requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    // Waar zit de tijd? Eerst stijl+layout afdwingen en klokken, dan een
+    // gewone taak (MessageChannel, wordt niet afgeremd zoals timers), dan het frame.
+    let tLayout=0,tTaak=0;
+    try{ const a=performance.now(); void document.body.getBoundingClientRect(); void e.target.getBoundingClientRect(); tLayout=Math.round(performance.now()-a); }catch(x){}
+    try{ const mc=new MessageChannel(); const b=performance.now(); mc.port1.onmessage=()=>{tTaak=Math.round(performance.now()-b);}; mc.port2.postMessage(1); }catch(x){}
+    const r0=performance.now();
+    requestAnimationFrame(()=>{ const r1=performance.now(); requestAnimationFrame(()=>{
       const tPaint=performance.now();
-      DIAG.toetsen.push({toets:DIAG.laatsteToets,naarInput:Math.round(tInput-t0),naarScherm:Math.round(tPaint-t0),veld:(e.target||{}).id||(e.target||{}).className||'?'});
+      DIAG.toetsen.push({toets:DIAG.laatsteToets,naarInput:Math.round(tInput-t0),naarScherm:Math.round(tPaint-t0),layout:tLayout,taak:tTaak,frame1:Math.round(r1-r0),frame2:Math.round(tPaint-r1),veld:(e.target||{}).id||(e.target||{}).className||'?'});
       if(DIAG.toetsen.length>8)DIAG.toetsen.shift();
       diagTeken();
-    }));
+    });});
   };
   document.addEventListener('keydown',DIAG.onKey,true);
   document.addEventListener('input',DIAG.onInput,true);
@@ -7012,7 +7018,9 @@ function diagTeken(){
   const r=[];
   r.push('browser: '+(navigator.userAgent.match(/(CriOS|Chrome|Safari|Firefox|Version)\/[\d.]+/g)||[]).join(' ')+(navigator.standalone||window.Capacitor?' (app)':''));
   r.push('pagina: '+((document.querySelector('.page.active')||{}).id||'-')+'  velden: '+document.querySelectorAll('input').length+'  knopen: '+document.getElementsByTagName('*').length);
-  if(DIAG.toetsen.length){ r.push('toets → scherm (ms): '+DIAG.toetsen.map(t=>t.naarScherm+(t.naarInput>50?'('+t.naarInput+' tot input)':'')).join(', ')); }
+  if(DIAG.toetsen.length){ r.push('toets → scherm (ms): '+DIAG.toetsen.map(t=>t.naarScherm+(t.naarInput>50?'('+t.naarInput+' tot input)':'')).join(', '));
+    r.push('per toets: layout / taak / frame1 / frame2: '+DIAG.toetsen.map(t=>[t.layout,t.taak,t.frame1,t.frame2].join('/')).join(', ')); }
+  r.push('venster: '+window.innerWidth+'×'+window.innerHeight+'  zoom: '+Math.round(window.devicePixelRatio*100)+'%  zichtbaar: '+document.visibilityState+'  focus: '+document.hasFocus()+'  hoogte pagina: '+document.documentElement.scrollHeight);
   if(DIAG.stallen.length){ r.push('blokkades: '+DIAG.stallen.map(s=>s.om+' '+s.ms+'ms').join(', ')); }
   const tel=Object.entries(DIAG.tellers).filter(([k])=>!k.endsWith('_ms')).map(([k,v])=>k+'×'+v+(DIAG.tellers[k+'_ms']?' '+DIAG.tellers[k+'_ms']+'ms':'')).join(', ');
   r.push('app deed: '+(tel||'niets'));
