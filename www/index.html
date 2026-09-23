@@ -8836,11 +8836,57 @@ function beschDekt(b,datum){
   const de=(b.datum_eind||'').slice(0,10)||ds;
   return !!ds&&ds<=datum&&datum<=de;
 }
+// ─── Vrij = niet inplanbaar ─────────────────────────────────────────
+// Goedgekeurd vrij (hele dagen) blokkeert het inplannen hard: de database
+// weigert de indeling en de app laat dat zien. Een deel van de dag vrij, of
+// een part-timer die zich niet heeft gemeld, blijft een waarschuwing waarbij
+// je "toch inplannen" kunt kiezen.
+function verlofSoortTekst(s){
+  return {vakantie:'vakantie',ziek:'ziekte',bijzonder:'bijzonder verlof',onbetaald:'onbetaald verlof'}[s]||'vrij';
+}
+function verlofDatumKort(d){
+  if(!d)return '';
+  try{return parseDate(String(d).slice(0,10)).toLocaleDateString('nl-NL',{day:'numeric',month:'short'});}catch(e){return String(d).slice(0,10);}
+}
+// Op welke klussen staat deze persoon nog ingepland in de periode van..tot?
+function verlofConflicten(gebruikerId,van,tot){
+  const v=String(van||'').slice(0,10), t=String(tot||van||'').slice(0,10);
+  if(!v)return[];
+  return (KLUSSEN||[]).filter(k=>{
+    const kv=String(k.datum||'').slice(0,10), kt=String(k.datum_eind||k.datum||'').slice(0,10);
+    if(!kv||kv>t||kt<v)return false;
+    return (k.personeel||[]).some(p=>p.id===gebruikerId);
+  }).sort((a,b)=>String(a.datum).localeCompare(String(b.datum)));
+}
+// Vraagt of de persoon van die klussen af mag; zo ja, haalt hem eraf.
+// Geeft false terug als de beheerder afziet van het goedkeuren.
+async function verlofConflictenAfhandelen(items){
+  // items: [{gebruiker_id, naam, van, tot}]
+  const alles=[];
+  items.forEach(it=>verlofConflicten(it.gebruiker_id,it.van,it.tot).forEach(k=>alles.push({...it,klus:k})));
+  if(!alles.length)return true;
+  const regels=alles.map(c=>'<div style="margin-bottom:6px">⚠ <strong>'+veiligTekst(c.naam)+'</strong> staat op <strong>'
+    +veiligTekst(c.klus.naam||c.klus.food||'klus')+'</strong> ('+veiligTekst(verlofDatumKort(c.klus.datum))+')</div>').join('');
+  const ok=await vraagBevestiging('Nog ingepland in die periode',
+    regels+'<div style="color:var(--muted);margin-top:8px">Iemand met goedgekeurd vrij kan niet ingepland staan. '
+    +'Als je doorgaat wordt hij van deze '+(alles.length===1?'klus':'klussen')+' gehaald en krijgt hij daar een melding van.</div>',
+    'Goedkeuren en van de planning halen');
+  if(!ok)return false;
+  for(const c of alles){
+    const{error}=await sb.from('klus_gebruikers').delete().eq('klus_id',c.klus.id).eq('gebruiker_id',c.gebruiker_id);
+    if(error){toast('Van de planning halen mislukt: '+error.message,'fout');return false;}
+    c.klus.personeel=(c.klus.personeel||[]).filter(p=>p.id!==c.gebruiker_id);
+    try{sendPushNotificatie(c.gebruiker_id,'Planning gewijzigd','Je staat niet meer op '+(c.klus.naam||c.klus.food||'de klus')+' op '+verlofDatumKort(c.klus.datum)+' omdat je vrij hebt.');}catch(e){}
+  }
+  return true;
+}
 // Mag deze persoon op deze datum ingepland worden?
 function magIngepland(persoonId,datum,rol){
   if(!datum)return{ok:true,reden:''};
   const regels=BESCHIKBAARHEID.filter(b=>b.gebruiker_id===persoonId&&beschDekt(b,datum));
-  if(regels.some(b=>b.soort==='onbeschikbaar'))return{ok:false,reden:'is niet beschikbaar op deze dag'};
+  const vrij=regels.find(b=>b.soort==='onbeschikbaar'&&!b.tijd_start&&!b.tijd_eind);
+  if(vrij)return{ok:false,hard:true,reden:'heeft goedgekeurd '+verlofSoortTekst(vrij.verlofsoort)+' van '+verlofDatumKort(vrij.datum_start)+' t/m '+verlofDatumKort(vrij.datum_eind||vrij.datum_start)+' en kan niet worden ingepland'};
+  if(regels.some(b=>b.soort==='onbeschikbaar'))return{ok:false,reden:'is een deel van deze dag niet beschikbaar'};
   if(werktOpAanvraag(rol)&&!regels.some(b=>b.soort==='beschikbaar'))
     return{ok:false,reden:'heeft zich nog niet beschikbaar gemeld voor deze dag'};
   return{ok:true,reden:''};
@@ -9358,7 +9404,7 @@ async function togglePers(id){
     const ander=anderKlusOpDag(id,datum,editId);
     if(!check.ok||ander){
       const ok=await vraagOverleg(persoon?.naam||'Deze medewerker',
-        check.ok?'':check.reden, ander?('staat die dag al op '+ander):'', '');
+        check.ok?'':check.reden, ander?('staat die dag al op '+ander):'', '', check.hard);
       if(!ok)return;
     }
   }
@@ -9391,7 +9437,14 @@ function bevestigAntwoord(ja){
 }
 
 // De vraag die je krijgt als je iemand inplant die er eigenlijk niet is.
-function vraagOverleg(naam,reden,dubbelTekst,klusnaam){
+function vraagOverleg(naam,reden,dubbelTekst,klusnaam,hard){
+  if(hard){
+    vraagBevestiging('Kan niet ingepland worden',
+      '<div style="margin-bottom:8px;color:#B91C1C;font-weight:500">⚠ '+veiligTekst(naam)+' '+veiligTekst(reden)+'.</div>'
+      +'<div style="color:var(--muted)">Goedgekeurd vrij blokkeert het inplannen. Wil je '+veiligTekst(naam)+' toch inzetten, haal dan eerst het vrij weg bij Beschikbaarheid.</div>',
+      'Begrepen');
+    return Promise.resolve(false);
+  }
   const regels=[];
   if(reden)regels.push('⚠ '+veiligTekst(naam)+' '+veiligTekst(reden)+'.');
   if(dubbelTekst)regels.push('⚠ '+veiligTekst(naam)+' '+veiligTekst(dubbelTekst)+'.');
@@ -14781,11 +14834,19 @@ async function keurBeschikbaarheid(id,status){
       }
     }
   }
-
+  if(status==='goedgekeurd'){
+    const rij=(ALLE_BESCH||[]).find(b=>b.id===id);
+    if(rij&&rij.soort==='onbeschikbaar'&&!rij.tijd_start&&!rij.tijd_eind){
+      const p=(PERSONEEL||[]).find(x=>x.id===rij.gebruiker_id);
+      const door=await verlofConflictenAfhandelen([{gebruiker_id:rij.gebruiker_id,naam:p?p.naam:'Deze medewerker',van:rij.datum_start,tot:rij.datum_eind||rij.datum_start}]);
+      if(!door)return;
+    }
+  }
   const{error}=await sb.from('beschikbaarheid').update(patch).eq('id',id);
   if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
   await laadVerlofCijfers();
   loadAlleBeschikbaarheid();
+  if(typeof loadAll==='function')loadAll();
 }
 
 // ── HET TABBLAD VERLOF OP EEN PROFIEL ────────────────────────────────────
@@ -15436,6 +15497,11 @@ async function bewaarAfwezig(){
     soort:'onbeschikbaar',status:'goedgekeurd',verlofsoort,
   }));
 
+  if(!tijd_start&&!tijd_eind){
+    const items=[...AFW_GEKOZEN].map(id=>{const p=(PERSONEEL||[]).find(x=>x.id===id);return{gebruiker_id:id,naam:p?p.naam:'Deze medewerker',van:datum_start,tot:datum_eind};});
+    const door=await verlofConflictenAfhandelen(items);
+    if(!door)return;
+  }
   // Zelfde beveiliging als bij het opslaan van een klus: twee keer drukken
   // mag niet twee keer wegschrijven.
   if(!slotPak('afwezig'))return;
@@ -15798,12 +15864,14 @@ async function pbWijsToe(klusId,mwId,gekozenShift){
   // Wie zich heeft aangemeld mag altijd. Is iemand niet beschikbaar, dan kan
   // het nog steeds — je bevestigt dan alleen even dat je het hebt afgestemd.
   const heeftGemeld=AANMELDINGEN.some(a=>a.klus_id===klusId&&a.gebruiker_id===mwId&&a.status!=='afgewezen');
+  const cVrij=magIngepland(mwId,klus.datum,mw.rol);
+  if(heeftGemeld&&cVrij.hard){await vraagOverleg(mw.naam,cVrij.reden,'',klus.naam,true);return;}
   if(!heeftGemeld){
-    const c=magIngepland(mwId,klus.datum,mw.rol);
+    const c=cVrij;
     const ander=anderKlusOpDag(mwId,klus.datum,klusId);
     if(!c.ok||ander){
       const ok=await vraagOverleg(mw.naam,c.ok?'':c.reden,
-        ander?('staat die dag al op '+ander):'',klus.naam);
+        ander?('staat die dag al op '+ander):'',klus.naam,c.hard);
       if(!ok)return;
     }
   }
@@ -15826,7 +15894,12 @@ async function pbWijsToe(klusId,mwId,gekozenShift){
 
   klus.personeel.push({id:mw.id,naam:mw.naam,shift_id:shiftId});pbOpenDrop=null;
   pbShowToast('toe',mw.naam,klus.naam);
-  sb.from('klus_gebruikers').insert({klus_id:klusId,gebruiker_id:mwId,shift_id:shiftId}).then(()=>{});
+  sb.from('klus_gebruikers').insert({klus_id:klusId,gebruiker_id:mwId,shift_id:shiftId}).then(({error})=>{
+    if(!error)return;
+    klus.personeel=(klus.personeel||[]).filter(p=>p.id!==mwId);
+    toast('Niet ingepland: '+error.message,'fout');
+    pbRenderContent();
+  });
   if(heeftGemeld){
     sb.from('klus_aanmeldingen').update({status:'geaccepteerd'})
       .eq('klus_id',klusId).eq('gebruiker_id',mwId).then(()=>{
@@ -16025,7 +16098,7 @@ async function pbInternWijsToe(naam,mwId){
   const ander=anderKlusOpDag(mwId,ds,bestaandeKlus?bestaandeKlus.id:null);
   if(!c.ok||ander){
     const ok=await vraagOverleg(mw.naam,c.ok?'':c.reden,
-      ander?('staat die dag al op '+ander):'',naam);
+      ander?('staat die dag al op '+ander):'',naam,c.hard);
     if(!ok)return;
   }
   const k=await pbInternZorgKlus(naam);
