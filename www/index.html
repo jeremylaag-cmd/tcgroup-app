@@ -13360,7 +13360,7 @@ function tekenLoonkosten(){
         <td style="${tdR}">${lkEuroKort(g.kw)}<div style="font-size:11px;color:var(--muted)">${lkUren(g.uw)}</div></td>
       </tr>`;}));
   }else{
-    tabel=lkTabel(['Medewerker','Uurloon','Klussen','Goedgekeurd','Te accorderen','Kosten'],
+    tabel=lkTabel(['Medewerker','Uurloon','Klussen','Goedgekeurd','Te accorderen','Kosten','KM\u2019s'],
       (LK_PERSRIJEN||[]).map(r=>`<tr>
         <td style="${td}">
           <div style="font-weight:600;color:var(--text)">${veiligTekst(r.naam||'Onbekend')}</div>
@@ -13371,6 +13371,7 @@ function tekenLoonkosten(){
         <td style="${tdR}">${lkUren(r.uren_goedgekeurd)}</td>
         <td style="${tdR}">${lkUren(r.uren_wacht)}</td>
         <td style="${tdR}">${lkEuroKort(r.kosten)}</td>
+        <td style="${tdR}">${Number(r.km)>0?lkEuroKort(r.km_bedrag)+`<div style="font-size:11px;color:var(--muted)">${String(Number(r.km)).replace('.',',')} km</div>`:'<span style="color:var(--muted)">&mdash;</span>'}</td>
       </tr>`));
   }
 
