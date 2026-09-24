@@ -6062,7 +6062,6 @@ function mcrFactuurRegels(f, inst, mij){
   const sc=(mij.sort_code||'').replace(/(\d{2})(?=\d)/g,'$1-');
   zet(56, 'IBAN '+(mij.iban ? mij.iban.replace(/(.{4})/g,'$1 ').trim() : '[add your IBAN in the app]'), {groot:9}); y-=12;
   zet(56, 'Account number '+(mij.bank_account || '[add your account number in the app]')+(sc?'   Sort code '+sc:''), {groot:9}); y-=26;
-  zet(56,'Breaks of 30 minutes come off shifts over six hours, as agreed in the house rules.',{groot:8,grijs:true});
   return R;
 }
 
