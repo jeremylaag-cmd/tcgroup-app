@@ -56,6 +56,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mcr-knop.licht{background:#fff;color:#1A1917;border:1px solid #D9D7D0}
 .mcr-knop[disabled]{opacity:.45;cursor:default}
 .mcr-chip{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+#mcrPauzeKnoppen .mcr-chip{border:1px solid #E5E3DC;background:#fff;color:#6B6A66}
+#mcrPauzeKnoppen .mcr-chip.on{background:#1A1917;border-color:#1A1917;color:#fff}
 .mcr-veld{width:100%;box-sizing:border-box;font-family:var(--font);font-size:15px;padding:12px 13px;border:1px solid #D9D7D0;border-radius:11px;background:#fff;color:#1A1917}
 .mcr-label{display:block;font-size:11px;font-weight:600;color:#6B6A66;margin-bottom:5px}
 .mcr-leeg{text-align:center;color:#8A8984;font-size:13.5px;line-height:1.6;padding:28px 10px}
@@ -5667,27 +5669,42 @@ async function mcrKlok0(){
 }
 // Ingeklokt: alleen de teller en de knop. De vragen over pauze en een notitie
 // komen pas in beeld als iemand op Clock out drukt (mcrUitklokVraag).
-function mcrUitklokVraag(){
+let MCR_PAUZE_KEUZE=null;
+async function mcrUitklokVraag(){
   const st=MCR_STATUS||{};
   const m=document.getElementById('mcrMain'); if(!m||!st.uren_id)return;
-  const min=Math.max(0,Math.round((Date.now()-new Date(st.ingeklokt_op).getTime())/60000));
   if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
+  // De standaardpauze komt uit de afspraak van de vestiging (bv. 30 min boven
+  // 6 uur), berekend op de gewerkte tijd. De medewerker mag hem aanpassen.
+  let v={minuten:Math.max(0,Math.round((Date.now()-new Date(st.ingeklokt_op).getTime())/60000)),pauze:0,drempel_uren:6,pauze_regel:30};
+  try{ const{data}=await sb.rpc('mcr_pauze_voorstel'); if(data&&data[0])v=data[0]; }catch(e){}
+  const min=Number(v.minuten)||0;
+  MCR_PAUZE_KEUZE=Number(v.pauze)||0;
+  const regel=Number(v.pauze_regel)||30, drempel=Number(v.drempel_uren)||6;
+  const uitleg=MCR_PAUZE_KEUZE
+    ?`For a shift this long the standard break is <b style="color:#1A1917">${MCR_PAUZE_KEUZE} min</b>. Took more or less? Change it here.`
+    :`No break is taken off shifts under ${drempel} hours. Did you take one anyway? Pick it here.`;
   m.innerHTML=`
     <div style="text-align:center">
       <div style="font-size:13px;color:#6B6A66">Clocking out of</div>
       <div style="font-size:22px;font-weight:700;color:#1A1917;margin-top:2px">${veiligTekst(st.kraam||'')}</div>
-      <div style="font-size:13px;color:#6B6A66;margin-top:4px">${Math.floor(min/60)}:${String(min%60).padStart(2,'0')} since ${veiligTekst(mcrKlok(st.ingeklokt_op))}</div>
+      <div style="font-size:13px;color:#6B6A66;margin-top:4px">${Math.floor(min/60)}h ${String(min%60).padStart(2,'0')}m since ${veiligTekst(mcrKlok(st.ingeklokt_op))}</div>
     </div>
     <div class="mcr-kaart" style="margin-top:20px">
-      <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
-        <input type="checkbox" id="mcrGeenPauze" style="margin-top:3px;width:17px;height:17px;flex-shrink:0">
-        <span style="font-size:13px;color:#6B6A66;line-height:1.5">I did not take a break. <b style="color:#1A1917">A 30 minute break</b> comes off shifts over 6 hours.</span>
-      </label>
-      <label class="mcr-label" style="margin-top:12px">Anything Bram should know?</label>
+      <label class="mcr-label">Break</label>
+      <div style="font-size:12.5px;color:#6B6A66;line-height:1.5;margin-bottom:10px">${uitleg}</div>
+      <div id="mcrPauzeKnoppen" style="display:flex;gap:5px">
+        ${[0,15,30,45,60].map(p=>`<div class="mcr-chip${p===MCR_PAUZE_KEUZE?' on':''}" data-min="${p}" onclick="mcrPauzeKies(${p})" style="cursor:pointer;flex:1;text-align:center;padding:9px 0;font-size:13px">${p===0?'None':p+' min'}</div>`).join('')}
+      </div>
+      <label class="mcr-label" style="margin-top:14px">Anything Bram should know?</label>
       <textarea class="mcr-veld" id="mcrKlokNotitie" rows="2" placeholder="Stayed on to help pack down&hellip;"></textarea>
     </div>
     <button class="mcr-knop" style="margin-top:14px" onclick="mcrUitklokken()">Clock out</button>
     <button class="mcr-knop" style="margin-top:8px;background:transparent;color:#6B6A66;border:1px solid #EFEDE7" onclick="mcrKlokTeken()">Back</button>`;
+}
+function mcrPauzeKies(p){
+  MCR_PAUZE_KEUZE=p;
+  document.querySelectorAll('#mcrPauzeKnoppen .mcr-chip').forEach(c=>c.classList.toggle('on',+c.dataset.min===p));
 }
 function mcrKlokTeken(){
   const st=MCR_STATUS||{};
@@ -5774,7 +5791,8 @@ async function mcrUitklokken(){
   try{
     const{data,error}=await sb.rpc('mcr_uitklokken',{
       p_geen_pauze: !!(geen&&geen.checked),
-      p_notitie: (not&&not.value)||null});
+      p_notitie: (not&&not.value)||null,
+      p_pauze: MCR_PAUZE_KEUZE==null?null:Number(MCR_PAUZE_KEUZE)});
     if(error)throw error;
     const r=(data&&data[0])||{};
     if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
