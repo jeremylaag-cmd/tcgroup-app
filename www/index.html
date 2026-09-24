@@ -5961,7 +5961,7 @@ async function mcrFactuurMaken(ronde){
     const[{data,error},inst,{data:mij}]=await Promise.all([
       sb.rpc('mcr_factuur_maken',{p_ronde:ronde}),
       mcrInstellingen(),
-      sb.from('gebruikers').select('naam,straat,postcode,plaats,telefoon,email').eq('id',CURRENT_USER.id).single()
+      sb.from('gebruikers').select('naam,straat,postcode,plaats,telefoon,email,iban,bank_account,sort_code,utr').eq('id',CURRENT_USER.id).single()
     ]);
     if(error)throw error;
     const f=(data&&data[0])||null;
@@ -6059,7 +6059,9 @@ function mcrFactuurRegels(f, inst, mij){
   zet(370,'Total',{groot:11,vet:true});        zet(480,'£ '+Number(f.bedrag||0).toFixed(2),{groot:13,vet:true}); y-=34;
 
   zet(56,'Bank details',{groot:8,grijs:true}); y-=12;
-  zet(56, mij.iban ? mij.iban : '[add your bank details in the app]', {groot:9}); y-=26;
+  const sc=(mij.sort_code||'').replace(/(\d{2})(?=\d)/g,'$1-');
+  zet(56, 'IBAN '+(mij.iban ? mij.iban.replace(/(.{4})/g,'$1 ').trim() : '[add your IBAN in the app]'), {groot:9}); y-=12;
+  zet(56, 'Account number '+(mij.bank_account || '[add your account number in the app]')+(sc?'   Sort code '+sc:''), {groot:9}); y-=26;
   zet(56,'Breaks of 30 minutes come off shifts over six hours, as agreed in the house rules.',{groot:8,grijs:true});
   return R;
 }
@@ -6355,10 +6357,10 @@ async function mcrProfiel(){
     <input class="mcr-veld" id="${id}" type="${type||'text'}" value="${veiligTekst(waarde||'')}" placeholder="${veiligTekst(ph||'')}">
     ${hint?`<div style="font-size:11.5px;color:#8A8984;margin-top:4px;line-height:1.45">${hint}</div>`:''}`;
 
-  const bank = (g.iban||'').trim();
+  const bank = (g.iban||'').trim() && (g.bank_account||'').trim();
   document.getElementById('mcrMain').innerHTML=`
     ${!bank?`<div class="mcr-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
-      <div style="font-size:12.5px;color:#8A5307;line-height:1.6"><b>Add your bank details.</b> Without them your invoice cannot be paid, and it moves to the next payment round.</div>
+      <div style="font-size:12.5px;color:#8A5307;line-height:1.6"><b>Add your IBAN and account number.</b> Without both your invoice cannot be paid, and it moves to the next payment round.</div>
     </div>`:''}
     ${g.goedgekeurd===false?`<div class="mcr-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
       <div style="font-size:14px;font-weight:700;color:#8A5307">Waiting for approval</div>
@@ -6381,7 +6383,9 @@ async function mcrProfiel(){
 
     <div class="mcr-kaart">
       <div class="mcr-kop">Getting paid</div>
-      ${veld('mcrPIban','Bank details',g.iban,'text','GB29 NWBK 6016 1331 9268 19','Needed before you can be paid.')}
+      ${veld('mcrPIban','IBAN',g.iban,'text','GB29 NWBK 6016 1331 9268 19','Required.')}
+      ${veld('mcrPBank','Account number',g.bank_account,'text','31926819','Required. Both the IBAN and the account number are needed before you can be paid.')}
+      ${veld('mcrPSort','Sort code &mdash; <span style="font-weight:500;color:#8A8984">optional</span>',g.sort_code,'text','60-16-13')}
       ${veld('mcrPUtr','UTR number &mdash; <span style="font-weight:500;color:#8A8984">optional</span>',g.utr,'text','1234567890','Your own tax affairs. Add it if you want it on your invoice.')}
     </div>
 
@@ -6410,6 +6414,7 @@ async function mcrProfielOpslaan(){
     const{error}=await sb.rpc('mcr_profiel_opslaan',{
       p_telefoon:v('mcrPTel'), p_straat:v('mcrPStraat'), p_postcode:v('mcrPPost'),
       p_plaats:v('mcrPPlaats'), p_iban:v('mcrPIban'), p_utr:v('mcrPUtr'),
+      p_bank_account:v('mcrPBank'), p_sort_code:v('mcrPSort'),
       p_nood_naam:v('mcrPNoodNaam'), p_nood_tel:v('mcrPNoodTel'), p_shirtmaat:v('mcrPMaat')});
     if(error)throw error;
     const ok=document.getElementById('mcrProfOk'); if(ok){ok.style.display='';setTimeout(()=>ok.style.display='none',2500);}
