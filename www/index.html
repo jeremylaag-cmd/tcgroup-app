@@ -5699,8 +5699,37 @@ async function mcrUitklokVraag(){
       <label class="mcr-label" style="margin-top:14px">Anything Bram should know?</label>
       <textarea class="mcr-veld" id="mcrKlokNotitie" rows="2" placeholder="Stayed on to help pack down&hellip;"></textarea>
     </div>
-    <button class="mcr-knop" style="margin-top:14px" onclick="mcrUitklokken()">Clock out</button>
+    <div style="text-align:center;margin-top:18px">
+      ${NFC_KAN?`
+      <div class="mcr-cirkel uit" onclick="mcrTagUitklokken()">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M6 8.5a8 8 0 0 1 0 7M9.5 6a12 12 0 0 1 0 12M13 3.5a16 16 0 0 1 0 17"/><circle cx="3" cy="12" r="1.2" fill="#fff" stroke="none"/></svg>
+        <span style="font-size:15px;font-weight:600">Tap the tag</span>
+      </div>
+      <div id="mcrNfcUit" style="font-size:12.5px;color:#6B6A66;margin-top:10px;min-height:17px"></div>
+      <div style="display:flex;align-items:center;gap:10px;margin:14px 0 12px">
+        <div style="flex:1;height:1px;background:#EFEDE7"></div>
+        <span style="font-size:11px;color:#8A8984">or type the code</span>
+        <div style="flex:1;height:1px;background:#EFEDE7"></div>
+      </div>`:`
+      <div style="font-size:12.5px;color:#6B6A66;line-height:1.5;margin-bottom:10px">Type the code from the card in the stall to clock out.</div>`}
+      <input class="mcr-veld" id="mcrUitCode" maxlength="8" autocapitalize="characters" autocomplete="off"
+             style="text-align:center;font-size:22px;letter-spacing:.3em;font-weight:700;padding:13px"
+             placeholder="ABC123" onkeydown="if(event.key==='Enter')mcrUitklokken(this.value)">
+      <button class="mcr-knop" style="margin-top:10px" onclick="mcrUitklokken(document.getElementById('mcrUitCode').value)">Clock out</button>
+    </div>
     <button class="mcr-knop" style="margin-top:8px;background:transparent;color:#6B6A66;border:1px solid #EFEDE7" onclick="mcrKlokTeken()">Back</button>`;
+}
+// Uitklokken met de tag: alleen bij de kraam, net als het inklokken.
+async function mcrTagUitklokken(){
+  const st=document.getElementById('mcrNfcUit');
+  const zet=(t,kl)=>{ if(st){st.style.color=kl||'#6B6A66'; st.textContent=t;} };
+  zet('Hold your phone against the sticker…');
+  try{
+    const code=await nfcLees('Hold your phone against the sticker in the stall');
+    zet('Clocking you out…');
+    await mcrUitklokken(code);
+  }catch(e){ zet(mcrFout(e),'#B4472B'); }
 }
 function mcrPauzeKies(p){
   MCR_PAUZE_KEUZE=p;
@@ -5773,7 +5802,6 @@ function mcrKlokTeken(){
         </div>
       </div>
     </div>`;
-  setTimeout(()=>{const c=document.getElementById('mcrCode'); if(c)c.focus();},150);
 }
 async function mcrInklokken(){
   const el=document.getElementById('mcrCode'); if(!el)return;
@@ -5785,14 +5813,17 @@ async function mcrInklokken(){
     await mcrGa('clock');
   }catch(e){ alert(mcrFout(e)); }
 }
-async function mcrUitklokken(){
+async function mcrUitklokken(code){
   const geen=document.getElementById('mcrGeenPauze');
   const not=document.getElementById('mcrKlokNotitie');
+  const c=String(code||'').trim();
+  if(!c){ alert('To clock out, tap the tag or type the code from the card in the stall.'); return; }
   try{
     const{data,error}=await sb.rpc('mcr_uitklokken',{
       p_geen_pauze: !!(geen&&geen.checked),
       p_notitie: (not&&not.value)||null,
-      p_pauze: MCR_PAUZE_KEUZE==null?null:Number(MCR_PAUZE_KEUZE)});
+      p_pauze: MCR_PAUZE_KEUZE==null?null:Number(MCR_PAUZE_KEUZE),
+      p_code: c});
     if(error)throw error;
     const r=(data&&data[0])||{};
     if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
