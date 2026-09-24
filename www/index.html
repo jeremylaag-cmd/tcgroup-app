@@ -13865,6 +13865,13 @@ function logWaarde(v){
   return veiligTekst(t.length>60?t.slice(0,60)+'\u2026':t);
 }
 
+// Klapt de overige gewijzigde velden van een logregel uit of in.
+function logMeerVelden(el){
+  const rest=el.previousElementSibling; if(!rest)return;
+  const open=rest.style.display==='none';
+  rest.style.display=open?'':'none';
+  el.textContent=open?el.dataset.open:el.dataset.dicht;
+}
 function tekenLogboek(){
   const lijst=document.getElementById('logLijst');
   const meer=document.getElementById('logMeerWrap');
@@ -13888,13 +13895,17 @@ function tekenLogboek(){
     const[bg,kl]=LOG_KLEUR[r.actie]||['#F3F4F6','#374151'];
     let detail='';
     if(r.actie==='gewijzigd'&&r.velden&&typeof r.velden==='object'){
-      const rijen=Object.entries(r.velden).slice(0,6).map(([k,v])=>
+      const veldRij=([k,v])=>
         `<div style="font-size:11.5px;color:var(--muted);line-height:1.6">
            <span style="color:var(--text)">${veiligTekst(logVeldNaam(k))}</span>:
            ${logWaarde(v&&v.oud)} &rarr; <b style="color:var(--text)">${logWaarde(v&&v.nieuw)}</b>
-         </div>`).join('');
-      const over=Object.keys(r.velden).length-6;
-      detail=rijen+(over>0?`<div style="font-size:11px;color:var(--muted)">en nog ${over} ${over===1?'veld':'velden'}</div>`:'');
+         </div>`;
+      const alle=Object.entries(r.velden);
+      const rijen=alle.slice(0,6).map(veldRij).join('');
+      const over=alle.length-6;
+      // De rest staat er ook, maar ingeklapt: tik op "en nog 3 velden" om ze te zien.
+      detail=rijen+(over>0?`<div style="display:none">${alle.slice(6).map(veldRij).join('')}</div>
+        <div style="font-size:11px;color:var(--muted);cursor:pointer;text-decoration:underline;user-select:none" onclick="logMeerVelden(this)" data-dicht="en nog ${over} ${over===1?'veld':'velden'}" data-open="minder velden">en nog ${over} ${over===1?'veld':'velden'}</div>`:'');
     }
     return kop+`<div style="display:flex;gap:11px;padding:9px 2px;border-bottom:1px solid var(--border)">
       <div style="flex:0 0 64px;font-size:12px;color:var(--muted);padding-top:2px;font-variant-numeric:tabular-nums">
