@@ -5664,14 +5664,30 @@ async function mcrKlok0(){
   if(error)throw error;
   MCR_STATUS=(data&&data[0])||{};
   mcrKlokTeken();
-  if(MCR_STATUS.uren_id){
-    MCR_TIMER=setInterval(()=>{
-      const el=document.getElementById('mcrTeller');
-      if(!el){clearInterval(MCR_TIMER);MCR_TIMER=null;return;}
-      const min=Math.max(0,Math.round((Date.now()-new Date(MCR_STATUS.ingeklokt_op).getTime())/60000));
-      el.textContent=Math.floor(min/60)+':'+String(min%60).padStart(2,'0');
-    },15000);
-  }
+}
+// Ingeklokt: alleen de teller en de knop. De vragen over pauze en een notitie
+// komen pas in beeld als iemand op Clock out drukt (mcrUitklokVraag).
+function mcrUitklokVraag(){
+  const st=MCR_STATUS||{};
+  const m=document.getElementById('mcrMain'); if(!m||!st.uren_id)return;
+  const min=Math.max(0,Math.round((Date.now()-new Date(st.ingeklokt_op).getTime())/60000));
+  if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
+  m.innerHTML=`
+    <div style="text-align:center">
+      <div style="font-size:13px;color:#6B6A66">Clocking out of</div>
+      <div style="font-size:22px;font-weight:700;color:#1A1917;margin-top:2px">${veiligTekst(st.kraam||'')}</div>
+      <div style="font-size:13px;color:#6B6A66;margin-top:4px">${Math.floor(min/60)}:${String(min%60).padStart(2,'0')} since ${veiligTekst(mcrKlok(st.ingeklokt_op))}</div>
+    </div>
+    <div class="mcr-kaart" style="margin-top:20px">
+      <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
+        <input type="checkbox" id="mcrGeenPauze" style="margin-top:3px;width:17px;height:17px;flex-shrink:0">
+        <span style="font-size:13px;color:#6B6A66;line-height:1.5">I did not take a break. <b style="color:#1A1917">A 30 minute break</b> comes off shifts over 6 hours.</span>
+      </label>
+      <label class="mcr-label" style="margin-top:12px">Anything Bram should know?</label>
+      <textarea class="mcr-veld" id="mcrKlokNotitie" rows="2" placeholder="Stayed on to help pack down&hellip;"></textarea>
+    </div>
+    <button class="mcr-knop" style="margin-top:14px" onclick="mcrUitklokken()">Clock out</button>
+    <button class="mcr-knop" style="margin-top:8px;background:transparent;color:#6B6A66;border:1px solid #EFEDE7" onclick="mcrKlokTeken()">Back</button>`;
 }
 function mcrKlokTeken(){
   const st=MCR_STATUS||{};
@@ -5679,6 +5695,14 @@ function mcrKlokTeken(){
   if(st.uren_id){
     const min=Math.max(0,Math.round((Date.now()-new Date(st.ingeklokt_op).getTime())/60000));
     document.getElementById('mcrSub').textContent=st.kraam||'';
+    if(!MCR_TIMER){
+      MCR_TIMER=setInterval(()=>{
+        const el=document.getElementById('mcrTeller');
+        if(!el){clearInterval(MCR_TIMER);MCR_TIMER=null;return;}
+        const mm=Math.max(0,Math.round((Date.now()-new Date(MCR_STATUS.ingeklokt_op).getTime())/60000));
+        el.textContent=Math.floor(mm/60)+':'+String(mm%60).padStart(2,'0');
+      },15000);
+    }
     m.innerHTML=`
       <div style="text-align:center">
         <div class="mcr-chip" style="background:#F2FBF6;color:#0F7A52;border:1px solid #0F7A52;padding:8px 15px;font-size:13px;display:inline-flex;align-items:center;gap:8px;margin-bottom:20px">
@@ -5686,18 +5710,10 @@ function mcrKlokTeken(){
         </div>
         <div id="mcrTeller" style="font-size:54px;font-weight:700;color:#1A1917;letter-spacing:-1.5px">${Math.floor(min/60)}:${String(min%60).padStart(2,'0')}</div>
         <div style="font-size:13px;color:#6B6A66;margin-top:2px">since ${veiligTekst(mcrKlok(st.ingeklokt_op))}</div>
-        <div class="mcr-cirkel uit" style="margin-top:26px" onclick="mcrUitklokken()">
+        <div class="mcr-cirkel uit" style="margin-top:26px" onclick="mcrUitklokVraag()">
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
           <span style="font-size:15px;font-weight:600">Clock out</span>
         </div>
-      </div>
-      <div class="mcr-kaart" style="margin-top:24px">
-        <label style="display:flex;gap:10px;align-items:flex-start;cursor:pointer">
-          <input type="checkbox" id="mcrGeenPauze" style="margin-top:3px;width:17px;height:17px;flex-shrink:0">
-          <span style="font-size:13px;color:#6B6A66;line-height:1.5">I did not take a break. <b style="color:#1A1917">A 30 minute break</b> comes off shifts over 6 hours.</span>
-        </label>
-        <label class="mcr-label" style="margin-top:12px">Anything Bram should know?</label>
-        <textarea class="mcr-veld" id="mcrKlokNotitie" rows="2" placeholder="Stayed on to help pack down&hellip;"></textarea>
       </div>`;
     return;
   }
