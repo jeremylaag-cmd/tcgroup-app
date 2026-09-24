@@ -41,6 +41,8 @@
 	<string>TC Group Planning gebruikt de camera als je zelf een foto of document aan een klus wilt toevoegen.</string>
 	<key>NFCReaderUsageDescription</key>
 	<string>TC Group Planning leest de sticker in de kraam zodat je kunt inklokken. Er wordt niets op de sticker geschreven.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>TC Group Planning legt alleen op het moment van in- en uitklokken vast waar je bent, als bewijs bij je urenregistratie. Je locatie wordt nooit op de achtergrond gevolgd.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>TC Group Planning legt vast waar je in- en uitklokt, als bewijs bij je urenregistratie.</string>
 	<key>NSMicrophoneUsageDescription</key>
