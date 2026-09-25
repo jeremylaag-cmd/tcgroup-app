@@ -4577,7 +4577,7 @@ function mbResultaatKaart(rows,kosten){
 // of euro's. Ponden en euro's worden nooit bij elkaar opgeteld of omgerekend.
 const MB_KOST_CAT=[['inkoop','Inkoop ingrediënten'],['verpakking','Verpakking & disposables'],['huur','Standplaats & huur'],
   ['vervoer','Vervoer & brandstof'],['reizen','Reizen (vlucht, ferry)'],['verblijf','Verblijf'],
-  ['materiaal','Materiaal & onderhoud'],['energie','Gas & energie'],['overig','Overig']];
+  ['materiaal','Materiaal & onderhoud'],['energie','Gas & energie'],['lonen','Lonen'],['overig','Overig']];
 function mbPosten(n){ return n===1?'1 post':n+' posten'; }
 function mbKostCat(k){ const c=MB_KOST_CAT.find(x=>x[0]===k); return c?c[1]:k; }
 function mbGeld(n,val){ return (val==='EUR'?'€ ':'£ ')+(Number(n)||0).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2}); }
