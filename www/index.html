@@ -2373,7 +2373,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div style="padding:1.25rem;max-width:600px;margin:0 auto">
       <div class="sc">
         <div class="sc-header" style="margin-bottom:.875rem">
-          <div class="st">Taken</div>
+          <div class="st" onclick="diagTik()">Taken</div>
           <div style="font-size:11px;color:var(--muted)" id="takenDatum"></div>
         </div>
         <div class="tk-week">
@@ -2637,7 +2637,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 <div class="modal-overlay" id="taakOverlay" onclick="if(event.target===this)sluitTaakModal()">
   <div class="modal" style="max-width:520px">
     <div class="modal-drag"></div>
-    <div class="modal-title" id="taakModalTitel">Nieuwe taak</div>
+    <div class="modal-title" id="taakModalTitel" onclick="diagTik()">Nieuwe taak</div>
     <div class="fr"><span class="fl">Wat moet er gebeuren <span style="color:#DC2626">*</span></span>
       <input type="text" id="tkTitel" placeholder="bv. vriezer ontdooien" maxlength="120"></div>
     <div class="fr"><span class="fl">Toelichting <span style="color:var(--muted);font-weight:400">(optioneel)</span></span>
@@ -7235,7 +7235,7 @@ function diagAan(){
   const p=document.createElement('div');
   p.id='diagPaneel';
   p.style.cssText='position:fixed;left:8px;bottom:70px;z-index:99999;background:#111;color:#eee;font:11px/1.5 -apple-system,Menlo,monospace;padding:8px 10px;border-radius:8px;max-width:340px;box-shadow:0 4px 18px rgba(0,0,0,.4);white-space:pre-wrap';
-  p.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:4px"><b>Diagnose</b><span><button onclick="diagKopieer()" style="font-size:11px;padding:1px 7px;margin-right:6px">kopieer</button><button onclick="diagUit()" style="font-size:11px;padding:1px 7px">×</button></span></div><div id="diagInhoud">Typ een cijfer in een veld…</div>';
+  p.innerHTML='<div style="display:flex;justify-content:space-between;gap:8px;margin-bottom:4px"><b>Diagnose</b><span><button onclick="diagRustigWissel()" style="font-size:11px;padding:1px 7px;margin-right:6px">Safari-hulp: '+(RUSTIG_UIT?'uit':'aan')+'</button><button onclick="diagKopieer()" style="font-size:11px;padding:1px 7px;margin-right:6px">kopieer</button><button onclick="diagUit()" style="font-size:11px;padding:1px 7px">×</button></span></div><div id="diagInhoud">Typ een cijfer in een veld…</div>';
   document.body.appendChild(p);
   // 1. Toetsaanslag → teken op het scherm.
   DIAG.onKey=e=>{ if(!/^(INPUT|TEXTAREA)$/.test((e.target||{}).tagName))return; DIAG.laatsteTik=performance.now(); DIAG.laatsteToets=e.key; };
@@ -7290,6 +7290,7 @@ function diagTeken(){
   const el=document.getElementById('diagInhoud'); if(!el||!DIAG)return;
   const r=[];
   r.push('browser: '+(navigator.userAgent.match(/(CriOS|Chrome|Safari|Firefox|Version)\/[\d.]+/g)||[]).join(' ')+(navigator.standalone||window.Capacitor?' (app)':''));
+  r.push('safari-hulp: '+(RUSTIG_UIT?'UIT':'aan')+'  rustige velden: '+document.querySelectorAll('[data-rustig]').length);
   r.push('pagina: '+((document.querySelector('.page.active')||{}).id||'-')+'  velden: '+document.querySelectorAll('input').length+'  knopen: '+document.getElementsByTagName('*').length);
   if(DIAG.toetsen.length){ r.push('toets → scherm (ms): '+DIAG.toetsen.map(t=>t.naarScherm+(t.naarInput>50?'('+t.naarInput+' tot input)':'')).join(', '));
     r.push('per toets: layout / taak / frame1 / frame2: '+DIAG.toetsen.map(t=>[t.layout,t.taak,t.frame1,t.frame2].join('/')).join(', ')); }
@@ -7871,8 +7872,33 @@ function aanvulTijd(el){
 document.addEventListener('focusout',e=>{
   if(e.target&&e.target.classList&&e.target.classList.contains('tijd-input'))aanvulTijd(e.target);
 });
+// Safari op de Mac doet bij elke toets veel werk in pagina's met honderden
+// invoervelden (AutoFill-herkenning, schrijfsuggesties, autocorrectie). Bij
+// velden waar dat niets toevoegt zetten we het uit. Inlog- en e-mailvelden
+// blijven zoals ze zijn. Met de diagnose (5x tikken op een titel) is het
+// voor een vergelijking uit te zetten.
+let RUSTIG_UIT=false; try{RUSTIG_UIT=localStorage.getItem('invoerRustigUit')==='1';}catch(e){}
+const RUSTIG_SEL='input:not([type=email]):not([type=password]):not([type=checkbox]):not([type=radio]):not([type=file]):not([type=range]):not([type=color]),textarea';
+function zetInvoerRustig(w){
+  if(RUSTIG_UIT||!w)return;
+  const lijst=[];
+  if(w.matches&&w.matches(RUSTIG_SEL))lijst.push(w);
+  if(w.querySelectorAll)w.querySelectorAll(RUSTIG_SEL).forEach(el=>lijst.push(el));
+  lijst.forEach(el=>{
+    if(el.dataset.rustig)return; el.dataset.rustig='1';
+    if(!el.hasAttribute('autocomplete'))el.setAttribute('autocomplete','off');
+    el.setAttribute('writingsuggestions','false');
+    if(!el.hasAttribute('autocorrect'))el.setAttribute('autocorrect','off');
+    if(el.tagName==='INPUT'&&!el.hasAttribute('spellcheck'))el.setAttribute('spellcheck','false');
+  });
+}
+function diagRustigWissel(){
+  try{ if(RUSTIG_UIT)localStorage.removeItem('invoerRustigUit'); else localStorage.setItem('invoerRustigUit','1'); }catch(e){}
+  location.reload();
+}
 function zetCijferToetsenbord(wortel){
   const w=wortel||document;
+  zetInvoerRustig(w);
   if(!w.querySelectorAll)return;
   w.querySelectorAll('.tijd-input').forEach(el=>{
     el.setAttribute('inputmode','numeric');
