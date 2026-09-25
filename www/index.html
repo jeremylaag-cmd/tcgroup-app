@@ -3128,7 +3128,7 @@ let MB_UREN_TAB='akkoord', MB_INST='kramen', MB_CIJ_VAN=null, MB_CIJ_TOT=null;
 let MB_WEEKRIJEN=null;   // de diensten van de week die nu op het scherm staat
 let MB_DAG_KRAAM=null, MB_KRAMEN=null, MB_INST_DATA=null;
 const MB_WEEKDAGEN=['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
-const MB_TABS=[['overzicht','Overzicht'],['shifts','Shifts'],['aanmeldingen','Aanmeldingen'],['uren','Uren'],['dagrapport','Dagrapport'],
+const MB_TABS=[['overzicht','Overzicht'],['shifts','Shifts'],['uren','Uren'],['dagrapport','Dagrapport'],
                ['inlezen','Inlezen'],['cijfers','Cijfers'],['kosten','Kosten'],['bezetting','Bezetting'],
                ['mensen','Mensen'],['instellingen','Instellingen']];
 
@@ -3182,7 +3182,7 @@ function mbNaar(tab, knop){
   el.innerHTML='<div class="mb-kaart" style="text-align:center;color:var(--muted)">Bezig&hellip;</div>';
   window.scrollTo(0,0);
   const f={overzicht:mbOverzicht,shifts:mbShiftsPlannen,uren:mbUren,dagrapport:mbDagrapport,
-           aanmeldingen:mbAanmeldingen,inlezen:mbInlezen,cijfers:mbCijfers,kosten:mbKosten,bezetting:mbBezetting,mensen:mbMensen,
+           inlezen:mbInlezen,cijfers:mbCijfers,kosten:mbKosten,bezetting:mbBezetting,mensen:mbMensen,
            instellingen:mbInstellingen}[tab];
   if(f)f().catch(e=>{console.error(e);el.innerHTML=
     `<div class="mb-kaart">Dit scherm kon niet geladen worden.<br><span style="color:var(--muted);font-size:12.5px">${veiligTekst(mbFout(e))}</span></div>`;});
@@ -3321,8 +3321,10 @@ function mbDag(stap){
 function mbMaandag(d){ const x=new Date(String(d)+'T00:00:00'); const w=(x.getDay()+6)%7; x.setDate(x.getDate()-w); return fmt(x); }
 async function mbShiftsPlannen(){
   if(!MB_WEEK)MB_WEEK=mbMaandag(MB_DATUM||await mbPeil());
-  const{data,error}=await sb.rpc('mcr_week',{p_van:MB_WEEK});
+  const [wk,aanm]=await Promise.all([sb.rpc('mcr_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_open')]);
+  const{data,error}=wk;
   if(error)throw error;
+  MB_AANM=aanm.error?[]:(aanm.data||[]);
   MB_WEEKRIJEN=(data||[]).filter(r=>r.shift_id);
   const dagen=[]; for(let i=0;i<7;i++){ const d=new Date(MB_WEEK+'T00:00:00'); d.setDate(d.getDate()+i); dagen.push(fmt(d)); }
   const kramen=[]; const cel={};
@@ -3340,6 +3342,7 @@ async function mbShiftsPlannen(){
      <button class="mb-mini" onclick="mbWeekKopieren()">Deze week kopi&euml;ren naar volgende</button>
      <button class="mb-mini zwart" onclick="mbDienstOpen(null,null)">+ Diensten toevoegen</button>`);
 
+  uit+=mbAanmBlok(dagen);
   uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-week">'
      +'<colgroup><col class="kraam">'+'<col class="dag">'.repeat(7)+'</colgroup>'
      +'<thead><tr><th></th>';
@@ -3731,7 +3734,9 @@ async function mbShiftOpen(id){
         <div class="mb-av" style="background:#2A4EA8">${veiligTekst(mbInit(m.naam))}</div>
         <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
         ${m.notitie?`<div style="font-size:11.5px;color:var(--muted)">${veiligTekst(m.notitie)}</div>`:''}</div>
-        <button class="mb-mini zwart" onclick="mbIndelen('${veiligJs(id)}','${veiligJs(m.gebruiker_id)}')">Indelen</button></div>`;
+        <div style="display:flex;gap:6px;flex-shrink:0">${MB_AANM.some(x=>x.aanmelding_id===m.aanmelding_id)
+          ? mbAanmKnoppen(m.aanmelding_id)
+          : `<button class="mb-mini zwart" onclick="mbIndelen('${veiligJs(id)}','${veiligJs(m.gebruiker_id)}')">Indelen</button>`}</div></div>`;
     });
   }
   uit+='</div>';
@@ -3784,40 +3789,42 @@ function mbBeschChip(k){
   return mbChip('beschikbaarheid niet ingevuld','#6B6A66','#F3F2EE');
 }
 function mbShiftTijd(r){ return mbUur(r.start_tijd)+' \u2013 '+(r.eind_tijd?mbUur(r.eind_tijd):'sluit'); }
-async function mbAanmeldingen(){
-  const el=document.getElementById('mbInhoud');
-  const res=await sb.rpc('mcr_aanmeldingen_open');
-  if(res.error)throw res.error;
-  MB_AANM=res.data||[];
-  if(!MB_AANM.length){
-    el.innerHTML='<div class="mb-kaart"><div class="mb-kop">Aanmeldingen</div><div style="color:var(--muted);font-size:13.5px">Niemand wacht op antwoord.</div></div>';
-    return;
-  }
-  const perDag={}; MB_AANM.forEach(r=>{(perDag[r.datum]=perDag[r.datum]||[]).push(r);});
-  let uit=`<div class="mb-kaart"><div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
-      <div class="mb-kop" style="margin:0">Aanmeldingen <span style="color:var(--muted);font-weight:500">(${MB_AANM.length})</span></div>
-      <div style="font-size:12px;color:var(--muted)">\u2713 = indelen &middot; \u2715 = afwijzen</div></div>`;
-  Object.keys(perDag).sort().forEach(d=>{
-    uit+=`<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:16px 0 4px">${veiligTekst(mbLang(d))}</div>`;
-    perDag[d].forEach(r=>{
-      const vol=r.nodig&&r.ingedeeld>=r.nodig;
-      uit+=`<div class="mb-persoon" id="mbA-${veiligTekst(r.aanmelding_id)}" style="align-items:flex-start">
-        <div class="mb-av" style="background:${veiligTekst(r.kleur||'#6B6A66')}">${veiligTekst(mbInit(r.naam))}</div>
-        <div style="flex-grow:1;min-width:0">
-          <div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}${r.telefoon?` <span style="font-weight:400;color:var(--muted);font-size:12px">${veiligTekst(r.telefoon)}</span>`:''}</div>
-          <div style="font-size:12.5px;margin-top:1px"><b>${veiligTekst(r.kraam)}</b> &middot; ${veiligTekst(mbShiftTijd(r))}${r.shift_naam?' &middot; '+veiligTekst(r.shift_naam):''}
-            <span style="color:${vol?'#B4472B':'var(--muted)'}"> &middot; ${r.ingedeeld}/${r.nodig||'?'} ingedeeld${vol?' (vol)':''}</span></div>
-          <div style="margin-top:4px">${mbBeschChip(r)}${r.al_bezet?' '+mbChip('staat die dag al ergens','#6B6A66','#F3F2EE'):''}</div>
-          ${r.notitie?`<div style="font-size:12px;color:var(--muted);margin-top:3px">\u201c${veiligTekst(r.notitie)}\u201d</div>`:''}
-        </div>
-        <div style="display:flex;gap:6px;flex-shrink:0">
-          <button class="mb-mini" title="Indelen" aria-label="Indelen" style="color:#fff;background:#0F7A52;border-color:#0F7A52;font-size:15px;padding:6px 12px" onclick="mbAanmJa('${veiligJs(r.aanmelding_id)}')">\u2713</button>
-          <button class="mb-mini" title="Afwijzen" aria-label="Afwijzen" style="color:#fff;background:#B4472B;border-color:#B4472B;font-size:15px;padding:6px 12px" onclick="mbAanmNee('${veiligJs(r.aanmelding_id)}')">\u2715</button>
-        </div></div>`;
-    });
+// Blok boven het weekrooster: de aanmeldingen van de week die je bekijkt,
+// plus een regel met de andere weken zodat er niets blijft liggen.
+function mbAanmBlok(dagen){
+  if(!MB_AANM.length)return '';
+  const deze=MB_AANM.filter(r=>dagen.includes(r.datum)).sort((a,b)=>(a.datum+a.start_tijd).localeCompare(b.datum+b.start_tijd));
+  const ander={}; MB_AANM.filter(r=>!dagen.includes(r.datum)).forEach(r=>{ const w=mbMaandag(r.datum); ander[w]=(ander[w]||0)+1; });
+  const weken=Object.keys(ander).sort();
+  let uit=`<div class="mb-kaart" style="border-left:4px solid #2A4EA8">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:${deze.length?6:0}px">
+      <div class="mb-kop" style="margin:0">Wacht op antwoord deze week <span style="color:#2A4EA8">(${deze.length})</span></div>
+      ${deze.length?'<div style="font-size:12px;color:var(--muted)">\u2713 = indelen &middot; \u2715 = afwijzen</div>':''}</div>`;
+  deze.forEach(r=>{
+    const vol=r.nodig&&r.ingedeeld>=r.nodig;
+    const dag=new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
+    uit+=`<div class="mb-persoon" id="mbA-${veiligTekst(r.aanmelding_id)}" style="align-items:center;flex-wrap:wrap;row-gap:4px">
+      <div style="width:86px;flex-shrink:0;font-size:12.5px;font-weight:700">${veiligTekst(dag)}</div>
+      <div style="flex:1 1 230px;min-width:0">
+        <div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}
+          <span style="font-weight:400;font-size:12.5px;color:var(--muted)">&middot; ${mbStip(r.kleur)} ${veiligTekst(r.kraam)} &middot; ${veiligTekst(mbShiftTijd(r))}${r.shift_naam?' &middot; '+veiligTekst(r.shift_naam):''}</span>
+          <span style="font-weight:400;font-size:12px;color:${vol?'#B4472B':'var(--muted)'}"> &middot; ${r.ingedeeld}/${r.nodig||'?'}${vol?' vol':''}</span></div>
+        <div style="margin-top:3px">${mbBeschChip(r)}${r.al_bezet?' '+mbChip('staat die dag al ergens','#6B6A66','#F3F2EE'):''}
+          ${r.notitie?`<span style="font-size:12px;color:var(--muted)"> \u201c${veiligTekst(r.notitie)}\u201d</span>`:''}</div>
+      </div>
+      <div style="display:flex;gap:6px;flex-shrink:0">${mbAanmKnoppen(r.aanmelding_id)}</div></div>`;
   });
-  uit+='</div>';
-  el.innerHTML=uit;
+  if(!deze.length)uit+='<div style="font-size:13px;color:var(--muted);margin-top:4px">Niemand deze week.</div>';
+  if(weken.length){
+    uit+=`<div style="font-size:12.5px;color:var(--muted);margin-top:10px">Ook ${weken.reduce((t,w)=>t+ander[w],0)} in andere weken: `
+      +weken.map(w=>`<button class="mb-linktekst" onclick="MB_WEEK='${veiligJs(w)}';MB_SHIFT=null;MB_DAG=null;mbNaar('shifts')">week van ${veiligTekst(mbKort(w))} (${ander[w]})</button>`).join(', ')
+      +'</div>';
+  }
+  return uit+'</div>';
+}
+function mbAanmKnoppen(aid){
+  return `<button class="mb-mini" title="Indelen" aria-label="Indelen" style="color:#fff;background:#0F7A52;border-color:#0F7A52;font-size:15px;padding:5px 12px" onclick="mbAanmJa('${veiligJs(aid)}')">\u2713</button>
+    <button class="mb-mini" title="Afwijzen" aria-label="Afwijzen" style="color:#fff;background:#B4472B;border-color:#B4472B;font-size:15px;padding:5px 12px" onclick="mbAanmNee('${veiligJs(aid)}')">\u2715</button>`;
 }
 async function mbAanmJa(aid){
   const r=MB_AANM.find(x=>x.aanmelding_id===aid); if(!r)return;
@@ -3829,7 +3836,7 @@ async function mbAanmJa(aid){
     if(!ok)return;
   }
   try{ const{error}=await sb.rpc('mcr_indelen',{p_shift:r.shift_id,p_gebruiker:r.gebruiker_id}); if(error)throw error;
-    toast(r.naam+' ingedeeld'); mbAanmeldingen().catch(e=>alert(mbFout(e))); }
+    toast(r.naam+' ingedeeld'); mbNaar('shifts'); }
   catch(e){ alert(mbFout(e)); }
 }
 async function mbAanmNee(aid){
@@ -3839,7 +3846,7 @@ async function mbAanmNee(aid){
     'Ja, afwijzen');
   if(!ok)return;
   try{ const{error}=await sb.rpc('mcr_aanmelding_afwijzen',{p_aanmelding:aid}); if(error)throw error;
-    toast('Afgewezen'); mbAanmeldingen().catch(e=>alert(mbFout(e))); }
+    toast('Afgewezen'); mbNaar('shifts'); }
   catch(e){ alert(mbFout(e)); }
 }
 // Iemand indelen die op die tijd niet (helemaal) kan: eerst vragen of het overlegd is.
