@@ -3737,14 +3737,17 @@ async function mbShiftOpen(id){
   uit+='</div>';
   uit+=`<div class="mb-kaart" style="flex:1;min-width:280px">
     <div class="mb-kop">Wie kan er nog</div>
-    <div style="font-size:12px;color:var(--muted);margin:-4px 0 6px">Op volgorde van beschikbaarheid. Wie die dag al ergens staat, staat grijs.</div>`;
+    <div style="font-size:12px;color:var(--muted);margin:-4px 0 6px">Op volgorde van beschikbaarheid. Wie die dag al ergens staat, staat grijs. Rood = kan niet op deze tijd.</div>`;
+  MB_KAND={shift:id, datum:sh.datum||null, tijd:shTijd, rijen:{}};
   (kand.data||[]).filter(k=>!ing.some(i=>i.gebruiker_id===k.gebruiker_id)).slice(0,40).forEach(k=>{
+    MB_KAND.rijen[k.gebruiker_id]=k;
     const venster = (k.besch_van||k.besch_tot)
       ? (k.besch_van&&k.besch_tot ? mbUur(k.besch_van)+'\u2013'+mbUur(k.besch_tot)
          : (k.besch_van ? 'vanaf '+mbUur(k.besch_van) : 'tot '+mbUur(k.besch_tot)))
       : '';
     const kl = k.beschikbaar==='beschikbaar' ? ['#0F7A52','#F2FBF6','beschikbaar']
-             : (k.beschikbaar==='deels' ? ['#B45309','#FEF6E7', venster||'deels']
+             : k.beschikbaar==='buiten' ? ['#B4472B','#FBEDE9',(venster||'andere tijd')+' \u00b7 past niet']
+             : (k.beschikbaar==='deels' ? ['#B45309','#FEF6E7', (venster||'deels')+' \u00b7 deels']
              : (k.beschikbaar==='onbeschikbaar' ? ['#B4472B','#FBEDE9','niet beschikbaar'] : ['#6B6A66','#F3F2EE','niet ingevuld']));
     uit+=`<div class="mb-persoon"${k.al_bezet?' style="opacity:.5"':''}>
       <div class="mb-av" style="background:#8A8984">${veiligTekst(mbInit(k.naam))}</div>
@@ -3764,7 +3767,26 @@ async function mbShiftWeg(id){
   try{ const{error}=await sb.rpc('mcr_shift_weg',{p_shift:id}); if(error)throw error; MB_SHIFT=null; mbNaar('shifts'); }
   catch(e){ alert(mbFout(e)); }
 }
+let MB_KAND=null;
+// Iemand indelen die op die tijd niet (helemaal) kan: eerst vragen of het overlegd is.
+async function mbIndelenCheck(shift,wie){
+  const k=MB_KAND&&MB_KAND.shift===shift?MB_KAND.rijen[wie]:null;
+  if(!k||!['deels','buiten','onbeschikbaar'].includes(k.beschikbaar))return true;
+  const dag=MB_KAND.datum?mbLang(MB_KAND.datum):'die dag';
+  const venster=(k.besch_van||k.besch_tot)
+    ? (k.besch_van&&k.besch_tot?'van '+mbUur(k.besch_van)+' tot '+mbUur(k.besch_tot):(k.besch_van?'vanaf '+mbUur(k.besch_van):'tot '+mbUur(k.besch_tot)))
+    : '';
+  const wat = k.beschikbaar==='onbeschikbaar' ? 'heeft doorgegeven op '+dag+' <b>niet te kunnen</b>'
+            : 'kan op '+dag+' alleen <b>'+veiligTekst(venster)+'</b>';
+  const oordeel = k.beschikbaar==='deels' ? 'Dat past maar deels bij deze dienst' : 'Dat past niet bij deze dienst';
+  return vraagBevestiging(k.beschikbaar==='deels'?'Past maar deels':'Past niet bij de beschikbaarheid',
+    '<div style="margin-bottom:8px;color:#B91C1C;font-weight:500">\u26a0 '+veiligTekst(k.naam)+' '+wat+'.</div>'
+    +'<div style="margin-bottom:8px">'+oordeel+(MB_KAND.tijd?' ('+veiligTekst(MB_KAND.tijd)+')':'')+'.</div>'
+    +'<div style="color:var(--muted)">Weet je het zeker? Is dit met '+veiligTekst(k.naam.split(' ')[0])+' overlegd?</div>',
+    'Ja, overlegd \u2013 indelen');
+}
 async function mbIndelen(shift,wie){
+  if(!(await mbIndelenCheck(shift,wie)))return;
   try{ const{error}=await sb.rpc('mcr_indelen',{p_shift:shift,p_gebruiker:wie}); if(error)throw error; mbNaar('shifts'); }
   catch(e){ alert(mbFout(e)); }
 }
