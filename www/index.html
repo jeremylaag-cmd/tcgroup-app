@@ -3129,7 +3129,7 @@ let MB_WEEKRIJEN=null;   // de diensten van de week die nu op het scherm staat
 let MB_DAG_KRAAM=null, MB_KRAMEN=null, MB_INST_DATA=null;
 const MB_WEEKDAGEN=['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
 const MB_TABS=[['overzicht','Overzicht'],['shifts','Shifts'],['uren','Uren'],['dagrapport','Dagrapport'],
-               ['inlezen','Inlezen'],['cijfers','Cijfers'],['bezetting','Bezetting'],
+               ['inlezen','Inlezen'],['cijfers','Cijfers'],['kosten','Kosten'],['bezetting','Bezetting'],
                ['mensen','Mensen'],['instellingen','Instellingen']];
 
 // ── kleine hulpjes ────────────────────────────────────────────────
@@ -3182,7 +3182,7 @@ function mbNaar(tab, knop){
   el.innerHTML='<div class="mb-kaart" style="text-align:center;color:var(--muted)">Bezig&hellip;</div>';
   window.scrollTo(0,0);
   const f={overzicht:mbOverzicht,shifts:mbShiftsPlannen,uren:mbUren,dagrapport:mbDagrapport,
-           inlezen:mbInlezen,cijfers:mbCijfers,bezetting:mbBezetting,mensen:mbMensen,
+           inlezen:mbInlezen,cijfers:mbCijfers,kosten:mbKosten,bezetting:mbBezetting,mensen:mbMensen,
            instellingen:mbInstellingen}[tab];
   if(f)f().catch(e=>{console.error(e);el.innerHTML=
     `<div class="mb-kaart">Dit scherm kon niet geladen worden.<br><span style="color:var(--muted);font-size:12.5px">${veiligTekst(mbFout(e))}</span></div>`;});
@@ -4448,22 +4448,26 @@ async function mbImportWeg(){
 }
 
 // ── CIJFERS ───────────────────────────────────────────────────────
+let MB_SEIZ_VAN=null, MB_SEIZ_TOT=null;
 async function mbPeriode(){
   if(!MB_CIJ_VAN){
     const kr=await mbKramenLijst();
     if(kr.length){
       MB_CIJ_VAN=kr.reduce((a,k)=>k.seizoen_start<a?k.seizoen_start:a,kr[0].seizoen_start);
       MB_CIJ_TOT=kr.reduce((a,k)=>k.seizoen_eind>a?k.seizoen_eind:a,kr[0].seizoen_eind);
+      MB_SEIZ_VAN=MB_CIJ_VAN; MB_SEIZ_TOT=MB_CIJ_TOT;
     }
   }
 }
 async function mbCijfers(){
   await mbPeriode();
-  const [cij,dag,wacht]=await Promise.all([
+  const [cij,dag,wacht,kst]=await Promise.all([
     sb.rpc('mcr_cijfers',{p_van:MB_CIJ_VAN,p_tot:MB_CIJ_TOT}),
     sb.rpc('mcr_dagtotalen',{p_van:MB_CIJ_VAN,p_tot:MB_CIJ_TOT}),
     sb.rpc('mcr_wacht_op_jou'),
+    sb.rpc('mcr_kosten_lijst',{p_van:(MB_CIJ_VAN===MB_SEIZ_VAN?null:MB_CIJ_VAN),p_tot:(MB_CIJ_TOT===MB_SEIZ_TOT?null:MB_CIJ_TOT)}),
   ]);
+  const kosten=(kst&&kst.data)||[];
   if(cij.error)throw cij.error;
   const rows=cij.data||[]; const dagen=(dag.data||[]); const w=(wacht.data&&wacht.data[0])||{};
   const tot=rows.reduce((a,r)=>({omzet:a.omzet+Number(r.omzet||0), forecast:a.forecast+Number(r.forecast||0),
@@ -4534,7 +4538,184 @@ async function mbCijfers(){
   });
   uit+='</tbody></table><div style="padding:12px 16px;font-size:12px;color:var(--muted);line-height:1.6">'
     +'Vorig jaar stond je ook op Piccadilly en St. Anne&rsquo;s. De totalen zijn daarom niet te vergelijken; per kraam w&eacute;l, voor de twee die er toen ook waren.</div></div>';
+  uit+=mbResultaatKaart(rows,kosten);
   document.getElementById('mbInhoud').innerHTML=uit;
+}
+// Omzet min loon, myPOS en de kosten die je zelf invult. Alleen ponden; wat in
+// euro's is betaald staat eronder apart en wordt niet omgerekend.
+function mbResultaatKaart(rows,kosten){
+  const gbp=kosten.filter(k=>k.valuta==='GBP'), eur=kosten.filter(k=>k.valuta==='EUR');
+  const kvan=id=>gbp.filter(k=>k.kraam_id===id).reduce((a,k)=>a+Number(k.bedrag||0),0);
+  const alg=gbp.filter(k=>!k.kraam_id).reduce((a,k)=>a+Number(k.bedrag||0),0);
+  const eurTot=eur.reduce((a,k)=>a+Number(k.bedrag||0),0);
+  let t={o:0,l:0,m:0,k:0};
+  let h='<div class="mb-kaart" style="padding:0;overflow-x:auto"><div style="padding:14px 16px 4px;display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">'
+    +'<span style="font-size:15px;font-weight:700">Resultaat per kraam</span>'
+    +'<button class="mb-mini" onclick="mbNaar(\'kosten\')">Kosten invullen</button></div>'
+    +'<table class="mb-tabel2"><thead><tr><th>Kraam</th><th style="text-align:right">Omzet</th><th style="text-align:right">Loon</th>'
+    +'<th style="text-align:right">myPOS</th><th style="text-align:right">Kosten</th><th style="text-align:right">Resultaat</th></tr></thead><tbody>';
+  const regel=(naam,o,l,m,k,stip)=>{ const res=o-l-m-k;
+    return `<tr><td><div style="display:flex;align-items:center;gap:8px">${stip||''}${naam}</div></td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${o?veiligTekst(mbPondKort(o)):'&mdash;'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${l?veiligTekst(mbPondKort(l)):'&mdash;'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${m?veiligTekst(mbPondKort(m)):'&mdash;'}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${k?veiligTekst(mbPondKort(k)):'&mdash;'}</td>
+      <td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums;color:${res>=0?'#0F7A52':'#B4472B'}">${veiligTekst(mbPondKort(res))}</td></tr>`; };
+  rows.forEach(r=>{ const o=Number(r.omzet||0),l=Number(r.loonkosten||0),m=Number(r.mypos_kosten||0),k=kvan(r.kraam_id);
+    t.o+=o;t.l+=l;t.m+=m;t.k+=k; h+=regel(veiligTekst(r.kraam),o,l,m,k,mbStip(r.kleur)); });
+  if(alg){ t.k+=alg; h+=regel('<span style="color:var(--muted)">Algemene kosten</span>',0,0,0,alg); }
+  h+=`<tr style="border-top:2px solid var(--border)">${regel('<b>Totaal</b>',t.o,t.l,t.m,t.k).replace(/^<tr>|<\/tr>$/g,'')}</tr>`;
+  h+='</tbody></table><div style="padding:12px 16px;font-size:12px;color:var(--muted);line-height:1.6">'
+    +'Resultaat = omzet &minus; loon &minus; myPOS-kosten &minus; de kosten die je bij <b>Kosten</b> invult (alleen ponden). Staat de periode op het hele seizoen, dan tellen ook de kosten van de voorbereiding mee.'
+    +(eurTot?` Daarnaast is er <b>${veiligTekst(mbGeld(eurTot,'EUR'))}</b> in euro&rsquo;s uitgegeven; die staat hier niet in omdat we niet omrekenen.`:'')
+    +'</div></div>';
+  return h;
+}
+
+// ── KOSTEN ────────────────────────────────────────────────────────
+// Uitgaven tijdens de Manchester-periode, per kraam of algemeen, in ponden
+// of euro's. Ponden en euro's worden nooit bij elkaar opgeteld of omgerekend.
+const MB_KOST_CAT=[['inkoop','Inkoop ingrediënten'],['verpakking','Verpakking & disposables'],['huur','Standplaats & huur'],
+  ['vervoer','Vervoer & brandstof'],['reizen','Reizen (vlucht, ferry)'],['verblijf','Verblijf'],
+  ['materiaal','Materiaal & onderhoud'],['energie','Gas & energie'],['overig','Overig']];
+function mbPosten(n){ return n===1?'1 post':n+' posten'; }
+function mbKostCat(k){ const c=MB_KOST_CAT.find(x=>x[0]===k); return c?c[1]:k; }
+function mbGeld(n,val){ return (val==='EUR'?'€ ':'£ ')+(Number(n)||0).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+let MB_KOST_BEWERK=null, MB_KOST_RIJEN=[], MB_KOST_VAL='GBP', MB_KOST_FILTER='alle', MB_KOST_VAN=null, MB_KOST_TOT=null;
+
+async function mbKosten(){
+  const [kramen,res]=await Promise.all([mbKramenLijst(), sb.rpc('mcr_kosten_lijst',{p_van:MB_KOST_VAN,p_tot:MB_KOST_TOT})]);
+  if(res.error)throw res.error;
+  MB_KOST_RIJEN=res.data||[];
+  const r=MB_KOST_RIJEN;
+  const som=(lijst,val)=>lijst.filter(x=>x.valuta===val).reduce((a,x)=>a+Number(x.bedrag||0),0);
+  const gbp=som(r,'GBP'), eur=som(r,'EUR');
+
+  let uit=mbKop('Kosten','Uitgaven tijdens de Manchester-periode, per kraam of algemeen',
+    `<input type="date" class="mb-getal" style="width:150px" title="Vanaf" value="${veiligTekst(MB_KOST_VAN||'')}" onchange="MB_KOST_VAN=this.value||null;mbNaar('kosten')">
+     <input type="date" class="mb-getal" style="width:150px" title="Tot en met" value="${veiligTekst(MB_KOST_TOT||'')}" onchange="MB_KOST_TOT=this.value||null;mbNaar('kosten')">
+     ${(MB_KOST_VAN||MB_KOST_TOT)?`<button class="mb-mini" onclick="MB_KOST_VAN=null;MB_KOST_TOT=null;mbNaar('kosten')">Alles tonen</button>`:''}`);
+
+  // Invoer
+  const b=MB_KOST_BEWERK?r.find(x=>x.id===MB_KOST_BEWERK):null;
+  if(b)MB_KOST_VAL=b.valuta;
+  const vandaag=mbVandaagStr();
+  uit+=`<div class="mb-kaart" id="mbKostForm">
+    <div class="mb-kop">${b?'Kostenpost bewerken':'Nieuwe kostenpost'}</div>
+    <div class="mb-veldrij">
+      <div style="flex:1 1 140px"><label class="mb-lab">Datum</label>
+        <input type="date" class="mb-veld" id="mbKdatum" value="${veiligTekst(b?b.datum:(MB_KOST_LAATSTE_DATUM||vandaag))}"></div>
+      <div style="flex:1 1 170px"><label class="mb-lab">Kraam</label>
+        <select class="mb-veld" id="mbKkraam"><option value="">Algemeen (alle kramen)</option>
+          ${kramen.map(k=>`<option value="${veiligTekst(k.id)}"${b&&b.kraam_id===k.id?' selected':''}>${veiligTekst(k.naam)}</option>`).join('')}</select></div>
+      <div style="flex:1 1 190px"><label class="mb-lab">Categorie</label>
+        <select class="mb-veld" id="mbKcat">${MB_KOST_CAT.map(([k,l])=>`<option value="${k}"${(b?b.categorie:MB_KOST_LAATSTE_CAT)===k?' selected':''}>${veiligTekst(l)}</option>`).join('')}</select></div>
+    </div>
+    <div class="mb-veldrij">
+      <div style="flex:3 1 220px"><label class="mb-lab">Omschrijving</label>
+        <input class="mb-veld" id="mbKoms" maxlength="200" placeholder="bv. Beslag en boter, Booker" value="${veiligTekst(b?b.omschrijving:'')}"
+               onkeydown="if(event.key==='Enter')mbKostOpslaan()"></div>
+      <div style="flex:1 1 120px"><label class="mb-lab">Bedrag</label>
+        <input class="mb-veld" id="mbKbedrag" inputmode="decimal" autocomplete="off" placeholder="0,00"
+               value="${b?veiligTekst(Number(b.bedrag).toLocaleString('nl-NL',{minimumFractionDigits:2})):''}" style="text-align:right"
+               onkeydown="if(event.key==='Enter')mbKostOpslaan()"></div>
+      <div style="flex:0 0 auto"><label class="mb-lab">Valuta</label>
+        <div style="display:flex;gap:4px" id="mbKval">
+          <button class="mb-mini${MB_KOST_VAL==='GBP'?' zwart':''}" style="padding:9px 14px" onclick="mbKostVal('GBP')">£</button>
+          <button class="mb-mini${MB_KOST_VAL==='EUR'?' zwart':''}" style="padding:9px 14px" onclick="mbKostVal('EUR')">€</button>
+        </div></div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
+      <button class="mb-mini zwart" style="padding:9px 16px" onclick="mbKostOpslaan()">${b?'Wijziging opslaan':'Toevoegen'}</button>
+      ${b?`<button class="mb-mini" style="padding:9px 14px" onclick="MB_KOST_BEWERK=null;mbNaar('kosten')">Annuleren</button>`:''}
+      <span id="mbKuit" style="font-size:12.5px;color:var(--muted)"></span>
+    </div>
+  </div>`;
+
+  // Tegels
+  const tegel=(l,v,sub)=>`<div class="mb-kaart" style="flex:1;min-width:170px"><div class="mb-kop" style="margin:0 0 4px">${l}</div>
+    <div style="font-size:24px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums">${v}</div>
+    ${sub?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${sub}</div>`:''}</div>`;
+  const algGbp=som(r.filter(x=>!x.kraam_id),'GBP');
+  uit+='<div class="mb-rij4">'+tegel('Totaal in ponden',veiligTekst(mbGeld(gbp,'GBP')),mbPosten(r.filter(x=>x.valuta==='GBP').length))
+    +tegel('Totaal in euro\'s',veiligTekst(mbGeld(eur,'EUR')),eur?mbPosten(r.filter(x=>x.valuta==='EUR').length)+' &middot; niet omgerekend':'nog niets in euro\'s')
+    +tegel('Algemeen',veiligTekst(mbGeld(algGbp,'GBP')),'niet aan één kraam toe te wijzen')+'</div>';
+
+  if(r.length){
+    // Per categorie en per kraam naast elkaar
+    const tab=(titel,groepen)=>`<div class="mb-kaart" style="flex:1;min-width:280px;padding:0;overflow-x:auto">
+      <div style="padding:14px 16px 4px;font-size:15px;font-weight:700">${titel}</div>
+      <table class="mb-tabel2"><thead><tr><th></th><th style="text-align:right">£</th><th style="text-align:right">€</th></tr></thead><tbody>
+      ${groepen.map(g=>`<tr><td>${g.l}</td><td style="text-align:right;font-variant-numeric:tabular-nums">${g.p?veiligTekst(mbGeld(g.p,'GBP')):'&mdash;'}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${g.e?veiligTekst(mbGeld(g.e,'EUR')):'&mdash;'}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    const perCat=MB_KOST_CAT.map(([k,l])=>{const x=r.filter(y=>y.categorie===k);return{l:veiligTekst(l),p:som(x,'GBP'),e:som(x,'EUR'),n:x.length};}).filter(g=>g.n);
+    const perKraam=[...kramen.map(k=>{const x=r.filter(y=>y.kraam_id===k.id);return{l:`<div style="display:flex;align-items:center;gap:8px">${mbStip(k.kleur||'#6B6A66')}${veiligTekst(k.naam)}</div>`,p:som(x,'GBP'),e:som(x,'EUR'),n:x.length};}),
+      (()=>{const x=r.filter(y=>!y.kraam_id);return{l:'Algemeen',p:som(x,'GBP'),e:som(x,'EUR'),n:x.length};})()].filter(g=>g.n);
+    uit+=`<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px">${tab('Per categorie',perCat)}${tab('Per kraam',perKraam)}</div>`;
+
+    // Lijst
+    const zicht=MB_KOST_FILTER==='alle'?r:(MB_KOST_FILTER==='algemeen'?r.filter(x=>!x.kraam_id):r.filter(x=>x.kraam_id===MB_KOST_FILTER));
+    uit+=`<div class="mb-kaart" style="padding:0;overflow-x:auto">
+      <div style="padding:14px 16px 8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <span style="font-size:15px;font-weight:700">Alle posten</span>
+        <select class="mb-getal" style="text-align:left" onchange="MB_KOST_FILTER=this.value;mbNaar('kosten')">
+          <option value="alle">Alles</option><option value="algemeen"${MB_KOST_FILTER==='algemeen'?' selected':''}>Algemeen</option>
+          ${kramen.map(k=>`<option value="${veiligTekst(k.id)}"${MB_KOST_FILTER===k.id?' selected':''}>${veiligTekst(k.naam)}</option>`).join('')}
+        </select></div>
+      <table class="mb-tabel2"><thead><tr><th>Datum</th><th>Omschrijving</th><th>Kraam</th><th>Categorie</th><th style="text-align:right">Bedrag</th><th></th></tr></thead><tbody>
+      ${zicht.map(x=>`<tr${x.id===MB_KOST_BEWERK?' style="background:#FEF6E7"':''}>
+        <td style="white-space:nowrap;color:var(--muted)">${veiligTekst(mbKort(x.datum))}</td>
+        <td>${veiligTekst(x.omschrijving)}${x.door?`<div style="font-size:11px;color:var(--muted)">door ${veiligTekst(x.door)}</div>`:''}</td>
+        <td style="white-space:nowrap">${x.kraam_id?`<div style="display:flex;align-items:center;gap:7px">${mbStip(x.kleur)}${veiligTekst(x.kraam)}</div>`:'<span style="color:var(--muted)">Algemeen</span>'}</td>
+        <td style="white-space:nowrap;color:var(--muted)">${veiligTekst(mbKostCat(x.categorie))}</td>
+        <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">${veiligTekst(mbGeld(x.bedrag,x.valuta))}</td>
+        <td style="white-space:nowrap;text-align:right">
+          <button class="mb-mini" onclick="MB_KOST_BEWERK='${veiligJs(x.id)}';mbNaar('kosten')">Bewerken</button>
+          <button class="mb-mini rood" onclick="mbKostWeg('${veiligJs(x.id)}')">Weg</button></td></tr>`).join('')}
+      </tbody></table></div>`;
+  }else{
+    uit+='<div class="mb-kaart" style="color:var(--muted);font-size:13px">Nog geen kosten in deze periode. Vul hierboven de eerste in.</div>';
+  }
+  document.getElementById('mbInhoud').innerHTML=uit;
+  if(b){ const f=document.getElementById('mbKostForm'); if(f)f.scrollIntoView({block:'start'}); }
+}
+let MB_KOST_LAATSTE_DATUM=null, MB_KOST_LAATSTE_CAT='inkoop';
+function mbKostVal(v){
+  MB_KOST_VAL=v;
+  document.querySelectorAll('#mbKval button').forEach((b,i)=>b.classList.toggle('zwart',(i===0?'GBP':'EUR')===v));
+}
+async function mbKostOpslaan(){
+  const uit=document.getElementById('mbKuit');
+  const zeg=(t,kl)=>{ if(uit){uit.style.color=kl||'var(--muted)';uit.textContent=t;} };
+  const datum=(document.getElementById('mbKdatum')||{}).value;
+  const kraam=(document.getElementById('mbKkraam')||{}).value||null;
+  const cat=(document.getElementById('mbKcat')||{}).value;
+  const oms=((document.getElementById('mbKoms')||{}).value||'').trim();
+  const bedrag=finGetal((document.getElementById('mbKbedrag')||{}).value);
+  if(!datum){zeg('Vul een datum in.','#B4472B');return;}
+  if(!oms){zeg('Vul een omschrijving in.','#B4472B');return;}
+  if(bedrag==null||Number.isNaN(bedrag)||bedrag<=0){zeg('Vul een geldig bedrag in, bv. 245,50.','#B4472B');return;}
+  zeg('Opslaan…');
+  const{error}=await sb.rpc('mcr_kosten_zetten',{p_id:MB_KOST_BEWERK,p_datum:datum,p_kraam:kraam,p_categorie:cat,
+    p_omschrijving:oms,p_bedrag:bedrag,p_valuta:MB_KOST_VAL});
+  if(error){zeg(mbFout(error),'#B4472B');return;}
+  MB_KOST_LAATSTE_DATUM=datum; MB_KOST_LAATSTE_CAT=cat;
+  const wasBewerk=!!MB_KOST_BEWERK; MB_KOST_BEWERK=null;
+  toast(wasBewerk?'Kostenpost bijgewerkt':'Kostenpost toegevoegd');
+  await mbNaar('kosten');
+  setTimeout(()=>{const o=document.getElementById('mbKoms'); if(o&&!wasBewerk)o.focus();},50);
+}
+async function mbKostWeg(id){
+  const x=MB_KOST_RIJEN.find(r=>r.id===id); if(!x)return;
+  const ok=await vraagBevestiging('Kostenpost verwijderen?',
+    `<div>${veiligTekst(mbKort(x.datum))} &middot; ${veiligTekst(x.omschrijving)} &middot; <b>${veiligTekst(mbGeld(x.bedrag,x.valuta))}</b></div>`,'Verwijderen');
+  if(!ok)return;
+  const{error}=await sb.rpc('mcr_kosten_weg',{p_id:id});
+  if(error){toast('Verwijderen mislukt: '+mbFout(error),'fout');return;}
+  if(MB_KOST_BEWERK===id)MB_KOST_BEWERK=null;
+  toast('Kostenpost verwijderd');
+  mbNaar('kosten');
 }
 
 // ── BEZETTING ─────────────────────────────────────────────────────
