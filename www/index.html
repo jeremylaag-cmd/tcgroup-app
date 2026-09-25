@@ -7894,6 +7894,25 @@ function zetInvoerRustig(w){
     if(el.tagName==='INPUT'&&!el.hasAttribute('spellcheck'))el.setAttribute('spellcheck','false');
   });
 }
+// Geen enkel veld in de app zit in een <form>. Safari's automatisch invullen
+// ziet dan alle velden van de hele pagina (honderden) als één groot formulier
+// en loopt die bij elke toets na: 1 à 3 seconden per letter in een gewoon
+// venster (in een privévenster niet). Daarom hangt het veld waarin je typt
+// tijdelijk aan een eigen, leeg formulier; dan kijkt Safari alleen naar dat ene veld.
+(function(){
+  let f=null;
+  const formulier=()=>{ if(f&&f.isConnected)return f; f=document.createElement('form'); f.id='rustigFormulier'; f.setAttribute('autocomplete','off'); f.style.display='none';
+    f.addEventListener('submit',e=>e.preventDefault()); document.body.appendChild(f); return f; };
+  document.addEventListener('focusin',e=>{
+    if(RUSTIG_UIT)return; const el=e.target;
+    if(!el||!el.matches||!el.matches(RUSTIG_SEL)||el.readOnly)return;
+    if(el.form&&el.form.id!=='rustigFormulier')return;
+    formulier(); el.setAttribute('form','rustigFormulier');
+  },true);
+  document.addEventListener('focusout',e=>{
+    const el=e.target; if(el&&el.getAttribute&&el.getAttribute('form')==='rustigFormulier')el.removeAttribute('form');
+  },true);
+})();
 function diagRustigWissel(){
   try{ if(RUSTIG_UIT)localStorage.removeItem('invoerRustigUit'); else localStorage.setItem('invoerRustigUit','1'); }catch(e){}
   location.reload();
