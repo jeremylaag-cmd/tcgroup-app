@@ -7322,6 +7322,8 @@ function diagUit(){
 let DIAG_TIKS=[];
 function diagTik(){ const nu=Date.now(); DIAG_TIKS=DIAG_TIKS.filter(t=>nu-t<2500); DIAG_TIKS.push(nu); if(DIAG_TIKS.length>=5){DIAG_TIKS=[];diagAan();} }
 document.addEventListener('DOMContentLoaded',()=>{ if(location.hash==='#diag')setTimeout(diagAan,1500); });
+// Sneltoets op de Mac/pc: Control + Option (Alt) + D, werkt ook als er een venster open is.
+document.addEventListener('keydown',e=>{ if(e.ctrlKey&&e.altKey&&!e.metaKey&&e.code==='KeyD'){ e.preventDefault(); diagAan(); } },true);
 
 function liveMagNu(){
   if(document.hidden)return false;
