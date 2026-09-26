@@ -18494,7 +18494,11 @@ async function bewaarPushToken(){
 // google-services.json; daar klapt Push.register() op stuk. We kijken dus naar
 // het buildnummer van de app zelf in plaats van naar een vlaggetje in de code,
 // want een live-update kan op een oude bundel terechtkomen.
-const ANDROID_FIREBASE_VANAF=4;
+// LET OP (26 sep): bundel 4 t/m 7 hebben GEEN google-services.json — de
+// aanname dat Firebase er vanaf 4 in zat klopte niet en liet de Play-versie
+// 1.3 (6) crashen zodra meldingen aan stonden. Zet dit getal pas op het
+// versionCode van de eerste bundel waar google-services.json écht in zit.
+const ANDROID_FIREBASE_VANAF=99999;
 
 async function androidHeeftFirebase(){
   try{
@@ -18601,6 +18605,11 @@ async function testMelding(){
 
   if(!Push){
     klaar('Je gebruikt de app nu in een browser. Pushmeldingen werken alleen in de app op je telefoon.');
+    return;
+  }
+  const platformT=(window.Capacitor&&window.Capacitor.getPlatform)?window.Capacitor.getPlatform():'web';
+  if(platformT==='android'&&!(await androidHeeftFirebase())){
+    klaar('Pushmeldingen op Android staan nog uit (Firebase is nog niet ingesteld).');
     return;
   }
 
