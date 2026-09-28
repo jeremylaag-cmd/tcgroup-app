@@ -124,6 +124,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mb-shiftnaam{font-size:12px;color:var(--text);flex-grow:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mb-shiftop{font-size:10.5px;font-weight:700;color:#B45309}
 .mb-dicht{font-size:11px;color:var(--muted);text-align:center;padding:8px 0}
+.mb-man{white-space:normal;font-weight:500;font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.5}
+.mb-man b{color:#6D28D9;font-weight:600}
+.mb-wkm{display:block;width:100%;text-align:left;font-size:11px;line-height:1.35;padding:4px 6px;margin-bottom:4px;border-radius:7px;border:1px dashed #C4B5FD;background:#F5F3FF;color:#6D28D9;cursor:pointer;font-family:var(--font)}
+.mb-wkm.leeg{background:none;color:#8B7FC7}
+.mb-kies-rij{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--border)}
 .mb-rondeknop{display:block;width:100%;text-align:left;cursor:pointer;padding:12px 14px;margin-bottom:6px}
 .mb-rondeknop.aan{border:1.5px solid #B4472B}
 .mb-nr{flex:0 0 26px;height:26px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--muted)}
@@ -3321,7 +3326,8 @@ function mbDag(stap){
 function mbMaandag(d){ const x=new Date(String(d)+'T00:00:00'); const w=(x.getDay()+6)%7; x.setDate(x.getDate()-w); return fmt(x); }
 async function mbShiftsPlannen(){
   if(!MB_WEEK)MB_WEEK=mbMaandag(MB_DATUM||await mbPeil());
-  const [wk,aanm]=await Promise.all([sb.rpc('mcr_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_open')]);
+  const [wk,aanm,man]=await Promise.all([sb.rpc('mcr_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_open'), sb.rpc('mcr_managers_week',{p_van:MB_WEEK})]);
+  MB_MAN=man.error?[]:(man.data||[]);
   const{data,error}=wk;
   if(error)throw error;
   MB_AANM=aanm.error?[]:(aanm.data||[]);
@@ -3356,12 +3362,13 @@ async function mbShiftsPlannen(){
   });
   uit+='</tr></thead><tbody>';
   kramen.forEach(k=>{
-    uit+=`<tr><td class="mb-kraamcel"><div style="display:flex;align-items:center;gap:7px">${mbStip(k.kleur)}<span>${veiligTekst(k.naam)}</span></div></td>`;
+    uit+=`<tr><td class="mb-kraamcel"><div style="display:flex;align-items:center;gap:7px">${mbStip(k.kleur)}<span>${veiligTekst(k.naam)}</span></div>${mbManKraamHtml(k.id)}</td>`;
     dagen.forEach(d=>{
       const c=cel[k.id+'|'+d]||{dicht:true,shifts:[]};
       uit+='<td>';
       if(c.dicht){ uit+='<div class="mb-dicht">dicht</div>'; }
       else{
+        if([5,6,0].includes(new Date(d+'T00:00:00').getDay()))uit+=mbWmCelHtml(k.id,d);
         c.shifts.sort((a,b)=>String(a.start_tijd).localeCompare(String(b.start_tijd))).forEach(sh=>{
           const namen=sh.namen||[];
           const vol=namen.length>=sh.nodig;
@@ -3393,6 +3400,129 @@ async function mbShiftsPlannen(){
   if(MB_DAG)mbDagOpen(MB_DAG);
   if(MB_NIEUW)mbDienstTeken();
   if(MB_SHIFT)mbShiftOpen(MB_SHIFT);
+}
+// ── Managers (ma–zo, met account) en weekendmanagers (vr–zo, uit een lijst) ──
+let MB_MAN=[];
+function mbManKraamHtml(kid){
+  const m=MB_MAN.filter(x=>x.soort==='manager'&&x.kraam_id===kid);
+  return `<div class="mb-man">${m.length?'Manager'+(m.length>1?'s':'')+': '+m.map(x=>'<b>'+veiligTekst(x.naam)+'</b>').join(', ')+'<br>':''}
+    <button class="mb-linktekst" style="font-size:11.5px" onclick="mbManKies('${veiligJs(kid)}')">${m.length?'wijzigen':'+ manager (ma\u2013zo)'}</button></div>`;
+}
+function mbWmCelHtml(kid,d){
+  const w=MB_MAN.filter(x=>x.soort==='weekend'&&x.kraam_id===kid&&x.datum===d);
+  return `<button class="mb-wkm${w.length?'':' leeg'}" title="Weekendmanager" onclick="mbWmKies('${veiligJs(kid)}','${veiligJs(d)}')">${
+    w.length?'W: '+w.map(x=>veiligTekst(x.naam)).join(', '):'+ weekendmanager'}</button>`;
+}
+function mbKiesOpen(titel,html){
+  let ov=document.getElementById('mbKiesOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='mbKiesOverlay'; document.body.appendChild(ov);
+    ov.onclick=e=>{ if(e.target===ov)mbKiesDicht(); }; }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9000;display:flex;align-items:center;justify-content:center;padding:16px';
+  ov.innerHTML=`<div style="background:var(--card,#fff);width:100%;max-width:440px;max-height:85vh;overflow:auto;border-radius:14px;padding:16px 18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="font-size:15px;font-weight:700">${titel}</div>
+      <button class="mb-mini" onclick="mbKiesDicht()">Klaar</button></div><div id="mbKiesInhoud">${html}</div></div>`;
+}
+async function mbKiesDicht(){
+  const ov=document.getElementById('mbKiesOverlay'); if(ov)ov.remove();
+  if(MB_TAB==='shifts'){ const y=window.scrollY; try{ await mbShiftsPlannen(); }catch(e){} window.scrollTo(0,y); }
+}
+function mbKraamNaam(kid){ const r=(MB_WEEKRIJEN||[]).find(x=>x.kraam_id===kid); return r?r.kraam:''; }
+let MB_MANKEUZE=null;
+async function mbManKies(kid){
+  const res=await sb.rpc('mcr_manager_keuze'); if(res.error){alert(mbFout(res.error));return;}
+  MB_MANKEUZE=res.data||[];
+  mbKiesOpen('Managers &middot; '+veiligTekst(mbKraamNaam(kid)||'kraam')+' &middot; week van '+veiligTekst(mbKort(MB_WEEK)),'');
+  mbManKiesTeken(kid);
+}
+function mbManKiesTeken(kid,zoek){
+  const el=document.getElementById('mbKiesInhoud'); if(!el)return;
+  const aan=new Set(MB_MAN.filter(x=>x.soort==='manager'&&x.kraam_id===kid).map(x=>x.id));
+  const z=(zoek||'').toLowerCase();
+  const lijst=MB_MANKEUZE.filter(p=>aan.has(p.gebruiker_id)||!z||String(p.naam).toLowerCase().includes(z));
+  el.innerHTML=`<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Maandag t/m zondag. Je kunt er meer dan \u00e9\u00e9n kiezen; tik nog eens om weg te halen.</div>
+    <input class="mb-veld" id="mbManZoek" placeholder="Zoek op naam" value="${veiligTekst(zoek||'')}" oninput="mbManKiesTeken('${veiligJs(kid)}',this.value)" style="margin-bottom:6px">
+    ${lijst.slice(0,60).map(p=>{ const is=aan.has(p.gebruiker_id);
+      return `<div class="mb-kies-rij"><div style="flex-grow:1;min-width:0"><div style="font-size:13.5px;font-weight:600">${veiligTekst(p.naam)}</div>
+        <div style="font-size:11.5px;color:var(--muted)">${p.kraammanager?'kraammanager':'crew'}${p.telefoon?' &middot; '+veiligTekst(p.telefoon):''}</div></div>
+        <button class="mb-mini${is?' zwart':''}" onclick="mbManZet('${veiligJs(kid)}','${veiligJs(p.gebruiker_id)}',${!is})">${is?'\u2713 manager':'+ kiezen'}</button></div>`; }).join('')
+      || '<div style="color:var(--muted);font-size:13px">Niemand gevonden.</div>'}`;
+  const z2=document.getElementById('mbManZoek'); if(z2&&zoek!==undefined){ z2.focus(); z2.setSelectionRange(z2.value.length,z2.value.length); }
+}
+async function mbManZet(kid,gid,aan){
+  const{error}=await sb.rpc('mcr_manager_week_zetten',{p_kraam:kid,p_week:MB_WEEK,p_gebruiker:gid,p_aan:aan});
+  if(error){alert(mbFout(error));return;}
+  const man=await sb.rpc('mcr_managers_week',{p_van:MB_WEEK}); MB_MAN=man.data||MB_MAN;
+  mbManKiesTeken(kid,(document.getElementById('mbManZoek')||{}).value||undefined);
+}
+let MB_WMLIJST=null;
+async function mbWmKies(kid,d){
+  const res=await sb.rpc('mcr_wm_lijst'); if(res.error){alert(mbFout(res.error));return;}
+  MB_WMLIJST=res.data||[];
+  mbKiesOpen('Weekendmanager &middot; '+veiligTekst(mbKraamNaam(kid)||'kraam')+' &middot; '+veiligTekst(mbLang(d)),'');
+  mbWmKiesTeken(kid,d);
+}
+function mbWmKiesTeken(kid,d){
+  const el=document.getElementById('mbKiesInhoud'); if(!el)return;
+  const aan=new Set(MB_MAN.filter(x=>x.soort==='weekend'&&x.kraam_id===kid&&x.datum===d).map(x=>x.id));
+  const lijst=MB_WMLIJST.filter(w=>w.actief||aan.has(w.id));
+  el.innerHTML=`<div style="font-size:12.5px;color:var(--muted);margin-bottom:6px">Namen uit je eigen lijst (geen account). Meer dan \u00e9\u00e9n mag.</div>
+    ${lijst.map(w=>{ const is=aan.has(w.id);
+      return `<div class="mb-kies-rij"><div style="flex-grow:1;min-width:0"><div style="font-size:13.5px;font-weight:600">${veiligTekst(w.naam)}</div>
+        ${w.telefoon?`<div style="font-size:11.5px;color:var(--muted)">${veiligTekst(w.telefoon)}</div>`:''}</div>
+        <button class="mb-mini${is?' zwart':''}" onclick="mbWmZet('${veiligJs(kid)}','${veiligJs(d)}','${veiligJs(w.id)}',${!is})">${is?'\u2713 ingedeeld':'+ kiezen'}</button></div>`; }).join('')
+      || '<div style="color:var(--muted);font-size:13px;padding:6px 0">De lijst is nog leeg. Voeg hieronder een naam toe.</div>'}
+    <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px">
+      <div class="mb-lab" style="margin-bottom:4px">Nieuwe naam toevoegen</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <input class="mb-veld" id="mbWmNaam" placeholder="Naam" style="flex:2 1 140px" onkeydown="if(event.key==='Enter')mbWmNieuw('${veiligJs(kid)}','${veiligJs(d)}')">
+        <input class="mb-veld" id="mbWmTel" placeholder="Telefoon (mag leeg)" style="flex:1 1 110px" onkeydown="if(event.key==='Enter')mbWmNieuw('${veiligJs(kid)}','${veiligJs(d)}')">
+        <button class="mb-mini zwart" onclick="mbWmNieuw('${veiligJs(kid)}','${veiligJs(d)}')">Toevoegen</button></div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:6px">De lijst beheer je bij Instellingen &rsaquo; Weekendmanagers.</div></div>`;
+}
+async function mbWmZet(kid,d,wid,aan){
+  const{error}=await sb.rpc('mcr_manager_dag_zetten',{p_kraam:kid,p_datum:d,p_wm:wid,p_aan:aan});
+  if(error){alert(mbFout(error));return;}
+  const man=await sb.rpc('mcr_managers_week',{p_van:MB_WEEK}); MB_MAN=man.data||MB_MAN;
+  mbWmKiesTeken(kid,d);
+}
+async function mbWmNieuw(kid,d){
+  const naam=((document.getElementById('mbWmNaam')||{}).value||'').trim();
+  const tel=((document.getElementById('mbWmTel')||{}).value||'').trim();
+  if(!naam){alert('Vul een naam in.');return;}
+  const{data:id,error}=await sb.rpc('mcr_wm_zetten',{p_id:null,p_naam:naam,p_telefoon:tel||null,p_actief:true});
+  if(error){alert(mbFout(error));return;}
+  const res=await sb.rpc('mcr_wm_lijst'); MB_WMLIJST=res.data||MB_WMLIJST;
+  await mbWmZet(kid,d,id,true);
+}
+// Instellingen › Weekendmanagers: de lijst bijhouden.
+async function mbWmBeheer(){
+  const el=document.getElementById('mbInstInhoud');
+  const res=await sb.rpc('mcr_wm_lijst'); if(res.error)throw res.error;
+  const r=res.data||[];
+  let uit=`<div class="mb-kaart"><div class="mb-kop">Weekendmanagers</div>
+    <div style="font-size:12.5px;color:var(--muted);margin:-4px 0 8px">Mensen zonder account die je op vrijdag, zaterdag en zondag als manager bij een kraam zet (in het weekrooster bij Shifts). Uitzetten haalt ze uit de keuzelijst; waar ze al stonden blijft staan.</div>`;
+  r.forEach(w=>{ const id=veiligTekst(w.id);
+    uit+=`<div class="mb-veldrij" style="align-items:flex-end;border-top:1px solid var(--border);padding-top:10px">
+      <div style="flex:2 1 160px"><label class="mb-lab">Naam</label><input class="mb-veld" id="mbWmN${id}" value="${veiligTekst(w.naam)}"></div>
+      <div style="flex:1 1 120px"><label class="mb-lab">Telefoon</label><input class="mb-veld" id="mbWmT${id}" value="${veiligTekst(w.telefoon||'')}"></div>
+      <label style="font-size:12.5px;display:flex;align-items:center;gap:6px;padding-bottom:9px"><input type="checkbox" id="mbWmA${id}" ${w.actief?'checked':''}> actief</label>
+      <span style="font-size:11.5px;color:var(--muted);padding-bottom:10px">${w.keer}\u00d7 ingedeeld</span>
+      <button class="mb-mini" style="margin-bottom:4px" onclick="mbWmOpslaan('${veiligJs(w.id)}')">Opslaan</button></div>`; });
+  uit+=`<div class="mb-veldrij" style="align-items:flex-end;border-top:1px solid var(--border);padding-top:10px">
+      <div style="flex:2 1 160px"><label class="mb-lab">Nieuwe naam</label><input class="mb-veld" id="mbWmN-nieuw"></div>
+      <div style="flex:1 1 120px"><label class="mb-lab">Telefoon</label><input class="mb-veld" id="mbWmT-nieuw"></div>
+      <button class="mb-mini zwart" style="margin-bottom:4px" onclick="mbWmOpslaan(null)">Toevoegen</button></div></div>`;
+  el.innerHTML=uit;
+}
+async function mbWmOpslaan(id){
+  const k=id||'-nieuw';
+  const naam=((document.getElementById('mbWmN'+k)||{}).value||'').trim();
+  const tel=((document.getElementById('mbWmT'+k)||{}).value||'').trim();
+  const a=document.getElementById('mbWmA'+k);
+  const{error}=await sb.rpc('mcr_wm_zetten',{p_id:id,p_naam:naam,p_telefoon:tel||null,p_actief:a?a.checked:true});
+  if(error){alert(mbFout(error));return;}
+  toast('Opgeslagen'); mbWmBeheer().catch(e=>alert(mbFout(e)));
 }
 function mbWeek(stap){
   const d=new Date(MB_WEEK+'T00:00:00'); d.setDate(d.getDate()+stap); MB_WEEK=fmt(d); MB_SHIFT=null; mbNaar('shifts');
@@ -5303,7 +5433,7 @@ async function mbPersoonOpslaan(id,vrijgeven){
 // ── INSTELLINGEN ──────────────────────────────────────────────────
 async function mbInstellingen(){
   const onder=[['kramen','Kramen & seizoen'],
-               ['gegevens','Factuurgegevens & bedragen'],['tags','NFC-tags']];
+               ['gegevens','Factuurgegevens & bedragen'],['tags','NFC-tags'],['weekend','Weekendmanagers']];
   document.getElementById('mbInhoud').innerHTML=
     mbKop('Instellingen &middot; Manchester','Elke kraam heeft zijn eigen seizoen en eigen openingstijden')
     +`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${
@@ -5320,6 +5450,7 @@ async function mbInstGa(k){
   try{
     if(k==='kramen')  return await mbKramen();
     if(k==='tags')    return await mbTags();
+    if(k==='weekend') return await mbWmBeheer();
     return await mbGegevens();
   }catch(e){ console.error(e); if(el)el.innerHTML=`<div class="mb-kaart" style="color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
 }
@@ -5709,8 +5840,15 @@ async function mcrGa(tab){
 // ─── Mijn diensten ─────────────────────────────────────────────────
 async function mcrShifts(){
   const vandaag=new Date().toISOString().slice(0,10);
-  const{data,error}=await sb.rpc('mcr_mijn_shifts',{p_van:vandaag,p_tot:null});
+  const [sh,mg]=await Promise.all([sb.rpc('mcr_mijn_shifts',{p_van:vandaag,p_tot:null}), sb.rpc('mcr_mijn_managers',{p_van:vandaag,p_tot:null})]);
+  const{data,error}=sh;
   if(error)throw error;
+  const MAN={}; (mg.error?[]:(mg.data||[])).forEach(x=>{ (MAN[x.datum+'|'+x.kraam]=MAN[x.datum+'|'+x.kraam]||[]).push(x); });
+  const manRegel=r=>{ const l=MAN[r.datum+'|'+r.kraam]; if(!l||!l.length)return '';
+    const p=x=>veiligTekst(x.naam)+(x.telefoon?` <a href="tel:${veiligTekst(String(x.telefoon).replace(/[^+\d]/g,''))}" style="color:#6D28D9">${veiligTekst(x.telefoon)}</a>`:'');
+    const m=l.filter(x=>x.soort==='manager'), w=l.filter(x=>x.soort==='weekend');
+    return `<div style="font-size:12px;color:#6D28D9;margin-top:3px;line-height:1.5">${
+      m.length?'Manager: '+m.map(p).join(', '):''}${m.length&&w.length?'<br>':''}${w.length?'Weekend manager: '+w.map(p).join(', '):''}</div>`; };
   const m=document.getElementById('mcrMain');
   let uit='';
   if(!data||!data.length){
@@ -5728,6 +5866,7 @@ async function mcrShifts(){
             <span style="font-size:14.5px;font-weight:600;color:#1A1917">${veiligTekst(r.kraam)}</span>
           </div>
           <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${veiligTekst(mcrTijd(r.start_tijd))} &ndash; ${veiligTekst(mcrTijd(r.eind_tijd))}${r.shift_naam?' &middot; '+veiligTekst(r.shift_naam):''}</div>
+          ${manRegel(r)}
           ${chip?'<div style="margin-top:5px">'+chip+'</div>':''}
         </div></div>`;
     });
