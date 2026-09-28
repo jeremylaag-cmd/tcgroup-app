@@ -3440,11 +3440,17 @@ function mbManKiesTeken(kid,zoek){
   const aan=new Set(MB_MAN.filter(x=>x.soort==='manager'&&x.kraam_id===kid).map(x=>x.id));
   const z=(zoek||'').toLowerCase();
   const lijst=MB_MANKEUZE.filter(p=>aan.has(p.gebruiker_id)||!z||String(p.naam).toLowerCase().includes(z));
-  el.innerHTML=`<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Maandag t/m zondag. Je kunt er meer dan \u00e9\u00e9n kiezen; tik nog eens om weg te halen.</div>
+  if(!MB_MANKEUZE.length){
+    el.innerHTML=`<div style="font-size:13px;line-height:1.6">Er zijn nog geen kraammanagers. Alleen mensen met het vinkje
+      <b>kraammanager</b> kunnen hier manager worden. Zet dat aan bij
+      <button class="mb-linktekst" onclick="mbKiesDicht();mbNaar('mensen')">Mensen</button>.</div>`;
+    return;
+  }
+  el.innerHTML=`<div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">Maandag t/m zondag, alleen kraammanagers. Je kunt er meer dan \u00e9\u00e9n kiezen; tik nog eens om weg te halen.</div>
     <input class="mb-veld" id="mbManZoek" placeholder="Zoek op naam" value="${veiligTekst(zoek||'')}" oninput="mbManKiesTeken('${veiligJs(kid)}',this.value)" style="margin-bottom:6px">
     ${lijst.slice(0,60).map(p=>{ const is=aan.has(p.gebruiker_id);
       return `<div class="mb-kies-rij"><div style="flex-grow:1;min-width:0"><div style="font-size:13.5px;font-weight:600">${veiligTekst(p.naam)}</div>
-        <div style="font-size:11.5px;color:var(--muted)">${p.kraammanager?'kraammanager':'crew'}${p.telefoon?' &middot; '+veiligTekst(p.telefoon):''}</div></div>
+        ${p.telefoon?`<div style="font-size:11.5px;color:var(--muted)">${veiligTekst(p.telefoon)}</div>`:''}</div>
         <button class="mb-mini${is?' zwart':''}" onclick="mbManZet('${veiligJs(kid)}','${veiligJs(p.gebruiker_id)}',${!is})">${is?'\u2713 manager':'+ kiezen'}</button></div>`; }).join('')
       || '<div style="color:var(--muted);font-size:13px">Niemand gevonden.</div>'}`;
   const z2=document.getElementById('mbManZoek'); if(z2&&zoek!==undefined){ z2.focus(); z2.setSelectionRange(z2.value.length,z2.value.length); }
