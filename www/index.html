@@ -5796,6 +5796,31 @@ async function mcrStart(){
   mcrNav();
   if(!MCR_WACHT&&!MCR_MGR)nfcKan();   // vast opvragen; het inklokscherm heeft het antwoord nodig
   await mcrGa(MCR_WACHT?'me':(MCR_MGR?'rota':'shifts'));
+  mcrHuisregelsCheck();
+}
+
+// Nieuwe versie van de huisregels? Dan eenmalig laten lezen en akkoord vragen.
+// Het akkoord komt in huisregels_akkoord (met de getypte naam = eigen naam);
+// sluit je het venster, dan komt de vraag bij de volgende keer openen terug.
+async function mcrHuisregelsCheck(){
+  try{
+    if(!CURRENT_USER)return;
+    HUISREGELS=null;
+    const hr=await laadHuisregels(); if(!hr||!hr.id)return;
+    const{data,error}=await sb.from('huisregels_akkoord').select('huisregels_id')
+      .eq('gebruiker_id',CURRENT_USER.id).eq('huisregels_id',hr.id).limit(1);
+    if(error||(data&&data.length))return;
+    await toonHuisregels(false,true);
+  }catch(e){ console.warn('Huisregels-check mislukt:',e); }
+}
+async function mcrHuisregelsAkkoord(){
+  const hr=HUISREGELS; if(!hr||!CURRENT_USER){ sluitHuisregels(); return; }
+  const kn=document.getElementById('huisregelsKnop'); if(kn){kn.disabled=true;kn.textContent='Saving\u2026';}
+  const{error}=await sb.from('huisregels_akkoord').insert({gebruiker_id:CURRENT_USER.id,huisregels_id:hr.id,naam_getypt:CURRENT_NAAM||null});
+  if(kn)kn.disabled=false;
+  if(error&&!/duplicate/i.test(error.message||'')){ if(kn)kn.textContent='I agree'; alert('Could not save: '+(error.message||error)); return; }
+  sluitHuisregels(); toast('Thanks! You agreed to the new house rules.');
+  if(MCR_TAB==='me')mcrGa('me');
 }
 
 function mcrNav(){
@@ -6982,7 +7007,7 @@ async function laadHuisregels(){
   return HUISREGELS;
 }
 
-async function toonHuisregels(alleenLezen){
+async function toonHuisregels(alleenLezen,nieuweVersie){
   const ov=document.getElementById('huisregelsOverlay'); if(!ov)return;
   const tk=document.getElementById('huisregelsTekst');
   const tt=document.getElementById('huisregelsTitel');
@@ -6990,13 +7015,14 @@ async function toonHuisregels(alleenLezen){
   // Lees je ze nog eens vanuit je profiel, dan hoef je nergens mee akkoord te
   // gaan; dat deed je al bij het aanmelden.
   if(kn){
-    kn.textContent = alleenLezen ? 'Close' : 'Agree and continue';
-    kn.setAttribute('onclick', alleenLezen ? 'sluitHuisregels()' : 'akkoordHuisregels()');
+    kn.textContent = nieuweVersie ? 'I agree' : (alleenLezen ? 'Close' : 'Agree and continue');
+    kn.setAttribute('onclick', nieuweVersie ? 'mcrHuisregelsAkkoord()' : (alleenLezen ? 'sluitHuisregels()' : 'akkoordHuisregels()'));
   }
   if(tk)tk.textContent='Loading\u2026';
   ov.style.display='flex';
   const hr=await laadHuisregels();
-  if(hr){ if(tt)tt.textContent=hr.titel||'House rules'; if(tk)tk.innerHTML=huisregelsNaarHtml(hr.tekst); }
+  if(hr){ if(tt)tt.textContent=nieuweVersie?'The house rules have been updated':(hr.titel||'House rules');
+    if(tk)tk.innerHTML=(nieuweVersie?'<p style="margin:0 0 .6rem;padding:9px 11px;background:#FEF6E7;border-radius:8px;color:#8A5307">Please read the new version and tap <b>I agree</b> at the bottom.</p>':'')+huisregelsNaarHtml(hr.tekst); }
   else if(tk){ tk.textContent='The house rules could not be loaded. Check your connection and try again.'; }
 }
 function sluitHuisregels(){ const ov=document.getElementById('huisregelsOverlay'); if(ov)ov.style.display='none'; }
