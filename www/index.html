@@ -1441,6 +1441,11 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <div class="add-form"><input type="text" id="newSoortTitel" placeholder="Titel (bv. BBQ)"><textarea id="newSoortBeschr" placeholder="Beschrijving (optioneel)"></textarea><button class="btn-sm" onclick="addSoort()">Toevoegen</button></div>
         </div>
         <div class="bc" style="grid-column:1/-1">
+          <div class="bt">Franklins-bestellingen</div>
+          <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-bottom:8px">Productlijst met inkoopprijzen, bestellingen van de Franklins-manager en de paklijsten voor de hal.</div>
+          <button class="btn-sm" onclick="showPage('bestellen')">Bestellingen en producten openen</button>
+        </div>
+        <div class="bc" style="grid-column:1/-1">
           <div class="bt" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
             <span>Taken</span>
             <span style="font-size:11px;font-weight:600;color:#B45309" id="takenWachtCount"></span>
@@ -2371,6 +2376,11 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       </div>
       <div class="sc" id="uurMaandCard" style="margin-top:1rem"></div>
     </div>
+  </div>
+
+  <!-- BESTELLEN — FRANKLINS -->
+  <div id="page-bestellen" class="page">
+    <div style="padding:1.25rem;max-width:760px;margin:0 auto" id="bsInhoud"><div class="spin">Laden...</div></div>
   </div>
 
   <!-- TAKEN — MEDEWERKER -->
@@ -7894,7 +7904,7 @@ async function initApp(user){
       <button class="htab active" onclick="showPage('beschikbaarheid',this)">Mijn schema</button>
       <button class="htab" onclick="showPage('uren',this)">Uren</button>
       ${(isFullTimer||isManagerFr)?`<button class="htab" onclick="showPage('taken',this)">Taken</button>`:''}
-      ${isManagerFr?`<button class="htab" onclick="showPage('planning-beheer',this)">Planning</button>`:''}
+      ${isManagerFr?`<button class="htab" onclick="showPage('planning-beheer',this)">Planning</button><button class="htab" onclick="showPage('bestellen',this)">Bestellen</button>`:''}
       ${laatsteTab}`;
     ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   }
@@ -7941,7 +7951,7 @@ async function initApp(user){
         bnavItem('planning-beheer','Planning',ico.schema)+
         bnavItem('uren','Uren',ico.uren)+
         bnavItem('taken','Taken',ico.taken)+
-        bnavItem('profiel','Profiel',ico.profiel);
+        bnavItem('bestellen','Bestellen',`<svg width="20" height="20" viewBox="0 0 24 24"><circle class="ni" cx="9" cy="21" r="1"/><circle class="ni" cx="20" cy="21" r="1"/><path class="ni" d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>`);
     }else{
       // Part-timer
       bn.innerHTML=
@@ -8260,6 +8270,7 @@ function showPage(id,btn){
   if(id==='uren')loadUrenPersoneel();
   if(id==='uren-beheer')loadUrenBeheer();
   if(id==='taken')loadTaken();
+  if(id==='bestellen')loadBestellen();
   if(id==='finance')loadFinance();
 
   if(id==='mcrbeheer')loadMcrBeheer();
@@ -13177,7 +13188,7 @@ function finCelHtml(soort,r){
   }
   const veld=soort==='O'?'omzet':'kosten';
   const leeg=r[veld]==null;
-  return `<td class="fin-cel" onclick="finBewerk('${soort}','${veiligJs(r.klus_id)}')"><span class="fin-waarde${leeg?' leeg':''}" id="fin${soort}-${veiligJs(r.klus_id)}">${leeg?'—':veiligTekst(finBedrag(r[veld]))}</span></td>`;
+  return `<td class="fin-cel" onclick="finBewerk('${soort}','${veiligJs(r.klus_id)}')"><span class="fin-waarde${leeg?' leeg':''}" id="fin${soort}-${veiligJs(r.klus_id)}">${leeg?'—':veiligTekst(finBedrag(r[veld]))}</span>${soort==='K'&&Number(r.bestelkosten)>0?`<div style="font-size:10.5px;color:#3730A3" title="Bestellingen uit de hal, verdeeld over de dagen tot de volgende levering">+ bestelling ${veiligTekst(finBedrag(r.bestelkosten))}</div>`:''}</td>`;
 }
 function finBewerk(soort,klusId){
   if(FIN_OPEN&&FIN_OPEN.klusId===klusId&&FIN_OPEN.soort===soort)return;
@@ -13244,7 +13255,7 @@ function finTeken(){
     return true;
   });
   const tot={omzet:0,kosten:0,loon:0,marge:0,open:0,dagen:0,zonder:0};
-  basis.forEach(r=>{ tot.omzet+=Number(r.omzet||0); tot.kosten+=Number(r.kosten||0)+Number(r.afdracht||0); tot.loon+=Number(r.loonkosten||0); tot.marge+=Number(r.marge||0);
+  basis.forEach(r=>{ tot.omzet+=Number(r.omzet||0); tot.kosten+=Number(r.kosten||0)+Number(r.afdracht||0)+Number(r.bestelkosten||0); tot.loon+=Number(r.loonkosten||0); tot.marge+=Number(r.marge||0);
     if(!r.gefactureerd&&r.verkoop_soort!=='losse_verkoop'&&Number(r.omzet||0)>0)tot.open+=Number(r.omzet||0); if(r.omzet!=null)tot.dagen++; else tot.zonder++; });
   const som=document.getElementById('finSom');
   if(som)som.innerHTML=`
@@ -13286,7 +13297,7 @@ async function finBedragen(klusId){
   if(Number.isNaN(o)||Number.isNaN(k)||(o!=null&&o<0)||(k!=null&&k<0)){toast('Omzet of kosten klopt niet','fout');return;}
   const{error}=await sb.rpc('finance_zetten',{p_klus:klusId,p_omzet:o,p_kosten:k,p_gefactureerd:null,p_notitie:null});
   if(error){toast('Opslaan mislukt: '+error.message,'fout');loadFinance();return;}
-  r.omzet=o; r.kosten=k; r.marge=(o||0)-(k||0)-Number(r.afdracht||0)-Number(r.loonkosten||0);
+  r.omzet=o; r.kosten=k; r.marge=(o||0)-(k||0)-Number(r.afdracht||0)-Number(r.bestelkosten||0)-Number(r.loonkosten||0);
   finRijBijwerken(klusId);
 }
 // Alleen de marge van die regel, de totaalregel en de tegels: de tabel zelf
@@ -13306,7 +13317,7 @@ function finRijBijwerken(klusId){
   const basis=FIN_RIJEN.filter(x=>(x.categorie==='franklins')===fr);
   const zichtbaar=[...document.querySelectorAll('#finLijst tbody tr[id^="fin-"]')].map(t=>FIN_RIJEN.find(x=>'fin-'+x.klus_id===t.id)).filter(Boolean);
   const tot={omzet:0,kosten:0,loon:0,marge:0,open:0,dagen:0,zonder:0};
-  basis.forEach(x=>{ tot.omzet+=Number(x.omzet||0); tot.kosten+=Number(x.kosten||0)+Number(x.afdracht||0); tot.loon+=Number(x.loonkosten||0); tot.marge+=Number(x.marge||0);
+  basis.forEach(x=>{ tot.omzet+=Number(x.omzet||0); tot.kosten+=Number(x.kosten||0)+Number(x.afdracht||0)+Number(x.bestelkosten||0); tot.loon+=Number(x.loonkosten||0); tot.marge+=Number(x.marge||0);
     if(!x.gefactureerd&&x.verkoop_soort!=='losse_verkoop'&&Number(x.omzet||0)>0)tot.open+=Number(x.omzet||0); if(x.omzet!=null)tot.dagen++; else tot.zonder++; });
   const som=document.getElementById('finSom');
   if(som)som.innerHTML=`
@@ -13423,6 +13434,329 @@ async function lvOpslaan(){
   const kk=(KLUSSEN||[]).find(x=>x.id===kid); if(kk)kk.verkoop_soort='losse_verkoop';
   if(document.getElementById('page-finance')?.classList.contains('active'))loadFinance();
 }
+// ══ FRANKLINS-BESTELLINGEN ═══════════════════════════════════════════
+// De Franklins-manager (of een beheerder) stelt een bestelling samen uit de
+// productlijst; de hal krijgt hem als taak met een paklijst per categorie.
+// Prijzen en rechten regelt de database (producten_lijst, bestelling_*).
+let BS_TAB='nieuw', BS_PROD=[], BS_AANTAL={}, BS_BEWERK=null, BS_VOOR=null, BS_OPM='', BS_ZOEK='', BS_LIJST=[];
+const BS_STATUS={verstuurd:['verstuurd','#2A4EA8','#EEF4FF'],wordt_gepakt:['wordt gepakt','#B45309','#FEF6E7'],klaar:['klaar','#0F7A52','#F2FBF6'],geannuleerd:['geannuleerd','#6B6A66','#F3F2EE']};
+function bsChip(st){ const c=BS_STATUS[st]||[st,'#6B6A66','#F3F2EE']; return `<span style="font-size:11px;font-weight:600;color:${c[1]};background:${c[2]};border-radius:6px;padding:2px 7px">${c[0]}</span>`; }
+function bsEuro(n){ return '€ '+Number(n||0).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function bsAantal(n){ return String(Math.round(Number(n||0)*100)/100).replace('.',','); }
+function bsMagBestellen(){ return CURRENT_ROL==='beheerder'||CURRENT_ROL==='manager-franklins'; }
+function bsMagPakken(){ return CURRENT_ROL==='beheerder'||CURRENT_ROL==='hal'; }
+function bsVolgendeLeverdag(){ const d=new Date(); d.setDate(d.getDate()+1); while(![1,4].includes(d.getDay()))d.setDate(d.getDate()+1); return fmt(d); }
+function bsCategorieen(lijst){ const v=[]; lijst.forEach(p=>{ if(!v.includes(p.categorie))v.push(p.categorie); }); return v; }
+
+async function loadBestellen(){
+  const el=document.getElementById('bsInhoud'); if(!el)return;
+  if(!bsMagBestellen()&&!bsMagPakken()){ el.innerHTML='<div class="sc"><div class="empty">Geen toegang.</div></div>'; return; }
+  if(!bsMagBestellen()&&BS_TAB==='nieuw')BS_TAB='lijst';
+  const[p,l]=await Promise.all([sb.rpc('producten_lijst'),sb.rpc('bestellingen_lijst',{p_van:null,p_tot:null})]);
+  if(p.error){ el.innerHTML=`<div class="sc"><div class="empty" style="color:#B91C1C">${veiligTekst(p.error.message)}</div></div>`; return; }
+  BS_PROD=p.data||[]; BS_LIJST=(l&&l.data)||[];
+  if(!BS_VOOR)BS_VOOR=bsVolgendeLeverdag();
+  bsTeken();
+}
+function bsTabKnop(k,l){ return `<button class="pb-fbtn${BS_TAB===k?' on':''}" onclick="BS_TAB='${k}';bsTeken()">${l}</button>`; }
+function bsTeken(){
+  const el=document.getElementById('bsInhoud'); if(!el)return;
+  const tabs=(bsMagBestellen()?bsTabKnop('nieuw',BS_BEWERK?'Bestelling aanpassen':'Nieuwe bestelling'):'')
+    +bsTabKnop('lijst','Bestellingen')+(CURRENT_ROL==='beheerder'?bsTabKnop('producten','Producten'):'');
+  let uit=`<div class="sc"><div class="sc-header" style="margin-bottom:.75rem"><div class="st">Franklins &middot; bestellen</div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${tabs}</div><div id="bsVak"></div></div>`;
+  el.innerHTML=uit;
+  if(BS_TAB==='nieuw')bsTekenNieuw(); else if(BS_TAB==='producten')bsTekenProducten(); else bsTekenLijst();
+}
+function bsTotaal(){ return BS_PROD.reduce((t,p)=>t+Number(BS_AANTAL[p.id]||0)*Number(p.inkoopprijs||0),0); }
+function bsTekenNieuw(){
+  const vak=document.getElementById('bsVak'); if(!vak)return;
+  const actief=BS_PROD.filter(p=>p.actief);
+  if(!actief.length){ vak.innerHTML='<div class="empty" style="padding:.5rem 0">Er staan nog geen producten in de lijst. Een beheerder vult die bij Producten.</div>'; return; }
+  const z=BS_ZOEK.toLowerCase();
+  let rij='';
+  bsCategorieen(actief).forEach(cat=>{
+    const ps=actief.filter(p=>p.categorie===cat&&(!z||p.naam.toLowerCase().includes(z)||cat.toLowerCase().includes(z)));
+    if(!ps.length)return;
+    rij+=`<div class="slabel" style="margin:14px 0 4px">${veiligTekst(cat)}</div>`;
+    ps.forEach(p=>{ const n=Number(BS_AANTAL[p.id]||0);
+      rij+=`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)${n?';background:#F5F9FF':''}">
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:${n?700:500}">${veiligTekst(p.naam)}</div>
+          <div style="font-size:11.5px;color:var(--muted)">${p.inkoopprijs!=null?bsEuro(p.inkoopprijs):'geen prijs'}${p.eenheid?' per '+veiligTekst(p.eenheid):''}${n?' &middot; <b style="color:var(--text)">'+bsEuro(n*Number(p.inkoopprijs||0))+'</b>':''}</div></div>
+        <button class="btn-nav" style="min-width:34px" onclick="bsZet('${veiligJs(p.id)}',-1)">&minus;</button>
+        <button class="btn-nav" style="min-width:44px;font-weight:700" onclick="bsTyp('${veiligJs(p.id)}')" title="Aantal intypen">${n?bsAantal(n):'0'}</button>
+        <button class="btn-nav" style="min-width:34px" onclick="bsZet('${veiligJs(p.id)}',1)">+</button></div>`; });
+  });
+  const aantal=Object.values(BS_AANTAL).filter(n=>Number(n)>0).length;
+  vak.innerHTML=`${BS_BEWERK?`<div style="font-size:12.5px;background:#FEF6E7;color:#8A5307;border-radius:8px;padding:8px 10px;margin-bottom:10px">Je past een bestaande bestelling aan. <button class="mb-linktekst" onclick="bsNieuwLeeg()">Nieuwe bestelling beginnen</button></div>`:''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:1 1 150px"><div class="slabel" style="margin-bottom:3px">Nodig op</div>
+        <input type="date" value="${veiligTekst(BS_VOOR||'')}" onchange="BS_VOOR=this.value" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font)"></div>
+      <div style="flex:3 1 220px"><div class="slabel" style="margin-bottom:3px">Opmerking voor de hal</div>
+        <input type="text" maxlength="500" value="${veiligTekst(BS_OPM)}" oninput="BS_OPM=this.value" placeholder="bv. graag vóór 10 uur" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font)"></div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px">
+      <input type="search" placeholder="Zoek product" value="${veiligTekst(BS_ZOEK)}" oninput="BS_ZOEK=this.value;clearTimeout(window.BS_ZT);window.BS_ZT=setTimeout(bsTekenNieuw,200)" style="flex:1 1 180px;font-size:13px;padding:7px 10px;border:1px solid var(--border);border-radius:20px;font-family:var(--font)">
+      ${!BS_BEWERK&&BS_LIJST.some(b=>b.status!=='geannuleerd')?'<button class="btn-nav" style="font-size:12px" onclick="bsVorigeOpnieuw()">Vorige bestelling opnieuw</button>':''}
+    </div>
+    <div>${rij||'<div class="empty" style="padding:.5rem 0">Niets gevonden.</div>'}</div>
+    <div style="position:sticky;bottom:0;background:var(--card,#fff);border-top:1px solid var(--border);margin-top:10px;padding:10px 0;display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div style="flex:1"><div style="font-size:18px;font-weight:700">${bsEuro(bsTotaal())}</div><div style="font-size:11.5px;color:var(--muted)">${aantal} ${aantal===1?'product':'producten'} &middot; inkoop excl. btw</div></div>
+      <button class="btn-sm" style="padding:10px 16px" ${aantal?'':'disabled'} onclick="bsVersturen()">${BS_BEWERK?'Wijziging opslaan':'Versturen naar de hal'}</button></div>`;
+}
+function bsZet(id,stap){ const n=Math.max(0,Math.round((Number(BS_AANTAL[id]||0)+stap)*100)/100); if(n)BS_AANTAL[id]=n; else delete BS_AANTAL[id]; bsTekenNieuw(); }
+function bsTyp(id){
+  const p=BS_PROD.find(x=>x.id===id);
+  const v=prompt('Aantal '+(p?p.naam:'')+(p&&p.eenheid?' ('+p.eenheid+')':''),BS_AANTAL[id]?bsAantal(BS_AANTAL[id]):'');
+  if(v===null)return; const n=finGetal(v);
+  if(n==null||n===0){ delete BS_AANTAL[id]; } else if(Number.isNaN(n)||n<0){ toast('Aantal klopt niet','fout'); return; } else BS_AANTAL[id]=n;
+  bsTekenNieuw();
+}
+function bsNieuwLeeg(){ BS_BEWERK=null; BS_AANTAL={}; BS_OPM=''; BS_VOOR=bsVolgendeLeverdag(); bsTeken(); }
+async function bsVorigeOpnieuw(){
+  const vorige=BS_LIJST.find(b=>b.status!=='geannuleerd'); if(!vorige)return;
+  const{data,error}=await sb.rpc('bestelling_lezen',{p_id:vorige.id}); if(error){toast(error.message,'fout');return;}
+  BS_AANTAL={}; (data||[]).forEach(r=>{ if(r.product_id&&BS_PROD.some(p=>p.id===r.product_id&&p.actief))BS_AANTAL[r.product_id]=Number(r.aantal); });
+  toast('Vorige bestelling ingeladen — pas aan wat nodig is'); bsTekenNieuw();
+}
+async function bsVersturen(){
+  const regels=Object.entries(BS_AANTAL).filter(([,n])=>Number(n)>0).map(([product_id,aantal])=>({product_id,aantal}));
+  if(!regels.length)return;
+  if(!BS_VOOR){ toast('Kies voor wanneer de bestelling nodig is','fout'); return; }
+  const ok=await vraagBevestiging(BS_BEWERK?'Wijziging opslaan?':'Bestelling versturen?',
+    `${regels.length} ${regels.length===1?'product':'producten'} &middot; <b>${bsEuro(bsTotaal())}</b><br>Nodig op ${veiligTekst(parseDate(BS_VOOR).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'}))}. De hal ziet hem bij Taken.`,
+    BS_BEWERK?'Opslaan':'Versturen');
+  if(!ok)return;
+  const{error}=await sb.rpc('bestelling_versturen',{p_id:BS_BEWERK,p_voor:BS_VOOR,p_opmerking:BS_OPM||null,p_regels:regels});
+  if(error){ toast('Versturen mislukt: '+error.message,'fout'); return; }
+  toast(BS_BEWERK?'Bestelling aangepast':'Bestelling verstuurd naar de hal');
+  BS_BEWERK=null; BS_AANTAL={}; BS_OPM=''; BS_VOOR=bsVolgendeLeverdag(); BS_TAB='lijst';
+  loadBestellen();
+}
+function bsTekenLijst(){
+  const vak=document.getElementById('bsVak'); if(!vak)return;
+  if(!BS_LIJST.length){ vak.innerHTML='<div class="empty" style="padding:.5rem 0">Nog geen bestellingen.</div>'; return; }
+  const maand={}; BS_LIJST.filter(b=>b.status!=='geannuleerd').forEach(b=>{ const k=String(b.voor_datum).slice(0,7); maand[k]=(maand[k]||0)+Number(b.totaal_geleverd||0); });
+  vak.innerHTML=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">${Object.keys(maand).sort().reverse().slice(0,3).map(k=>
+      `<div class="pb-sum-card" style="flex:1;min-width:140px"><div class="pb-sum-num">${bsEuro(maand[k])}</div><div class="pb-sum-lbl">${veiligTekst(parseDate(k+'-01').toLocaleDateString('nl-NL',{month:'long',year:'numeric'}))}</div></div>`).join('')}</div>
+    ${BS_LIJST.map(b=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer" onclick="bsOpen('${veiligJs(b.id)}')">
+      <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600">${veiligTekst(parseDate(b.voor_datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}))} &middot; ${b.regels} ${b.regels===1?'product':'producten'} ${bsChip(b.status)}</div>
+        <div style="font-size:11.5px;color:var(--muted)">${b.besteld_door?'door '+veiligTekst(b.besteld_door):''}${b.tekorten?` &middot; <span style="color:#B91C1C;font-weight:600">${b.tekorten} minder geleverd</span>`:''}${b.status==='wordt_gepakt'?' &middot; '+b.gepakt+'/'+b.regels+' gepakt':''}${b.opmerking?' &middot; '+veiligTekst(b.opmerking):''}</div></div>
+      <div style="text-align:right"><div style="font-weight:700">${bsEuro(b.totaal_geleverd)}</div>${Number(b.totaal_geleverd)!==Number(b.totaal_besteld)?`<div style="font-size:11px;color:var(--muted);text-decoration:line-through">${bsEuro(b.totaal_besteld)}</div>`:''}</div></div>`).join('')}`;
+}
+
+// ── De bestelling / paklijst ──
+let BS_OPEN=null;
+async function bsOpen(id){
+  const[l,r]=await Promise.all([sb.rpc('bestellingen_lijst',{p_van:'2000-01-01',p_tot:'2100-01-01'}),sb.rpc('bestelling_lezen',{p_id:id})]);
+  if(r.error){toast(r.error.message,'fout');return;}
+  const kop=((l&&l.data)||[]).find(b=>b.id===id);
+  if(!kop){toast('Deze bestelling bestaat niet meer','fout');return;}
+  BS_OPEN={kop,regels:r.data||[]};
+  let ov=document.getElementById('bsOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='bsOverlay'; document.body.appendChild(ov); ov.onclick=e=>{ if(e.target===ov)bsDicht(); }; }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;display:flex;align-items:center;justify-content:center;padding:12px';
+  bsTekenOpen();
+}
+function bsDicht(){ const ov=document.getElementById('bsOverlay'); if(ov)ov.remove(); BS_OPEN=null;
+  if(document.getElementById('page-taken')?.classList.contains('active'))loadTaken();
+  if(document.getElementById('page-bestellen')?.classList.contains('active'))loadBestellen(); }
+function bsTekenOpen(){
+  const ov=document.getElementById('bsOverlay'); if(!ov||!BS_OPEN)return;
+  const{kop,regels}=BS_OPEN;
+  const pakken=bsMagPakken()&&kop.status!=='geannuleerd'&&(kop.status!=='klaar'||CURRENT_ROL==='beheerder');
+  const bewerken=bsMagBestellen()&&(CURRENT_ROL==='beheerder'?kop.status!=='klaar':kop.status==='verstuurd');
+  const totB=regels.reduce((t,x)=>t+Number(x.prijs)*Number(x.aantal),0);
+  const totG=regels.reduce((t,x)=>t+Number(x.prijs)*Number(x.geleverd!=null?x.geleverd:x.aantal),0);
+  let lijst='';
+  bsCategorieen(regels).forEach(cat=>{
+    lijst+=`<div class="slabel" style="margin:12px 0 2px">${veiligTekst(cat)}</div>`;
+    regels.filter(x=>x.categorie===cat).forEach(x=>{
+      const min=x.geleverd!=null&&Number(x.geleverd)<Number(x.aantal);
+      lijst+=`<div style="display:flex;align-items:flex-start;gap:9px;padding:8px 0;border-bottom:1px solid var(--border)">
+        <button class="tk-vink ${x.gepakt?'aan':''}" ${pakken?'':'disabled'} onclick="bsVink('${veiligJs(x.regel_id)}')" title="Gepakt">&#10003;</button>
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600;${x.gepakt?'color:var(--muted)':''}">${bsAantal(x.aantal)} ${veiligTekst(x.eenheid||'')} &middot; ${veiligTekst(x.naam)}</div>
+          <div style="font-size:11.5px;color:var(--muted)">${bsEuro(x.prijs)}${x.eenheid?' per '+veiligTekst(x.eenheid):''} &middot; ${bsEuro(Number(x.prijs)*Number(x.geleverd!=null?x.geleverd:x.aantal))}</div>
+          ${min?`<div style="font-size:12px;color:#B91C1C;font-weight:600">Maar ${bsAantal(x.geleverd)} van ${bsAantal(x.aantal)} geleverd${x.opmerking?' &middot; '+veiligTekst(x.opmerking):''}</div>`:(x.opmerking?`<div style="font-size:12px;color:#8A5307">${veiligTekst(x.opmerking)}</div>`:'')}</div>
+        ${pakken?`<button class="btn-nav" style="font-size:11px;white-space:nowrap" onclick="bsMinder('${veiligJs(x.regel_id)}')">${min?'aanpassen':'minder'}</button>`:''}</div>`;
+    });
+  });
+  const gepakt=regels.filter(x=>x.gepakt).length;
+  ov.innerHTML=`<div style="background:var(--card,#fff);width:100%;max-width:640px;max-height:90vh;overflow:auto;border-radius:14px;padding:16px 18px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div><div style="font-size:15px;font-weight:700">Bestelling Franklins ${bsChip(kop.status)}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Nodig op ${veiligTekst(parseDate(kop.voor_datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'}))}${kop.besteld_door?' &middot; door '+veiligTekst(kop.besteld_door):''}</div>
+        ${kop.opmerking?`<div style="font-size:12.5px;margin-top:4px;background:#FEF6E7;color:#8A5307;border-radius:7px;padding:5px 8px">${veiligTekst(kop.opmerking)}</div>`:''}
+        ${kop.status==='klaar'&&kop.klaar_door?`<div style="font-size:12px;color:#0F7A52;margin-top:4px">Klaar gemeld door ${veiligTekst(kop.klaar_door)}${kop.klaar_op?' om '+new Date(kop.klaar_op).toLocaleString('nl-NL',{weekday:'short',hour:'2-digit',minute:'2-digit'}):''}</div>`:''}</div>
+      <button class="btn-ghost" onclick="bsDicht()">&times;</button></div>
+    ${lijst}
+    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;gap:10px;flex-wrap:wrap">
+      <div style="font-size:12px;color:var(--muted)">${gepakt}/${regels.length} gepakt${totG!==totB?' &middot; besteld '+bsEuro(totB):''}</div>
+      <div style="font-size:18px;font-weight:700">${bsEuro(totG)}</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px">
+      <button class="btn-ghost" onclick="bsPrint()">Printen / PDF</button>
+      ${bewerken?`<button class="btn-ghost" onclick="bsBewerk()">Aanpassen</button><button class="btn-ghost" style="color:#B91C1C" onclick="bsAnnuleer()">Annuleren</button>`:''}
+      ${pakken&&kop.status!=='klaar'?`<button class="btn-sm" onclick="bsKlaar(true)">Bestelling klaar</button>`:''}
+      ${pakken&&kop.status==='klaar'?`<button class="btn-ghost" onclick="bsKlaar(false)">Terugzetten</button>`:''}
+    </div></div>`;
+}
+async function bsHerlaadOpen(){ if(!BS_OPEN)return; const id=BS_OPEN.kop.id; const{data}=await sb.rpc('bestelling_lezen',{p_id:id}); if(data)BS_OPEN.regels=data;
+  const l=await sb.rpc('bestellingen_lijst',{p_van:'2000-01-01',p_tot:'2100-01-01'}); const k=((l&&l.data)||[]).find(b=>b.id===id); if(k)BS_OPEN.kop=k; bsTekenOpen(); }
+async function bsVink(rid){
+  const x=BS_OPEN&&BS_OPEN.regels.find(r=>r.regel_id===rid); if(!x)return;
+  x.gepakt=!x.gepakt; bsTekenOpen();
+  const{error}=await sb.rpc('bestelregel_zetten',{p_regel:rid,p_gepakt:x.gepakt,p_geleverd:x.geleverd,p_opmerking:x.opmerking});
+  if(error){ x.gepakt=!x.gepakt; bsTekenOpen(); toast(error.message,'fout'); return; }
+  if(BS_OPEN.kop.status==='verstuurd')BS_OPEN.kop.status='wordt_gepakt';
+}
+async function bsMinder(rid){
+  const x=BS_OPEN&&BS_OPEN.regels.find(r=>r.regel_id===rid); if(!x)return;
+  const v=prompt(`Hoeveel ${x.eenheid||''} ${x.naam} lever je? (besteld: ${bsAantal(x.aantal)})`,x.geleverd!=null?bsAantal(x.geleverd):'');
+  if(v===null)return;
+  const n=v.trim()===''?null:finGetal(v);
+  if(n!=null&&(Number.isNaN(n)||n<0)){ toast('Aantal klopt niet','fout'); return; }
+  let opm=x.opmerking||'';
+  if(n!=null&&n<Number(x.aantal)){ const o=prompt('Waarom minder? (bv. niet op voorraad)',opm||'niet op voorraad'); if(o===null)return; opm=o; }
+  const geleverd=(n==null||n>=Number(x.aantal))?null:n;
+  const{error}=await sb.rpc('bestelregel_zetten',{p_regel:rid,p_gepakt:true,p_geleverd:geleverd,p_opmerking:geleverd==null&&n!=null?null:opm||null});
+  if(error){ toast(error.message,'fout'); return; }
+  bsHerlaadOpen();
+}
+async function bsKlaar(klaar){
+  if(!BS_OPEN)return;
+  if(klaar){
+    const open=BS_OPEN.regels.filter(x=>!x.gepakt).length;
+    const min=BS_OPEN.regels.filter(x=>x.geleverd!=null&&Number(x.geleverd)<Number(x.aantal)).length;
+    const ok=await vraagBevestiging('Bestelling klaar?',
+      (open?`<div style="color:#B91C1C;margin-bottom:6px">${open} ${open===1?'product is':'producten zijn'} nog niet afgevinkt. Die tellen als volledig geleverd.</div>`:'')
+      +(min?`<div style="margin-bottom:6px">${min} ${min===1?'product wordt':'producten worden'} minder geleverd; de Franklins-manager ziet dat.</div>`:'')
+      +'De taak wordt afgevinkt.', 'Ja, klaar');
+    if(!ok)return;
+  }
+  const{error}=await sb.rpc('bestelling_klaar',{p_id:BS_OPEN.kop.id,p_klaar:klaar});
+  if(error){ toast(error.message,'fout'); return; }
+  toast(klaar?'Bestelling klaar gemeld':'Bestelling teruggezet');
+  bsHerlaadOpen();
+}
+async function bsAnnuleer(){
+  if(!BS_OPEN)return;
+  const ok=await vraagBevestiging('Bestelling annuleren?','De taak verdwijnt bij de hal.','Ja, annuleren'); if(!ok)return;
+  const{error}=await sb.rpc('bestelling_annuleren',{p_id:BS_OPEN.kop.id});
+  if(error){ toast(error.message,'fout'); return; }
+  toast('Bestelling geannuleerd'); bsDicht();
+}
+function bsBewerk(){
+  if(!BS_OPEN)return;
+  BS_BEWERK=BS_OPEN.kop.id; BS_VOOR=BS_OPEN.kop.voor_datum; BS_OPM=BS_OPEN.kop.opmerking||''; BS_AANTAL={};
+  BS_OPEN.regels.forEach(r=>{ if(r.product_id)BS_AANTAL[r.product_id]=Number(r.aantal); });
+  const ov=document.getElementById('bsOverlay'); if(ov)ov.remove(); BS_OPEN=null;
+  BS_TAB='nieuw'; showPage('bestellen');
+}
+
+// ── Printen: een PDF van de paklijst, met hokjes om af te vinken ──
+function pdfMakenPaginas(paginas){
+  const strm=regels=>{ let st='';
+    regels.forEach(r=>{
+      if(r.hok){ st+=`0.25 0.25 0.24 RG 0.8 w ${r.x} ${r.y-2} 9 9 re S\n`; return; }
+      const f=r.vet?'/F2':'/F1'; const g=r.grijs?'0.42 0.42 0.40 rg':(r.rood?'0.72 0.11 0.11 rg':'0.10 0.10 0.09 rg');
+      st+=`BT ${g} ${f} ${r.groot||10} Tf 1 0 0 1 ${r.x} ${r.y} Tm (${pdfTekens(r.tekst)}) Tj ET\n`;
+      if(r.lijn)st+=`0.85 0.84 0.82 RG 0.6 w ${r.x} ${r.y-5} m ${r.lijn} ${r.y-5} l S\n`;
+    }); return st; };
+  const n=paginas.length, obj=[];
+  obj[1]='<< /Type /Catalog /Pages 2 0 R >>';
+  const kids=[]; for(let i=0;i<n;i++)kids.push((5+i*2)+' 0 R');
+  obj[2]='<< /Type /Pages /Kids ['+kids.join(' ')+'] /Count '+n+' >>';
+  obj[3]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+  obj[4]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+  paginas.forEach((regels,i)=>{ const st=strm(regels);
+    obj[5+i*2]='<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents '+(6+i*2)+' 0 R >>';
+    obj[6+i*2]='<< /Length '+st.length+' >>\nstream\n'+st+'endstream'; });
+  const tot=4+n*2; let pdf='%PDF-1.4\n'; const plek=[];
+  for(let i=1;i<=tot;i++){ plek[i]=pdf.length; pdf+=i+' 0 obj\n'+obj[i]+'\nendobj\n'; }
+  const xref=pdf.length; pdf+='xref\n0 '+(tot+1)+'\n0000000000 65535 f \n';
+  for(let i=1;i<=tot;i++) pdf+=String(plek[i]).padStart(10,'0')+' 00000 n \n';
+  pdf+='trailer\n<< /Size '+(tot+1)+' /Root 1 0 R >>\nstartxref\n'+xref+'\n%%EOF';
+  const bytes=new Uint8Array(pdf.length); for(let i=0;i<pdf.length;i++)bytes[i]=pdf.charCodeAt(i)&0xff; return bytes;
+}
+function bsPaklijstPaginas(kop,regels){
+  const paginas=[]; let R=[], y=0;
+  const eur=n=>'EUR '+Number(n||0).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const nieuw=()=>{ R=[]; paginas.push(R); y=800; };
+  nieuw();
+  R.push({x:40,y,tekst:'Paklijst Franklins',groot:18,vet:true}); y-=20;
+  R.push({x:40,y,tekst:'Nodig op '+parseDate(kop.voor_datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'})+(kop.besteld_door?'  -  besteld door '+kop.besteld_door:''),groot:10,grijs:true}); y-=14;
+  if(kop.opmerking){ R.push({x:40,y,tekst:'Opmerking: '+kop.opmerking,groot:10}); y-=14; }
+  y-=8;
+  const kolom=()=>{ R.push({x:62,y,tekst:'AANTAL',groot:8,vet:true,grijs:true}); R.push({x:130,y,tekst:'PRODUCT',groot:8,vet:true,grijs:true});
+    R.push({x:410,y,tekst:'PRIJS',groot:8,vet:true,grijs:true}); R.push({x:490,y,tekst:'TOTAAL',groot:8,vet:true,grijs:true,lijn:555}); y-=18; };
+  kolom();
+  bsCategorieen(regels).forEach(cat=>{
+    if(y<90){ nieuw(); kolom(); }
+    R.push({x:40,y,tekst:cat.toUpperCase(),groot:9,vet:true}); y-=15;
+    regels.filter(x=>x.categorie===cat).forEach(x=>{
+      if(y<60){ nieuw(); kolom(); }
+      R.push({x:42,y,hok:true});
+      R.push({x:62,y,tekst:bsAantal(x.aantal)+' '+(x.eenheid||''),groot:10,vet:true});
+      R.push({x:130,y,tekst:String(x.naam).slice(0,52),groot:10});
+      R.push({x:410,y,tekst:eur(x.prijs),groot:9,grijs:true});
+      R.push({x:490,y,tekst:eur(Number(x.prijs)*Number(x.aantal)),groot:9});
+      y-=15;
+      if(x.geleverd!=null&&Number(x.geleverd)<Number(x.aantal)){ R.push({x:130,y:y+3,tekst:'Maar '+bsAantal(x.geleverd)+' geleverd'+(x.opmerking?' - '+x.opmerking:''),groot:8,rood:true}); y-=11; }
+    });
+    y-=6;
+  });
+  if(y<80)nieuw();
+  R.push({x:40,y:y+4,tekst:'',lijn:555}); y-=14;
+  const tot=regels.reduce((t,x)=>t+Number(x.prijs)*Number(x.aantal),0);
+  R.push({x:340,y,tekst:'Totaal (inkoop excl. btw)',groot:10,vet:true}); R.push({x:490,y,tekst:eur(tot),groot:11,vet:true}); y-=30;
+  R.push({x:40,y,tekst:'Gepakt door: ______________________     Datum: ____________',groot:10});
+  paginas.forEach((p,i)=>p.push({x:500,y:25,tekst:'blad '+(i+1)+' van '+paginas.length,groot:8,grijs:true}));
+  return paginas;
+}
+async function bsPrint(){
+  if(!BS_OPEN)return;
+  const bytes=pdfMakenPaginas(bsPaklijstPaginas(BS_OPEN.kop,BS_OPEN.regels));
+  const naam='Paklijst-Franklins-'+BS_OPEN.kop.voor_datum+'.pdf';
+  const ok=await mcrPdfDelen(bytes,naam);
+  if(!ok)toast('Printen lukte niet','fout');
+}
+
+// ── Producten (alleen beheerders) ──
+function bsTekenProducten(){
+  const vak=document.getElementById('bsVak'); if(!vak)return;
+  let uit=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px"><button class="btn-sm" onclick="bsProduct(null)">+ Product</button>
+    <span style="font-size:12px;color:var(--muted);align-self:center">Prijzen zijn inkoop, excl. btw. Een prijswijziging geldt voor nieuwe bestellingen.</span></div>`;
+  if(!BS_PROD.length)uit+='<div class="empty" style="padding:.5rem 0">Nog geen producten. Stuur Claude de ingevulde productlijst, of voeg ze hier toe.</div>';
+  bsCategorieen(BS_PROD).forEach(cat=>{
+    uit+=`<div class="slabel" style="margin:12px 0 2px">${veiligTekst(cat)}</div>`;
+    BS_PROD.filter(p=>p.categorie===cat).forEach(p=>{
+      uit+=`<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border);cursor:pointer${p.actief?'':';opacity:.5'}" onclick="bsProduct('${veiligJs(p.id)}')">
+        <div style="flex:1;min-width:0"><div style="font-size:13.5px;font-weight:600">${veiligTekst(p.naam)}${p.actief?'':' <span style="font-size:11px;color:var(--muted)">(uit)</span>'}</div>
+          <div style="font-size:11.5px;color:var(--muted)">${veiligTekst(p.eenheid||'—')}${p.opmerking?' &middot; '+veiligTekst(p.opmerking):''}</div></div>
+        <div style="font-weight:600">${p.inkoopprijs!=null?bsEuro(p.inkoopprijs):'<span style="color:#B45309">geen prijs</span>'}</div></div>`;
+    });
+  });
+  vak.innerHTML=uit;
+}
+async function bsProduct(id){
+  const p=id?BS_PROD.find(x=>x.id===id):null;
+  const inp=(i,l,v,ph)=>`<div style="margin-bottom:8px"><div class="slabel" style="margin-bottom:3px">${l}</div><input id="${i}" value="${veiligTekst(v==null?'':v)}" placeholder="${ph||''}" style="width:100%;font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font)"></div>`;
+  const cats=bsCategorieen(BS_PROD);
+  const ok=await vraagBevestiging(p?'Product aanpassen':'Nieuw product',
+    inp('bpCat','Categorie',p?p.categorie:'',cats.slice(0,3).join(', '))+inp('bpNaam','Product',p?p.naam:'')+inp('bpEenh','Eenheid',p?p.eenheid:'','doos, kg, zak, stuk')
+    +inp('bpPrijs','Inkoopprijs excl. btw (€)',p&&p.inkoopprijs!=null?finBedrag(p.inkoopprijs):'','0,00')+inp('bpOpm','Opmerking',p?p.opmerking:'')
+    +(p?`<label style="font-size:13px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="bpActief" ${p.actief?'checked':''}> In de bestellijst</label>`:''),
+    'Opslaan');
+  if(!ok)return;
+  const g=i=>(document.getElementById(i)||{}).value||'';
+  const prijs=g('bpPrijs').trim()===''?null:finGetal(g('bpPrijs'));
+  if(prijs!=null&&(Number.isNaN(prijs)||prijs<0)){toast('Prijs klopt niet','fout');return;}
+  const act=document.getElementById('bpActief');
+  const{error}=await sb.rpc('product_zetten',{p_id:id,p_categorie:g('bpCat'),p_naam:g('bpNaam'),p_eenheid:g('bpEenh')||null,p_prijs:prijs,p_opmerking:g('bpOpm')||null,p_actief:act?act.checked:true,p_volgorde:null});
+  if(error){toast(error.message,'fout');return;}
+  toast('Opgeslagen'); loadBestellen();
+}
+
 async function finVinkje(klusId,aan){
   const{error}=await sb.rpc('finance_zetten',{p_klus:klusId,p_omzet:null,p_kosten:null,p_gefactureerd:!!aan,p_notitie:null});
   if(error){toast('Opslaan mislukt: '+error.message,'fout');loadFinance();return;}
@@ -17417,6 +17751,16 @@ function taakKaart(r,vandaag,historie){
   const titel=later
     ?'Kan pas op '+parseDate(r.datum).toLocaleDateString('nl-NL',{weekday:'long'})
     :(af?'Ongedaan maken':'Afvinken');
+  if(t.bestelling_id){
+    return`<div class="tk${laat?' laat':''}${af?' af':''}" style="cursor:pointer" onclick="bsOpen('${veiligJs(t.bestelling_id)}')">
+      <button class="tk-vink ${af?'aan':''}" onclick="event.stopPropagation();bsOpen('${veiligJs(t.bestelling_id)}')" title="Paklijst openen">&#10003;</button>
+      <div class="tk-tekst">
+        <div class="tk-naam">${veiligTekst(t.titel)}</div>
+        ${meta}
+        ${t.omschrijving?`<div class="tk-uitleg">${veiligTekst(t.omschrijving)}</div>`:''}
+        <div style="margin-top:6px"><span class="tk-bdg herhaal" style="background:#EEF2FF;color:#3730A3">Paklijst openen &rsaquo;</span></div>
+      </div></div>`;
+  }
   return`<div class="tk${laat?' laat':''}${af?' af':''}${later?' later':''}">
     <button class="tk-vink ${vinkKlasse}" ${opSlot?'disabled':''} onclick="vinkTaak('${r.id}')" title="${veiligTekst(titel)}">&#10003;</button>
     <div class="tk-tekst">
