@@ -2972,6 +2972,20 @@ async function laadMijnDashboardRechten(){
 function magBlok(code){return MIJN_BLOKKEN.has(code);}
 function beheerRolLabel(r){return BEHEER_ROLLEN[r]||'';}
 const today=new Date();const todayStr=fmt(today);
+// Staat de app over middernacht open, dan klopt "vandaag" niet meer. Komt hij
+// weer naar voren op een nieuwe dag, dan laden we opnieuw (niet midden in typen).
+function dagVerversen(){
+  try{
+    if(fmt(new Date())===todayStr)return;
+    if(document.querySelector('.modal-overlay.open'))return;
+    const a=document.activeElement; if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;
+    location.reload();
+  }catch(e){}
+}
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible')dagVerversen(); });
+setInterval(dagVerversen,15*60*1000);
+try{ if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.App)
+  window.Capacitor.Plugins.App.addListener('appStateChange',st=>{ if(st.isActive)dagVerversen(); }); }catch(e){}
 
 function switchNav(pageId,btn){
   // Update bottom nav active state
@@ -12417,7 +12431,10 @@ async function loadUrenPersoneel(){
 
   const{data:kgData}=await sb.from('klus_gebruikers').select('klus_id').eq('gebruiker_id',CURRENT_USER.id);
   const mijnKlusIds=(kgData||[]).map(x=>x.klus_id);
-  const klussenVandaag=(KLUSSEN||[]).filter(k=>mijnKlusIds.includes(k.id)&&klusDagen(k).includes(todayStr));
+  // De datum van nú: de app blijft op een telefoon soms dagen open staan, en dan
+  // is todayStr nog die van gisteren (Pamella klokte op 25 sep in op de klus van 24 sep).
+  const nuDag=fmt(new Date());
+  const klussenVandaag=(KLUSSEN||[]).filter(k=>mijnKlusIds.includes(k.id)&&klusDagen(k).includes(nuDag));
   const vandaagKlus=klussenVandaag[0]||null;
 
   const klusRegel=k=>{
@@ -12582,6 +12599,14 @@ async function doInklokken(klusId){
     return;
   }
 
+  if(klusId){
+    const kk=(KLUSSEN||[]).find(k=>k.id===klusId);
+    if(kk&&!klusDagen(kk).includes(fmt(new Date()))){
+      herstel('Deze klus is niet vandaag. De app stond nog op een eerdere dag; hij wordt nu ververst.');
+      setTimeout(()=>location.reload(),1500);
+      return;
+    }
+  }
   if(btn)btn.textContent='Inklokken...';
   try{
     const{error}=await sb.from('urenregistraties').insert({
@@ -14462,16 +14487,20 @@ async function tekenKlusUren(k){
 
   // Iedereen die op de klus staat komt in de lijst, ook wie nog niet heeft
   // ingeklokt. Juist die regels wil je zien.
-  const perPersoon=new Map();
-  (k.personeel||[]).forEach(pp=>perPersoon.set(pp.id,{naam:pp.naam,rol:(PERSONEEL.find(x=>x.id===pp.id)||{}).rol||'',reg:null}));
-  (regs||[]).forEach(r=>{
-    const best=perPersoon.get(r.gebruiker_id);
-    const naam=(PERSONEEL.find(x=>x.id===r.gebruiker_id)||{}).naam||'Onbekend';
-    if(best){if(!best.reg||geklokteMinuten(r)>geklokteMinuten(best.reg))best.reg=r;}
-    else perPersoon.set(r.gebruiker_id,{naam,rol:(PERSONEEL.find(x=>x.id===r.gebruiker_id)||{}).rol||'',reg:r,extra:true});
+  // Eén regel per registratie: heeft iemand er twee op deze klus, dan zie je ze
+  // allebei (eerst toonde dit venster alleen de langste, terwijl Finance alles telt).
+  const ingedeeld=new Set((k.personeel||[]).map(pp=>pp.id));
+  const rolVan=id=>(PERSONEEL.find(x=>x.id===id)||{}).rol||'';
+  const rijen=[];
+  (k.personeel||[]).forEach(pp=>{
+    const eigen=(regs||[]).filter(r=>r.gebruiker_id===pp.id);
+    if(!eigen.length)rijen.push({naam:pp.naam,rol:rolVan(pp.id),reg:null});
+    eigen.forEach((r,i)=>rijen.push({naam:pp.naam,rol:rolVan(pp.id),reg:r,tweede:i>0}));
   });
-
-  const rijen=[...perPersoon.values()].sort((a,b)=>a.naam.localeCompare(b.naam));
+  (regs||[]).filter(r=>!ingedeeld.has(r.gebruiker_id)).forEach(r=>
+    rijen.push({naam:(PERSONEEL.find(x=>x.id===r.gebruiker_id)||{}).naam||'Onbekend',rol:rolVan(r.gebruiker_id),reg:r,extra:true}));
+  rijen.sort((a,b)=>a.naam.localeCompare(b.naam)||String(a.reg&&a.reg.ingeklokt_op||'').localeCompare(String(b.reg&&b.reg.ingeklokt_op||'')));
+  const klusDagSet=new Set(klusDagen(k));
   if(!rijen.length){
     el.innerHTML='<div style="font-size:12px;color:var(--muted);font-style:italic">Nog niemand ingedeeld.</div>';
     return;
@@ -14497,9 +14526,10 @@ async function tekenKlusUren(k){
       ?`<span class="pdf-link" style="font-size:11px" onclick="openUrenFoto('${r.foto_pad}')">bekijk</span>`
       :'<span style="color:var(--muted)">—</span>';
     return`<tr>
-      <td><div style="font-weight:600">${veiligTekst(x.naam)}</div><div style="color:var(--muted);font-size:11px">${veiligTekst(x.rol||'')}${x.extra?' · niet ingedeeld':''}</div></td>
+      <td><div style="font-weight:600">${veiligTekst(x.naam)}</div><div style="color:var(--muted);font-size:11px">${veiligTekst(x.rol||'')}${x.extra?' · niet ingedeeld':''}${x.tweede?' · 2e registratie':''}</div></td>
       <td>${geplTekst}</td>
-      <td>${r?`${tijd(r.ingeklokt_op)}–${r.uitgeklokt_op?tijd(r.uitgeklokt_op):'…'}`:'<span style="color:var(--muted)">niet ingeklokt</span>'}</td>
+      <td>${r?`${tijd(r.ingeklokt_op)}–${r.uitgeklokt_op?tijd(r.uitgeklokt_op):'…'}`:'<span style="color:var(--muted)">niet ingeklokt</span>'}
+        ${r&&!klusDagSet.has(fmt(new Date(r.ingeklokt_op)))?`<div style="font-size:11px;color:#B91C1C;font-weight:600">geklokt op ${veiligTekst(new Date(r.ingeklokt_op).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}))}</div>`:''}</td>
       <td style="text-align:right">${r?(r.pauze_minuten||0):''}</td>
       <td style="text-align:right;font-weight:600">${r?minToStr(r.totaal_minuten):''}</td>
       <td>${g?`<span style="color:${g.afwijking?(g.verschil>0?'#B45309':'#B91C1C'):'#059669'}">${g.tekst}</span>`:'<span style="color:var(--muted)">—</span>'}</td>
