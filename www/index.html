@@ -13309,7 +13309,7 @@ async function lvOpen(klusId){
   const k=(FIN_RIJEN||[]).find(x=>x.klus_id===klusId)||(KLUSSEN||[]).find(x=>x.id===klusId)||{};
   const eerste=rijen[0]||{};
   LV={klusId,naam:k.naam||'Klus',btw:Number(eerste.btw_pct||9),niveau:eerste.afdracht_niveau||'truck',
-      evSoort:eerste.event_afdracht_soort||'geen',evWaarde:eerste.event_afdracht_waarde,
+      evSoort:eerste.event_afdracht_soort||'geen',evWaarde:eerste.event_afdracht_waarde,basis:eerste.afdracht_basis==='excl'?'excl':'incl',
       alle:rijen,trucks:rijen.filter(r=>r.gekoppeld||r.kassa_omzet!=null||r.afdracht_soort!=='geen')
         .map(r=>({truck_id:r.truck_id,naam:r.truck,kleur:r.kleur,kassa:r.kassa_omzet,soort:r.afdracht_soort||'geen',waarde:r.afdracht_waarde}))};
   let ov=document.getElementById('lvOverlay');
@@ -13335,7 +13335,9 @@ function lvAfdrSelect(id,soort){
     <option value="procent"${soort==='procent'?' selected':''}>% van kassa</option>
     <option value="bedrag"${soort==='bedrag'?' selected':''}>vast &euro;</option></select>`;
 }
-function lvAfdracht(soort,waarde,kassa){ return soort==='procent'?(Number(kassa||0)*Number(waarde||0)/100):(soort==='bedrag'?Number(waarde||0):0); }
+function lvAfdracht(soort,waarde,kassa){
+  const f=(LV&&LV.basis==='excl')?1/(1+LV.btw/100):1;
+  return soort==='procent'?(Number(kassa||0)*f*Number(waarde||0)/100):(soort==='bedrag'?Number(waarde||0):0); }
 function lvTeken(){
   const ov=document.getElementById('lvOverlay'); if(!ov||!LV)return;
   const inp='style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)" inputmode="decimal" autocomplete="off" oninput="lvLees();lvSom()"';
@@ -13350,6 +13352,9 @@ function lvTeken(){
       <span style="font-size:12px;font-weight:600">Afdracht:</span>
       <button type="button" class="chip${perTruck?' on':''}" onclick="lvLees();LV.niveau='truck';lvTeken()">per truck</button>
       <button type="button" class="chip${perTruck?'':' on'}" onclick="lvLees();LV.niveau='event';lvTeken()">per event</button>
+      <span style="font-size:12px;font-weight:600;margin-left:10px">Percentage over:</span>
+      <button type="button" class="chip${LV.basis==='incl'?' on':''}" onclick="lvLees();LV.basis='incl';lvTeken()">incl. btw</button>
+      <button type="button" class="chip${LV.basis==='excl'?' on':''}" onclick="lvLees();LV.basis='excl';lvTeken()">excl. btw</button>
     </div>
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="text-align:left;color:var(--muted);font-size:11px"><th style="padding:4px 4px">Truck</th><th style="padding:4px 4px;width:130px">Kassa incl. btw</th>${perTruck?'<th style="padding:4px 4px">Afdracht</th><th style="padding:4px 4px;width:95px"></th>':''}<th></th></tr></thead>
@@ -13377,7 +13382,7 @@ function lvSom(){
   const netto=kassa/(1+LV.btw/100);
   const afdr=LV.niveau==='event'?lvAfdracht(LV.evSoort,LV.evWaarde,kassa):LV.trucks.reduce((a,t)=>a+lvAfdracht(t.soort,t.waarde,t.kassa),0);
   el.innerHTML=`Kassa totaal <b>${lkEuro(kassa)}</b> incl. btw &middot; omzet excl. btw <b>${lkEuro(netto)}</b>
-    &middot; afdracht <b style="color:#6D28D9">${lkEuro(afdr)}</b><br><span style="color:var(--muted)">Afdracht als percentage wordt over de kassa (incl. btw) gerekend. De afdracht telt bij Finance mee als kosten.</span>`;
+    &middot; afdracht <b style="color:#6D28D9">${lkEuro(afdr)}</b><br><span style="color:var(--muted)">Een percentage-afdracht wordt over de kassa ${LV.basis==='excl'?'<b>zonder</b> btw':'<b>inclusief</b> btw'} gerekend. De afdracht telt bij Finance mee als kosten.</span>`;
 }
 async function lvOpslaan(){
   if(!LV)return; lvLees();
@@ -13386,7 +13391,7 @@ async function lvOpslaan(){
   const knop=document.getElementById('lvOpslaanKnop'); if(knop){knop.disabled=true;knop.textContent='Opslaan…';}
   const{error}=await sb.rpc('losse_verkoop_zetten',{p_klus:LV.klusId,
     p_trucks:LV.trucks.map(t=>({truck_id:t.truck_id,kassa_omzet:t.kassa,afdracht_soort:t.soort||'geen',afdracht_waarde:t.soort&&t.soort!=='geen'?t.waarde:null})),
-    p_niveau:LV.niveau,p_event_soort:LV.niveau==='event'?LV.evSoort:'geen',p_event_waarde:LV.niveau==='event'&&LV.evSoort!=='geen'?LV.evWaarde:null});
+    p_niveau:LV.niveau,p_event_soort:LV.niveau==='event'?LV.evSoort:'geen',p_event_waarde:LV.niveau==='event'&&LV.evSoort!=='geen'?LV.evWaarde:null,p_basis:LV.basis});
   if(knop){knop.disabled=false;knop.textContent='Opslaan';}
   if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
   const kid=LV.klusId; lvDicht(); toast('Omzet per truck opgeslagen');
