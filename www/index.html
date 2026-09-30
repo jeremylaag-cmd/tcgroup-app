@@ -14287,13 +14287,28 @@ async function laadLoonkosten(){
   LK_BEZIG=true;
   vak.innerHTML='<div class="spin">Laden...</div>';
   try{
-    const[a,b,c]=await Promise.all([
+    const[a,b,c,z]=await Promise.all([
       sb.rpc('loonkosten',{p_van:g.van,p_tot:g.tot}),
       sb.rpc('loonkosten_per_persoon',{p_van:g.van,p_tot:g.tot}),
-      sb.from('gebruikers').select('id',{count:'exact',head:true}).is('uurloon',null)
+      sb.from('gebruikers').select('id',{count:'exact',head:true}).is('uurloon',null),
+      sb.rpc('loonkosten_zonder_klus',{p_van:g.van,p_tot:g.tot})
     ]);
     if(a.error)throw new Error(a.error.message);
-    LK_KLUSRIJEN=a.data||[];
+    // "Uren zonder klus" kwam als één regel op de eerste dag. Nu één regel per
+    // dag, zodat hij op datum tussen de klussen staat en je erin kunt kijken.
+    LK_ZONDER=(z&&!z.error&&z.data)||[];
+    const perDag={};
+    LK_ZONDER.forEach(r=>{
+      const d=perDag[r.dag]=perDag[r.dag]||{klus_id:null,zonder_dag:r.dag,klus:'Uren zonder klus',datum:r.dag,categorie:'overig',
+        namen:new Set(),aantal_mensen:0,uren_goedgekeurd:0,kosten_goedgekeurd:0,uren_wacht:0,kosten_wacht:0,uren_gepland:0,kosten_gepland:0,zonder_uurloon:0,km:0,km_bedrag:0};
+      d.namen.add(r.naam);
+      if(r.status==='goedgekeurd'){ d.uren_goedgekeurd+=Number(r.uren||0); d.kosten_goedgekeurd+=Number(r.kosten||0); d.km+=Number(r.km||0); d.km_bedrag+=Number(r.km_bedrag||0); }
+      else { d.uren_wacht+=Number(r.uren||0); d.kosten_wacht+=Number(r.kosten||0); }
+      if(r.zonder_uurloon)d.zonder_uurloon++;
+    });
+    Object.values(perDag).forEach(d=>{ d.aantal_mensen=d.namen.size; });
+    const heeftDetail=!(z&&z.error);
+    LK_KLUSRIJEN=(a.data||[]).filter(r=>!(heeftDetail&&r.klus_id==null)).concat(heeftDetail?Object.values(perDag):[]);
     LK_PERSRIJEN=(b&&b.data)||[];
     LK_ZONDERLOON=(c&&typeof c.count==='number')?c.count:null;
     tekenLoonkosten();
@@ -14342,6 +14357,34 @@ function lkTabel(kop,rijen){
   </div>`;
 }
 
+let LK_ZONDER=[];
+// Wie heeft er op die dag zonder klus geklokt, hoe lang en wat kost het.
+function lkZonderOpen(dag){
+  const r=(LK_ZONDER||[]).filter(x=>x.dag===dag);
+  const tijd=t=>t?new Date(t).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'…';
+  let ov=document.getElementById('lkZonderOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='lkZonderOverlay'; document.body.appendChild(ov); ov.onclick=e=>{ if(e.target===ov)ov.remove(); }; }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;display:flex;align-items:center;justify-content:center;padding:14px';
+  const somU=r.reduce((a,x)=>a+Number(x.uren||0),0), somK=r.reduce((a,x)=>a+Number(x.kosten||0),0);
+  ov.innerHTML=`<div style="background:var(--card,#fff);width:100%;max-width:640px;max-height:86vh;overflow:auto;border-radius:14px;padding:16px 18px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:10px">
+      <div><div style="font-size:15px;font-weight:700">Uren zonder klus</div>
+      <div style="font-size:12px;color:var(--muted)">${veiligTekst(parseDate(dag).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'}))} &middot; ${r.length} ${r.length===1?'registratie':'registraties'}</div></div>
+      <button class="btn-ghost" onclick="document.getElementById('lkZonderOverlay').remove()">&times;</button></div>
+    <div style="overflow-x:auto"><table class="uur-tbl" style="min-width:520px">
+      <thead><tr><th>Naam</th><th>Geklokt</th><th style="text-align:right">Pauze</th><th style="text-align:right">Uren</th><th style="text-align:right">Kosten</th><th>Status</th></tr></thead>
+      <tbody>${r.map(x=>`<tr>
+        <td><div style="font-weight:600">${veiligTekst(x.naam||'Onbekend')}</div><div style="font-size:11px;color:var(--muted)">${veiligTekst(x.rol||'')}${x.zonder_uurloon?' · <span style="color:#B45309">geen uurloon</span>':''}</div>
+          ${x.notitie?`<div style="font-size:11px;color:var(--muted);font-style:italic">${veiligTekst(x.notitie)}</div>`:''}</td>
+        <td style="white-space:nowrap">${tijd(x.ingeklokt_op)}–${tijd(x.uitgeklokt_op)}</td>
+        <td style="text-align:right">${x.pauze_minuten||0} min</td>
+        <td style="text-align:right;font-weight:600">${lkUren(x.uren)}</td>
+        <td style="text-align:right">${lkEuro(x.kosten)}${Number(x.km)>0?`<div style="font-size:11px;color:var(--muted)">+ ${String(Number(x.km)).replace('.',',')} km</div>`:''}</td>
+        <td>${x.status==='goedgekeurd'?'<span style="color:#059669">akkoord</span>':'<span style="color:#B45309">te doen</span>'}</td></tr>`).join('')}
+        <tr class="totaal"><td>Totaal</td><td></td><td></td><td style="text-align:right">${lkUren(somU)}</td><td style="text-align:right">${lkEuro(somK)}</td><td></td></tr>
+      </tbody></table></div>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:8px">Kosten inclusief werkgeverslasten.</div></div>`;
+}
 function tekenLoonkosten(){
   const vak=document.getElementById('lkInhoud');
   if(!vak)return;
@@ -14358,13 +14401,13 @@ function tekenLoonkosten(){
 
   let tabel='';
   if(LK_WEERGAVE==='klus'){
-    const lijst=rijen.slice().sort((a,b)=>
-      (Number(b.kosten_goedgekeurd)+Number(b.kosten_wacht)+Number(b.kosten_gepland))
-      -(Number(a.kosten_goedgekeurd)+Number(a.kosten_wacht)+Number(a.kosten_gepland)));
+    // Op datum, en op één dag de klussen op naam met "uren zonder klus" onderaan.
+    const lijst=rijen.slice().sort((a,b)=>String(a.datum||'').localeCompare(String(b.datum||''))
+      ||((a.klus_id==null)-(b.klus_id==null))||String(a.klus||'').localeCompare(String(b.klus||'')));
     tabel=lkTabel(['Klus','Mensen','Gepland','Goedgekeurd','KM\u2019s','Te accorderen'],
-      lijst.map(r=>`<tr${r.klus_id?` style="cursor:pointer" onclick="openDetail('${r.klus_id}')"`:''}>
+      lijst.map(r=>`<tr${r.klus_id?` style="cursor:pointer" onclick="openDetail('${r.klus_id}')"`:(r.zonder_dag?` style="cursor:pointer;background:#FAFAF7" onclick="lkZonderOpen('${veiligJs(r.zonder_dag)}')"`:'')}>
         <td style="${td}">
-          <div style="font-weight:600;color:var(--text)">${veiligTekst(r.klus||'Klus')}</div>
+          <div style="font-weight:600;color:${r.zonder_dag?'#6D28D9':'var(--text)'}">${veiligTekst(r.klus||'Klus')}${r.zonder_dag?' <span style="font-weight:400;font-size:11px">&rsaquo; bekijk</span>':''}</div>
           <div style="font-size:11px;color:var(--muted)">${parseDate(r.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'})}${r.categorie?' · '+veiligTekst(r.categorie):''}${r.zonder_uurloon?` · <span style="color:#B45309">${r.zonder_uurloon} zonder uurloon</span>`:''}</div>
         </td>
         <td style="${tdR}">${r.aantal_mensen||0}</td>
