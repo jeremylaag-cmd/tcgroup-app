@@ -9366,6 +9366,11 @@ function pdRenderGegevens(){
          <input type="date" id="pdInDienst" value="${u.in_dienst_op||''}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
        </div>
      </div>
+     <div class="fr"><span class="fl">Vaste werkdagen <span style="color:var(--muted);font-weight:400">(telt mee bij het uitrekenen van verlofuren)</span></span>
+       <div class="chips" id="pdWerkdagen" style="display:flex;gap:6px;flex-wrap:wrap">${['ma','di','wo','do','vr','za','zo'].map((l,i)=>{
+         const wd=(u.werkdagen&&u.werkdagen.length)?u.werkdagen:[1,2,3,4,5];
+         return `<button type="button" class="chip${wd.includes(i+1)?' on':''}" data-wd="${i+1}" onclick="this.classList.toggle('on')">${l}</button>`; }).join('')}</div>
+     </div>
      <div class="fr"><span class="fl">Uit dienst per <span style="color:var(--muted);font-weight:400">(leeg laten als hij nog werkt)</span></span>
        <input type="date" id="pdUitDienst" value="${u.uit_dienst_op||''}" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);width:100%">
      </div>
@@ -9406,11 +9411,15 @@ async function savePersDetail(){
   const in_dienst_op=document.getElementById('pdInDienst').value||null;
   const uit_dienst_op=document.getElementById('pdUitDienst').value||null;
   const wb=document.getElementById('pdWarn');
+  const wdSel=[...document.querySelectorAll('#pdWerkdagen .chip.on')].map(el=>+el.dataset.wd).sort();
+  if(!wdSel.length){wb.textContent='Kies minstens één vaste werkdag.';wb.className='warn-box show';return;}
+  // Ma t/m vr is de standaard; dan slaan we niets apart op.
+  const werkdagen=(wdSel.join(',')==='1,2,3,4,5')?null:wdSel;
   if(!naam){wb.textContent='Naam is verplicht.';wb.className='warn-box show';return;}
   if(uurloon!==null&&(isNaN(uurloon)||uurloon<0)){wb.textContent='Uurloon klopt niet.';wb.className='warn-box show';return;}
   wb.className='warn-box';
   const velden={naam,rol,email,telefoon,straat,postcode,plaats,shirtmaat,rijbewijs,
-      contract_uren_per_week,in_dienst_op,uit_dienst_op,
+      contract_uren_per_week,in_dienst_op,uit_dienst_op,werkdagen,
              geslacht,geboortedatum,contractvorm,uurloon};
   // De beheerdersrol sturen we alleen mee als de administrator hem echt mocht
   // kiezen. Anders vult de database zelf 'planning' in.
@@ -15484,8 +15493,15 @@ async function vsoortGewijzigd(id,waarde){
   loadAlleBeschikbaarheid();
 }
 
+// De database rekent de uren pas opnieuw uit als ze al op 0 stonden. Daarom
+// twee keer: eerst naar 0, dan nog eens 0 zodat het voorstel wordt ingevuld.
+async function urenOpnieuw(id){
+  let r=await sb.from('beschikbaarheid').update({uren:0}).eq('id',id);
+  if(!r.error)r=await sb.from('beschikbaarheid').update({uren:0}).eq('id',id);
+  return r;
+}
 async function herberekenVerzoekUren(id){
-  const{error}=await sb.from('beschikbaarheid').update({uren:0}).eq('id',id);
+  const{error}=await urenOpnieuw(id);
   if(error){toast('Herberekenen mislukt: '+error.message,'fout');return;}
   await laadVerlofCijfers();
   loadAlleBeschikbaarheid();
@@ -15704,7 +15720,7 @@ async function pdZetRegel(id,veld,waarde){
 // Zet de uren terug op nul; de database vult er meteen het verse voorstel in.
 // Handig als je de datums hebt aangepast nadat de uren al vaststonden.
 async function pdHerberekenUren(id){
-  const{error}=await sb.from('beschikbaarheid').update({uren:0}).eq('id',id);
+  const{error}=await urenOpnieuw(id);
   if(error){toast('Herberekenen mislukt: '+error.message,'fout');return;}
   const{data}=await sb.from('beschikbaarheid').select('uren').eq('id',id).maybeSingle();
   const r=(PD.besch||[]).find(b=>b.id===id);
