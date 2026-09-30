@@ -2563,6 +2563,12 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="fr"><span class="fl">Telefoonnummer</span><input type="text" id="fTelefoon" placeholder="06-12345678"></div>
     </div>
     <div class="fr" id="fFinancieelWrap" style="display:none">
+      <span class="fl">Soort verkoop</span>
+      <div class="chips" id="fVerkoopSoort" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <button type="button" class="chip" data-vs="uitkoop" onclick="klusVerkoopKies('uitkoop')">Uitkoop &middot; 1 factuur</button>
+        <button type="button" class="chip" data-vs="losse_verkoop" onclick="klusVerkoopKies('losse_verkoop')">Losse verkoop &middot; per truck</button>
+      </div>
+      <div id="fLosseUitleg" style="display:none;font-size:11.5px;line-height:1.55;background:#F5F3FF;color:#5B21B6;border-radius:8px;padding:8px 10px;margin-bottom:8px"></div>
       <span class="fl">Omzet en kosten</span>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:7px">
         Omzet <b>exclusief btw</b>. Bij kosten zet je inkoop, huur en alles wat deze klus kost &mdash;
@@ -2570,7 +2576,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
         cijfers in hun dashboard zien dit.
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <div style="flex:1;min-width:130px">
+        <div style="flex:1;min-width:130px" id="fOmzetVak">
           <div class="slabel" style="margin-bottom:4px">Omzet excl. btw</div>
           <input type="number" id="fOmzet" min="0" step="0.01" inputmode="decimal" placeholder="0.00" oninput="klusMargeBijwerken()" style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
         </div>
@@ -10459,9 +10465,24 @@ async function vulKlantenLijst(){
 // ── OMZET EN KOSTEN BIJ EEN KLUS ────────────────────────────────────────
 let KLUS_LOONKOSTEN=0;
 
+let FORM_VERKOOP='uitkoop';
+function klusVerkoopKies(v){
+  FORM_VERKOOP=v==='losse_verkoop'?'losse_verkoop':'uitkoop';
+  document.querySelectorAll('#fVerkoopSoort .chip').forEach(c=>c.classList.toggle('on',c.dataset.vs===FORM_VERKOOP));
+  const losse=FORM_VERKOOP==='losse_verkoop';
+  const vak=document.getElementById('fOmzetVak'); if(vak)vak.style.display=losse?'none':'';
+  const u=document.getElementById('fLosseUitleg');
+  if(u){ u.style.display=losse?'':'none';
+    u.innerHTML=losse?('Bij losse verkoop vul je <b>per truck de kassa-omzet (incl. btw)</b> en de afdracht in. Dat kan '
+      +(editId?`nu: <button type="button" class="btn-nav" style="font-size:11.5px;padding:3px 9px;margin-left:2px" onclick="lvOpen('${veiligJs(editId)}')">Omzet per truck invullen</button>`:'na het opslaan, bij Finance of hier in de klus.')
+      +'<br>Geen factuur, dus ook geen vinkje &lsquo;gefactureerd&rsquo;.'):''; }
+  klusMargeBijwerken();
+}
 async function laadKlusFinancieel(id){
   const wrap=document.getElementById('fFinancieelWrap');
   if(!wrap)return;
+  const kk=id?KLUSSEN.find(x=>x.id===id):null;
+  klusVerkoopKies(kk&&kk.verkoop_soort||'uitkoop');
   wrap.style.display=MAG_CIJFERS?'':'none';
   const o=document.getElementById('fOmzet'), k=document.getElementById('fKosten');
   if(o)o.value=''; if(k)k.value='';
@@ -10489,6 +10510,10 @@ function klusMargeBijwerken(){
     const v=(document.getElementById(id)?.value||'').trim().replace(',','.');
     return v===''?null:Number(v);
   };
+  if(FORM_VERKOOP==='losse_verkoop'){
+    el.innerHTML='Omzet, afdracht en marge zie je bij Finance zodra de omzet per truck is ingevuld. Loonkosten tot nu toe <b>'+lkEuro(KLUS_LOONKOSTEN||0)+'</b>.';
+    return;
+  }
   const omzet=getal('fOmzet'), kosten=getal('fKosten');
   if(omzet===null&&kosten===null){
     el.innerHTML=editId
@@ -10510,7 +10535,14 @@ async function bewaarKlusFinancieel(id){
     const v=(document.getElementById(veldId)?.value||'').trim().replace(',','.');
     return v===''?null:Number(v);
   };
-  const omzet=getal('fOmzet'), kosten=getal('fKosten');
+  const losse=FORM_VERKOOP==='losse_verkoop';
+  const omzet=losse?null:getal('fOmzet'), kosten=getal('fKosten');
+  if(losse){
+    if(kosten!==null&&(isNaN(kosten)||kosten<0))throw new Error('Kosten klopt niet.');
+    const{error}=await sb.from('klus_financieel').upsert({klus_id:id,kosten},{onConflict:'klus_id'});
+    if(error)throw new Error('Kosten opslaan mislukt: '+error.message);
+    return;
+  }
   if(omzet===null&&kosten===null){
     await sb.from('klus_financieel').delete().eq('klus_id',id);
     return;
@@ -10636,7 +10668,7 @@ async function saveKlusIntern(){
     };
 
     if(editId){
-      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,lat,lon,gemeente}).eq('id',editId);
+      const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,lat,lon,gemeente,...(MAG_CIJFERS?{verkoop_soort:FORM_VERKOOP}:{})}).eq('id',editId);
       if(updErr)throw new Error('Klus opslaan mislukt: '+updErr.message);
       await sb.from('klus_trucks').delete().eq('klus_id',editId);
       await sb.from('klus_gebruikers').delete().eq('klus_id',editId);
@@ -10662,7 +10694,7 @@ async function saveKlusIntern(){
         if(melder)melder.textContent=allDatums.length>1
           ? `Klus ${i+1} van ${allDatums.length} aanmaken...`
           : 'Opslaan...';
-        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,lat,lon,gemeente}).select('id');
+        const{data,error}=await sb.from('klussen').insert({naam,datum:klusDatum,datum_eind:klusDatum===datum?datum_eind:klusDatum,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,lat,lon,gemeente,...(MAG_CIJFERS?{verkoop_soort:FORM_VERKOOP}:{})}).select('id');
         if(error||!data||!data.length)throw new Error(error?.message||'Insert mislukt');
         const thisKlusId=data[0].id;
         if(i===0)klusId=thisKlusId; // gebruik eerste voor PDFs
@@ -13110,6 +13142,14 @@ async function loadFinance(){
 // regels heen zoals je gewend bent.
 let FIN_OPEN=null;
 function finCelHtml(soort,r){
+  if(r.verkoop_soort==='losse_verkoop'){
+    if(soort==='O')return `<td class="fin-cel" style="text-align:right" onclick="lvOpen('${veiligJs(r.klus_id)}')" title="Omzet per truck invullen">
+      <span class="fin-waarde${r.omzet==null?' leeg':''}">${r.omzet==null?'per truck':veiligTekst(finBedrag(r.omzet))}</span>
+      ${r.kassa_omzet!=null?`<div style="font-size:10.5px;color:var(--muted)">kassa ${veiligTekst(finBedrag(r.kassa_omzet))} incl.</div>`:''}</td>`;
+    const leegK=r.kosten==null;
+    return `<td class="fin-cel" onclick="finBewerk('K','${veiligJs(r.klus_id)}')"><span class="fin-waarde${leegK?' leeg':''}" id="finK-${veiligJs(r.klus_id)}">${leegK?'—':veiligTekst(finBedrag(r.kosten))}</span>
+      ${Number(r.afdracht)>0?`<div style="font-size:10.5px;color:#6D28D9">+ afdracht ${veiligTekst(finBedrag(r.afdracht))}</div>`:''}</td>`;
+  }
   const veld=soort==='O'?'omzet':'kosten';
   const leeg=r[veld]==null;
   return `<td class="fin-cel" onclick="finBewerk('${soort}','${veiligJs(r.klus_id)}')"><span class="fin-waarde${leeg?' leeg':''}" id="fin${soort}-${veiligJs(r.klus_id)}">${leeg?'—':veiligTekst(finBedrag(r[veld]))}</span></td>`;
@@ -13171,15 +13211,16 @@ function finTeken(){
   const fr=FIN_DEEL==='franklins';
   const basis=FIN_RIJEN.filter(r=>(r.categorie==='franklins')===fr);
   const rijen=basis.filter(r=>{
-    if(FIN_FILTER==='open'&&r.gefactureerd)return false;
-    if(FIN_FILTER==='gefactureerd'&&!r.gefactureerd)return false;
+    const lv=r.verkoop_soort==='losse_verkoop';
+    if(FIN_FILTER==='open'&&(r.gefactureerd||lv))return false;
+    if(FIN_FILTER==='gefactureerd'&&(!r.gefactureerd||lv))return false;
     if(FIN_FILTER==='zonder'&&(r.omzet!=null))return false;
     if(zoek&&String(r.naam||'').toLowerCase().indexOf(zoek)<0&&String(r.adres||'').toLowerCase().indexOf(zoek)<0)return false;
     return true;
   });
   const tot={omzet:0,kosten:0,loon:0,marge:0,open:0,dagen:0,zonder:0};
-  basis.forEach(r=>{ tot.omzet+=Number(r.omzet||0); tot.kosten+=Number(r.kosten||0); tot.loon+=Number(r.loonkosten||0); tot.marge+=Number(r.marge||0);
-    if(!r.gefactureerd&&Number(r.omzet||0)>0)tot.open+=Number(r.omzet||0); if(r.omzet!=null)tot.dagen++; else tot.zonder++; });
+  basis.forEach(r=>{ tot.omzet+=Number(r.omzet||0); tot.kosten+=Number(r.kosten||0)+Number(r.afdracht||0); tot.loon+=Number(r.loonkosten||0); tot.marge+=Number(r.marge||0);
+    if(!r.gefactureerd&&r.verkoop_soort!=='losse_verkoop'&&Number(r.omzet||0)>0)tot.open+=Number(r.omzet||0); if(r.omzet!=null)tot.dagen++; else tot.zonder++; });
   const som=document.getElementById('finSom');
   if(som)som.innerHTML=`
     <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.omzet))}</div><div class="pb-sum-lbl">Omzet</div></div>
@@ -13199,16 +13240,16 @@ function finTeken(){
     const geen=r.omzet==null&&r.kosten==null;
     html+=`<tr id="fin-${id}"${r.gefactureerd&&!fr?' style="background:#F2FBF6"':''}>
       <td style="white-space:nowrap;color:var(--muted)">${veiligTekst(d)}${veiligTekst(meer)}</td>
-      <td><div style="font-weight:600">${veiligTekst(fr?new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'long'}):r.naam)}${r.is_optie?' <span style="font-size:10px;color:#B45309;font-weight:600">optie</span>':''}</div>
+      <td><div style="font-weight:600">${veiligTekst(fr?new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'long'}):r.naam)}${r.is_optie?' <span style="font-size:10px;color:#B45309;font-weight:600">optie</span>':''}${r.verkoop_soort==='losse_verkoop'?' <span style="font-size:10px;color:#6D28D9;font-weight:600;background:#F5F3FF;border-radius:5px;padding:1px 5px">losse verkoop</span>':''}</div>
           <div style="font-size:11px;color:var(--muted)">${fr?'':veiligTekst(r.adres||'')}${!fr&&r.personen?' · '+r.personen+' pers.':''}${Number(r.uren)>0?(fr?'':' · ')+String(Number(r.uren)).replace('.',',')+' u goedgekeurd':''}</div>
           ${r.gefactureerd&&r.gefactureerd_op?`<div style="font-size:11px;color:#059669">Gefactureerd ${veiligTekst(new Date(r.gefactureerd_op).toLocaleDateString('nl-NL',{day:'numeric',month:'short'}))}${r.gefactureerd_door?' door '+veiligTekst(r.gefactureerd_door):''}</div>`:''}</td>
       ${finCelHtml('O',r)}
       ${finCelHtml('K',r)}
       <td style="text-align:right;color:var(--muted);white-space:nowrap">${Number(r.loonkosten)>0?veiligTekst(lkEuro(r.loonkosten)):'—'}</td>
       <td style="text-align:right;white-space:nowrap;font-weight:600;color:${geen?'var(--muted)':(marge>=0?'#059669':'#B91C1C')}">${geen?'—':veiligTekst(lkEuro(marge))}</td>
-      ${fr?'':`<td style="text-align:center"><span class="fin-vink${r.gefactureerd?' aan':''}" role="checkbox" aria-checked="${r.gefactureerd?'true':'false'}" tabindex="0" onclick="finVinkje('${veiligJs(r.klus_id)}',${r.gefactureerd?'false':'true'})" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();this.click();}" title="Gefactureerd">✓</span></td>`}</tr>`;
+      ${fr?'':r.verkoop_soort==='losse_verkoop'?'<td style="text-align:center;font-size:11px;color:var(--muted)">n.v.t.</td>':`<td style="text-align:center"><span class="fin-vink${r.gefactureerd?' aan':''}" role="checkbox" aria-checked="${r.gefactureerd?'true':'false'}" tabindex="0" onclick="finVinkje('${veiligJs(r.klus_id)}',${r.gefactureerd?'false':'true'})" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();this.click();}" title="Gefactureerd">✓</span></td>`}</tr>`;
   });
-  html+=`<tr class="totaal"><td colspan="2">Totaal ${rijen.length} ${fr?'dagen':'klussen'}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.omzet||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.kosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.loonkosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.marge||0),0)))}</td>${fr?'':`<td style="text-align:center">${rijen.filter(r=>r.gefactureerd).length}/${rijen.length}</td>`}</tr>`;
+  html+=`<tr class="totaal"><td colspan="2">Totaal ${rijen.length} ${fr?'dagen':'klussen'}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.omzet||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.kosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.loonkosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.marge||0),0)))}</td>${fr?'':`<td style="text-align:center">${rijen.filter(r=>r.gefactureerd).length}/${rijen.filter(r=>r.verkoop_soort!=='losse_verkoop').length}</td>`}</tr>`;
   html+='</tbody></table></div>';
   lijst.innerHTML=html;
 }
@@ -13220,7 +13261,7 @@ async function finBedragen(klusId){
   if(Number.isNaN(o)||Number.isNaN(k)||(o!=null&&o<0)||(k!=null&&k<0)){toast('Omzet of kosten klopt niet','fout');return;}
   const{error}=await sb.rpc('finance_zetten',{p_klus:klusId,p_omzet:o,p_kosten:k,p_gefactureerd:null,p_notitie:null});
   if(error){toast('Opslaan mislukt: '+error.message,'fout');loadFinance();return;}
-  r.omzet=o; r.kosten=k; r.marge=(o||0)-(k||0)-Number(r.loonkosten||0);
+  r.omzet=o; r.kosten=k; r.marge=(o||0)-(k||0)-Number(r.afdracht||0)-Number(r.loonkosten||0);
   finRijBijwerken(klusId);
 }
 // Alleen de marge van die regel, de totaalregel en de tegels: de tabel zelf
@@ -13233,15 +13274,15 @@ function finRijBijwerken(klusId){
   const margeCel=cellen[5];
   if(margeCel){ margeCel.style.color=geen?'var(--muted)':(marge>=0?'#059669':'#B91C1C'); margeCel.textContent=geen?'—':lkEuro(marge); }
   const o=document.getElementById('finO-'+klusId), k=document.getElementById('finK-'+klusId);
-  if(o){ o.textContent=r.omzet==null?'—':finBedrag(r.omzet); o.classList.toggle('leeg',r.omzet==null); }
+  if(o&&r.verkoop_soort!=='losse_verkoop'){ o.textContent=r.omzet==null?'—':finBedrag(r.omzet); o.classList.toggle('leeg',r.omzet==null); }
   if(k){ k.textContent=r.kosten==null?'—':finBedrag(r.kosten); k.classList.toggle('leeg',r.kosten==null); }
   // tegels en totaalregel opnieuw
   const fr=FIN_DEEL==='franklins';
   const basis=FIN_RIJEN.filter(x=>(x.categorie==='franklins')===fr);
   const zichtbaar=[...document.querySelectorAll('#finLijst tbody tr[id^="fin-"]')].map(t=>FIN_RIJEN.find(x=>'fin-'+x.klus_id===t.id)).filter(Boolean);
   const tot={omzet:0,kosten:0,loon:0,marge:0,open:0,dagen:0,zonder:0};
-  basis.forEach(x=>{ tot.omzet+=Number(x.omzet||0); tot.kosten+=Number(x.kosten||0); tot.loon+=Number(x.loonkosten||0); tot.marge+=Number(x.marge||0);
-    if(!x.gefactureerd&&Number(x.omzet||0)>0)tot.open+=Number(x.omzet||0); if(x.omzet!=null)tot.dagen++; else tot.zonder++; });
+  basis.forEach(x=>{ tot.omzet+=Number(x.omzet||0); tot.kosten+=Number(x.kosten||0)+Number(x.afdracht||0); tot.loon+=Number(x.loonkosten||0); tot.marge+=Number(x.marge||0);
+    if(!x.gefactureerd&&x.verkoop_soort!=='losse_verkoop'&&Number(x.omzet||0)>0)tot.open+=Number(x.omzet||0); if(x.omzet!=null)tot.dagen++; else tot.zonder++; });
   const som=document.getElementById('finSom');
   if(som)som.innerHTML=`
     <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.omzet))}</div><div class="pb-sum-lbl">Omzet</div></div>
@@ -13256,6 +13297,101 @@ function finRijBijwerken(klusId){
     if(tds[2])tds[2].textContent=lkEuro(zichtbaar.reduce((a,x)=>a+Number(x.kosten||0),0));
     if(tds[4])tds[4].textContent=lkEuro(zichtbaar.reduce((a,x)=>a+Number(x.marge||0),0));
   }
+}
+// ── LOSSE VERKOOP: omzet (kassa, incl. btw) en afdracht per truck ──────
+// De database rekent zelf de omzet excl. btw en de afdracht uit
+// (trigger klus_financieel_losse); hier vul je alleen de kassa en de afspraak in.
+let LV=null;
+async function lvOpen(klusId){
+  const{data,error}=await sb.rpc('losse_verkoop_lezen',{p_klus:klusId});
+  if(error){toast('Laden mislukt: '+error.message,'fout');return;}
+  const rijen=data||[];
+  const k=(FIN_RIJEN||[]).find(x=>x.klus_id===klusId)||(KLUSSEN||[]).find(x=>x.id===klusId)||{};
+  const eerste=rijen[0]||{};
+  LV={klusId,naam:k.naam||'Klus',btw:Number(eerste.btw_pct||9),niveau:eerste.afdracht_niveau||'truck',
+      evSoort:eerste.event_afdracht_soort||'geen',evWaarde:eerste.event_afdracht_waarde,
+      alle:rijen,trucks:rijen.filter(r=>r.gekoppeld||r.kassa_omzet!=null||r.afdracht_soort!=='geen')
+        .map(r=>({truck_id:r.truck_id,naam:r.truck,kleur:r.kleur,kassa:r.kassa_omzet,soort:r.afdracht_soort||'geen',waarde:r.afdracht_waarde}))};
+  let ov=document.getElementById('lvOverlay');
+  if(!ov){ ov=document.createElement('div'); ov.id='lvOverlay'; document.body.appendChild(ov); ov.onclick=e=>{ if(e.target===ov)lvDicht(); }; }
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;display:flex;align-items:center;justify-content:center;padding:14px';
+  lvTeken();
+}
+function lvDicht(){ const ov=document.getElementById('lvOverlay'); if(ov)ov.remove(); LV=null; }
+function lvLees(){
+  if(!LV)return;
+  LV.trucks.forEach((t,i)=>{
+    const a=document.getElementById('lvK'+i), s=document.getElementById('lvS'+i), w=document.getElementById('lvW'+i);
+    if(a){ const n=finGetal(a.value); t.kassa=Number.isNaN(n)?t.kassa:n; }
+    if(s)t.soort=s.value;
+    if(w){ const n=finGetal(w.value); t.waarde=Number.isNaN(n)?t.waarde:n; }
+  });
+  const es=document.getElementById('lvEvS'), ew=document.getElementById('lvEvW');
+  if(es)LV.evSoort=es.value; if(ew){ const n=finGetal(ew.value); LV.evWaarde=Number.isNaN(n)?LV.evWaarde:n; }
+}
+function lvAfdrSelect(id,soort){
+  return `<select class="fin-veld" id="${id}" style="width:auto;min-width:92px" onchange="lvLees();lvTeken()">
+    <option value="geen"${soort==='geen'?' selected':''}>geen</option>
+    <option value="procent"${soort==='procent'?' selected':''}>% van kassa</option>
+    <option value="bedrag"${soort==='bedrag'?' selected':''}>vast &euro;</option></select>`;
+}
+function lvAfdracht(soort,waarde,kassa){ return soort==='procent'?(Number(kassa||0)*Number(waarde||0)/100):(soort==='bedrag'?Number(waarde||0):0); }
+function lvTeken(){
+  const ov=document.getElementById('lvOverlay'); if(!ov||!LV)return;
+  const inp='style="width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)" inputmode="decimal" autocomplete="off" oninput="lvLees();lvSom()"';
+  const perTruck=LV.niveau==='truck';
+  const rest=LV.alle.filter(r=>!LV.trucks.some(t=>t.truck_id===r.truck_id));
+  ov.innerHTML=`<div style="background:var(--card,#fff);width:100%;max-width:620px;max-height:88vh;overflow:auto;border-radius:14px;padding:16px 18px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+      <div><div style="font-size:15px;font-weight:700">Losse verkoop &middot; ${veiligTekst(LV.naam)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">Vul per truck de <b>kassa-omzet incl. btw</b> in. De app rekent de omzet excl. ${String(LV.btw).replace('.',',')}% btw zelf uit.</div></div>
+      <button class="btn-ghost" onclick="lvDicht()">&times;</button></div>
+    <div style="display:flex;gap:6px;align-items:center;margin:12px 0 6px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:600">Afdracht:</span>
+      <button type="button" class="chip${perTruck?' on':''}" onclick="lvLees();LV.niveau='truck';lvTeken()">per truck</button>
+      <button type="button" class="chip${perTruck?'':' on'}" onclick="lvLees();LV.niveau='event';lvTeken()">per event</button>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:var(--muted);font-size:11px"><th style="padding:4px 4px">Truck</th><th style="padding:4px 4px;width:130px">Kassa incl. btw</th>${perTruck?'<th style="padding:4px 4px">Afdracht</th><th style="padding:4px 4px;width:95px"></th>':''}<th></th></tr></thead>
+      <tbody>${LV.trucks.map((t,i)=>`<tr style="border-top:1px solid var(--border)">
+        <td style="padding:6px 4px"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${veiligTekst(t.kleur||'#999')};margin-right:6px"></span>${veiligTekst(t.naam)}</td>
+        <td style="padding:6px 4px"><input id="lvK${i}" ${inp} value="${t.kassa==null?'':veiligTekst(finBedrag(t.kassa))}" placeholder="0,00"></td>
+        ${perTruck?`<td style="padding:6px 4px">${lvAfdrSelect('lvS'+i,t.soort)}</td>
+        <td style="padding:6px 4px">${t.soort==='geen'?'':`<input id="lvW${i}" ${inp} value="${t.waarde==null?'':veiligTekst(finBedrag(t.waarde))}" placeholder="${t.soort==='procent'?'%':'€'}">`}</td>`:''}
+        <td style="padding:6px 0;text-align:right"><button class="btn-ghost" style="padding:3px 8px" title="Weghalen" onclick="lvLees();LV.trucks.splice(${i},1);lvTeken()">&times;</button></td></tr>`).join('')
+        ||`<tr><td colspan="5" style="padding:10px 4px;color:var(--muted);font-size:12.5px">Er staan nog geen trucks op deze klus. Voeg er hieronder een toe.</td></tr>`}</tbody></table>
+    ${rest.length?`<div style="margin-top:8px"><select class="fin-veld" style="width:auto" onchange="if(this.value){lvLees();const r=LV.alle.find(x=>x.truck_id===this.value);LV.trucks.push({truck_id:r.truck_id,naam:r.truck,kleur:r.kleur,kassa:null,soort:'geen',waarde:null});lvTeken();}">
+      <option value="">+ truck toevoegen</option>${rest.map(r=>`<option value="${veiligTekst(r.truck_id)}">${veiligTekst(r.truck)}</option>`).join('')}</select></div>`:''}
+    ${perTruck?'':`<div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap;background:#F5F3FF;border-radius:9px;padding:9px 11px">
+      <span style="font-size:12.5px;font-weight:600;color:#5B21B6">Afdracht voor het hele event</span>${lvAfdrSelect('lvEvS',LV.evSoort)}
+      ${LV.evSoort==='geen'?'':`<div style="width:110px"><input id="lvEvW" ${inp} value="${LV.evWaarde==null?'':veiligTekst(finBedrag(LV.evWaarde))}" placeholder="${LV.evSoort==='procent'?'%':'€'}"></div>`}</div>`}
+    <div id="lvSom" style="margin-top:12px;font-size:12.5px;line-height:1.7"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+      <button class="btn-ghost" onclick="lvDicht()">Annuleren</button>
+      <button class="btn-sm" id="lvOpslaanKnop" onclick="lvOpslaan()">Opslaan</button></div></div>`;
+  lvSom();
+}
+function lvSom(){
+  const el=document.getElementById('lvSom'); if(!el||!LV)return;
+  const kassa=LV.trucks.reduce((a,t)=>a+Number(t.kassa||0),0);
+  const netto=kassa/(1+LV.btw/100);
+  const afdr=LV.niveau==='event'?lvAfdracht(LV.evSoort,LV.evWaarde,kassa):LV.trucks.reduce((a,t)=>a+lvAfdracht(t.soort,t.waarde,t.kassa),0);
+  el.innerHTML=`Kassa totaal <b>${lkEuro(kassa)}</b> incl. btw &middot; omzet excl. btw <b>${lkEuro(netto)}</b>
+    &middot; afdracht <b style="color:#6D28D9">${lkEuro(afdr)}</b><br><span style="color:var(--muted)">Afdracht als percentage wordt over de kassa (incl. btw) gerekend. De afdracht telt bij Finance mee als kosten.</span>`;
+}
+async function lvOpslaan(){
+  if(!LV)return; lvLees();
+  const fout=LV.trucks.find(t=>(t.kassa!=null&&t.kassa<0)||(t.waarde!=null&&t.waarde<0)||(t.soort==='procent'&&Number(t.waarde||0)>100));
+  if(fout||(LV.evSoort==='procent'&&Number(LV.evWaarde||0)>100)){ toast('Een bedrag of percentage klopt niet','fout'); return; }
+  const knop=document.getElementById('lvOpslaanKnop'); if(knop){knop.disabled=true;knop.textContent='Opslaan…';}
+  const{error}=await sb.rpc('losse_verkoop_zetten',{p_klus:LV.klusId,
+    p_trucks:LV.trucks.map(t=>({truck_id:t.truck_id,kassa_omzet:t.kassa,afdracht_soort:t.soort||'geen',afdracht_waarde:t.soort&&t.soort!=='geen'?t.waarde:null})),
+    p_niveau:LV.niveau,p_event_soort:LV.niveau==='event'?LV.evSoort:'geen',p_event_waarde:LV.niveau==='event'&&LV.evSoort!=='geen'?LV.evWaarde:null});
+  if(knop){knop.disabled=false;knop.textContent='Opslaan';}
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  const kid=LV.klusId; lvDicht(); toast('Omzet per truck opgeslagen');
+  const kk=(KLUSSEN||[]).find(x=>x.id===kid); if(kk)kk.verkoop_soort='losse_verkoop';
+  if(document.getElementById('page-finance')?.classList.contains('active'))loadFinance();
 }
 async function finVinkje(klusId,aan){
   const{error}=await sb.rpc('finance_zetten',{p_klus:klusId,p_omzet:null,p_kosten:null,p_gefactureerd:!!aan,p_notitie:null});
