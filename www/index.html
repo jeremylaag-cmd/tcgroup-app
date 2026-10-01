@@ -3360,11 +3360,13 @@ function mbDag(stap){
 function mbMaandag(d){ const x=new Date(String(d)+'T00:00:00'); const w=(x.getDay()+6)%7; x.setDate(x.getDate()-w); return fmt(x); }
 async function mbShiftsPlannen(){
   if(!MB_WEEK)MB_WEEK=mbMaandag(MB_DATUM||await mbPeil());
-  const [wk,aanm,man]=await Promise.all([sb.rpc('mcr_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_open'), sb.rpc('mcr_managers_week',{p_van:MB_WEEK})]);
+  const [wk,aanm,man,waar]=await Promise.all([sb.rpc('mcr_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_open'), sb.rpc('mcr_managers_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_al_ingedeeld')]);
   MB_MAN=man.error?[]:(man.data||[]);
   const{data,error}=wk;
   if(error)throw error;
   MB_AANM=aanm.error?[]:(aanm.data||[]);
+  const W={}; ((waar&&waar.data)||[]).forEach(w=>{ W[w.aanmelding_id]=w; });
+  MB_AANM.forEach(r=>{ const w=W[r.aanmelding_id]; r.al_waar=w?w.waar:null; r.eind_echt=w?w.eind_echt:null; });
   MB_WEEKRIJEN=(data||[]).filter(r=>r.shift_id);
   const dagen=[]; for(let i=0;i<7;i++){ const d=new Date(MB_WEEK+'T00:00:00'); d.setDate(d.getDate()+i); dagen.push(fmt(d)); }
   const kramen=[]; const cel={};
@@ -3958,6 +3960,24 @@ function mbBeschChip(k){
   if(k.beschikbaar==='onbeschikbaar')return mbChip('niet beschikbaar','#B4472B','#FBEDE9');
   return mbChip('beschikbaarheid niet ingevuld','#6B6A66','#F3F2EE');
 }
+// Shifttijd met de echte sluittijd erbij, bv. "10:00 – 21:30 (sluit)".
+function mbShiftVol(r){ const e=r.eind_tijd||r.eind_echt; return mbUur(r.start_tijd)+' – '+(e?mbUur(e):'sluit')+(!r.eind_tijd&&e?' (sluit)':''); }
+// In gewone woorden: wanneer kan iemand, en past dat bij de shift?
+function mbKanTekst(r){
+  const v=r.besch_van?mbUur(r.besch_van):null, t=r.besch_tot?mbUur(r.besch_tot):null;
+  const venster=v&&t?v+' – '+t:(v?'vanaf '+v:(t?'tot '+t:'de hele dag'));
+  const st=mbUur(r.start_tijd), eind=r.eind_tijd||r.eind_echt, et=eind?mbUur(eind):null;
+  const groen=x=>`<span style="color:#0F7A52;font-weight:600">${x}</span>`, oranje=x=>`<span style="color:#B45309;font-weight:600">${x}</span>`, rood=x=>`<span style="color:#B4472B;font-weight:600">${x}</span>`;
+  if(r.beschikbaar==='beschikbaar')return groen(veiligTekst(venster)+' ✓')+' <span style="color:var(--muted);font-size:12px">past bij de hele shift</span>';
+  if(r.beschikbaar==='deels'){
+    const w=[]; if(v&&v>st)w.push('begint pas om '+v+' (shift begint '+st+')');
+    if(t&&et&&t<et)w.push('moet om '+t+' weg (shift tot '+et+')');
+    return oranje(veiligTekst(venster))+` <span style="font-size:12px;color:#B45309">&middot; ${veiligTekst(w.join(' en ')||'past maar deels')}</span>`;
+  }
+  if(r.beschikbaar==='buiten')return rood(veiligTekst(venster))+' <span style="font-size:12px;color:#B4472B">&middot; past niet bij deze shift</span>';
+  if(r.beschikbaar==='onbeschikbaar')return rood('niet beschikbaar')+' <span style="font-size:12px;color:var(--muted)">heeft zich voor deze dag afgemeld</span>';
+  return '<span style="color:var(--muted)">geen beschikbaarheid ingevuld voor deze dag</span>';
+}
 function mbShiftTijd(r){ return mbUur(r.start_tijd)+' \u2013 '+(r.eind_tijd?mbUur(r.eind_tijd):'sluit'); }
 // Blok boven het weekrooster: de aanmeldingen van de week die je bekijkt,
 // plus een regel met de andere weken zodat er niets blijft liggen.
@@ -3973,14 +3993,20 @@ function mbAanmBlok(dagen){
   deze.forEach(r=>{
     const vol=r.nodig&&r.ingedeeld>=r.nodig;
     const dag=new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
-    uit+=`<div class="mb-persoon" id="mbA-${veiligTekst(r.aanmelding_id)}" style="align-items:center;flex-wrap:wrap;row-gap:4px">
-      <div style="width:86px;flex-shrink:0;font-size:12.5px;font-weight:700">${veiligTekst(dag)}</div>
-      <div style="flex:1 1 230px;min-width:0">
-        <div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}
-          <span style="font-weight:400;font-size:12.5px;color:var(--muted)">&middot; ${mbStip(r.kleur)} ${veiligTekst(r.kraam)} &middot; ${veiligTekst(mbShiftTijd(r))}${r.shift_naam?' &middot; '+veiligTekst(r.shift_naam):''}</span>
-          <span style="font-weight:400;font-size:12px;color:${vol?'#B4472B':'var(--muted)'}"> &middot; ${r.ingedeeld}/${r.nodig||'?'}${vol?' vol':''}</span></div>
-        <div style="margin-top:3px">${mbBeschChip(r)}${r.al_bezet?' '+mbChip('staat die dag al ergens','#6B6A66','#F3F2EE'):''}
-          ${r.notitie?`<span style="font-size:12px;color:var(--muted)"> \u201c${veiligTekst(r.notitie)}\u201d</span>`:''}</div>
+    const ook=MB_AANM.filter(x=>x.gebruiker_id===r.gebruiker_id&&x.datum===r.datum&&x.aanmelding_id!==r.aanmelding_id);
+    const rij=(label,inhoud)=>`<div style="display:flex;gap:10px;font-size:13px;line-height:1.45;margin-top:3px">
+      <div style="flex:0 0 112px;color:var(--muted);font-size:12px;padding-top:1px">${label}</div><div style="flex:1;min-width:0">${inhoud}</div></div>`;
+    const naamLosVanTijd=r.shift_naam&&!/\d{1,2}[:.]\d{2}/.test(r.shift_naam)?' &middot; '+veiligTekst(r.shift_naam):'';
+    uit+=`<div class="mb-persoon" id="mbA-${veiligTekst(r.aanmelding_id)}" style="align-items:flex-start;flex-wrap:wrap;row-gap:4px;padding-top:12px;padding-bottom:12px">
+      <div style="width:86px;flex-shrink:0;font-size:12.5px;font-weight:700;padding-top:2px">${veiligTekst(dag)}</div>
+      <div style="flex:1 1 260px;min-width:0">
+        <div style="font-size:14.5px;font-weight:700">${veiligTekst(r.naam)}</div>
+        ${rij('Meldt zich aan voor',`${mbStip(r.kleur)} <b>${veiligTekst(r.kraam)} &middot; ${veiligTekst(mbShiftVol(r))}</b>${naamLosVanTijd}
+          <span style="color:${vol?'#B4472B':'var(--muted)'};font-size:12px"> &middot; ${r.ingedeeld} van ${r.nodig||'?'} ingedeeld${vol?' (vol)':''}</span>`)}
+        ${rij('Kan',mbKanTekst(r))}
+        ${r.al_waar?rij('Staat al ingedeeld',`<span style="color:#B4472B;font-weight:600">${veiligTekst(r.al_waar).split('; ').join('<br>')}</span>`):''}
+        ${ook.length?rij('Ook aangemeld voor',ook.map(x=>veiligTekst(x.kraam+' · '+mbShiftVol(x))).join('<br>')):''}
+        ${r.notitie?rij('Bericht',`“${veiligTekst(r.notitie)}”`):''}
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">${mbAanmKnoppen(r.aanmelding_id)}</div></div>`;
   });
