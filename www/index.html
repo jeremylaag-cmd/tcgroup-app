@@ -4127,9 +4127,9 @@ async function mbUrenAkkoord(){
       </div></td>
       <td style="white-space:nowrap">${veiligTekst(mbKort(r.datum))}</td>
       <td><div style="display:flex;align-items:center;gap:7px">${mbStip(r.kleur)}${veiligTekst(r.kraam)}</div></td>
-      <td style="white-space:nowrap;font-variant-numeric:tabular-nums">${veiligTekst(mbKlokT(r.ingeklokt_op))} &ndash;
-        ${open?`<input type="time" class="mb-getal" style="width:86px" id="mbUT${id}">`
-               :`<span id="mbUTs${id}">${veiligTekst(mbKlokT(r.uitgeklokt_op))}</span>`}
+      <td style="white-space:nowrap;font-variant-numeric:tabular-nums">
+        <input type="time" class="mb-getal" style="width:86px" id="mbUI${id}" value="${veiligTekst(mbKlokT(r.ingeklokt_op))}" title="Begintijd"> &ndash;
+        <input type="time" class="mb-getal" style="width:86px" id="mbUT${id}" value="${open?'':veiligTekst(mbKlokT(r.uitgeklokt_op))}" title="Eindtijd">
         ${r.uit_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.uit_op))}">eindtijd door ${veiligTekst(r.uit_door)}</div>`:''}</td>
       <td><input type="number" min="0" max="180" class="mb-getal" style="width:58px" id="mbUP${id}" value="${r.pauze}">
         ${r.pauze_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.pauze_op))}">door ${veiligTekst(r.pauze_door)}</div>`:''}</td>
@@ -4222,15 +4222,17 @@ async function mbUurAkkoord(id,ja){
   try{ const{error}=await sb.rpc('mcr_uur_akkoord',{p_uren:id,p_akkoord:ja,p_notitie:reden}); if(error)throw error; mbUrenGa('akkoord'); }
   catch(e){ alert(mbFout(e)); }
 }
+// Begin- én eindtijd (en pauze) aanpassen. Ligt de eindtijd vóór de begintijd,
+// dan is het een nachtdienst en hoort de eindtijd bij de volgende dag.
 async function mbUurBijstellen(id,datum,open){
-  const el=document.getElementById('mbUT'+id);
-  let t=el?el.value:null;
-  if(!t){ t=prompt('Eindtijd (bijvoorbeeld 21:30)',''); if(!t)return; }
+  const b=(document.getElementById('mbUI'+id)||{}).value, t=(document.getElementById('mbUT'+id)||{}).value;
+  if(!b||!t){ alert('Vul een begin- en eindtijd in.'); return; }
   const pa=parseInt((document.getElementById('mbUP'+id)||{}).value,10)||0;
   try{
-    const iso=new Date(datum+'T'+t+':00').toISOString();
-    const{error}=await sb.rpc('mcr_uur_bijstellen',{p_uren:id,p_uit:iso,p_pauze:pa});
-    if(error)throw error; mbUrenGa('akkoord');
+    const inD=new Date(datum+'T'+b+':00'), uitD=new Date(datum+'T'+t+':00');
+    if(uitD<=inD)uitD.setDate(uitD.getDate()+1);
+    const{error}=await sb.rpc('mcr_uur_tijden',{p_uren:id,p_in:inD.toISOString(),p_uit:uitD.toISOString(),p_pauze:pa});
+    if(error)throw error; toast('Tijden aangepast'); mbUrenGa('akkoord');
   }catch(e){ alert(mbFout(e)); }
 }
 
