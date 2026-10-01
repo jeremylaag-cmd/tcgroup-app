@@ -2913,10 +2913,11 @@ async function sbFetch(input,init){
   try{
     const res=await fetch(input,init);
     if(!res.ok&&!url.includes('/auth/v1/')&&res.status!==406){
-      let detail='';
-      try{ detail=(await res.clone().json()).message||''; }catch(e){}
-      console.error('Databaseverzoek mislukt',res.status,url,detail);
-      if(res.status===401||res.status===403){
+      let detail='', code='';
+      try{ const j=await res.clone().json(); detail=j.message||''; code=j.code||''; }catch(e){}
+      console.error('Databaseverzoek mislukt',res.status,url,code,detail);
+      if((code==='P0001'||code==='P0002')&&detail){ toast(detail,'fout'); }  // bewuste melding: laat de echte reden zien
+      else if(res.status===401||res.status===403){
         toast(engelsScherm()
           ?'You do not have access to this, or your session has expired. Please sign in again.'
           :'Je hebt hier geen toegang toe, of je sessie is verlopen. Log opnieuw in.','fout');
@@ -4227,13 +4228,19 @@ async function mbUurAkkoord(id,ja){
 async function mbUurBijstellen(id,datum,open){
   const b=(document.getElementById('mbUI'+id)||{}).value, t=(document.getElementById('mbUT'+id)||{}).value;
   if(!b||!t){ alert('Vul een begin- en eindtijd in.'); return; }
+  if(b===t){ alert('Begin- en eindtijd zijn hetzelfde ('+b+'). Pas eerst een van de twee aan.'); return; }
   const pa=parseInt((document.getElementById('mbUP'+id)||{}).value,10)||0;
   try{
     const inD=new Date(datum+'T'+b+':00'), uitD=new Date(datum+'T'+t+':00');
-    if(uitD<=inD)uitD.setDate(uitD.getDate()+1);
+    if(uitD<=inD){
+      const ok=await vraagBevestiging('Eindtijd ligt vóór de begintijd',
+        `${veiligTekst(b)} tot ${veiligTekst(t)}: is dit een nachtdienst die de volgende dag eindigt?`,'Ja, volgende dag');
+      if(!ok)return;
+      uitD.setDate(uitD.getDate()+1);
+    }
     const{error}=await sb.rpc('mcr_uur_tijden',{p_uren:id,p_in:inD.toISOString(),p_uit:uitD.toISOString(),p_pauze:pa});
     if(error)throw error; toast('Tijden aangepast'); mbUrenGa('akkoord');
-  }catch(e){ alert(mbFout(e)); }
+  }catch(e){ if(!(e&&/^P000[12]$/.test(e.code||'')))alert(mbFout(e)); }
 }
 
 async function mbAandacht(){
