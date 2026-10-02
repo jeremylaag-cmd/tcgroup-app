@@ -2318,7 +2318,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <input id="finZoek" placeholder="Zoek klus" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" writingsuggestions="false" data-1p-ignore data-lpignore="true" data-bwignore oninput="FIN_ZOEK=this.value;clearTimeout(window.FIN_ZOEK_T);window.FIN_ZOEK_T=setTimeout(finTeken,180)" style="margin-left:auto;font-size:12px;padding:6px 10px;border:1px solid var(--border);border-radius:20px;font-family:var(--font);background:var(--surface);color:var(--text);min-width:140px">
         </div>
         <div id="finLijst"><div class="spin">Laden...</div></div>
-        <div style="font-size:11px;color:var(--muted);margin-top:.75rem;line-height:1.6">Klik op een bedrag om omzet of kosten in te vullen; met Tab of Enter ga je naar het volgende veld en wordt het opgeslagen. Franklins staat apart: daar vul je per dag omzet en kosten in, zonder facturatie. Loon = goedgekeurde uren &times; uurloon plus werkgeverslasten, en loopt op zolang er uren worden goedgekeurd. Marge = omzet &minus; kosten &minus; loon.</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:.75rem;line-height:1.6">Klik op een bedrag om omzet of kosten in te vullen; met Tab of Enter ga je naar het volgende veld en wordt het opgeslagen. Franklins staat apart: daar vul je per dag omzet, TB (Thuisbezorgd) en kosten in, zonder facturatie; Totaal = omzet + TB. Loon = goedgekeurde uren &times; uurloon plus werkgeverslasten, en loopt op zolang er uren worden goedgekeurd. Marge = omzet (+ TB) &minus; kosten &minus; loon.</div>
       </div>
     </div>
   </div>
@@ -13240,9 +13240,11 @@ async function loadFinance(){
   if(!MAG_CIJFERS){ lijst.innerHTML='<div class="empty" style="padding:1rem 0">Je hebt geen toegang tot de cijfers. Dat regel je bij Beheer &rsaquo; Dashboardrechten (groep Cijfers).</div>'; return; }
   lijst.innerHTML='<div class="spin">Laden...</div>';
   const van=fmt(FIN_MAAND), tot=fmt(new Date(FIN_MAAND.getFullYear(),FIN_MAAND.getMonth()+1,0));
-  const{data,error}=await sb.rpc('finance_overzicht',{p_van:van,p_tot:tot});
+  const[{data,error},tb]=await Promise.all([sb.rpc('finance_overzicht',{p_van:van,p_tot:tot}),sb.rpc('finance_tb_lijst',{p_van:van,p_tot:tot})]);
   if(error){lijst.innerHTML=`<div class="empty" style="color:#B91C1C">${veiligTekst(error.message)}</div>`;return;}
   FIN_RIJEN=data||[];
+  const TB={}; ((tb&&tb.data)||[]).forEach(x=>{ TB[x.klus_id]=Number(x.tb_omzet); });
+  FIN_RIJEN.forEach(r=>{ r.tb_omzet=TB[r.klus_id]!=null?TB[r.klus_id]:null; });
   finTeken();
 }
 
@@ -13252,6 +13254,9 @@ async function loadFinance(){
 // wat Safari per toetsaanslag seconden kostte. Tab en Enter lopen door de
 // regels heen zoals je gewend bent.
 let FIN_OPEN=null;
+const FIN_VELD={O:'omzet',T:'tb_omzet',K:'kosten'};
+// Omzet + Thuisbezorgd: wat er die dag in totaal binnenkwam.
+function finOmzetTot(r){ return (r.omzet==null&&r.tb_omzet==null)?null:Number(r.omzet||0)+Number(r.tb_omzet||0); }
 function finCelHtml(soort,r){
   if(r.verkoop_soort==='losse_verkoop'){
     if(soort==='O')return `<td class="fin-cel" style="text-align:right" onclick="lvOpen('${veiligJs(r.klus_id)}')" title="Omzet per truck invullen">
@@ -13261,7 +13266,7 @@ function finCelHtml(soort,r){
     return `<td class="fin-cel" onclick="finBewerk('K','${veiligJs(r.klus_id)}')"><span class="fin-waarde${leegK?' leeg':''}" id="finK-${veiligJs(r.klus_id)}">${leegK?'—':veiligTekst(finBedrag(r.kosten))}</span>
       ${Number(r.afdracht)>0?`<div style="font-size:10.5px;color:#6D28D9">+ afdracht ${veiligTekst(finBedrag(r.afdracht))}</div>`:''}</td>`;
   }
-  const veld=soort==='O'?'omzet':'kosten';
+  const veld=FIN_VELD[soort];
   const leeg=r[veld]==null;
   return `<td class="fin-cel" onclick="finBewerk('${soort}','${veiligJs(r.klus_id)}')"><span class="fin-waarde${leeg?' leeg':''}" id="fin${soort}-${veiligJs(r.klus_id)}">${leeg?'—':veiligTekst(finBedrag(r[veld]))}</span>${soort==='K'&&Number(r.bestelkosten)>0?`<div style="font-size:10.5px;color:#3730A3" title="Bestellingen uit de hal, verdeeld over de dagen tot de volgende levering">+ bestelling ${veiligTekst(finBedrag(r.bestelkosten))}</div>`:''}</td>`;
 }
@@ -13270,7 +13275,7 @@ function finBewerk(soort,klusId){
   if(FIN_OPEN)finSluit(true);
   const r=FIN_RIJEN.find(x=>x.klus_id===klusId); if(!r)return;
   const span=document.getElementById('fin'+soort+'-'+klusId); if(!span)return;
-  const veld=soort==='O'?'omzet':'kosten';
+  const veld=FIN_VELD[soort];
   const inp=document.createElement('input');
   inp.className='fin-veld';
   inp.value=finBedrag(r[veld]);
@@ -13293,9 +13298,10 @@ function finToets(e){
   const rijen=[...document.querySelectorAll('#finLijst tbody tr[id^="fin-"]')].map(t=>t.id.slice(4));
   const i=rijen.indexOf(klusId);
   let volgende=null;
+  const kol=FIN_DEEL==='franklins'?['O','T','K']:['O','K'], j=kol.indexOf(soort);
   if(e.key==='Enter'){ if(i>=0&&i<rijen.length-1)volgende=[soort,rijen[i+1]]; }
-  else if(e.shiftKey){ volgende=soort==='K'?['O',klusId]:(i>0?['K',rijen[i-1]]:null); }
-  else{ volgende=soort==='O'?['K',klusId]:(i>=0&&i<rijen.length-1?['O',rijen[i+1]]:null); }
+  else if(e.shiftKey){ volgende=j>0?[kol[j-1],klusId]:(i>0?[kol[kol.length-1],rijen[i-1]]:null); }
+  else{ volgende=j<kol.length-1?[kol[j+1],klusId]:(i>=0&&i<rijen.length-1?[kol[0],rijen[i+1]]:null); }
   finSluit(true);
   if(volgende)finBewerk(volgende[0],volgende[1]);
 }
@@ -13312,7 +13318,7 @@ function finSluit(bewaren){
   o.inp.removeEventListener('keydown',finToets);
   o.inp.remove(); o.span.style.display='';
   if(r){ const leeg=r[o.veld]==null; o.span.textContent=leeg?'—':finBedrag(r[o.veld]); o.span.classList.toggle('leeg',leeg); }
-  if(opslaan)finBedragen(o.klusId);
+  if(opslaan)(o.veld==='tb_omzet'?finTbOpslaan(o.klusId):finBedragen(o.klusId));
 }
 
 function finTeken(){
@@ -13325,16 +13331,16 @@ function finTeken(){
     const lv=r.verkoop_soort==='losse_verkoop';
     if(FIN_FILTER==='open'&&(r.gefactureerd||lv))return false;
     if(FIN_FILTER==='gefactureerd'&&(!r.gefactureerd||lv))return false;
-    if(FIN_FILTER==='zonder'&&(r.omzet!=null))return false;
+    if(FIN_FILTER==='zonder'&&(r.omzet!=null||r.tb_omzet!=null))return false;
     if(zoek&&String(r.naam||'').toLowerCase().indexOf(zoek)<0&&String(r.adres||'').toLowerCase().indexOf(zoek)<0)return false;
     return true;
   });
-  const tot={omzet:0,kosten:0,loon:0,marge:0,open:0,dagen:0,zonder:0};
-  basis.forEach(r=>{ tot.omzet+=Number(r.omzet||0); tot.kosten+=Number(r.kosten||0)+Number(r.afdracht||0)+Number(r.bestelkosten||0); tot.loon+=Number(r.loonkosten||0); tot.marge+=Number(r.marge||0);
-    if(!r.gefactureerd&&r.verkoop_soort!=='losse_verkoop'&&Number(r.omzet||0)>0)tot.open+=Number(r.omzet||0); if(r.omzet!=null)tot.dagen++; else tot.zonder++; });
+  const tot={omzet:0,tb:0,kosten:0,loon:0,marge:0,open:0,dagen:0,zonder:0};
+  basis.forEach(r=>{ tot.omzet+=Number(r.omzet||0)+Number(r.tb_omzet||0); tot.tb+=Number(r.tb_omzet||0); tot.kosten+=Number(r.kosten||0)+Number(r.afdracht||0)+Number(r.bestelkosten||0); tot.loon+=Number(r.loonkosten||0); tot.marge+=Number(r.marge||0);
+    if(!r.gefactureerd&&r.verkoop_soort!=='losse_verkoop'&&Number(r.omzet||0)>0)tot.open+=Number(r.omzet||0); if(r.omzet!=null||r.tb_omzet!=null)tot.dagen++; else tot.zonder++; });
   const som=document.getElementById('finSom');
   if(som)som.innerHTML=`
-    <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.omzet))}</div><div class="pb-sum-lbl">Omzet</div></div>
+    <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.omzet))}</div><div class="pb-sum-lbl">${fr?'Omzet totaal'+(tot.tb?' (waarvan TB '+veiligTekst(lkEuroKort(tot.tb))+')':''):'Omzet'}</div></div>
     <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.kosten+tot.loon))}</div><div class="pb-sum-lbl">Kosten incl. loon</div></div>
     <div class="pb-sum-card"><div class="pb-sum-num" style="color:${tot.marge>=0?'#059669':'#B91C1C'}">${veiligTekst(lkEuroKort(tot.marge))}</div><div class="pb-sum-lbl">Marge</div></div>
     ${fr?`<div class="pb-sum-card"><div class="pb-sum-num" style="color:${tot.zonder?'#B45309':'var(--text)'}">${tot.dagen}/${basis.length}</div><div class="pb-sum-lbl">Dagen met omzet ingevuld</div></div>`
@@ -13342,25 +13348,27 @@ function finTeken(){
   if(!rijen.length){lijst.innerHTML='<div class="empty" style="padding:1rem 0;font-size:12px">Geen '+(fr?'Franklins-dagen':'klussen')+(FIN_FILTER!=='alle'||zoek?' voor dit filter':'')+' in '+veiligTekst(finMaandLabel())+'.</div>';return;}
   if(fr)rijen.sort((a,b)=>String(a.datum).localeCompare(String(b.datum)));
   let html='<div style="overflow-x:auto"><table class="uur-tbl fin-tbl"><thead><tr>'
-    +'<th>Datum</th><th>'+(fr?'Dag':'Klus')+'</th><th style="text-align:right">Omzet</th><th style="text-align:right">Kosten</th><th style="text-align:right">Loon</th><th style="text-align:right">Marge</th>'+(fr?'':'<th style="text-align:center">Gefactureerd</th>')+'</tr></thead><tbody>';
+    +'<th>Datum</th><th>'+(fr?'Dag':'Klus')+'</th><th style="text-align:right">Omzet</th>'+(fr?'<th style="text-align:right" title="Thuisbezorgd">TB</th><th style="text-align:right">Totaal</th>':'')+'<th style="text-align:right">Kosten</th><th style="text-align:right">Loon</th><th style="text-align:right">Marge</th>'+(fr?'':'<th style="text-align:center">Gefactureerd</th>')+'</tr></thead><tbody>';
   rijen.forEach(r=>{
     const id=veiligTekst(r.klus_id);
     const d=new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
     const meer=r.datum_eind&&r.datum_eind!==r.datum?' – '+new Date(r.datum_eind+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):'';
     const marge=Number(r.marge||0);
-    const geen=r.omzet==null&&r.kosten==null;
+    const geen=r.omzet==null&&r.kosten==null&&r.tb_omzet==null;
+    const ot=finOmzetTot(r);
     html+=`<tr id="fin-${id}"${r.gefactureerd&&!fr?' style="background:#F2FBF6"':''}>
       <td style="white-space:nowrap;color:var(--muted)">${veiligTekst(d)}${veiligTekst(meer)}</td>
       <td><div style="font-weight:600">${veiligTekst(fr?new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'long'}):r.naam)}${r.is_optie?' <span style="font-size:10px;color:#B45309;font-weight:600">optie</span>':''}${r.verkoop_soort==='losse_verkoop'?' <span style="font-size:10px;color:#6D28D9;font-weight:600;background:#F5F3FF;border-radius:5px;padding:1px 5px">losse verkoop</span>':''}</div>
           <div style="font-size:11px;color:var(--muted)">${fr?'':veiligTekst(r.adres||'')}${!fr&&r.personen?' · '+r.personen+' pers.':''}${Number(r.uren)>0?(fr?'':' · ')+String(Number(r.uren)).replace('.',',')+' u goedgekeurd':''}</div>
           ${r.gefactureerd&&r.gefactureerd_op?`<div style="font-size:11px;color:#059669">Gefactureerd ${veiligTekst(new Date(r.gefactureerd_op).toLocaleDateString('nl-NL',{day:'numeric',month:'short'}))}${r.gefactureerd_door?' door '+veiligTekst(r.gefactureerd_door):''}</div>`:''}</td>
       ${finCelHtml('O',r)}
+      ${fr?finCelHtml('T',r)+`<td class="fin-tot" style="text-align:right;white-space:nowrap;font-weight:600">${ot==null?'<span style="color:var(--muted)">—</span>':veiligTekst(finBedrag(ot))}</td>`:''}
       ${finCelHtml('K',r)}
       <td style="text-align:right;color:var(--muted);white-space:nowrap">${Number(r.loonkosten)>0?veiligTekst(lkEuro(r.loonkosten)):'—'}</td>
-      <td style="text-align:right;white-space:nowrap;font-weight:600;color:${geen?'var(--muted)':(marge>=0?'#059669':'#B91C1C')}">${geen?'—':veiligTekst(lkEuro(marge))}</td>
+      <td class="fin-marge" style="text-align:right;white-space:nowrap;font-weight:600;color:${geen?'var(--muted)':(marge>=0?'#059669':'#B91C1C')}">${geen?'—':veiligTekst(lkEuro(marge))}</td>
       ${fr?'':r.verkoop_soort==='losse_verkoop'?'<td style="text-align:center;font-size:11px;color:var(--muted)">n.v.t.</td>':`<td style="text-align:center"><span class="fin-vink${r.gefactureerd?' aan':''}" role="checkbox" aria-checked="${r.gefactureerd?'true':'false'}" tabindex="0" onclick="finVinkje('${veiligJs(r.klus_id)}',${r.gefactureerd?'false':'true'})" onkeydown="if(event.key===' '||event.key==='Enter'){event.preventDefault();this.click();}" title="Gefactureerd">✓</span></td>`}</tr>`;
   });
-  html+=`<tr class="totaal"><td colspan="2">Totaal ${rijen.length} ${fr?'dagen':'klussen'}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.omzet||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.kosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.loonkosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.marge||0),0)))}</td>${fr?'':`<td style="text-align:center">${rijen.filter(r=>r.gefactureerd).length}/${rijen.filter(r=>r.verkoop_soort!=='losse_verkoop').length}</td>`}</tr>`;
+  html+=`<tr class="totaal"><td colspan="2">Totaal ${rijen.length} ${fr?'dagen':'klussen'}</td><td class="t-o" style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.omzet||0),0)))}</td>${fr?`<td class="t-t" style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.tb_omzet||0),0)))}</td><td class="t-s" style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(finOmzetTot(r)||0),0)))}</td>`:''}<td class="t-k" style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.kosten||0),0)))}</td><td style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.loonkosten||0),0)))}</td><td class="t-m" style="text-align:right">${veiligTekst(lkEuro(rijen.reduce((s,r)=>s+Number(r.marge||0),0)))}</td>${fr?'':`<td style="text-align:center">${rijen.filter(r=>r.gefactureerd).length}/${rijen.filter(r=>r.verkoop_soort!=='losse_verkoop').length}</td>`}</tr>`;
   html+='</tbody></table></div>';
   lijst.innerHTML=html;
 }
@@ -13372,7 +13380,17 @@ async function finBedragen(klusId){
   if(Number.isNaN(o)||Number.isNaN(k)||(o!=null&&o<0)||(k!=null&&k<0)){toast('Omzet of kosten klopt niet','fout');return;}
   const{error}=await sb.rpc('finance_zetten',{p_klus:klusId,p_omzet:o,p_kosten:k,p_gefactureerd:null,p_notitie:null});
   if(error){toast('Opslaan mislukt: '+error.message,'fout');loadFinance();return;}
-  r.omzet=o; r.kosten=k; r.marge=(o||0)-(k||0)-Number(r.afdracht||0)-Number(r.bestelkosten||0)-Number(r.loonkosten||0);
+  r.omzet=o; r.kosten=k; finMargeRekenen(r);
+  finRijBijwerken(klusId);
+}
+function finMargeRekenen(r){ r.marge=Number(r.omzet||0)+Number(r.tb_omzet||0)-Number(r.kosten||0)-Number(r.afdracht||0)-Number(r.bestelkosten||0)-Number(r.loonkosten||0); }
+async function finTbOpslaan(klusId){
+  FIN_BEZIG_TOT=Date.now()+20000;
+  const r=FIN_RIJEN.find(x=>x.klus_id===klusId); if(!r)return;
+  const t=r.tb_omzet==null?null:Number(r.tb_omzet);
+  const{error}=await sb.rpc('finance_tb_zetten',{p_klus:klusId,p_tb:t});
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');loadFinance();return;}
+  finMargeRekenen(r);
   finRijBijwerken(klusId);
 }
 // Alleen de marge van die regel, de totaalregel en de tegels: de tabel zelf
@@ -13381,8 +13399,12 @@ function finRijBijwerken(klusId){
   const r=FIN_RIJEN.find(x=>x.klus_id===klusId); if(!r)return;
   const tr=document.getElementById('fin-'+klusId); if(!tr){finTeken();return;}
   const cellen=tr.querySelectorAll('td');
-  const geen=r.omzet==null&&r.kosten==null; const marge=Number(r.marge||0);
-  const margeCel=cellen[5];
+  const geen=r.omzet==null&&r.kosten==null&&r.tb_omzet==null; const marge=Number(r.marge||0);
+  const margeCel=tr.querySelector('td.fin-marge');
+  const totCel=tr.querySelector('td.fin-tot');
+  if(totCel){ const ot=finOmzetTot(r); totCel.innerHTML=ot==null?'<span style="color:var(--muted)">—</span>':veiligTekst(finBedrag(ot)); }
+  const tbs=document.getElementById('finT-'+klusId);
+  if(tbs){ tbs.textContent=r.tb_omzet==null?'—':finBedrag(r.tb_omzet); tbs.classList.toggle('leeg',r.tb_omzet==null); }
   if(margeCel){ margeCel.style.color=geen?'var(--muted)':(marge>=0?'#059669':'#B91C1C'); margeCel.textContent=geen?'—':lkEuro(marge); }
   const o=document.getElementById('finO-'+klusId), k=document.getElementById('finK-'+klusId);
   if(o&&r.verkoop_soort!=='losse_verkoop'){ o.textContent=r.omzet==null?'—':finBedrag(r.omzet); o.classList.toggle('leeg',r.omzet==null); }
@@ -13391,22 +13413,24 @@ function finRijBijwerken(klusId){
   const fr=FIN_DEEL==='franklins';
   const basis=FIN_RIJEN.filter(x=>(x.categorie==='franklins')===fr);
   const zichtbaar=[...document.querySelectorAll('#finLijst tbody tr[id^="fin-"]')].map(t=>FIN_RIJEN.find(x=>'fin-'+x.klus_id===t.id)).filter(Boolean);
-  const tot={omzet:0,kosten:0,loon:0,marge:0,open:0,dagen:0,zonder:0};
-  basis.forEach(x=>{ tot.omzet+=Number(x.omzet||0); tot.kosten+=Number(x.kosten||0)+Number(x.afdracht||0)+Number(x.bestelkosten||0); tot.loon+=Number(x.loonkosten||0); tot.marge+=Number(x.marge||0);
-    if(!x.gefactureerd&&x.verkoop_soort!=='losse_verkoop'&&Number(x.omzet||0)>0)tot.open+=Number(x.omzet||0); if(x.omzet!=null)tot.dagen++; else tot.zonder++; });
+  const tot={omzet:0,tb:0,kosten:0,loon:0,marge:0,open:0,dagen:0,zonder:0};
+  basis.forEach(x=>{ tot.omzet+=Number(x.omzet||0)+Number(x.tb_omzet||0); tot.tb+=Number(x.tb_omzet||0); tot.kosten+=Number(x.kosten||0)+Number(x.afdracht||0)+Number(x.bestelkosten||0); tot.loon+=Number(x.loonkosten||0); tot.marge+=Number(x.marge||0);
+    if(!x.gefactureerd&&x.verkoop_soort!=='losse_verkoop'&&Number(x.omzet||0)>0)tot.open+=Number(x.omzet||0); if(x.omzet!=null||x.tb_omzet!=null)tot.dagen++; else tot.zonder++; });
   const som=document.getElementById('finSom');
   if(som)som.innerHTML=`
-    <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.omzet))}</div><div class="pb-sum-lbl">Omzet</div></div>
+    <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.omzet))}</div><div class="pb-sum-lbl">${fr?'Omzet totaal'+(tot.tb?' (waarvan TB '+veiligTekst(lkEuroKort(tot.tb))+')':''):'Omzet'}</div></div>
     <div class="pb-sum-card"><div class="pb-sum-num">${veiligTekst(lkEuroKort(tot.kosten+tot.loon))}</div><div class="pb-sum-lbl">Kosten incl. loon</div></div>
     <div class="pb-sum-card"><div class="pb-sum-num" style="color:${tot.marge>=0?'#059669':'#B91C1C'}">${veiligTekst(lkEuroKort(tot.marge))}</div><div class="pb-sum-lbl">Marge</div></div>
     ${fr?`<div class="pb-sum-card"><div class="pb-sum-num" style="color:${tot.zonder?'#B45309':'var(--text)'}">${tot.dagen}/${basis.length}</div><div class="pb-sum-lbl">Dagen met omzet ingevuld</div></div>`
          :`<div class="pb-sum-card"><div class="pb-sum-num" style="color:#B45309">${veiligTekst(lkEuroKort(tot.open))}</div><div class="pb-sum-lbl">Nog te factureren</div></div>`}`;
   const totaal=document.querySelector('#finLijst tr.totaal');
   if(totaal){
-    const tds=totaal.querySelectorAll('td');
-    if(tds[1])tds[1].textContent=lkEuro(zichtbaar.reduce((a,x)=>a+Number(x.omzet||0),0));
-    if(tds[2])tds[2].textContent=lkEuro(zichtbaar.reduce((a,x)=>a+Number(x.kosten||0),0));
-    if(tds[4])tds[4].textContent=lkEuro(zichtbaar.reduce((a,x)=>a+Number(x.marge||0),0));
+    const zet=(k,v)=>{ const c=totaal.querySelector('td.'+k); if(c)c.textContent=lkEuro(v); };
+    zet('t-o',zichtbaar.reduce((a,x)=>a+Number(x.omzet||0),0));
+    zet('t-t',zichtbaar.reduce((a,x)=>a+Number(x.tb_omzet||0),0));
+    zet('t-s',zichtbaar.reduce((a,x)=>a+Number(finOmzetTot(x)||0),0));
+    zet('t-k',zichtbaar.reduce((a,x)=>a+Number(x.kosten||0),0));
+    zet('t-m',zichtbaar.reduce((a,x)=>a+Number(x.marge||0),0));
   }
 }
 // ── LOSSE VERKOOP: omzet (kassa, incl. btw) en afdracht per truck ──────
