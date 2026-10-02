@@ -3361,7 +3361,7 @@ function mbDag(stap){
 function mbMaandag(d){ const x=new Date(String(d)+'T00:00:00'); const w=(x.getDay()+6)%7; x.setDate(x.getDate()-w); return fmt(x); }
 async function mbShiftsPlannen(){
   if(!MB_WEEK)MB_WEEK=mbMaandag(MB_DATUM||await mbPeil());
-  const [wk,aanm,man,waar]=await Promise.all([sb.rpc('mcr_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_open'), sb.rpc('mcr_managers_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_al_ingedeeld')]);
+  const [,wk,aanm,man,waar]=await Promise.all([mbErvaringLaden(),sb.rpc('mcr_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_open'), sb.rpc('mcr_managers_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_al_ingedeeld')]);
   MB_MAN=man.error?[]:(man.data||[]);
   const{data,error}=wk;
   if(error)throw error;
@@ -3869,9 +3869,9 @@ async function mbShiftOpen(id){
   const el=document.getElementById('mbShiftDetail'); if(!el)return;
   el.innerHTML='<div class="mb-kaart" style="color:var(--muted)">Bezig&hellip;</div>';
   const [mensen,kand]=await Promise.all([
-    sb.rpc('mcr_shift_mensen',{p_shift:id}), sb.rpc('mcr_kandidaten',{p_shift:id})]);
+    sb.rpc('mcr_shift_mensen',{p_shift:id}), sb.rpc('mcr_kandidaten',{p_shift:id}), Object.keys(MB_ERV).length?null:mbErvaringLaden()]);
   const ing=(mensen.data||[]).filter(x=>x.soort==='ingedeeld');
-  const aan=(mensen.data||[]).filter(x=>x.soort==='aangemeld');
+  const aan=(mensen.data||[]).filter(x=>x.soort==='aangemeld').sort((a,b)=>mbErvVergelijk(a.gebruiker_id,b.gebruiker_id));
   // Welke dienst je open hebt staan hoort er gewoon boven te staan: kraam,
   // dag en de tijden. Dat moest je eerst uit het rooster erboven afleiden.
   const sh=(MB_WEEKRIJEN||[]).find(r=>r.shift_id===id)||{};
@@ -3906,6 +3906,7 @@ async function mbShiftOpen(id){
       uit+=`<div class="mb-persoon">
         <div class="mb-av" style="background:#2A4EA8">${veiligTekst(mbInit(m.naam))}</div>
         <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
+        <div style="margin-top:3px">${mbErvaringHtml(m.gebruiker_id)}</div>
         ${m.notitie?`<div style="font-size:11.5px;color:var(--muted)">${veiligTekst(m.notitie)}</div>`:''}</div>
         <div style="display:flex;gap:6px;flex-shrink:0">${MB_AANM.some(x=>x.aanmelding_id===m.aanmelding_id)
           ? mbAanmKnoppen(m.aanmelding_id)
@@ -3930,6 +3931,7 @@ async function mbShiftOpen(id){
     uit+=`<div class="mb-persoon"${k.al_bezet?' style="opacity:.5"':''}>
       <div class="mb-av" style="background:#8A8984">${veiligTekst(mbInit(k.naam))}</div>
       <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(k.naam)}</div>
+        <div style="margin-top:3px">${mbErvaringHtml(k.gebruiker_id)}</div>
         <div style="font-size:11.5px;color:var(--muted);margin-top:2px">
           ${mbChip(kl[2],kl[0],kl[1])}${(k.beschikbaar==='beschikbaar'&&venster)?' '+mbChip(venster,'#0F7A52','#F2FBF6'):''}${k.al_bezet?' staat vandaag al ergens':''}
           ${k.shifts_deze_week?' &middot; '+k.shifts_deze_week+' diensten in twee weken':''}</div>
@@ -3951,6 +3953,39 @@ let MB_KAND=null;
 // Iedereen die zich voor een dienst heeft aangemeld en op antwoord wacht.
 // Groene vink = indelen, rood kruis = afwijzen (crew ziet dan "Rejected").
 let MB_AANM=[];
+// Ervaring per persoon (werkt sinds, beoordeling, gewerkte shifts). Wordt
+// gebruikt om aanmeldingen te sorteren: beoordeling eerst, dan hoe lang
+// iemand al bij ons werkt, dan het aantal gewerkte shifts.
+let MB_ERV={};
+async function mbErvaringLaden(){
+  try{ const{data,error}=await sb.rpc('mcr_ervaring'); if(error)return;
+    MB_ERV={}; (data||[]).forEach(e=>{ MB_ERV[e.gebruiker_id]=e; }); }catch(e){}
+}
+const MB_OORDEEL_RANG={'topper':0,'goed':1,'prima':2,'':3,'minder dan verwacht':4,'niet meer':5};
+function mbErvScore(gid){
+  const e=MB_ERV[gid]||{}, jaar=new Date().getFullYear();
+  const r=MB_OORDEEL_RANG[e.beoordeling||'']??3;
+  const sinds=e.werkt_sinds||jaar+1;   // onbekend telt als nieuwst
+  return [r, sinds, -(e.shifts_gewerkt||0)];
+}
+function mbErvVergelijk(a,b){ const x=mbErvScore(a), y=mbErvScore(b); for(let i=0;i<3;i++){ if(x[i]!==y[i])return x[i]-y[i]; } return 0; }
+function mbOordeelChip(b){
+  if(!b)return '';
+  const kl={'topper':['#fff','#0F7A52'],'goed':['#0F7A52','#F2FBF6'],'prima':['#2A4EA8','#EEF4FF'],
+            'minder dan verwacht':['#B45309','#FEF6E7'],'niet meer':['#fff','#B4472B']}[b]||['#6B6A66','#F3F2EE'];
+  return mbChip(b,kl[0],kl[1]);
+}
+// "topper · werkt sinds 2021 · 34 shifts" of heel zichtbaar "NIEUW".
+function mbErvaringHtml(gid){
+  const e=MB_ERV[gid]; if(!e)return '';
+  const jaar=new Date().getFullYear(), n=Number(e.shifts_gewerkt||0);
+  const shifts=n===0?'nog geen shift gewerkt':(n===1?'1 shift gewerkt':n+' shifts gewerkt');
+  let sinds;
+  if(e.werkt_sinds&&e.werkt_sinds<jaar)sinds=mbChip('werkt sinds '+e.werkt_sinds,'#fff','#1F2937');
+  else if(e.werkt_sinds===jaar||(!e.werkt_sinds&&n===0))sinds=`<span class="mb-chip" style="color:#fff;background:#D97706;font-weight:800;letter-spacing:.04em">NIEUW</span>`;
+  else sinds=mbChip('sinds ? (vul in bij Mensen)','#6B6A66','#F3F2EE');
+  return `${mbOordeelChip(e.beoordeling)} ${sinds} <span style="font-size:12px;color:${n?'var(--text)':'#B45309'};font-weight:600">${shifts}</span>`;
+}
 function mbBeschChip(k){
   const venster=(k.besch_van||k.besch_tot)
     ? (k.besch_van&&k.besch_tot?mbUur(k.besch_van)+'\u2013'+mbUur(k.besch_tot):(k.besch_van?'vanaf '+mbUur(k.besch_van):'tot '+mbUur(k.besch_tot)))
@@ -3984,7 +4019,7 @@ function mbShiftTijd(r){ return mbUur(r.start_tijd)+' \u2013 '+(r.eind_tijd?mbUu
 // plus een regel met de andere weken zodat er niets blijft liggen.
 function mbAanmBlok(dagen){
   if(!MB_AANM.length)return '';
-  const deze=MB_AANM.filter(r=>dagen.includes(r.datum)).sort((a,b)=>(a.datum+a.start_tijd).localeCompare(b.datum+b.start_tijd));
+  const deze=MB_AANM.filter(r=>dagen.includes(r.datum)).sort((a,b)=>(a.datum+a.start_tijd+a.kraam).localeCompare(b.datum+b.start_tijd+b.kraam)||mbErvVergelijk(a.gebruiker_id,b.gebruiker_id));
   const ander={}; MB_AANM.filter(r=>!dagen.includes(r.datum)).forEach(r=>{ const w=mbMaandag(r.datum); ander[w]=(ander[w]||0)+1; });
   const weken=Object.keys(ander).sort();
   let uit=`<div class="mb-kaart" style="border-left:4px solid #2A4EA8">
@@ -4001,7 +4036,7 @@ function mbAanmBlok(dagen){
     uit+=`<div class="mb-persoon" id="mbA-${veiligTekst(r.aanmelding_id)}" style="align-items:flex-start;flex-wrap:wrap;row-gap:4px;padding-top:12px;padding-bottom:12px">
       <div style="width:86px;flex-shrink:0;font-size:12.5px;font-weight:700;padding-top:2px">${veiligTekst(dag)}</div>
       <div style="flex:1 1 260px;min-width:0">
-        <div style="font-size:14.5px;font-weight:700">${veiligTekst(r.naam)}</div>
+        <div style="font-size:14.5px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${veiligTekst(r.naam)} ${mbErvaringHtml(r.gebruiker_id)}</div>
         ${rij('Meldt zich aan voor',`${mbStip(r.kleur)} <b>${veiligTekst(r.kraam)} &middot; ${veiligTekst(mbShiftVol(r))}</b>${naamLosVanTijd}
           <span style="color:${vol?'#B4472B':'var(--muted)'};font-size:12px"> &middot; ${r.ingedeeld} van ${r.nodig||'?'} ingedeeld${vol?' (vol)':''}</span>`)}
         ${rij('Kan',mbKanTekst(r))}
@@ -4012,6 +4047,7 @@ function mbAanmBlok(dagen){
       <div style="display:flex;gap:6px;flex-shrink:0">${mbAanmKnoppen(r.aanmelding_id)}</div></div>`;
   });
   if(!deze.length)uit+='<div style="font-size:13px;color:var(--muted);margin-top:4px">Niemand deze week.</div>';
+  else uit+='<div style="font-size:11.5px;color:var(--muted);margin-top:8px">Per dienst op volgorde van beoordeling, dan hoe lang iemand al bij ons werkt, dan het aantal gewerkte shifts.</div>';
   if(weken.length){
     uit+=`<div style="font-size:12.5px;color:var(--muted);margin-top:10px">Ook ${weken.reduce((t,w)=>t+ander[w],0)} in andere weken: `
       +weken.map(w=>`<button class="mb-linktekst" onclick="MB_WEEK='${veiligJs(w)}';MB_SHIFT=null;MB_DAG=null;mbNaar('shifts')">week van ${veiligTekst(mbKort(w))} (${ander[w]})</button>`).join(', ')
@@ -5173,7 +5209,14 @@ async function mbExport(){
 
 // ── MENSEN ────────────────────────────────────────────────────────
 const MB_OORDELEN=['topper','goed','prima','minder dan verwacht','niet meer'];
+function mbSindsSelect(id,waarde){
+  const jaar=new Date().getFullYear(); let o='<option value="">&mdash;</option>';
+  o+=`<option value="${jaar}"${waarde===jaar?' selected':''}>${jaar} (nieuw)</option>`;
+  for(let j=jaar-1;j>=2015;j--)o+=`<option value="${j}"${waarde===j?' selected':''}>${j}</option>`;
+  return `<select class="mb-getal" style="width:104px;text-align:left" id="mbPS${id}" data-oud="${waarde||''}" title="Sinds welk jaar werkt deze persoon bij ons?">${o}</select>`;
+}
 async function mbMensen(){
+  await mbErvaringLaden();
   const{data,error}=await sb.rpc('mcr_mensen');
   if(error)throw error;
   const alle=data||[];
@@ -5192,8 +5235,8 @@ async function mbMensen(){
     +'<th style="text-align:right">Shifts</th><th style="text-align:right">Uren</th>'
     +'<th style="text-align:right">Verdiend</th><th style="text-align:center">Kleding</th>'
     +'<th style="text-align:center" title="Niet komen opdagen \u00b7 afgemeld \u00b7 te laat">Misgegaan</th>'
-    +'<th>Beoordeling</th><th></th></tr></thead><tbody>';
-  if(!actief.length&&!nietmeer.length)uit+='<tr><td colspan="10" style="color:var(--muted)">Nog niemand vrijgegeven.</td></tr>';
+    +'<th>Werkt sinds</th><th>Beoordeling</th><th></th></tr></thead><tbody>';
+  if(!actief.length&&!nietmeer.length)uit+='<tr><td colspan="11" style="color:var(--muted)">Nog niemand vrijgegeven.</td></tr>';
   actief.concat(nietmeer).forEach(m=>uit+=mbPersoonRij(m));
   uit+='</tbody></table></div>';
   if(uitDienst.length){
@@ -5225,6 +5268,8 @@ async function mbMensen(){
         <div class="mb-veldrij" style="margin-top:12px">
           <div style="flex:1 1 120px"><label class="mb-lab">Tarief &pound;/uur</label>
             <input class="mb-veld" type="number" step="0.25" id="mbPL${id}" value="${m.uurloon!=null?veiligTekst(m.uurloon):(band?band[2].replace(',','.'):'')}"></div>
+          <div style="flex:1 1 120px"><label class="mb-lab">Werkt bij ons sinds</label>
+            ${mbSindsSelect(id,(MB_ERV[m.id]||{}).werkt_sinds||null).replace('class="mb-getal" style="width:104px;text-align:left"','class="mb-veld"')}</div>
           <div style="flex:1 1 140px"><label class="mb-lab">Beoordeling</label>
             <select class="mb-veld" id="mbPB${id}"><option value="">&mdash;</option>
               ${MB_OORDELEN.map(o=>`<option value="${o}"${m.beoordeling===o?' selected':''}>${o}</option>`).join('')}</select></div>
@@ -5272,6 +5317,8 @@ function mbPersoonRij(m){
     <td style="text-align:center">${(m.niet_gekomen||m.afgemeld||m.te_laat)
       ? `<span style="color:#B4472B;font-weight:700" title="${m.niet_gekomen||0} keer niet gekomen, ${m.afgemeld||0} keer afgemeld, ${m.te_laat||0} keer te laat">${(m.niet_gekomen||0)+(m.afgemeld||0)+(m.te_laat||0)}</span>`
       : '<span style="color:var(--muted)">&mdash;</span>'}</td>
+    <td>${mbSindsSelect(id,(MB_ERV[m.id]||{}).werkt_sinds||null)}
+      <div style="font-size:10.5px;color:var(--muted);margin-top:2px;white-space:nowrap">${(MB_ERV[m.id]||{}).shifts_gewerkt||0} gewerkt</div></td>
     <td><select class="mb-getal" style="width:118px;text-align:left" id="mbPB${id}"><option value="">&mdash;</option>
       ${MB_OORDELEN.map(o=>`<option value="${o}"${m.beoordeling===o?' selected':''}>${o}</option>`).join('')}</select>
       ${m.beoordeling_door?`<div style="font-size:10.5px;color:var(--muted);margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(m.beoordeling_op))}">door ${veiligTekst(m.beoordeling_door)}</div>`:''}</td>
@@ -5498,7 +5545,12 @@ async function mbVoorvalWeg(vid, id){
 async function mbPersoonOpslaan(id,vrijgeven){
   const l=(document.getElementById('mbPL'+id)||{}).value;
   const b=(document.getElementById('mbPB'+id)||{}).value;
+  const ps=document.getElementById('mbPS'+id);
   try{
+    if(ps&&ps.value!==(ps.dataset.oud||'')){
+      const{error:e2}=await sb.rpc('mcr_werkt_sinds_zetten',{p_id:id,p_jaar:ps.value?Number(ps.value):null});
+      if(e2)throw e2;
+    }
     const{error}=await sb.rpc('mcr_persoon_opslaan',{p_id:id,p_kleding:null,
       p_uurloon:(l===''||l==null)?null:Number(l), p_beoordeling:b||null, p_goedkeuren:vrijgeven?true:null});
     if(error)throw error; mbNaar('mensen');
