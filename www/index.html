@@ -5256,15 +5256,26 @@ async function mbMensen(){
   // De aanmeldingen en het werfoverzicht komen hierboven te staan; hieronder
   // worden ze opgebouwd en daarna op hun plek gezet.
   let boven='';
+  const telNorm=t=>String(t||'').replace(/\D/g,'').replace(/^44/,'0').replace(/^0+/,'');
+  const dubbelVan=m=>alle.filter(x=>x.id!==m.id&&!x.gearchiveerd_op&&(
+      (telNorm(x.telefoon)&&telNorm(x.telefoon)===telNorm(m.telefoon))||
+      (String(x.naam||'').trim().toLowerCase()===String(m.naam||'').trim().toLowerCase())));
   if(wacht.length){
     wacht.forEach(m=>{
       const id=veiligTekst(m.id);
+      const dub=dubbelVan(m), tik=emailTikfout(m.email);
       const band = m.leeftijd==null?null:(m.leeftijd<18?['16–17','7,55','8,00']:(m.leeftijd<21?['18–20','10,00','10,00']:['21+','12,21','12,50']));
       boven+=`<div class="mb-kaart" style="flex:1 1 320px;border:1.5px solid #B4472B">
         <div class="mb-kop" style="color:#B4472B">Nieuwe aanmelding</div>
         <div style="font-size:18px;font-weight:700">${veiligTekst(m.naam)}</div>
         <div style="font-size:12.5px;color:var(--muted);margin-top:2px">
           ${m.aangebracht_door?'via '+veiligTekst(m.aangebracht_door)+' &middot; ':''}${m.leeftijd?m.leeftijd+' jaar &middot; ':''}${veiligTekst(m.telefoon||'')}</div>
+        <div style="font-size:14px;margin-top:4px;word-break:break-all"><span style="color:var(--muted);font-size:12px">E-mail</span> <b style="${tik?'color:#B4472B':''}">${veiligTekst(m.email||'—')}</b></div>
+        ${tik?`<div style="font-size:12.5px;color:#B4472B;margin-top:3px;font-weight:600">Lijkt een tikfout &mdash; bedoeld is waarschijnlijk ${veiligTekst(tik)}. Op dit adres komt geen mail aan.</div>`:''}
+        ${dub.length?`<div style="font-size:12.5px;background:#FEF6E7;color:#8A5307;border-radius:8px;padding:7px 9px;margin-top:8px;line-height:1.5">
+          <b>Mogelijk dubbel account.</b> Zelfde ${dub.some(x=>telNorm(x.telefoon)&&telNorm(x.telefoon)===telNorm(m.telefoon))?'telefoonnummer':'naam'} als:<br>
+          ${dub.map(x=>`${veiligTekst(x.naam)} &middot; <b>${veiligTekst(x.email||'')}</b>${x.goedgekeurd?' (al vrijgegeven)':' (wacht ook)'}${x.iban?' &middot; heeft bankrekening':''}`).join('<br>')}<br>
+          Geef het account met het juiste e-mailadres vrij en haal het andere weg.</div>`:''}
         <div class="mb-veldrij" style="margin-top:12px">
           <div style="flex:1 1 120px"><label class="mb-lab">Tarief &pound;/uur</label>
             <input class="mb-veld" type="number" step="0.25" id="mbPL${id}" value="${m.uurloon!=null?veiligTekst(m.uurloon):(band?band[2].replace(',','.'):'')}"></div>
@@ -7152,6 +7163,30 @@ function akkoordHuisregels(){
   sluitHuisregels();
 }
 
+// ─── Tikfout in het e-mailadres? ──────────────────────────────────
+// Mensen typten "icloud.clm" of "hitmail.com", kregen geen mail en maakten
+// meteen een tweede account. Lijkt het domein op een bekend domein, dan
+// vragen we het eerst na.
+const BEKENDE_MAILDOMEINEN=['gmail.com','googlemail.com','hotmail.com','hotmail.co.uk','hotmail.nl','outlook.com','outlook.nl',
+  'live.com','live.co.uk','live.nl','icloud.com','me.com','mac.com','yahoo.com','yahoo.co.uk','btinternet.com','sky.com',
+  'aol.com','msn.com','ziggo.nl','kpnmail.nl','planet.nl','home.nl','tcgroup.nl','thecreperiegroup.nl'];
+function tikAfstand(a,b){
+  const m=a.length,n=b.length; if(Math.abs(m-n)>2)return 9;
+  const d=[]; for(let i=0;i<=m;i++){ d[i]=[i]; } for(let j=0;j<=n;j++)d[0][j]=j;
+  for(let i=1;i<=m;i++)for(let j=1;j<=n;j++){
+    d[i][j]=Math.min(d[i-1][j]+1,d[i][j-1]+1,d[i-1][j-1]+(a[i-1]===b[j-1]?0:1));
+    if(i>1&&j>1&&a[i-1]===b[j-2]&&a[i-2]===b[j-1])d[i][j]=Math.min(d[i][j],d[i-2][j-2]+1);
+  }
+  return d[m][n];
+}
+function emailTikfout(email){
+  const e=String(email||'').trim().toLowerCase(); const at=e.lastIndexOf('@'); if(at<1)return null;
+  const dom=e.slice(at+1); if(!dom||BEKENDE_MAILDOMEINEN.includes(dom))return null;
+  let beste=null, afst=9;
+  BEKENDE_MAILDOMEINEN.forEach(k=>{ const a=tikAfstand(dom,k); if(a<afst){afst=a;beste=k;} });
+  return (beste&&afst<=2)?e.slice(0,at+1)+beste:null;
+}
+
 // ─── Aanmelden via de Manchester-ingang ────────────────────────────
 async function doRegisterMCR(){
   const naam=netteNaam(schoneInvoer(document.getElementById('mcrNaam').value,80));
@@ -7172,6 +7207,9 @@ async function doRegisterMCR(){
   if(!geb) return stop('Please fill in your date of birth.');
   if(pw.length<12) return stop('Your password needs at least 12 characters. Three random words works well.');
   if(!akkoord) return stop('Please read and agree to the house rules first.');
+  const voorstel=emailTikfout(email);
+  if(voorstel&&!confirm('Check your email address:\n\n'+email+'\n\nDid you mean '+voorstel+' ?\n\nOK = use '+voorstel+'\nCancel = keep what I typed'))
+    {} else if(voorstel){ document.getElementById('mcrEmail').value=voorstel; return doRegisterMCR(); }
 
   const hr=await laadHuisregels();
   const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{naam}}});
@@ -7439,6 +7477,9 @@ async function doRegister(){
   if(pw.length<12){err.textContent='Je wachtwoord moet minimaal 12 tekens zijn. Tip: drie losse woorden achter elkaar.';err.style.display='block';return;}
   if(!maat){err.textContent='Selecteer je shirtmaat.';err.style.display='block';return;}
   if(!rijbewijsRuw){err.textContent='Selecteer je rijbewijs (kies "Geen" als je geen rijbewijs hebt).';err.style.display='block';return;}
+  const voorstel=emailTikfout(email);
+  if(voorstel&&confirm('Klopt je e-mailadres?\n\n'+email+'\n\nBedoel je '+voorstel+' ?\n\nOK = '+voorstel+' gebruiken\nAnnuleren = laten zoals ik het typte')){
+    document.getElementById('regEmail').value=voorstel; return doRegister(); }
   const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{naam}}});
   if(error){err.textContent=error.message;err.style.display='block';return;}
   if(data.user){
