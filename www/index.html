@@ -168,6 +168,21 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:0
 .htab{padding:0 1rem;font-size:12px;font-weight:500;color:var(--muted);border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;height:100%;font-family:var(--font)}
 .htab.active{color:var(--text);border-bottom-color:var(--text)}
 .htab,.bnav-item{position:relative}
+.ok-kaart{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px;margin-bottom:10px;display:flex;gap:12px;transition:opacity .25s,transform .25s}
+.ok-kaart.weg{opacity:0;transform:translateX(40px)}
+.ok-kaart.nieuw{border:1.5px solid #2563EB;box-shadow:0 2px 10px rgba(37,99,235,.08)}
+.ok-kaart.licht{outline:3px solid #F59E0B}
+.ok-datum{flex:0 0 54px;text-align:center;border-radius:10px;background:#F3F2EE;padding:7px 0;align-self:flex-start}
+.ok-datum .d1{font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.04em}
+.ok-datum .d2{font-size:24px;font-weight:800;line-height:1.05;color:var(--text)}
+.ok-datum .d3{font-size:11px;color:var(--muted)}
+.ok-kaart.nieuw .ok-datum{background:#EEF4FF}.ok-kaart.nieuw .ok-datum .d2{color:#1D4ED8}
+.ok-chip{display:inline-block;font-size:11.5px;font-weight:600;border-radius:20px;padding:2px 9px;margin:6px 5px 0 0}
+.ok-knoppen{display:flex;gap:8px;margin-top:12px}
+.ok-ja{flex:2;background:#0F7A52;color:#fff;border:none;border-radius:10px;padding:12px;font-size:14.5px;font-weight:700;cursor:pointer;font-family:var(--font)}
+.ok-nee{flex:1;background:var(--surface);color:var(--muted);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:var(--font)}
+.ok-banner{display:flex;align-items:center;gap:12px;background:#EEF4FF;border:1px solid #BFD3FF;border-radius:12px;padding:12px 14px;margin-bottom:12px;cursor:pointer}
+.ok-banner b{font-size:15px;color:#1D4ED8}
 .meld-bol{position:absolute;top:7px;right:1px;min-width:17px;height:17px;padding:0 5px;box-sizing:border-box;border-radius:9px;background:#DC2626;color:#fff;font-size:10px;font-weight:700;line-height:17px;text-align:center;pointer-events:none;box-shadow:0 0 0 2px var(--card,#fff)}
 .bnav-item .meld-bol{top:4px;right:calc(50% - 22px)}
 .logout-btn{font-size:11px;color:var(--muted);background:none;border:none;cursor:pointer;font-family:var(--font);padding:5px 8px;border-radius:6px;border:1px solid var(--border)}
@@ -2846,6 +2861,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div class="detail-footer">
       <button class="btn-ghost" onclick="closeDetail()">Sluiten</button>
       <button class="btn-sm" id="detailBevestigBtn" style="display:none">Klus bevestigen</button>
+      <button class="btn-edit" id="detailWhatsappBtn" style="display:none;color:#128C4A">WhatsApp</button>
       <button class="btn-edit" id="detailKopieerBtn" style="display:none">Kopieer</button>
       <button class="btn-edit" id="detailEditBtn" style="display:none">Bewerk</button>
     </div>
@@ -3027,7 +3043,13 @@ const I18N_EN={
 'Je hebt hier geen toegang toe, of je sessie is verlopen. Log opnieuw in.':'You don’t have access to this, or your session has expired. Please sign in again.',
 'Geen verbinding met de server. Controleer je internet.':'No connection to the server. Check your internet.',
 'Taal':'Language','Taal / Language':'Taal / Language',
-'kan':'can','gevraagd':'requested','De hal ziet hem bij Taken.':'The warehouse will see it under Tasks.','ma':'Mon','di':'Tue','wo':'Wed','do':'Thu','vr':'Fri','za':'Sat','zo':'Sun','Bewerk':'Edit','Kopieer':'Copy','of':'or','t/m':'until','Hele dag':'All day','goedgekeurd':'approved','afgewezen':'rejected',
+'kan':'can','gevraagd':'requested','vol':'full','Ik kan ✓':'I can ✓','Kan niet':'Can\u2019t','Toch wel':'Actually I can','Je gaf aan dat je niet kunt':'You said you can\u2019t','Nog 1 plek':'1 place left','tijd volgt':'time to follow',
+'Je hebt deze dag vrij gevraagd':'You asked for this day off','✓ Je bent ingedeeld':'✓ You are scheduled','⏳ Aangemeld — wacht op bevestiging':'⏳ Signed up — waiting for confirmation',
+'Eén tik per klus: Ik kan of Kan niet. Dan weet de planning waar ze aan toe is.':'One tap per job: I can or Can\u2019t. Then the planning team knows where they stand.',
+'Je bent helemaal bij':'You\u2019re all caught up','Op alle klussen heb je gereageerd. Je krijgt bericht als je bent ingedeeld.':'You have responded to every job. You\u2019ll get a message when you are scheduled.',
+'Tik om te kiezen — één tik per klus.':'Tap to choose — one tap per job.','Top! De planning laat het je weten.':'Great! The planning team will let you know.','Genoteerd: je kunt niet':'Noted: you can\u2019t','Staat weer open':'Open again',
+'Er is een klus op die dag':'There is a job on that day','Er zijn klussen op die dagen':'There are jobs on those days','Wil je je meteen aanmelden?':'Do you want to sign up right away?','Ja, meld me aan':'Yes, sign me up','Bekijken':'View',
+'Aangemeld! De planning laat het je weten.':'Signed up! The planning team will let you know.','Klus':'Job','De hal ziet hem bij Taken.':'The warehouse will see it under Tasks.','ma':'Mon','di':'Tue','wo':'Wed','do':'Thu','vr':'Fri','za':'Sat','zo':'Sun','Bewerk':'Edit','Kopieer':'Copy','of':'or','t/m':'until','Hele dag':'All day','goedgekeurd':'approved','afgewezen':'rejected',
 'Je staat standaard niet ingepland. Geef door op welke dagen je wél kunt werken — alleen dan kan de planning je inzetten. Ga je op vakantie of ben je een periode weg, vraag dat dan aan met "Vrij aanvragen"; de planning keurt dat goed en zet je die dagen niet in.':'By default you are not scheduled. Let us know on which days you CAN work — only then can the planning team schedule you. Going on holiday or away for a while? Request it with "Request day off"; the planning team approves it and won\u2019t schedule you on those days.',
 'Urenregistratie':'Time clock','Uitgeklokt':'Clocked out','Ingeklokt om':'Clocked in at','Klus bevestigen':'Confirm job','Loonkosten':'Labour costs',
 'Je account is afgesloten':'Your account has been closed',
@@ -3035,6 +3057,15 @@ const I18N_EN={
 };
 // Zinnen met een getal of naam erin. Volgorde telt: specifiek eerst.
 const I18N_EN_REGELS=[
+[/^(\d+) (klus wacht|klussen wachten) op je antwoord$/,(m,n,k)=>n+' '+(k==='klus wacht'?'job is':'jobs are')+' waiting for your answer'],
+[/^Kan niet \((\d+)\) — tik om te bekijken$/,'Can\u2019t ($1) — tap to view'],
+[/^(\d+) plekken vrij$/,'$1 places free'],
+[/^± ([\d,]+) uur · ± € (\d+)$/,'± $1 hours · ± € $2'],
+[/^± ([\d,]+) uur$/,'± $1 hours'],
+[/^👋 (.+) (gaat|gaan) al$/,(m,w,g)=>'👋 '+w.replace(/ en (\d+) anderen$/,' and $1 others').replace(/ en /,' and ')+(g==='gaat'?' is going':' are going')],
+[/^Aangemeld voor (\d+) klussen$/,'Signed up for $1 jobs'],
+[/^vertrek (.+)$/,'departure $1'],
+
 [/^Klussen \((\d+)\)$/,'Jobs ($1)'],
 [/^(\d+) (klus|klussen)$/,(m,n,k)=>n+' '+(k==='klus'?'job':'jobs')],
 [/^(\d+) (klus|klussen) · (\d+) keer vrij$/,(m,n,k,v)=>n+' '+(k==='klus'?'job':'jobs')+' · '+v+' × off'],
@@ -3084,7 +3115,7 @@ const I18N_EN_REGELS=[
 [/^(.+) is niet gelukt$/,'$1 failed'],
 ];
 // Losse zinsdelen die midden in een langere tekst kunnen staan.
-const I18N_EN_DELEN={
+const I18N_EN_DELEN={'vertrek':'departure',
 'Vrij aangevraagd':'Day off requested','Hele dag':'All day','Vertrek':'Departure','Opbouw':'Set-up','pauze':'break','goedgekeurd':'approved','in afwachting':'pending','Vandaag':'Today','t/m':'until',
 'januari':'January','februari':'February','maart':'March','april':'April','mei':'May','juni':'June','juli':'July','augustus':'August','september':'September','oktober':'October','november':'November','december':'December',
 'Januari':'January','Februari':'February','Maart':'March','Mei':'May','Juni':'June','Juli':'July','Augustus':'August','Oktober':'October',
@@ -8434,6 +8465,7 @@ async function initApp(user){
     document.getElementById('page-beschikbaarheid').classList.add('active');
     loadPersoonlijkSchema();
   }
+  setTimeout(okDeeplinkOpen,400);
 }
 
 // Check bestaande sessie. Komt iemand binnen via de herstellink, dan krijgt hij
@@ -8711,6 +8743,7 @@ async function meldingenLaden(){
   MELD_BEZIG=false;
 }
 function meldingenTeken(){
+  try{ okStartBanner(); }catch(e){}
   document.querySelectorAll('.htab,.bnav-item').forEach(k=>{
     const m=(k.getAttribute('onclick')||'').match(/(showPage|switchNav|mbNaar)\('([\w-]+)'/);
     if(!m)return;
@@ -11325,6 +11358,11 @@ function openDetail(id){
   if(bev){
     bev.style.display=(CURRENT_ROL==='beheerder'&&k.is_optie)?'':'none';
     bev.onclick=()=>bevestigOptie(id);
+  }
+  const wa=document.getElementById('detailWhatsappBtn');
+  if(wa){
+    wa.style.display=(CURRENT_ROL==='beheerder'&&!k.is_optie&&k.categorie!=='intern')?'':'none';
+    wa.onclick=()=>deelKlusWhatsApp(id);
   }
   const kop=document.getElementById('detailKopieerBtn');
   if(kop){
@@ -16169,7 +16207,9 @@ async function bkOpslaan(){
   }
 
   const erbij=bkAan.size, eraf=bkUit.size;
+  const nieuweDagen=[...bkAan];
   bkAan.clear(); bkUit.clear();
+  setTimeout(()=>okNaBeschikbaarheid(nieuweDagen),600);
   toast([erbij?erbij+' '+(erbij===1?'dag':'dagen')+' toegevoegd':'',eraf?eraf+' weggehaald':'']
     .filter(Boolean).join(' · ')||'Bijgewerkt');
   await loadPersoonlijkSchema();
@@ -17320,8 +17360,9 @@ let toonAlleFranklins=false;
 async function loadOpenKlussen(){
   const el=document.getElementById('okLijst');
   if(!el)return;
-  el.innerHTML='<div class="spin">Laden...</div>';
-  const{data,error}=await sb.rpc('beschikbare_klussen');
+  if(!OPEN_KLUSSEN.length)el.innerHTML='<div class="spin">Laden...</div>';
+  let{data,error}=await sb.rpc('mijn_open_klussen');
+  if(error){ ({data,error}=await sb.rpc('beschikbare_klussen')); }
   if(error){
     el.innerHTML='<div class="empty">Klussen laden mislukt: '+error.message+'</div>';
     return;
@@ -17359,74 +17400,89 @@ function renderOpenKlussen(){
   }
 
   const kaart=k=>{
-    const datum=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
+    const dd=parseDate(k.datum);
     const tot=k.datum_eind&&k.datum_eind!==k.datum
-      ?' t/m '+parseDate(k.datum_eind).toLocaleDateString('nl-NL',{day:'numeric',month:'long'}):'';
-    const tijden=[
-      k.vertrek_tijd&&'Vertrek '+tijdFromDb(k.vertrek_tijd),
-      k.start_opbouw&&'Opbouw '+tijdFromDb(k.start_opbouw),
-      k.start_feest&&'Feest '+tijdFromDb(k.start_feest),
-      k.einde_feest&&'Einde '+tijdFromDb(k.einde_feest),
-    ].filter(Boolean).join(' · ');
-
-    const namen=(k.ingedeeld||[]);
-    const nodig=k.personeel_nodig||0;
-    // Losse krachten staan ook op de klus en tellen dus mee; anders leek een
-    // volle klus hier nog plek te hebben.
-    const bezet=(k.bezet_aantal!=null)?k.bezet_aantal:(k.ingedeeld_aantal||0);
-    const losse=k.losse_aantal||0;
-    const plekVrij=nodig?Math.max(0,nodig-bezet):null;
+      ?'t/m '+parseDate(k.datum_eind).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}):'';
     const shifts=Array.isArray(k.shifts)?k.shifts:[];
+    const begin=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd)||tijdFromDb(k.start_opbouw)||tijdFromDb(k.start_feest);
+    const eind=tijdFromDb(k.einde_klus)||tijdFromDb(k.einde_feest)||tijdFromDb(k.eind_tijd);
+    const tijd=begin?(eind?begin+' – '+eind:'vanaf '+begin):'tijd volgt';
+    const extra=[k.vertrek_tijd&&'vertrek '+tijdFromDb(k.vertrek_tijd)].filter(Boolean).join('');
+    const nodig=k.personeel_nodig||0;
+    const bezet=(k.bezet_aantal!=null)?k.bezet_aantal:(k.ingedeeld_aantal||0);
+    const plekVrij=shifts.length
+      ?shifts.reduce((t,sh)=>t+Math.max(0,(sh.personeel_nodig||0)-(sh.bezet||0)),0)
+      :(nodig?Math.max(0,nodig-bezet):null);
+    // Wat je ongeveer verdient: geplande uren × je eigen uurloon. Alleen jij ziet dit.
+    const min=klusMinuten(k);
+    const uren=min?Math.round(min/30)/2:null;
+    const bedrag=(uren&&k.mijn_uurloon)?Math.round(uren*Number(k.mijn_uurloon)/5)*5:null;
+    const voornamen=(k.ingedeeld||[]).map(n=>String(n).split(' ')[0]).filter(Boolean);
+    const wie=voornamen.length
+      ?(voornamen.length<=3?voornamen.join(voornamen.length===2?' en ':', ').replace(/, ([^,]*)$/,' en $1')
+         :voornamen.slice(0,2).join(', ')+' en '+(voornamen.length-2)+' anderen')+(voornamen.length===1?' gaat al':' gaan al')
+      :'';
+    const chips=[];
+    if(uren)chips.push(`<span class="ok-chip" style="background:#F2FBF6;color:#0F7A52">± ${String(uren).replace('.',',')} uur${bedrag?' · ± € '+bedrag:''}</span>`);
+    if(plekVrij!==null&&plekVrij>0)chips.push(plekVrij===1
+      ?'<span class="ok-chip" style="background:#FEF3C7;color:#B45309">Nog 1 plek</span>'
+      :`<span class="ok-chip" style="background:#F3F2EE;color:var(--muted)">${plekVrij} plekken vrij</span>`);
+    if(wie)chips.push(`<span class="ok-chip" style="background:#EEF4FF;color:#1D4ED8">👋 ${veiligTekst(wie)}</span>`);
 
+    const open=!k.ben_ingedeeld&&!k.mijn_status&&!k.kan_niet;
     let knop='';
     if(k.ben_ingedeeld){
-      knop=`<span style="font-size:12px;font-weight:600;color:#059669">✓ Je bent ingedeeld</span>`;
+      knop=`<div style="margin-top:10px;font-size:13px;font-weight:700;color:#0F7A52">✓ Je bent ingedeeld</div>`;
     }else if(k.mijn_status==='aangemeld'){
-      knop=`<div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:12px;font-weight:600;color:#92400E">Aangemeld — wacht op bevestiging</span>
-        <button class="btn-ghost" style="font-size:11px;padding:5px 10px" onclick="trekAanmeldingIn('${k.id}')">Intrekken</button>
-      </div>`;
+      knop=`<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:13px;font-weight:700;color:#B45309">⏳ Aangemeld — wacht op bevestiging</span>
+        <button class="btn-ghost" style="font-size:11.5px;padding:5px 10px" onclick="trekAanmeldingIn('${k.id}')">Intrekken</button></div>`;
     }else if(k.mijn_status==='afgewezen'){
-      knop=`<span style="font-size:12px;font-weight:600;color:#DC2626">Niet ingedeeld voor deze klus</span>`;
+      knop=`<div style="margin-top:10px;font-size:13px;font-weight:600;color:#B4472B">Niet ingedeeld voor deze klus</div>`;
+    }else if(k.kan_niet){
+      knop=`<div style="margin-top:8px;display:flex;align-items:center;gap:8px"><span style="font-size:12.5px;color:var(--muted)">Je gaf aan dat je niet kunt</span>
+        <button class="btn-ghost" style="font-size:11.5px;padding:5px 10px" onclick="okKanNiet('${k.id}',false)">Toch wel</button></div>`;
     }else if(shifts.length){
-      // Bij shifts meld je je aan voor een shift, niet voor de hele dag.
-      knop=shifts.map(sh=>{
-        const tijd=[tijdFromDb(sh.start_tijd),tijdFromDb(sh.eind_tijd)].filter(Boolean).join(' – ');
+      knop='<div style="margin-top:10px">'+shifts.map(sh=>{
+        const t=[tijdFromDb(sh.start_tijd),tijdFromDb(sh.eind_tijd)].filter(Boolean).join(' – ');
         const vol=(sh.personeel_nodig||0)>0&&(sh.bezet||0)>=(sh.personeel_nodig||0);
         return`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
-          <span style="font-size:12px">${veiligTekst(sh.naam||'Shift')}${tijd?` <span style="color:var(--muted)">${tijd}</span>`:''}
-            <span style="color:var(--muted)">· ${sh.bezet||0}/${sh.personeel_nodig||0}</span></span>
-          ${vol
-            ?'<span style="font-size:11px;color:var(--muted)">vol</span>'
-            :`<button class="btn-sm" style="font-size:11px;padding:6px 12px;flex-shrink:0" onclick="meldAan('${k.id}','${sh.id}')">Ik wil deze</button>`}
-        </div>`;
-      }).join('');
+          <span style="font-size:13px">${veiligTekst(sh.naam||'Shift')}${t?` <b>${t}</b>`:''} <span style="color:var(--muted)">· ${sh.bezet||0}/${sh.personeel_nodig||0}</span></span>
+          ${vol?'<span style="font-size:11px;color:var(--muted)">vol</span>'
+               :`<button class="ok-ja" style="flex:0 0 auto;padding:8px 14px;font-size:13px" onclick="okIkKan('${k.id}','${sh.id}')">Ik kan ✓</button>`}</div>`;
+      }).join('')+`<button class="ok-nee" style="width:100%;margin-top:4px" onclick="okKanNiet('${k.id}',true)">Kan niet</button></div>`;
     }else{
-      knop=`<button class="btn-sm" style="font-size:12px;padding:8px 16px" onclick="meldAan('${k.id}')">Ik wil deze klus</button>`;
+      knop=`<div class="ok-knoppen"><button class="ok-ja" onclick="okIkKan('${k.id}')">Ik kan ✓</button><button class="ok-nee" onclick="okKanNiet('${k.id}',true)">Kan niet</button></div>`;
     }
 
-    return`<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
-      <div style="font-size:15px;font-weight:600;color:var(--text)">${veiligTekst(k.naam||'Klus')}</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:3px">${datum}${tot}</div>
-      ${tijden?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${tijden}</div>`:''}
-      ${k.adres?`<div style="font-size:12px;color:var(--muted);margin-top:3px">📍 ${veiligTekst(k.adres)}</div>`:''}
-      <div style="font-size:12px;color:var(--text);margin-top:8px">
-        <span style="color:var(--muted)">Al ingedeeld:</span>
-        ${namen.length?namen.join(', '):'nog niemand'}${losse?`<span style="color:var(--muted)"> + ${losse} losse ${losse===1?'kracht':'krachten'}</span>`:''}
-        ${plekVrij!==null?`<span style="color:var(--muted)"> · ${plekVrij} van de ${nodig} plekken vrij</span>`:''}
+    return`<div class="ok-kaart${open?' nieuw':''}" id="ok-${veiligTekst(k.id)}">
+      <div class="ok-datum"><div class="d1">${dd.toLocaleDateString('nl-NL',{weekday:'short'}).replace('.','')}</div><div class="d2">${dd.getDate()}</div><div class="d3">${dd.toLocaleDateString('nl-NL',{month:'short'}).replace('.','')}</div></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15.5px;font-weight:700;color:var(--text)">${veiligTekst(k.naam||'Klus')}</div>
+        <div style="font-size:13.5px;font-weight:600;color:var(--text);margin-top:2px">${veiligTekst(tijd)}${tot?` <span style="font-weight:400;color:var(--muted)">${veiligTekst(tot)}</span>`:''}</div>
+        ${k.adres?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">📍 ${veiligTekst(k.adres)}${extra?' · '+veiligTekst(extra):''}</div>`:(extra?`<div style="font-size:12.5px;color:var(--muted);margin-top:2px">${veiligTekst(extra)}</div>`:'')}
+        ${k.ik_onbeschikbaar&&open?'<div style="font-size:12px;color:#B45309;margin-top:4px">Je hebt deze dag vrij gevraagd</div>':''}
+        <div>${chips.join('')}</div>
+        ${knop}
       </div>
-      <div style="margin-top:12px">${knop}</div>
     </div>`;
   };
-
   // Franklins draait dagelijks door; die diensten staan onder een eigen kopje
   // zodat de gewone klussen niet ondersneeuwen.
-  const gewoon=lijst.filter(k=>k.categorie!=='franklins');
+  const alleGewoon=lijst.filter(k=>k.categorie!=='franklins');
+  const kanNiet=alleGewoon.filter(k=>k.kan_niet&&!k.ben_ingedeeld&&!k.mijn_status);
+  const vragen=alleGewoon.filter(k=>!k.kan_niet&&!k.ben_ingedeeld&&!k.mijn_status);
+  const gewoon=vragen.concat(alleGewoon.filter(k=>!k.kan_niet&&(k.ben_ingedeeld||k.mijn_status)));
   const vast=lijst.filter(k=>k.categorie==='franklins');
   const kopje=(t,n)=>`<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin:0 0 .625rem">${t} (${n})</div>`;
 
   let html='';
+  if(vragen.length)html+=`<div class="ok-banner" style="cursor:default"><div style="font-size:24px">🙋</div><div><b>${vragen.length} ${vragen.length===1?'klus wacht':'klussen wachten'} op je antwoord</b>
+      <div style="font-size:12px;color:#3B5BA9;margin-top:2px">Eén tik per klus: Ik kan of Kan niet. Dan weet de planning waar ze aan toe is.</div></div></div>`;
+  else if(alleGewoon.length)html+=`<div class="ok-banner" style="cursor:default;background:#F2FBF6;border-color:#BBE5CF"><div style="font-size:24px">✅</div><div><b style="color:#0F7A52">Je bent helemaal bij</b>
+      <div style="font-size:12px;color:#2F7A55;margin-top:2px">Op alle klussen heb je gereageerd. Je krijgt bericht als je bent ingedeeld.</div></div></div>`;
   if(gewoon.length)html+=kopje('Klussen',gewoon.length)+gewoon.map(kaart).join('');
+  if(kanNiet.length)html+=`<details style="margin:6px 0 12px"><summary style="cursor:pointer;font-size:12.5px;color:var(--muted);padding:6px 0">Kan niet (${kanNiet.length}) — tik om te bekijken</summary>${kanNiet.map(kaart).join('')}</details>`;
   if(vast.length){
     html+=`<div style="${gewoon.length?'margin-top:1.25rem;padding-top:1.25rem;border-top:1px solid var(--border)':''}">`
       +kopje('Franklins &mdash; snackbar',vast.length)
@@ -17437,6 +17493,73 @@ function renderOpenKlussen(){
       +`</div>`;
   }
   el.innerHTML=html;
+}
+
+// Eén tik: aanmelden. De kaart verandert meteen, de rest volgt op de achtergrond.
+async function okIkKan(klusId,shiftId){
+  const k=OPEN_KLUSSEN.find(x=>x.id===klusId);
+  const{error}=await sb.from('klus_aanmeldingen').insert({klus_id:klusId,gebruiker_id:CURRENT_USER.id,status:'aangemeld',shift_id:shiftId||null});
+  if(error){toast('Aanmelden mislukt: '+error.message,'fout');return;}
+  if(k){ k.mijn_status='aangemeld'; k.kan_niet=false; }
+  toast('Top! De planning laat het je weten.');
+  renderOpenKlussen(); loadOpenKlussen();
+}
+async function okKanNiet(klusId,kanNiet){
+  const el=document.getElementById('ok-'+klusId);
+  if(kanNiet&&el){ el.classList.add('weg'); await new Promise(r=>setTimeout(r,230)); }
+  const{error}=await sb.rpc('klus_kan_niet',{p_klus:klusId,p_kan_niet:kanNiet});
+  if(error){ if(el)el.classList.remove('weg'); toast(error.message,'fout'); return; }
+  const k=OPEN_KLUSSEN.find(x=>x.id===klusId); if(k)k.kan_niet=kanNiet;
+  toast(kanNiet?'Genoteerd: je kunt niet':'Staat weer open');
+  renderOpenKlussen();
+}
+// Banner op het startscherm: "3 klussen wachten op je antwoord".
+function okStartBanner(){
+  const pg=document.getElementById('page-beschikbaarheid'); if(!pg)return;
+  const binnen=pg.firstElementChild; if(!binnen)return;
+  let el=document.getElementById('okStartBanner');
+  const n=(typeof MELD!=='undefined'&&MELD['open-klussen'])||0;
+  if(!n||!['part-timer','full-timer'].includes(CURRENT_ROL)){ if(el)el.remove(); return; }
+  if(!el){ el=document.createElement('div'); el.id='okStartBanner'; el.className='ok-banner'; el.onclick=()=>{ const kn=document.querySelector(".bnav-item[onclick*=\"'open-klussen'\"]"); if(kn&&typeof switchNav==='function')switchNav('open-klussen',kn); else showPage('open-klussen'); }; binnen.insertBefore(el,binnen.firstChild); }
+  el.innerHTML=`<div style="font-size:24px">🙋</div><div style="flex:1"><b>${n} ${n===1?'klus wacht':'klussen wachten'} op je antwoord</b><div style="font-size:12px;color:#3B5BA9;margin-top:2px">Tik om te kiezen — één tik per klus.</div></div><div style="font-size:20px;color:#1D4ED8">›</div>`;
+}
+// Na het opslaan van beschikbaarheid: staat er op zo'n dag een klus open, vraag dan meteen of je wilt.
+async function okNaBeschikbaarheid(dagen){
+  if(!dagen.length||!['part-timer','full-timer'].includes(CURRENT_ROL))return;
+  const{data}=await sb.rpc('mijn_open_klussen'); if(!data)return;
+  OPEN_KLUSSEN=data;
+  const hits=data.filter(k=>k.categorie!=='franklins'&&dagen.includes(k.datum)&&!k.ben_ingedeeld&&!k.mijn_status&&!k.kan_niet
+    &&((Array.isArray(k.shifts)&&k.shifts.length)?k.shifts.some(sh=>(sh.personeel_nodig||0)>(sh.bezet||0)):(k.personeel_nodig||0)>(k.bezet_aantal||0)));
+  if(!hits.length)return;
+  const lijst=hits.slice(0,4).map(k=>`<div style="margin:4px 0">• <b>${veiligTekst(parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}))}</b> — ${veiligTekst(k.naam||'Klus')}</div>`).join('');
+  const zonderShift=hits.filter(k=>!(Array.isArray(k.shifts)&&k.shifts.length));
+  const ok=await vraagBevestiging(hits.length===1?'Er is een klus op die dag':'Er zijn klussen op die dagen',
+    lijst+'<div style="margin-top:8px">Wil je je meteen aanmelden?</div>', zonderShift.length===hits.length?'Ja, meld me aan':'Bekijken');
+  if(!ok)return;
+  if(zonderShift.length===hits.length){
+    for(const k of hits){ await sb.from('klus_aanmeldingen').insert({klus_id:k.id,gebruiker_id:CURRENT_USER.id,status:'aangemeld'}); }
+    toast(hits.length===1?'Aangemeld! De planning laat het je weten.':'Aangemeld voor '+hits.length+' klussen');
+    meldingenStraks();
+  }else showPage('open-klussen');
+}
+// Planner: een klus delen in WhatsApp, met een link die in de app precies die klus opent.
+function deelKlusWhatsApp(id){
+  const k=(KLUSSEN||[]).find(x=>x.id===id); if(!k)return;
+  const d=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
+  const b=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd)||tijdFromDb(k.start_opbouw), e=tijdFromDb(k.einde_klus)||tijdFromDb(k.einde_feest);
+  const bezet=(k.personeel||[]).length+(k.losse||[]).length, vrij=Math.max(0,(k.personeel_nodig||0)-bezet);
+  const plaats=(k.adres||'').split(',').slice(-1)[0].trim();
+  const tekst=`🙋 Wie kan er mee?\n*${k.naam||'Klus'}*\n📅 ${d}${b?'\n🕒 '+b+(e?' – '+e:''):''}${plaats?'\n📍 '+plaats:''}${vrij?'\nNog '+vrij+(vrij===1?' plek':' plekken')+' vrij':''}\n\nMeld je aan in de app (Klussen → Ik kan):\nhttps://jeremylaag-cmd.github.io/tcgroup-app/app.html?klus=${k.id}`;
+  window.open('https://wa.me/?text='+encodeURIComponent(tekst),'_blank');
+}
+// Komt iemand binnen via zo'n link, dan gaan we naar die klus.
+let OK_DEEPLINK=null;
+try{ const m=(location.search||'').match(/[?&]klus=([0-9a-f-]{36})/i); if(m){ OK_DEEPLINK=m[1]; sessionStorage.setItem('ok_klus',m[1]); } else OK_DEEPLINK=sessionStorage.getItem('ok_klus'); }catch(e){}
+async function okDeeplinkOpen(){
+  if(!OK_DEEPLINK)return; const id=OK_DEEPLINK; OK_DEEPLINK=null; try{sessionStorage.removeItem('ok_klus');}catch(e){}
+  if(CURRENT_ROL==='beheerder'){ if((KLUSSEN||[]).some(k=>k.id===id))openDetail(id); return; }
+  showPage('open-klussen');
+  for(let i=0;i<20;i++){ const el=document.getElementById('ok-'+id); if(el){ el.scrollIntoView({behavior:'smooth',block:'center'}); el.classList.add('licht'); setTimeout(()=>el.classList.remove('licht'),2500); return; } await new Promise(r=>setTimeout(r,250)); }
 }
 
 async function meldAan(klusId,shiftId){
