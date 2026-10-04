@@ -1089,6 +1089,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <button type="button" data-ingang="MCR" onclick="kiesIngang('MCR')">Manchester</button>
     </div>
     <div class="auth-logo" id="authLogo">TC Group <span>/ Planning</span></div>
+    <div class="notr" id="authTaal" style="text-align:right;margin:-6px 0 6px;font-size:12px"><button type="button" onclick="kiesTaal(TAAL==='en'?'nl':'en')" style="background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font-family:var(--font);font-size:12px;padding:0"></button></div>
     <div class="auth-sub" id="authSub">Log in of maak een account aan</div>
     <div class="auth-tabs">
       <button class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Inloggen</button>
@@ -1734,6 +1735,16 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
             <div id="profielContractRegel" style="font-size:12px;color:var(--muted);display:none"></div>
             <button class="btn-sm" onclick="saveProfielGegevens()" style="align-self:flex-end;padding:8px 14px">Gegevens opslaan</button>
           </div>
+        </div>
+
+        <!-- Taal -->
+        <div class="detail-section notr">
+          <div class="detail-label">Taal / Language</div>
+          <div style="display:flex;gap:8px;margin-top:6px">
+            <button class="pb-fbtn" id="taalNl" onclick="kiesTaal('nl')" style="padding:8px 16px">Nederlands</button>
+            <button class="pb-fbtn" id="taalEn" onclick="kiesTaal('en')" style="padding:8px 16px">English</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">Kies de taal van de app. / Choose the language of the app.</div>
         </div>
 
         <!-- Meldingen testen (alleen beheerder) -->
@@ -2875,6 +2886,302 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 const SB_URL='https://rxfrdocioodfxrnjtipa.supabase.co';
 const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ4ZnJkb2Npb29kZnhybmp0aXBhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzc4MjM1MDQsImV4cCI6MjA5MzM5OTUwNH0.dvTDgvVSQQILHdgm0FI_FW8WmALTZI06VTqabLrwu1E';
+// ══ ENGLISH TRANSLATION (medewerkersschermen) ══════════════════════
+// Exacte zinnen en zinsdelen. Sleutel = Nederlandse tekst zoals hij op het
+// scherm staat (zonder spaties aan begin/eind).
+const I18N_EN={
+'TC Group — Planning':'TC Group — Planning',
+'Log in of maak een account aan':'Sign in or create an account',
+'Inloggen':'Sign in','Registreren':'Register','E-mailadres':'Email address','Wachtwoord':'Password',
+'Inloggen met Apple':'Sign in with Apple','Wachtwoord vergeten?':'Forgot password?','Reset link versturen':'Send reset link',
+'Terug naar inloggen':'Back to sign in','Kies een nieuw wachtwoord voor je account. Daarna log je er meteen mee in.':'Choose a new password for your account. You will be signed in with it straight away.',
+'Nieuw wachtwoord':'New password','Nog een keer':'Once more','Wachtwoord opslaan':'Save password','Volledige naam':'Full name',
+'Telefoonnummer':'Phone number','Shirtmaat':'Shirt size','Rijbewijs':'Driving licence','(meerdere mogelijk)':'(more than one possible)',
+'Geen':'None','AM · Scooter':'AM · Moped','B · Auto':'B · Car','BE · Auto met aanhanger':'BE · Car with trailer',
+'C1 · Lichte vrachtwagen':'C1 · Light truck','C1E · Lichte vrachtwagen met aanhanger':'C1E · Light truck with trailer',
+'C · Vrachtwagen':'C · Truck','CE · Vrachtwagen met aanhanger':'CE · Truck with trailer','Account aanmaken':'Create account',
+'Je account wacht op goedkeuring':'Your account is waiting for approval','Opnieuw kijken':'Check again','Uitloggen':'Sign out',
+'naam@email.com':'name@email.com','Minimaal 6 tekens':'At least 6 characters','Herhaal je wachtwoord':'Repeat your password',
+'Voornaam Achternaam':'First name Surname','Profiel':'Profile','Agenda & Overzicht':'Calendar & overview','Agenda':'Calendar',
+'Ma':'Mon','Di':'Tue','Wo':'Wed','Do':'Thu','Vr':'Fri','Za':'Sat','Zo':'Sun',
+'MA':'MON','DI':'TUE','WO':'WED','DO':'THU','VR':'FRI','ZA':'SAT','ZO':'SUN',
+'Mededelingen':'Announcements','Nu':'Now','Truckbeschikbaarheid':'Truck availability','Vandaag':'Today','Alle klussen':'All jobs',
+'Toon alles':'Show all','Laden...':'Loading...','Laden…':'Loading…','Zoek een klus...':'Search for a job...','Wissen':'Clear',
+'Je aanmelding is binnen. Een beheerder zet je rol en je uurloon klaar en geeft je account vrij; daarna kun je meteen aan de slag. Duurt het lang, geef dan even een seintje op kantoor.':'We have received your sign-up. A manager will set your role and hourly rate and approve your account; then you can get started. If it takes long, please let the office know.',
+'Je aanmelding is binnen. Een beheerder zet je rol en je uurloon klaar en geeft je account vrij; daarna staat de hele app voor je open. Duurt het lang, geef dan even een seintje op kantoor.':'We have received your sign-up. A manager will set your role and hourly rate and approve your account; then the whole app opens up for you. If it takes long, please let the office know.',
+'Vul hieronder alvast je gegevens in.':'Fill in your details below in the meantime.',
+'Hoe completer dit staat, hoe sneller je op de juiste klussen wordt ingedeeld — je rijbewijs en je shirtmaat schelen echt.':'The more complete this is, the sooner you are scheduled on the right jobs — your driving licence and shirt size really help.',
+'Kijk of ik al ben vrijgegeven':'Check if I have been approved','Naam':'Name','Opslaan':'Save','Adres':'Address','Adres opslaan':'Save address',
+'Over jezelf':'About you','Handig voor de planning en de kleding. Alleen de beheerder kan dit inzien.':'Useful for planning and uniforms. Only managers can see this.',
+'Geslacht':'Gender','Kies —':'Choose —','Man':'Male','Vrouw':'Female','Anders':'Other','Zeg ik liever niet':'Prefer not to say',
+'Geboortedatum':'Date of birth','(tik aan wat je hebt, meerdere mag)':'(tap what you have, more than one is fine)','Gegevens opslaan':'Save details',
+'Meldingen':'Notifications',
+'Controleer of pushmeldingen op dít toestel aankomen. Let op: word je op een klus ingedeeld, dan gaat de melding naar het toestel van dat account — niet naar het account waarmee je aan het indelen bent.':'Check whether push notifications arrive on this device. Note: when someone is scheduled on a job, the notification goes to that person’s device — not to the account doing the scheduling.',
+'Stuur mezelf een testmelding':'Send myself a test notification','Account verwijderen':'Delete account','Jouw gegevens':'Your data',
+'Deze app legt vast wanneer je werkt, hoeveel uren je maakt en — op het moment dat je zelf in- of uitklokt — waar je dan bent. Je wordt niet op de achtergrond gevolgd. Wil je weten wat er precies wordt bewaard, hoe lang, en wat je rechten zijn?':'This app records when you work, how many hours you do and — only at the moment you clock in or out yourself — where you are. You are not tracked in the background. Want to know exactly what is stored, for how long, and what your rights are?',
+'Lees het privacybeleid':'Read the privacy policy','Account permanent verwijderen':'Permanently delete account',
+"Hiermee worden je account en alle bijbehorende gegevens (beschikbaarheid, schema's, urenregistraties)":'This will delete your account and all related data (availability, schedules, time records)',
+'permanent verwijderd':'permanently','. Dit kan niet ongedaan worden gemaakt.':'. This cannot be undone.','Typ':'Type','om te bevestigen:':'to confirm:',
+'Annuleren':'Cancel','Verwijderen':'Delete','Straat en huisnummer':'Street and house number','Postcode':'Postcode','Plaats':'Town/city',
+'Hoeveel pauze heb je gehad?':'How much break did you have?','Of vul zelf in (minuten)':'Or enter it yourself (minutes)','Notitie':'Note',
+'(optioneel)':'(optional)','Je beheerder ziet dit bij het accorderen van je uren.':'Your manager sees this when approving your hours.',
+'Kilometers met je eigen auto':'Kilometres in your own car','Alleen invullen als je met je eigen auto hebt gereden. Laat leeg bij een bedrijfsbus.':'Only fill in if you drove your own car. Leave empty for a company van.',
+'Foto':'Photo','Bijvoorbeeld een bon, de kilometerstand of iets dat je wilt laten zien.':'For example a receipt, the mileage, or something you want to show.',
+'Uitklokken':'Clock out','Sluiten':'Close','Volledig profiel':'Full profile','bv. later begonnen, extra opgeruimd, materiaal kapot...':'e.g. started later, extra cleaning, equipment broken...',
+'Weet je het zeker?':'Are you sure?','Ja, toch doen':'Yes, do it','Mijn verlof':'My leave','Ik ben ziek vandaag':'I am sick today',
+'Wanneer kun je werken?':'When can you work?','Tik alle dagen aan waarop je kunt. Je kunt er zoveel aanklikken als je wilt en daarna in één keer opslaan.':'Tap all the days you can work. Select as many as you like and save them all at once.',
+'Mijn schema':'My schedule','+ Vrij aanvragen':'+ Request day off','+ Onbeschikbaar':'+ Unavailable','Mijn onbeschikbaarheid':'My unavailability',
+'Klussen waar je je voor kunt aanmelden':'Jobs you can sign up for','Meld je aan voor de klussen die je leuk lijken. De planning bevestigt daarna of je mee kunt.':'Sign up for the jobs you like. The planning team will then confirm whether you can join.',
+'Zoek op naam of plaats...':'Search by name or place...','Mijn registraties':'My time records','Taken':'Tasks','Deze week':'This week','Afgerond':'Completed',
+'Wat je de afgelopen twee weken hebt afgevinkt.':'What you ticked off in the last two weeks.',
+'Personen':'People','Personeel':'Staff','Wie staat erop':'Who is on it','Rijschema':'Driving schedule','Aanpassen':'Change','Bijlagen':'Attachments',
+'Optie':'Option','Intern':'Internal','Milieuzone':'Low emission zone','Dienst':'Shift','Klussen vanaf vandaag':'Jobs from today','Geen klussen gepland':'No jobs planned',
+'(los)':'(temp)','Zoeken...':'Search...','Let op: milieuzone':'Note: low emission zone','nog niemand':'nobody yet','Hele klus:':'Whole job:','Klus':'Job','Shift':'Shift',
+'Start:':'Start:','Vertrek:':'Departure:','Opbouw:':'Set-up:','Start feest:':'Party starts:','Einde feest:':'Party ends:','Einde klus:':'Job ends:',
+'Beheerder':'Manager','Wacht op goedkeuring':'Waiting for approval','Personeelslid':'Staff member','Oproepkracht':'On-call','Bepaalde tijd':'Fixed-term',
+'Onbepaalde tijd':'Permanent','Stage':'Internship','ZZP':'Freelance','Vakantiekracht':'Holiday worker','Contractvorm:':'Contract type:','— dit stelt de beheerder in.':'— set by your manager.',
+'Bezig...':'Working...','Opslaan mislukt:':'Saving failed:','✓ Opgeslagen':'✓ Saved','Adres opslaan mislukt:':'Saving address failed:','Vul eerst een telefoonnummer in':'Fill in a phone number first',
+'Telefoonnummer opslaan mislukt:':'Saving phone number failed:','Locatie niet beschikbaar':'Location not available','Locatie geweigerd':'Location denied','Locatie ophalen...':'Getting location...',
+'Geklokt':'Clocked','Ingepland':'Scheduled','nog geen tijden ingevuld':'no times filled in yet','klus staan':'job have','klussen staan':'jobs have','in afwachting':'pending',
+'— je kunt altijd inklokken, ook zonder klus':'— you can always clock in, also without a job','Geen klus ingepland voor vandaag':'No job scheduled for today','Nog geen registraties':'No time records yet',
+'Ingeklokt':'Clocked in','nog niet uitgeklokt':'not clocked out yet','Mijn klus vandaag':'My job today','Mijn klussen vandaag':'My jobs today','Hal medewerker':'Warehouse staff',
+'Goedgekeurd':'Approved','Afgewezen':'Rejected','In afwachting':'Pending','min pauze':'min break','Hal':'Warehouse','Kantoor':'Office','Inklokken zonder klus':'Clock in without a job','Inklokken':'Clock in',
+'Zet je locatie aan —':'Turn on your location —','niet zonder.':'without it.','in- en uitklokken lukken':'clocking in and out won’t work','inklokken lukt':'clocking in won’t work','uitklokken lukt':'clocking out won’t work',
+'Je staat vandaag op meer dan één klus. Kies waar je op inklokt.':'You are on more than one job today. Choose which one to clock in on.',
+'Klok in zodra je begint. Je locatie wordt opgeslagen als bewijs.':'Clock in as soon as you start. Your location is saved as proof.',
+'Je kunt alleen inklokken op een dag dat je een klus hebt.':'You can only clock in on a day you have a job.','aan het werk':'at work',
+'Locatie ophalen mislukt:':'Getting location failed:','Inklokken kan alleen met je locatie aan.':'You can only clock in with your location turned on.','Inklokken...':'Clocking in...',
+'Inklokken mislukt:':'Clocking in failed:','. Probeer het opnieuw.':'. Please try again.','geen verbinding':'no connection',
+'Zet hem aan bij Instellingen → Privacy → Locatie → TC Group Planning → "Bij gebruik van app".':'Turn it on in Settings → Privacy → Location Services → TC Group Planning → "While Using the App".',
+'Zet hem aan bij de instellingen van je telefoon → Apps → TC Group Planning → Rechten → Locatie.':'Turn it on in your phone settings → Apps → TC Group Planning → Permissions → Location.',
+'Geen signaal gekregen. Ga even naar buiten of bij een raam staan en probeer het opnieuw.':'No signal. Step outside or stand by a window and try again.',
+'Bij deze lengte hoort geen verplichte pauze.':'No break is required for this length.','Deze foto is te groot. Maak er een kleinere.':'This photo is too large. Please use a smaller one.',
+'Gekozen:':'Chosen:','Foto uploaden mislukt:':'Uploading photo failed:','Uitklokken kan alleen met je locatie aan.':'You can only clock out with your location turned on.','Uitklokken...':'Clocking out...',
+'Uitklokken mislukt:':'Clocking out failed:','Foto versturen...':'Sending photo...','Je uren zijn geregistreerd, maar de foto kon niet worden verstuurd.':'Your hours have been recorded, but the photo could not be sent.',
+'Onbekend':'Unknown','Al meer dan 12 uur ingeklokt — vergeten uit te klokken?':'Clocked in for more than 12 hours — forgot to clock out?','Nu ingeklokt':'Clocked in now','Geen toegang.':'No access.',
+'Franklins · bestellen':'Franklins · ordering','Bestelling aanpassen':'Change order','Nieuwe bestelling':'New order','Bestellingen':'Orders','Producten':'Products',
+'Er staan nog geen producten in de lijst. Een beheerder vult die bij Producten.':'There are no products in the list yet. A manager adds them under Products.',
+'Je past een bestaande bestelling aan.':'You are changing an existing order.','Nieuwe bestelling beginnen':'Start a new order','Nodig op':'Needed on','Opmerking voor de hal':'Note for the warehouse',
+'Vorige bestelling opnieuw':'Repeat previous order','Niets gevonden.':'Nothing found.','geen prijs':'no price','Wijziging opslaan':'Save change','Versturen naar de hal':'Send to the warehouse',
+'Aantal intypen':'Type quantity','bv. graag vóór 10 uur':'e.g. before 10 am please','Zoek product':'Search product','Aantal':'Quantity','Aantal klopt niet':'Quantity is not valid',
+'Vorige bestelling ingeladen — pas aan wat nodig is':'Previous order loaded — change what you need','Kies voor wanneer de bestelling nodig is':'Choose when the order is needed',
+'Wijziging opslaan?':'Save change?','Bestelling versturen?':'Send order?','Versturen':'Send','Versturen mislukt:':'Sending failed:','Bestelling aangepast':'Order changed',
+'Bestelling verstuurd naar de hal':'Order sent to the warehouse','Nog geen bestellingen.':'No orders yet.','minder geleverd':'delivered short','Deze bestelling bestaat niet meer':'This order no longer exists',
+'· opgelost':'· resolved','Paklijst Franklins':'Packing list Franklins','Klaar gemeld door':'Marked ready by','inkoop excl. btw':'purchase excl. VAT','· inkoop excl. btw':'· purchase excl. VAT',
+'Printen / PDF':'Print / PDF','Bestelling klaar':'Order ready','Terugzetten':'Undo','Toch nog open zetten':'Reopen','Markeer als opgelost':'Mark as resolved','Gepakt':'Packed',
+'Waarom minder? (bv. niet op voorraad)':'Why less? (e.g. out of stock)','niet op voorraad':'out of stock','nog niet afgevinkt. Die tellen als volledig geleverd.':'not ticked yet. They count as fully delivered.',
+'Bestelling klaar?':'Order ready?','De taak wordt afgevinkt.':'The task will be ticked off.','Ja, klaar':'Yes, ready','Bestelling klaar gemeld':'Order marked ready','Bestelling teruggezet':'Order reopened',
+'Bestelling annuleren?':'Cancel order?','De taak verdwijnt bij de hal.':'The task disappears for the warehouse.','Ja, annuleren':'Yes, cancel','Bestelling geannuleerd':'Order cancelled',
+'Printen lukte niet':'Printing failed','minder':'less','aanpassen':'change','Opmerking':'Note','verstuurd':'sent','wordt gepakt':'being packed','klaar':'ready','geannuleerd':'cancelled',
+'· Hele dag':'· All day','Nog op te nemen':'Left to take','Opgenomen dit jaar':'Taken this year','aangevraagd, nog niet goedgekeurd':'requested, not yet approved','Opgebouwd':'Accrued',
+'tot en met deze maand':'up to and including this month',
+'Je meldt jezelf ziek voor vandaag. Je beheerder krijgt er meteen bericht van en haalt je van de planning. Doorgaan?':'You are reporting sick for today. Your manager is notified straight away and takes you off the schedule. Continue?',
+'Ziek melden mislukt:':'Reporting sick failed:','Je stond vandaag al ziek gemeld':'You were already reported sick today','Je bent ziek gemeld voor vandaag':'You have been reported sick for today','Mislukt:':'Failed:',
+'Wacht nog op de planning — je kunt nu nog ingepland worden':'Still waiting for the planning team — you can still be scheduled','Klussen':'Jobs','Je hebt deze maand':'This month you have entered',
+'dagen doorgegeven waarop je kunt werken.':'days you can work.','dag doorgegeven waarop je kunt werken.':'day you can work.','geen klussen':'no jobs','tijd nog niet bekend':'time not known yet',
+'Vrij aangevraagd':'Day off requested','Vrij':'Day off',
+'Er staat deze maand nog niets voor je ingepland. Geef hierboven door wanneer je kunt, of kijk bij':'Nothing is scheduled for you this month yet. Let us know above when you can work, or have a look at',
+'waar je je voor kunt aanmelden.':'that you can sign up for.','Er staat deze maand niets voor je ingepland.':'Nothing is scheduled for you this month.',
+'Januari':'January','Februari':'February','Maart':'March','April':'April','Mei':'May','Juni':'June','Juli':'July','Augustus':'August','September':'September','Oktober':'October','November':'November','December':'December',
+'Vorige maand':'Previous month','Volgende maand':'Next month','Je hebt deze dag als vrij doorgegeven':'You marked this day as off','Deze dag zit in een periode — haal die weg in de lijst hieronder':'This day is part of a period — remove it in the list below',
+'Hele maand':'Whole month','Alle weekenden':'All weekends','Doordeweeks':'Weekdays','dag erbij':'day added','dagen erbij':'days added','eraf':'removed',
+'Verwijderen mislukt:':'Deleting failed:','Bijgewerkt':'Updated','+ Ik kan werken':'+ I can work','+ Verlof aanvragen':'+ Request leave','Wat ik heb doorgegeven':'What I have entered',
+'Mijn verlof en vrije dagen':'My leave and days off','Je hebt nog niets doorgegeven — zo kun je nog niet ingepland worden':'You haven’t entered anything yet — so you can’t be scheduled yet',
+'Je hebt nog geen verlof aangevraagd — je staat overal op beschikbaar':'You haven’t requested any leave — you are available everywhere','Doorgegeven':'Entered','Beschikbaar':'Available',
+'Verlof':'Leave','Vrij aanvragen':'Request day off','Klussen laden mislukt:':'Loading jobs failed:','✓ Je bent ingedeeld':'✓ You are scheduled','Aangemeld — wacht op bevestiging':'Signed up — waiting for confirmation',
+'Intrekken':'Withdraw','Niet ingedeeld voor deze klus':'Not scheduled for this job','Ik wil deze':'I want this one','Ik wil deze klus':'I want this job','Al ingedeeld:':'Already scheduled:',
+'Niets gevonden':'Nothing found','Er staan op dit moment geen klussen open — alles is bemenst':'There are no open jobs right now — everything is staffed','Vertrek':'Departure','Opbouw':'Set-up','Feest':'Party','Einde':'End',
+'Franklins — snackbar':'Franklins — snack bar','Minder tonen':'Show less','Alle':'All','Franklins-dagen tonen':'Show Franklins days','Aanmelden mislukt:':'Signing up failed:','Je aanmelding is doorgegeven':'Your sign-up has been sent',
+'Intrekken mislukt:':'Withdrawing failed:','Aanmelding ingetrokken':'Sign-up withdrawn','Blijft liggen':'Still to do','Van de planning':'From the planning team','Van mijzelf':'My own',
+'Deze week staat er niets voor je klaar.':'Nothing is waiting for you this week.','+ Eigen taak':'+ Own task','Nog niets afgerond.':'Nothing completed yet.','1 taak':'1 task',
+'Afgevinkt':'Ticked off','wacht op de planning':'waiting for the planning team','Afgekeurd:':'Rejected:','Paklijst openen ›':'Open packing list ›','Paklijst openen':'Open packing list',
+'Ongedaan maken':'Undo','Afvinken':'Tick off','Weghalen':'Remove','Afvinken mislukt:':'Ticking off failed:','Vanaf de gekozen datum komt hij steeds terug. Alleen jij ziet hem.':'From the chosen date it keeps coming back. Only you can see it.',
+'Vul in wat er moet gebeuren.':'Fill in what needs to be done.','Kies een datum.':'Choose a date.','Taak toegevoegd':'Task added','Weghalen mislukt:':'Removing failed:','Taak weggehaald':'Task removed',
+'Eigen taak':'Own task','Wat moet er gebeuren':'What needs to be done','Wanneer':'When','Herhalen':'Repeat','Niet':'No','Elke dag':'Every day','Elke week':'Every week','Elke maand':'Every month',
+'Deze taak zie alleen jij. Hij hoeft niet goedgekeurd te worden en je kunt hem altijd weghalen.':'Only you can see this task. It doesn’t need approval and you can always remove it.',
+'bv. kabelhaspel terugbrengen naar hal 2':'e.g. take cable reel back to warehouse 2',
+'Verlof aanvragen':'Request leave','Reden':'Reason','Tijdstip':'Time','(optioneel — laat leeg voor hele dag)':'(optional — leave empty for the whole day)','Vanaf':'From','Tot':'Until',
+'bv. Vakantie, Ziek, Vrij, Bruiloft...':'e.g. Holiday, Sick, Day off, Wedding...','Verlof aanpassen':'Change leave','Vrij aanpassen':'Change day off','Beschikbaarheid bewerken':'Edit availability',
+'Ik ben beschikbaar':'I am available','Toelichting (optioneel)':'Explanation (optional)','bv. alleen avonden, liefst met de foodtruck...':'e.g. evenings only, preferably with the food truck...',
+'De planning moet dit goedkeuren. Zolang dat nog niet is gebeurd kun je die dagen gewoon ingepland worden.':'The planning team has to approve this. Until then you can still be scheduled on those days.',
+'Vul een startdatum in.':'Fill in a start date.','Einddatum moet na startdatum liggen.':'End date must be after the start date.',
+'elke werkdag':'every working day','elke dag':'every day','elke week':'every week','laatste dag van de maand':'last day of the month','elke maand':'every month','vaste datums':'fixed dates',
+'bijzonder verlof':'special leave','onbetaald verlof':'unpaid leave','Overzicht':'Overview','Uren':'Hours','Telefoon':'Phone','E-mail':'Email','Leeftijd':'Age','Contract':'Contract','Medewerker':'Employee',
+'geen nummer bekend':'no number known','Meer gegevens van een collega ziet alleen een beheerder.':'Only a manager can see more details of a colleague.','niet ingevuld':'not filled in',
+'geen rijbewijs doorgegeven':'no driving licence entered','Kan':'Can do','nog geen vaardigheden aangevinkt':'no skills ticked yet',
+'Pushmeldingen staan uit: deze Android-versie heeft Firebase nog niet.':'Push notifications are off: this Android version doesn’t have Firebase yet.','Melding':'Notification',
+'Onjuist e-mailadres of wachtwoord':'Incorrect email address or password','Vul je volledige naam in.':'Fill in your full name.','Vul je voor- én achternaam in, bijvoorbeeld: Bram Dreijer.':'Fill in your first name and surname, for example: Bram Dreijer.',
+'Vul je telefoonnummer in.':'Fill in your phone number.','Vul je e-mailadres in.':'Fill in your email address.','Je wachtwoord moet minimaal 12 tekens zijn. Tip: drie losse woorden achter elkaar.':'Your password needs at least 12 characters. Tip: three random words in a row.',
+'Selecteer je shirtmaat.':'Select your shirt size.','Selecteer je rijbewijs (kies "Geen" als je geen rijbewijs hebt).':'Select your driving licence (choose "None" if you don’t have one).',
+'Account aangemaakt! Je kunt nu inloggen.':'Account created! You can sign in now.','Gelukt! Je krijgt een mail met een link. Open die op dit toestel en kies daarna een nieuw wachtwoord.':'Done! You will receive an email with a link. Open it on this device and then choose a new password.',
+'Kies een nieuw wachtwoord':'Choose a new password','Je wachtwoord moet minimaal 12 tekens lang zijn. Drie losse woorden achter elkaar is makkelijk te onthouden en juist heel sterk.':'Your password needs to be at least 12 characters long. Three random words in a row is easy to remember and very strong.',
+'De twee wachtwoorden zijn niet gelijk.':'The two passwords don’t match.','De herstellink is verlopen of al gebruikt. Vraag een nieuwe link aan.':'The reset link has expired or was already used. Request a new link.',
+'Je wachtwoord is gewijzigd. Je wordt nu ingelogd...':'Your password has been changed. Signing you in...','Typ VERWIJDER (in hoofdletters) om te bevestigen.':'Type VERWIJDER (in capitals) to confirm.',
+'Geen actieve sessie. Log opnieuw in.':'No active session. Please sign in again.','Je account is afgesloten. Je uren blijven bewaard voor de administratie.':'Your account has been closed. Your hours are kept for the records.',
+'Je account is permanent verwijderd.':'Your account has been permanently deleted.','Er ging iets mis. Probeer het opnieuw.':'Something went wrong. Please try again.',
+// navigatie
+'Rooster':'Roster','Mijn gegevens':'My details','Bestellen':'Order','Planning':'Planning','Open klussen':'Open jobs','Beschikbaarheid':'Availability','Beheer':'Admin',
+// knoppen en algemene woorden
+'Ja':'Yes','Nee':'No','Terug':'Back','Klaar':'Done','Bewaren':'Save','Begrepen':'Got it','OK':'OK','Morgen':'Tomorrow','Gisteren':'Yesterday','dagen':'days','dag':'day',
+'Er ging iets mis bij de server. Probeer het opnieuw.':'Something went wrong on the server. Please try again.',
+'Je hebt hier geen toegang toe, of je sessie is verlopen. Log opnieuw in.':'You don’t have access to this, or your session has expired. Please sign in again.',
+'Geen verbinding met de server. Controleer je internet.':'No connection to the server. Check your internet.',
+'Taal':'Language','Taal / Language':'Taal / Language',
+'kan':'can','gevraagd':'requested','De hal ziet hem bij Taken.':'The warehouse will see it under Tasks.','ma':'Mon','di':'Tue','wo':'Wed','do':'Thu','vr':'Fri','za':'Sat','zo':'Sun','Bewerk':'Edit','Kopieer':'Copy','of':'or','t/m':'until','Hele dag':'All day','goedgekeurd':'approved','afgewezen':'rejected',
+'Je staat standaard niet ingepland. Geef door op welke dagen je wél kunt werken — alleen dan kan de planning je inzetten. Ga je op vakantie of ben je een periode weg, vraag dat dan aan met "Vrij aanvragen"; de planning keurt dat goed en zet je die dagen niet in.':'By default you are not scheduled. Let us know on which days you CAN work — only then can the planning team schedule you. Going on holiday or away for a while? Request it with "Request day off"; the planning team approves it and won\u2019t schedule you on those days.',
+'Urenregistratie':'Time clock','Uitgeklokt':'Clocked out','Ingeklokt om':'Clocked in at','Klus bevestigen':'Confirm job','Loonkosten':'Labour costs',
+'Je account is afgesloten':'Your account has been closed',
+
+};
+// Zinnen met een getal of naam erin. Volgorde telt: specifiek eerst.
+const I18N_EN_REGELS=[
+[/^Klussen \((\d+)\)$/,'Jobs ($1)'],
+[/^(\d+) (klus|klussen)$/,(m,n,k)=>n+' '+(k==='klus'?'job':'jobs')],
+[/^(\d+) (klus|klussen) · (\d+) keer vrij$/,(m,n,k,v)=>n+' '+(k==='klus'?'job':'jobs')+' · '+v+' × off'],
+[/^vanaf (.+)$/,'from $1'],
+[/^Vrij — (.+)$/,'Day off — $1'],
+[/^Vrij aangevraagd — (.+)$/,'Day off requested — $1'],
+[/^(\d+) personen$/,'$1 people'],
+[/^(\d+)u (\d+)m$/,'$1h $2m'],
+[/^Stond op (.+)$/,(m,x)=>'Was due on '+x.replace(/\b[a-z]/g,c=>c.toUpperCase())],
+
+[/^Ingeklokt om (.+)$/,'Clocked in at $1'],
+[/^Geklokt in (.+)$/,'Clocked in $1'],
+[/^Deze week · (.+)$/,'This week · $1'],
+[/^Inklokken op (.+)$/,'Clock in at $1'],
+[/^Je staat (.+) ingeklokt\.$/,'You have been clocked in for $1.'],
+[/^Bij deze lengte hoort minimaal (\d+) minuten pauze\.$/,'For this length at least $1 minutes of break is required.'],
+[/^Let op: minder dan de gebruikelijke (\d+) minuten\. Dat mag, de planning ziet het erbij staan\.$/,'Note: less than the usual $1 minutes. That’s fine, the planning team will see it.'],
+[/^\* bij (\d+) (klus|klussen) staan nog geen tijden ingevuld$/,(m,n,k)=>'* '+n+' '+(k==='klus'?'job has':'jobs have')+' no times filled in yet'],
+[/^(\d+) van de (\d+) plekken vrij$/,'$1 of $2 places free'],
+[/^· (\d+) van de (\d+) plekken vrij$/,'· $1 of $2 places free'],
+[/^Kan pas op (.+)$/,'Can only be done on $1'],
+[/^Stond op (.+)$/,'Was due on $1'],
+[/^Afgevinkt (.+)$/,'Ticked off $1'],
+[/^Vandaag · (.+)$/,'Today · $1'],
+[/^Morgen · (.+)$/,'Tomorrow · $1'],
+[/^(\d+) taken$/,'$1 tasks'],
+[/^(\d+) keer vrij$/,'$1 × off'],
+[/^ongeveer (.+) dagen van (.+)$/,'about $1 days of $2'],
+[/^(\d+) (dag|dagen) erbij$/,(m,n,d)=>n+' '+(d==='dag'?'day':'days')+' added'],
+[/^(\d+) eraf$/,'$1 removed'],
+[/^🚗 Jij rijdt (.+)$/,'🚗 You drive $1'],
+[/^Je rijdt mee in (.+)$/,'You ride along in $1'],
+[/^· vertrek (.+)$/,'· departure $1'],
+[/^(\d+) (product|producten) · inkoop excl\. btw$/,(m,n,p)=>n+' '+(p==='product'?'product':'products')+' · purchase excl. VAT'],
+[/^(\d+) (product|producten)$/,(m,n,p)=>n+' '+(p==='product'?'product':'products')],
+[/^(\d+) van (\d+) gepakt$/,'$1 of $2 packed'],
+[/^Maar (.+) geleverd$/,'Only $1 delivered'],
+[/^Maar (.+) van (.+) geleverd$/,'Only $1 of $2 delivered'],
+[/^Hoeveel (.*) lever je\? \(besteld: (.+)\)$/,'How many $1 are you delivering? (ordered: $2)'],
+[/^Bestelling Franklins · (\d+) (product|producten)$/,(m,n,p)=>'Franklins order · '+n+' '+(p==='product'?'product':'products')],
+[/^Nodig op (.+)$/,'Needed on $1'],
+[/^Gepakt door: (.*)$/,'Packed by: $1'],
+[/^(\d+) (uur|u)$/,'$1 h'],
+[/^Het restant van (\d+) als beginsaldo voor (\d+) wegschrijven\? Een eerder meegenomen restant wordt overschreven\.$/,'Carry over the remainder of $1 as the starting balance for $2? A previously carried-over remainder will be overwritten.'],
+[/^Wil je "(.+)" weghalen\?$/,'Remove "$1"?'],
+[/^"(.+)" weghalen\?$/,'Remove "$1"?'],
+[/^(.+) is niet gelukt$/,'$1 failed'],
+];
+// Losse zinsdelen die midden in een langere tekst kunnen staan.
+const I18N_EN_DELEN={
+'Vrij aangevraagd':'Day off requested','Hele dag':'All day','Vertrek':'Departure','Opbouw':'Set-up','pauze':'break','goedgekeurd':'approved','in afwachting':'pending','Vandaag':'Today','t/m':'until',
+'januari':'January','februari':'February','maart':'March','april':'April','mei':'May','juni':'June','juli':'July','augustus':'August','september':'September','oktober':'October','november':'November','december':'December',
+'Januari':'January','Februari':'February','Maart':'March','Mei':'May','Juni':'June','Juli':'July','Augustus':'August','Oktober':'October',
+'maandag':'Monday','dinsdag':'Tuesday','woensdag':'Wednesday','donderdag':'Thursday','vrijdag':'Friday','zaterdag':'Saturday','zondag':'Sunday',
+'Maandag':'Monday','Dinsdag':'Tuesday','Woensdag':'Wednesday','Donderdag':'Thursday','Vrijdag':'Friday','Zaterdag':'Saturday','Zondag':'Sunday',
+
+'Je hebt deze maand':'This month you have entered','doorgegeven waarop je kunt werken':'that you can work','Geen klus gevonden voor':'No job found for',
+'Er is hiervoor geen akkoord via de app':'There is no approval for this in the app','Weet je het zeker':'Are you sure','Probeer het opnieuw':'Please try again',
+'is mislukt':'failed','mislukt':'failed','plekken vrij':'places free','besteld door':'ordered by','Klaar gemeld door':'Marked ready by',
+'vandaag':'today','morgen':'tomorrow','ingeklokt':'clocked in','uitgeklokt':'clocked out','geleverd':'delivered','niet op voorraad':'out of stock',
+'Er ging iets mis bij de server':'Something went wrong on the server','Probeer het opnieuw':'Please try again',
+};
+
+// ── Vertaalmotor ───────────────────────────────────────────────────
+// De app is in het Nederlands geschreven. Kiest iemand English (Profiel, of
+// onderaan het inlogscherm), dan vertaalt deze laag alles wat op het scherm
+// verschijnt: vaste zinnen uit I18N_EN, zinnen met getallen via I18N_EN_REGELS
+// en losse zinsdelen via I18N_EN_DELEN. Datums gaan dan als en-GB.
+// Het Manchester-beheer (#page-mcrbeheer) en de Engelse crew-app blijven zoals ze zijn.
+let TAAL=(()=>{ try{ return localStorage.getItem('tc_taal')==='en'?'en':'nl'; }catch(e){ return 'nl'; } })();
+const I18N_UIT='#page-mcrbeheer,#mcrApp,script,style,textarea,[contenteditable="true"],.notr';
+let I18N_DELEN_RE=null;
+function i18nDelenRe(){
+  if(I18N_DELEN_RE)return I18N_DELEN_RE;
+  const k=Object.keys(I18N_EN_DELEN).sort((a,b)=>b.length-a.length).map(s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+  I18N_DELEN_RE=new RegExp('(^|[^A-Za-zÀ-ÿ])('+k.join('|')+')(?=$|[^A-Za-zÀ-ÿ])','g');
+  return I18N_DELEN_RE;
+}
+function i18nT(s){
+  if(TAAL!=='en'||s==null)return s;
+  const ruw=String(s); const kern0=ruw.trim(); if(!kern0||!/[A-Za-zÀ-ÿ]/.test(kern0))return ruw;
+  const voor=ruw.slice(0,ruw.indexOf(kern0)), na=ruw.slice(ruw.indexOf(kern0)+kern0.length);
+  const kern=kern0.replace(/\s+/g,' ');
+  let uit=I18N_EN[kern];
+  if(uit===undefined){
+    for(const [re,v] of I18N_EN_REGELS){ if(re.test(kern)){ uit=kern.replace(re,v); break; } }
+  }
+  if(uit===undefined&&kern.length<600){
+    const r=kern.replace(i18nDelenRe(),(m,a,b)=>a+I18N_EN_DELEN[b]).replace(/\b(\d+)u (\d{2})m\b/g,'$1h $2m');
+    if(r!==kern)uit=r;
+  }
+  return uit===undefined?ruw:voor+uit+na;
+}
+function i18nBuiten(el){ try{ return !!(el&&el.closest&&el.closest(I18N_UIT)); }catch(e){ return false; } }
+function i18nKnoop(n){
+  if(TAAL!=='en'||!n)return;
+  if(n.nodeType===3){
+    const p=n.parentNode; if(!p||i18nBuiten(p))return;
+    const v=n.nodeValue, t=i18nT(v); if(t!==v)n.nodeValue=t; return;
+  }
+  if(n.nodeType!==1||i18nBuiten(n))return;
+  ['placeholder','title','aria-label'].forEach(a=>{ const v=n.getAttribute&&n.getAttribute(a); if(v){ const t=i18nT(v); if(t!==v)n.setAttribute(a,t); } });
+  if(n.tagName==='INPUT'&&(n.type==='button'||n.type==='submit')&&n.value){ const t=i18nT(n.value); if(t!==n.value)n.value=t; }
+  const w=document.createTreeWalker(n,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT,{acceptNode:x=>
+    (x.nodeType===1&&x.matches&&x.matches(I18N_UIT))?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});
+  let x; while((x=w.nextNode())){
+    if(x.nodeType===3){ const v=x.nodeValue, t=i18nT(v); if(t!==v)x.nodeValue=t; }
+    else ['placeholder','title','aria-label'].forEach(a=>{ const v=x.getAttribute(a); if(v){ const t=i18nT(v); if(t!==v)x.setAttribute(a,t); } });
+  }
+}
+function i18nStart(){
+  if(TAAL!=='en')return;
+  document.documentElement.lang='en';
+  // Datums in het Engels (weekdagen en maanden); getallen blijven zoals ze zijn.
+  ['toLocaleDateString','toLocaleTimeString','toLocaleString'].forEach(f=>{
+    const org=Date.prototype[f];
+    Date.prototype[f]=function(loc,opt){ return org.call(this,(loc==='nl-NL'||loc==='nl')?'en-GB':loc,opt); };
+  });
+  ['alert','confirm','prompt'].forEach(f=>{
+    const org=window[f]; if(!org)return;
+    window[f]=function(msg,...rest){ return org.call(window,i18nT(msg),...rest); };
+  });
+  const loop=()=>{ i18nKnoop(document.body);
+    new MutationObserver(lijst=>{ for(const m of lijst){
+      if(m.type==='characterData')i18nKnoop(m.target);
+      else if(m.type==='attributes'){ const el=m.target, v=el.getAttribute(m.attributeName); if(v&&!i18nBuiten(el)){ const t=i18nT(v); if(t!==v)el.setAttribute(m.attributeName,t); } }
+      else m.addedNodes.forEach(i18nKnoop);
+    } }).observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['placeholder','title']});
+  };
+  if(document.body)loop(); else document.addEventListener('DOMContentLoaded',loop);
+}
+// Na het inloggen: de keuze uit het account wint, en een keuze die op het
+// inlogscherm is gemaakt wordt bij het account bewaard.
+async function i18nNaInloggen(serverTaal,uid){
+  try{
+    if(serverTaal&&serverTaal!==TAAL){ localStorage.setItem('tc_taal',serverTaal); location.reload(); return; }
+    if(!serverTaal&&TAAL==='en'&&uid)await sb.from('gebruikers').update({taal:'en'}).eq('id',uid);
+  }catch(e){}
+}
+async function kiesTaal(t){
+  t=t==='en'?'en':'nl';
+  try{ localStorage.setItem('tc_taal',t); }catch(e){}
+  try{ if(typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&CURRENT_USER.id)await sb.from('gebruikers').update({taal:t}).eq('id',CURRENT_USER.id); }catch(e){}
+  location.reload();
+}
+i18nStart();
+
 // ── MELDINGEN ──────────────────────────────────────────────────────
 // Eén plek voor korte meldingen onderin beeld. Wordt gebruikt door het
 // vangnet hieronder en door losse functies die iets willen bevestigen.
@@ -7090,6 +7397,7 @@ function kiesIngang(code){
 function pasIngangToe(){
   bewaarNederlandseTeksten();
   const eng = INGANG==='MCR';
+  const tk=document.querySelector('#authTaal'); if(tk){ tk.style.display=eng?'none':''; const b=tk.querySelector('button'); if(b)b.textContent=TAAL==='en'?'Nederlands':'English'; }
   document.querySelectorAll('#ingangKeuze button').forEach(b=>{
     b.classList.toggle('active', b.getAttribute('data-ingang')===INGANG);
   });
@@ -7882,11 +8190,12 @@ async function initApp(user){
   // Haal rol op — probeer meerdere keren als nodig
   let rol='part-timer',naam=user.email,goedgekeurd=null,beheerRol=null,gearchiveerd=null;
   try{
-    const velden='rol,naam,goedgekeurd,beheer_rol,vestiging,alle_vestigingen,actieve_vestiging,gearchiveerd_op';
+    const velden='rol,naam,goedgekeurd,beheer_rol,vestiging,alle_vestigingen,actieve_vestiging,gearchiveerd_op,taal';
     const neem=r=>{
       rol=r.rol||'part-timer';naam=r.naam||user.email;goedgekeurd=r.goedgekeurd;beheerRol=r.beheer_rol||null;
       gearchiveerd=r.gearchiveerd_op||null;
       MIJN_VESTIGING=r.vestiging||'NL';
+      if(MIJN_VESTIGING!=='MCR')i18nNaInloggen(r.taal||null,user.id);
       MAG_ALLE_VESTIGINGEN=!!r.alle_vestigingen;
       ACTIEVE_VESTIGING=MAG_ALLE_VESTIGINGEN?(r.actieve_vestiging||MIJN_VESTIGING):MIJN_VESTIGING;
     };
@@ -12243,6 +12552,7 @@ async function verwijderAccount(id){
 }
 
 function loadProfiel(){
+  ['taalNl','taalEn'].forEach(id=>{ const b=document.getElementById(id); if(b)b.classList.toggle('on',(id==='taalEn')===(TAAL==='en')); });
   const initials=CURRENT_NAAM.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
   document.getElementById('profielAvatar').textContent=initials;
   document.getElementById('profielNaam').textContent=CURRENT_NAAM;
