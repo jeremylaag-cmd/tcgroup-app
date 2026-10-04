@@ -1762,6 +1762,17 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
           <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">Kies de taal van de app. / Choose the language of the app.</div>
         </div>
 
+        <!-- Meldingen over open klussen (part-timers) -->
+        <div class="detail-section" id="klusMeldBlok" style="display:none">
+          <div class="detail-label">Meldingen over klussen</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+            <button class="pb-fbtn" data-km="alles" onclick="zetKlusMeldingen('alles')" style="padding:8px 12px">Alles</button>
+            <button class="pb-fbtn" data-km="week" onclick="zetKlusMeldingen('week')" style="padding:8px 12px">Alleen weekoverzicht</button>
+            <button class="pb-fbtn" data-km="uit" onclick="zetKlusMeldingen('uit')" style="padding:8px 12px">Uit</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5">Hooguit twee per week, nooit 's avonds of 's nachts: op maandag een overzicht van wat er openstaat, en een seintje als er op een dag dat jij kunt nog iemand nodig is. Meldingen dat je bent ingedeeld en herinneringen voor je dienst krijg je altijd.</div>
+        </div>
+
         <!-- Meldingen testen (alleen beheerder) -->
         <div class="detail-section" id="testMeldingBlok" style="display:none">
           <div class="detail-label">Meldingen</div>
@@ -2861,6 +2872,7 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
     <div class="detail-footer">
       <button class="btn-ghost" onclick="closeDetail()">Sluiten</button>
       <button class="btn-sm" id="detailBevestigBtn" style="display:none">Klus bevestigen</button>
+      <button class="btn-edit" id="detailVraagBtn" style="display:none;color:#1D4ED8">Vraag mensen</button>
       <button class="btn-edit" id="detailWhatsappBtn" style="display:none;color:#128C4A">WhatsApp</button>
       <button class="btn-edit" id="detailKopieerBtn" style="display:none">Kopieer</button>
       <button class="btn-edit" id="detailEditBtn" style="display:none">Bewerk</button>
@@ -3043,7 +3055,9 @@ const I18N_EN={
 'Je hebt hier geen toegang toe, of je sessie is verlopen. Log opnieuw in.':'You don’t have access to this, or your session has expired. Please sign in again.',
 'Geen verbinding met de server. Controleer je internet.':'No connection to the server. Check your internet.',
 'Taal':'Language','Taal / Language':'Taal / Language',
-'kan':'can','gevraagd':'requested','vol':'full','Ik kan ✓':'I can ✓','Kan niet':'Can\u2019t','Toch wel':'Actually I can','Je gaf aan dat je niet kunt':'You said you can\u2019t','Nog 1 plek':'1 place left','tijd volgt':'time to follow',
+'kan':'can','gevraagd':'requested','Meldingen over klussen':'Notifications about jobs','Alles':'Everything','Alleen weekoverzicht':'Weekly overview only','Uit':'Off',
+'Hooguit twee per week, nooit \'s avonds of \'s nachts: op maandag een overzicht van wat er openstaat, en een seintje als er op een dag dat jij kunt nog iemand nodig is. Meldingen dat je bent ingedeeld en herinneringen voor je dienst krijg je altijd.':'At most two a week, never in the evening or at night: on Monday an overview of what is open, and a nudge when someone is still needed on a day you can work. Messages that you have been scheduled and reminders for your shift always come through.',
+'Je krijgt geen meldingen meer over open klussen':'You won\u2019t get notifications about open jobs anymore','Alleen het weekoverzicht op maandag':'Only the weekly overview on Monday','Opgeslagen':'Saved','vol':'full','Ik kan ✓':'I can ✓','Kan niet':'Can\u2019t','Toch wel':'Actually I can','Je gaf aan dat je niet kunt':'You said you can\u2019t','Nog 1 plek':'1 place left','tijd volgt':'time to follow',
 'Je hebt deze dag vrij gevraagd':'You asked for this day off','✓ Je bent ingedeeld':'✓ You are scheduled','⏳ Aangemeld — wacht op bevestiging':'⏳ Signed up — waiting for confirmation',
 'Eén tik per klus: Ik kan of Kan niet. Dan weet de planning waar ze aan toe is.':'One tap per job: I can or Can\u2019t. Then the planning team knows where they stand.',
 'Je bent helemaal bij':'You\u2019re all caught up','Op alle klussen heb je gereageerd. Je krijgt bericht als je bent ingedeeld.':'You have responded to every job. You\u2019ll get a message when you are scheduled.',
@@ -3204,6 +3218,12 @@ async function i18nNaInloggen(serverTaal,uid){
     if(serverTaal&&serverTaal!==TAAL){ localStorage.setItem('tc_taal',serverTaal); location.reload(); return; }
     if(!serverTaal&&TAAL==='en'&&uid)await sb.from('gebruikers').update({taal:'en'}).eq('id',uid);
   }catch(e){}
+}
+async function zetKlusMeldingen(w){
+  const{error}=await sb.from('gebruikers').update({meldingen_klussen:w}).eq('id',CURRENT_USER.id);
+  if(error){ toast('Opslaan mislukt: '+error.message,'fout'); return; }
+  document.querySelectorAll('#klusMeldBlok [data-km]').forEach(b=>b.classList.toggle('on',b.dataset.km===w));
+  toast(w==='uit'?'Je krijgt geen meldingen meer over open klussen':(w==='week'?'Alleen het weekoverzicht op maandag':'Opgeslagen'));
 }
 async function kiesTaal(t){
   t=t==='en'?'en':'nl';
@@ -11359,6 +11379,13 @@ function openDetail(id){
     bev.style.display=(CURRENT_ROL==='beheerder'&&k.is_optie)?'':'none';
     bev.onclick=()=>bevestigOptie(id);
   }
+  const vr=document.getElementById('detailVraagBtn');
+  if(vr){
+    const bezet=(k.personeel||[]).length+(k.losse||[]).length;
+    const toekomst=k.datum>=fmt(new Date());
+    vr.style.display=(CURRENT_ROL==='beheerder'&&!k.is_optie&&k.categorie!=='intern'&&toekomst&&(k.personeel_nodig||0)>bezet)?'':'none';
+    vr.onclick=()=>vraagMensen(id);
+  }
   const wa=document.getElementById('detailWhatsappBtn');
   if(wa){
     wa.style.display=(CURRENT_ROL==='beheerder'&&!k.is_optie&&k.categorie!=='intern')?'':'none';
@@ -12613,9 +12640,12 @@ function loadProfiel(){
   // geen vinkjes maar wel de knoppen — anders zou opslaan je rijbewijs wissen.
   vulProfielRijbewijs('');
   sb.from('gebruikers')
-    .select('straat,postcode,plaats,telefoon,geslacht,geboortedatum,contractvorm,shirtmaat,rijbewijs')
+    .select('straat,postcode,plaats,telefoon,geslacht,geboortedatum,contractvorm,shirtmaat,rijbewijs,meldingen_klussen')
     .eq('id',CURRENT_USER.id).single().then(({data})=>{
     if(data){
+      const kb=document.getElementById('klusMeldBlok');
+      if(kb){ kb.style.display=CURRENT_ROL==='part-timer'?'':'none';
+        kb.querySelectorAll('[data-km]').forEach(b=>b.classList.toggle('on',b.dataset.km===(data.meldingen_klussen||'alles'))); }
       document.getElementById('profielStraat').value=data.straat||'';
       document.getElementById('profielTelefoon').value=data.telefoon||'';
       document.getElementById('profielPostcode').value=data.postcode||'';
@@ -17542,6 +17572,15 @@ async function okNaBeschikbaarheid(dagen){
     meldingenStraks();
   }else showPage('open-klussen');
 }
+async function vraagMensen(id){
+  const k=(KLUSSEN||[]).find(x=>x.id===id); if(!k)return;
+  const ok=await vraagBevestiging('Mensen vragen voor deze klus?',
+    'De part-timers die het best passen (eerst wie die dag beschikbaar is, dan wie het vaakst heeft gewerkt) krijgen binnen een kwartier een pushmelding met een directe knop. Wie al heeft gereageerd, niet kan of meldingen uit heeft staan, slaan we over.','Ja, vraag ze');
+  if(!ok)return;
+  const{data,error}=await sb.rpc('vraag_mensen',{p_klus:id});
+  if(error){ toast(error.message,'fout'); return; }
+  toast(data?data+(data===1?' persoon krijgt':' mensen krijgen')+' binnen een kwartier een melding':'Er is niemand meer om te vragen');
+}
 // Planner: een klus delen in WhatsApp, met een link die in de app precies die klus opent.
 function deelKlusWhatsApp(id){
   const k=(KLUSSEN||[]).find(x=>x.id===id); if(!k)return;
@@ -19929,7 +19968,7 @@ async function bewaarPushToken(){
 // aanname dat Firebase er vanaf 4 in zat klopte niet en liet de Play-versie
 // 1.3 (6) crashen zodra meldingen aan stonden. Zet dit getal pas op het
 // versionCode van de eerste bundel waar google-services.json écht in zit.
-const ANDROID_FIREBASE_VANAF=99999;
+const ANDROID_FIREBASE_VANAF=8;   // bundel 8 = eerste Android-versie met google-services.json
 
 async function androidHeeftFirebase(){
   try{
@@ -19970,6 +20009,9 @@ async function initPushNotifications(){
       console.error('Push registratie fout:', err);
     });
 
+    if(platform==='android'&&Push.createChannel){
+      try{ await Push.createChannel({id:'klussen',name:'Klussen en planning',description:'Open klussen, indelingen en herinneringen',importance:4,visibility:1,sound:'default',vibration:true}); }catch(e){}
+    }
     let perm=await Push.checkPermissions();
     if(perm.receive!=='granted')perm=await Push.requestPermissions();
     PUSH_RECHT=perm.receive;
@@ -19989,6 +20031,19 @@ async function initPushNotifications(){
 
     await Push.addListener('pushNotificationActionPerformed', actie=>{
       console.log('Notificatie aangetikt:', actie);
+      try{
+        const d=(actie&&actie.notification&&actie.notification.data)||{};
+        if(d.klus&&/^[0-9a-f-]{36}$/i.test(d.klus))OK_DEEPLINK=d.klus;
+        const ga=()=>{
+          if(OK_DEEPLINK){ okDeeplinkOpen(); return; }
+          if(d.pagina==='open-klussen'||d.pagina==='beschikbaarheid'){
+            const kn=document.querySelector(".bnav-item[onclick*=\"'"+d.pagina+"'\"]");
+            if(kn)switchNav(d.pagina,kn); else showPage(d.pagina);
+          }
+        };
+        // Bij een koude start is de app nog aan het inloggen: even wachten.
+        if(typeof CURRENT_ROL!=='undefined'&&CURRENT_ROL)setTimeout(ga,300); else setTimeout(ga,2500);
+      }catch(e){ console.error(e); }
     });
 
   } catch(e){
