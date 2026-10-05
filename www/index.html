@@ -5573,6 +5573,26 @@ function mbSindsSelect(id,waarde){
   for(let j=jaar-1;j>=2015;j--)o+=`<option value="${j}"${waarde===j?' selected':''}>${j}</option>`;
   return `<select class="mb-getal" style="width:104px;text-align:left" id="mbPS${id}" data-oud="${waarde||''}" title="Sinds welk jaar werkt deze persoon bij ons?">${o}</select>`;
 }
+// Wettelijk minimumloon in het VK vanaf 1 april 2026 (gov.uk).
+// [band, minimum, voorstel bij nieuwe aanmelding]
+const MB_MINLOON_PER='1 april 2026';
+function mbMinLoon(leeftijd){
+  if(leeftijd==null||leeftijd==='')return null;
+  const l=Number(leeftijd); if(!l)return null;
+  if(l<18)return {band:'16–17',min:8.00,voorstel:8.00};
+  if(l<21)return {band:'18–20',min:10.85,voorstel:11.00};
+  return {band:'21+',min:12.71,voorstel:12.75};
+}
+const mbPondTxt=n=>Number(n).toFixed(2).replace('.',',');
+function mbOnderMin(m){
+  const b=mbMinLoon(m.leeftijd);
+  return !!(b&&m.uurloon!=null&&Number(m.uurloon)<b.min-0.0001);
+}
+async function mbNaarMinimum(id){
+  const el=document.getElementById('mbPL'+id); if(!el)return;
+  el.value=el.dataset.min;
+  await mbPersoonOpslaan(id,false);
+}
 async function mbMensen(){
   await mbErvaringLaden();
   const{data,error}=await sb.rpc('mcr_mensen');
@@ -5622,7 +5642,8 @@ async function mbMensen(){
     wacht.forEach(m=>{
       const id=veiligTekst(m.id);
       const dub=dubbelVan(m), tik=emailTikfout(m.email);
-      const band = m.leeftijd==null?null:(m.leeftijd<18?['16–17','7,55','8,00']:(m.leeftijd<21?['18–20','10,00','10,00']:['21+','12,21','12,50']));
+      const mb=mbMinLoon(m.leeftijd);
+      const band = mb?[mb.band,mbPondTxt(mb.min),mbPondTxt(mb.voorstel)]:null;
       boven+=`<div class="mb-kaart" style="flex:1 1 320px;border:1.5px solid #B4472B">
         <div class="mb-kop" style="color:#B4472B">Nieuwe aanmelding</div>
         <div style="font-size:18px;font-weight:700">${veiligTekst(m.naam)}</div>
@@ -5636,14 +5657,14 @@ async function mbMensen(){
           Geef het account met het juiste e-mailadres vrij en haal het andere weg.</div>`:''}
         <div class="mb-veldrij" style="margin-top:12px">
           <div style="flex:1 1 120px"><label class="mb-lab">Tarief &pound;/uur</label>
-            <input class="mb-veld" type="number" step="0.25" id="mbPL${id}" value="${m.uurloon!=null?veiligTekst(m.uurloon):(band?band[2].replace(',','.'):'')}"></div>
+            <input class="mb-veld" type="number" step="0.01" id="mbPL${id}" value="${m.uurloon!=null?veiligTekst(m.uurloon):(band?band[2].replace(',','.'):'')}"></div>
           <div style="flex:1 1 120px"><label class="mb-lab">Werkt bij ons sinds</label>
             ${mbSindsSelect(id,(MB_ERV[m.id]||{}).werkt_sinds||null).replace('class="mb-getal" style="width:104px;text-align:left"','class="mb-veld"')}</div>
           <div style="flex:1 1 140px"><label class="mb-lab">Beoordeling</label>
             <select class="mb-veld" id="mbPB${id}"><option value="">&mdash;</option>
               ${MB_OORDELEN.map(o=>`<option value="${o}"${m.beoordeling===o?' selected':''}>${o}</option>`).join('')}</select></div>
         </div>
-        ${band?`<div style="font-size:12px;color:var(--muted);margin-top:8px">Bij ${m.leeftijd} jaar hoort band ${band[0]}: minimaal &pound; ${band[1]}.</div>`:''}
+        ${band?`<div style="font-size:12px;color:var(--muted);margin-top:8px">Bij ${m.leeftijd} jaar hoort band ${band[0]}: minimaal &pound; ${band[1]} (minimumloon vanaf ${MB_MINLOON_PER}).</div>`:''}
         ${!m.iban?'<div style="font-size:12px;color:#B45309;margin-top:4px">Heeft nog geen bankrekening ingevuld.</div>':''}
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           <button class="mb-mini" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',false)">Opslaan</button>
@@ -5661,7 +5682,21 @@ async function mbMensen(){
   uit+='<div id="mbPersoonPaneel"></div>';
   document.getElementById('mbInhoud').innerHTML=uit;
   const bovenEl=document.getElementById('mbMensenBoven');
-  if(bovenEl)bovenEl.innerHTML='<div class="mb-rij2">'+boven+'</div>';
+  const onder=actief.filter(mbOnderMin);
+  let minBlok='';
+  if(onder.length){
+    minBlok=`<div class="mb-kaart" style="border:1.5px solid #B4472B;background:#FBEDE9">
+      <div class="mb-kop" style="color:#B4472B">Onder het minimumloon</div>
+      <div style="font-size:12.5px;color:#5B2A1D;line-height:1.6;margin-bottom:8px">Sinds ${MB_MINLOON_PER} is het minimumloon in het VK
+        &pound; 12,71 (21+), &pound; 10,85 (18&ndash;20) en &pound; 8,00 (16&ndash;17). ${onder.length===1?'Deze persoon zit':'Deze '+onder.length+' mensen zitten'} eronder.
+        Nieuwe uren rekenen met het tarief dat hier staat.</div>
+      ${onder.map(m=>{const b=mbMinLoon(m.leeftijd);return `<div class="mb-persoon"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
+        <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
+        <div style="font-size:11.5px;color:#5B2A1D">${veiligTekst(String(m.leeftijd))} jaar &middot; nu &pound; ${mbPondTxt(m.uurloon)} &middot; minimaal &pound; ${mbPondTxt(b.min)}</div></div>
+        <button class="mb-mini" onclick="mbNaarMinimum('${veiligJs(m.id)}')">Naar &pound; ${mbPondTxt(b.min)}</button></div>`;}).join('')}
+    </div>`;
+  }
+  if(bovenEl)bovenEl.innerHTML=minBlok+'<div class="mb-rij2">'+boven+'</div>';
   if(MB_PERSOON){ const w=MB_PERSOON; MB_PERSOON=null; mbPersoonOpen(w); }
 }
 function mbPersoonRij(m){
@@ -5678,7 +5713,9 @@ function mbPersoonRij(m){
       <div><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
       ${extra.length?`<div style="font-size:11.5px;color:var(--muted)">${extra.map(veiligTekst).join(' &middot; ')}</div>`:''}</div></div></td>
     <td style="text-align:right">${m.leeftijd||'&mdash;'}</td>
-    <td style="text-align:right"><input class="mb-getal" type="number" step="0.25" style="width:68px" id="mbPL${id}" value="${m.uurloon!=null?veiligTekst(m.uurloon):''}"></td>
+    <td style="text-align:right">${(()=>{const b=mbMinLoon(m.leeftijd),o=mbOnderMin(m);
+      return `<input class="mb-getal" type="number" step="0.01" style="width:68px${o?';border-color:#B4472B;color:#B4472B;font-weight:700':''}" id="mbPL${id}" data-min="${b?b.min.toFixed(2):''}" value="${m.uurloon!=null?veiligTekst(m.uurloon):''}"${o?` title="Onder het minimumloon: ${m.leeftijd} jaar = minimaal £ ${mbPondTxt(b.min)}"`:''}>`
+        +(o?`<div style="font-size:10.5px;color:#B4472B;white-space:nowrap;margin-top:2px">min &pound; ${mbPondTxt(b.min)}</div>`:'');})()}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${m.shifts}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbNum(m.uren,1))}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(m.verdiend))}</td>
