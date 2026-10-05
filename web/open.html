@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kun jij mee? — TC Group Planning</title>
+<meta property="og:title" content="Kun jij mee?">
+<meta property="og:description" content="Open de klus in de TC Group Planning-app en tik op Ik kan.">
+<meta name="theme-color" content="#F7F6F2">
+<style>
+:root{--bg:#F7F6F2;--kaart:#fff;--tekst:#1A1917;--zacht:#6B6A66;--lijn:#E6E4DE;--knop:#1A1917;--knoptekst:#fff}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--kaart:#1F1E1C;--tekst:#F2F1EC;--zacht:#A3A19A;--lijn:#33312D;--knop:#F2F1EC;--knoptekst:#141413}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--tekst);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+main{max-width:420px;margin:0 auto;padding:max(48px,env(safe-area-inset-top)) 20px 40px;min-height:100vh;display:flex;flex-direction:column;justify-content:center}
+.merk{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--zacht);font-weight:600;letter-spacing:.02em}
+.merk span{width:30px;height:30px;border-radius:8px;background:var(--knop);color:var(--knoptekst);display:grid;place-items:center;font-size:12px;font-weight:800}
+h1{font-size:30px;line-height:1.15;margin:22px 0 8px;letter-spacing:-.01em}
+p{margin:0;color:var(--zacht);font-size:16px;line-height:1.5}
+.kaart{background:var(--kaart);border:1px solid var(--lijn);border-radius:16px;padding:18px;margin-top:26px}
+a.knop{display:block;text-align:center;text-decoration:none;font-weight:700;font-size:17px;padding:16px;border-radius:12px;background:var(--knop);color:var(--knoptekst)}
+a.knop.licht{background:transparent;color:var(--tekst);border:1px solid var(--lijn);font-size:15px;padding:13px;font-weight:600}
+.klein{font-size:13px;color:var(--zacht);margin:16px 0 10px;text-align:center}
+.rij{display:flex;gap:8px}
+.rij a{flex:1}
+.web{display:block;text-align:center;margin-top:22px;font-size:14px;color:var(--zacht)}
+.fout{display:none;margin-top:16px;font-size:14px;color:#B4472B;text-align:center}
+</style>
+</head>
+<body>
+<main>
+  <div class="merk"><span>TC</span>TC Group Planning</div>
+  <h1>Kun jij mee?</h1>
+  <p>Open de klus in de app en tik op <b>Ik kan</b>. De planning laat je weten of je bent ingedeeld.</p>
+
+  <div class="kaart">
+    <a class="knop" id="openApp" href="#">Open de klus in de app</a>
+    <div class="fout" id="fout">Deze link mist de klus. Open de app en kijk bij Klussen.</div>
+    <div class="klein">Nog geen app?</div>
+    <div class="rij" id="winkels">
+      <a class="knop licht" id="ios" href="https://apps.apple.com/nl/app/tc-group-planning/id6768035671">App Store</a>
+      <a class="knop licht" id="android" href="https://play.google.com/store/apps/details?id=com.tcgroup.planning">Google Play</a>
+    </div>
+  </div>
+
+  <a class="web" id="web" href="app.html">Of open de klus in je browser</a>
+</main>
+<script>
+(function(){
+  var m=(location.search||'').match(/[?&]klus=([0-9a-f-]{36})/i);
+  var id=m?m[1]:null;
+  var ua=navigator.userAgent||'';
+  var isAndroid=/Android/i.test(ua);
+  var isIOS=/iPhone|iPad|iPod/i.test(ua)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  var play='https://play.google.com/store/apps/details?id=com.tcgroup.planning';
+  var open=document.getElementById('openApp');
+  var pad='klus'+(id?'?klus='+id:'');
+  if(isAndroid){
+    open.href='intent://'+pad+'#Intent;scheme=tcgroup;package=com.tcgroup.planning;S.browser_fallback_url='+encodeURIComponent(play)+';end';
+    document.getElementById('ios').style.display='none';
+  }else{
+    open.href='tcgroup://'+pad;
+    if(isIOS)document.getElementById('android').style.display='none';
+  }
+  if(id){ document.getElementById('web').href='app.html?klus='+id; }
+  else { document.getElementById('fout').style.display='block'; }
+})();
+</script>
+</body>
+</html>

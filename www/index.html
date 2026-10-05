@@ -17935,7 +17935,10 @@ function deelKlusWhatsApp(id){
   const b=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd)||tijdFromDb(k.start_opbouw), e=tijdFromDb(k.einde_klus)||tijdFromDb(k.einde_feest);
   const bezet=(k.personeel||[]).length+(k.losse||[]).length, vrij=Math.max(0,(k.personeel_nodig||0)-bezet);
   const plaats=(k.adres||'').split(',').slice(-1)[0].trim();
-  const tekst=`🙋 Wie kan er mee?\n*${k.naam||'Klus'}*\n📅 ${d}${b?'\n🕒 '+b+(e?' – '+e:''):''}${plaats?'\n📍 '+plaats:''}${vrij?'\nNog '+vrij+(vrij===1?' plek':' plekken')+' vrij':''}\n\nMeld je aan in de app (Klussen → Ik kan):\nhttps://jeremylaag-cmd.github.io/tcgroup-app/app.html?klus=${k.id}`;
+  // Persoonlijk, zoals je het zelf zou typen. De link opent de app (of de winkel als je hem nog niet hebt).
+  const wie=vrij>1?`nog ${vrij} mensen die mee kunnen`:'nog iemand die mee kan';
+  const tijd=b?(e?` van ${b} tot ${e}`:` vanaf ${b}`):'';
+  const tekst=`Hey! Ik zoek ${wie} naar ${k.naam||'een klus'} op ${d}${tijd}. Zou jij kunnen?\n\nMeld je even aan in de app: https://jeremylaag-cmd.github.io/tcgroup-app/open.html?klus=${k.id}`;
   window.open('https://wa.me/?text='+encodeURIComponent(tekst),'_blank');
 }
 // Komt iemand binnen via zo'n link, dan gaan we naar die klus.
@@ -20524,13 +20527,21 @@ document.addEventListener('DOMContentLoaded', ()=>{
   document.addEventListener('mousedown',sluitToetsenbord);
 })();
 
-// ── DEEP LINK HANDLER (Apple login callback) ──
+// ── DEEP LINK HANDLER (Apple login callback + klus-links uit WhatsApp) ──
 window.addEventListener('load', ()=>{
   if(window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.App){
     window.Capacitor.Plugins.App.addListener('appUrlOpen', async (data)=>{
       const url=data.url;
       console.log('Deep link ontvangen:', url);
       if(!url)return;
+
+      // tcgroup://klus?klus=<id> — via open.html (de link in het WhatsApp-bericht)
+      const mk=/^tcgroup:\/\/klus/i.test(url)&&url.match(/[?&]klus=([0-9a-f-]{36})/i);
+      if(mk){
+        OK_DEEPLINK=mk[1];
+        if(typeof CURRENT_ROL!=='undefined'&&CURRENT_ROL)setTimeout(okDeeplinkOpen,300);
+        return;
+      }
 
       // Het in-app browservenster mag dicht zodra we terug zijn.
       const Browser=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Browser;
