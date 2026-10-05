@@ -5593,6 +5593,20 @@ async function mbNaarMinimum(id){
   el.value=el.dataset.min;
   await mbPersoonOpslaan(id,false);
 }
+// Zoeken bij Mensen: op naam, e-mail of telefoon; blijft staan na Opslaan.
+let MB_ZOEK='';
+const mbZoekSleutel=m=>[m.naam,m.email,m.telefoon,String(m.telefoon||'').replace(/\D/g,'')].filter(Boolean).join(' ').toLowerCase();
+function mbMensenZoek(w){
+  MB_ZOEK=w||'';
+  const q=MB_ZOEK.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const past=el=>!q.length||q.every(t=>(el.dataset.zoek||'').includes(t));
+  let tel=0;
+  document.querySelectorAll('#mbInhoud [data-zoek]').forEach(el=>{const ok=past(el);el.style.display=ok?'':'none';
+    if(ok&&el.tagName==='TR'){tel++;const nr=el.querySelector('.mb-nr');if(nr)nr.textContent=tel;}});
+  const leeg=document.getElementById('mbZoekLeeg');
+  if(leeg)leeg.style.display=(q.length&&!document.querySelectorAll('#mbInhoud [data-zoek]:not([style*="display: none"])').length)?'':'none';
+  const x=document.getElementById('mbZoekWis'); if(x)x.style.display=MB_ZOEK?'':'none';
+}
 async function mbMensen(){
   await mbErvaringLaden();
   const{data,error}=await sb.rpc('mcr_mensen');
@@ -5607,14 +5621,21 @@ async function mbMensen(){
   let uit=mbKop('Mensen',
     `${actief.length} actief &middot; ${wacht.length} wachten &middot; ${nietmeer.length} niet meer uitnodigen`
     +`${uitDienst.length?' &middot; '+uitDienst.length+' uit dienst':''}`);
+  uit+=`<div style="position:relative;max-width:420px;margin-bottom:12px">
+    <input id="mbZoekMens" class="mb-veld" type="search" autocomplete="off" placeholder="Zoek op naam, e-mail of telefoon"
+      value="${veiligTekst(MB_ZOEK)}" oninput="mbMensenZoek(this.value)" style="width:100%;padding-right:34px">
+    <button id="mbZoekWis" type="button" onclick="const z=document.getElementById('mbZoekMens');z.value='';mbMensenZoek('');z.focus()"
+      style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:18px;color:var(--muted);cursor:pointer" aria-label="Wissen">&times;</button>
+  </div>
+  <div id="mbZoekLeeg" class="mb-kaart" style="display:none;color:var(--muted);font-size:13px">Niemand gevonden met deze naam.</div>`;
   uit+='<div id="mbMensenBoven"></div>';
   uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr>'
-    +'<th style="min-width:210px">Naam</th><th style="text-align:right">Lft</th><th style="text-align:right">Tarief</th>'
+    +'<th style="text-align:right;width:28px">#</th><th style="min-width:210px">Naam</th><th style="text-align:right">Lft</th><th style="text-align:right">Tarief</th>'
     +'<th style="text-align:right">Shifts</th><th style="text-align:right">Uren</th>'
     +'<th style="text-align:right">Verdiend</th><th style="text-align:center">Kleding</th>'
     +'<th style="text-align:center" title="Niet komen opdagen \u00b7 afgemeld \u00b7 te laat">Misgegaan</th>'
     +'<th>Werkt sinds</th><th>Beoordeling</th><th></th></tr></thead><tbody>';
-  if(!actief.length&&!nietmeer.length)uit+='<tr><td colspan="11" style="color:var(--muted)">Nog niemand vrijgegeven.</td></tr>';
+  if(!actief.length&&!nietmeer.length)uit+='<tr><td colspan="12" style="color:var(--muted)">Nog niemand vrijgegeven.</td></tr>';
   actief.concat(nietmeer).forEach(m=>uit+=mbPersoonRij(m));
   uit+='</tbody></table></div>';
   if(uitDienst.length){
@@ -5623,7 +5644,7 @@ async function mbMensen(){
        +'Deze mensen kunnen niet meer inloggen en staan nergens meer tussen. Hun uren en '
        +'facturen zijn bewaard gebleven.</div>';
     uitDienst.forEach(m=>{
-      uit+=`<div class="mb-persoon"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
+      uit+=`<div class="mb-persoon" data-zoek="${veiligTekst(mbZoekSleutel(m))}"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
         <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
           <div style="font-size:11.5px;color:var(--muted)">uit dienst sinds ${veiligTekst(mbDatum(String(m.gearchiveerd_op).slice(0,10)))}${m.archief_reden?' &middot; '+veiligTekst(m.archief_reden):''} &middot; ${veiligTekst(mbNum(m.uren,1))} uur bewaard</div></div>
         <button class="mb-mini" onclick="mbPersoonTerug('${veiligJs(m.id)}')">Terughalen</button></div>`;
@@ -5644,7 +5665,7 @@ async function mbMensen(){
       const dub=dubbelVan(m), tik=emailTikfout(m.email);
       const mb=mbMinLoon(m.leeftijd);
       const band = mb?[mb.band,mbPondTxt(mb.min),mbPondTxt(mb.voorstel)]:null;
-      boven+=`<div class="mb-kaart" style="flex:1 1 320px;border:1.5px solid #B4472B">
+      boven+=`<div class="mb-kaart" data-zoek="${veiligTekst(mbZoekSleutel(m))}" style="flex:1 1 320px;border:1.5px solid #B4472B">
         <div class="mb-kop" style="color:#B4472B">Nieuwe aanmelding</div>
         <div style="font-size:18px;font-weight:700">${veiligTekst(m.naam)}</div>
         <div style="font-size:12.5px;color:var(--muted);margin-top:2px">
@@ -5690,13 +5711,14 @@ async function mbMensen(){
       <div style="font-size:12.5px;color:#5B2A1D;line-height:1.6;margin-bottom:8px">Sinds ${MB_MINLOON_PER} is het minimumloon in het VK
         &pound; 12,71 (21+), &pound; 10,85 (18&ndash;20) en &pound; 8,00 (16&ndash;17). ${onder.length===1?'Deze persoon zit':'Deze '+onder.length+' mensen zitten'} eronder.
         Nieuwe uren rekenen met het tarief dat hier staat.</div>
-      ${onder.map(m=>{const b=mbMinLoon(m.leeftijd);return `<div class="mb-persoon"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
+      ${onder.map(m=>{const b=mbMinLoon(m.leeftijd);return `<div class="mb-persoon" data-zoek="${veiligTekst(mbZoekSleutel(m))}"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
         <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
         <div style="font-size:11.5px;color:#5B2A1D">${veiligTekst(String(m.leeftijd))} jaar &middot; nu &pound; ${mbPondTxt(m.uurloon)} &middot; minimaal &pound; ${mbPondTxt(b.min)}</div></div>
         <button class="mb-mini" onclick="mbNaarMinimum('${veiligJs(m.id)}')">Naar &pound; ${mbPondTxt(b.min)}</button></div>`;}).join('')}
     </div>`;
   }
   if(bovenEl)bovenEl.innerHTML=minBlok+'<div class="mb-rij2">'+boven+'</div>';
+  mbMensenZoek(MB_ZOEK);
   if(MB_PERSOON){ const w=MB_PERSOON; MB_PERSOON=null; mbPersoonOpen(w); }
 }
 function mbPersoonRij(m){
@@ -5708,7 +5730,8 @@ function mbPersoonRij(m){
   if(m.aangebracht_door)extra.push('via '+m.aangebracht_door);
   if(m.eigen_opmerking)extra.push(m.eigen_opmerking);
   if(!m.iban)extra.push('geen bankrekening');
-  return `<tr${m.beoordeling==='niet meer'?' style="opacity:.55"':''}>
+  return `<tr data-zoek="${veiligTekst(mbZoekSleutel(m))}"${m.beoordeling==='niet meer'?' style="opacity:.55"':''}>
+    <td class="mb-nr" style="text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12.5px"></td>
     <td style="min-width:210px"><div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
       <div><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
       ${extra.length?`<div style="font-size:11.5px;color:var(--muted)">${extra.map(veiligTekst).join(' &middot; ')}</div>`:''}</div></div></td>
