@@ -55,6 +55,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mcr-knop{display:block;width:100%;text-align:center;background:#1A1917;color:#fff;font-size:15px;font-weight:600;padding:14px 0;border:none;border-radius:11px;cursor:pointer;font-family:var(--font)}
 .mcr-knop.licht{background:#fff;color:#1A1917;border:1px solid #D9D7D0}
 .mcr-knop[disabled]{opacity:.45;cursor:default}
+.mcr-linkje{background:none;border:0;padding:0;font-family:var(--font);font-size:12.5px;color:#6B6A66;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
 .mcr-chip{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
 #mcrPauzeKnoppen .mcr-chip{border:1px solid #E5E3DC;background:#fff;color:#6B6A66}
 #mcrPauzeKnoppen .mcr-chip.on{background:#1A1917;border-color:#1A1917;color:#fff}
@@ -3628,6 +3629,7 @@ async function mbOverzicht(){
     sb.rpc('mcr_overzicht',{p_datum:MB_DATUM}),
     sb.rpc('mcr_wacht_op_jou'),
     sb.rpc('mcr_bezetting_balk',{p_dagen:25}),
+    mbRuilLaden(),
   ]);
   if(ovz.error)throw ovz.error;
   const w=(wacht.data&&wacht.data[0])||{};
@@ -3683,6 +3685,7 @@ async function mbOverzicht(){
       <div class="mb-kop">Wacht op jou</div>
       ${regel(w.uren||0,'Urenregistraties op akkoord','#B45309','uren')}
       ${regel(w.aanmeldingen||0,'Shiftaanvragen te beoordelen','#B45309','shifts')}
+      ${regel(MB_RUIL.filter(r=>r.status==='gevraagd').length,'Iemand kan zijn shift niet doen (ruilen)','#B45309','shifts')}
       ${regel(w.nieuwe_accounts||0,'Nieuwe aanmeldingen vrij te geven','#B45309','mensen')}
       ${regel(w.gaten||0,'Shifts zonder genoeg mensen, komende 7 dagen','#B4472B','shifts')}
     </div>
@@ -3721,7 +3724,7 @@ function mbDag(stap){
 function mbMaandag(d){ const x=new Date(String(d)+'T00:00:00'); const w=(x.getDay()+6)%7; x.setDate(x.getDate()-w); return fmt(x); }
 async function mbShiftsPlannen(){
   if(!MB_WEEK)MB_WEEK=mbMaandag(MB_DATUM||await mbPeil());
-  const [,wk,aanm,man,waar]=await Promise.all([mbErvaringLaden(),sb.rpc('mcr_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_open'), sb.rpc('mcr_managers_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_al_ingedeeld')]);
+  const [,wk,aanm,man,waar]=await Promise.all([mbErvaringLaden(),sb.rpc('mcr_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_open'), sb.rpc('mcr_managers_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_al_ingedeeld'), mbRuilLaden()]);
   MB_MAN=man.error?[]:(man.data||[]);
   const{data,error}=wk;
   if(error)throw error;
@@ -3745,6 +3748,7 @@ async function mbShiftsPlannen(){
      <button class="mb-mini" onclick="mbWeekKopieren()">Deze week kopi&euml;ren naar volgende</button>
      <button class="mb-mini zwart" onclick="mbDienstOpen(null,null)">+ Diensten toevoegen</button>`);
 
+  uit+=mbRuilBlok();
   uit+=mbAanmBlok(dagen);
   uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-week">'
      +'<colgroup><col class="kraam">'+'<col class="dag">'.repeat(7)+'</colgroup>'
@@ -4313,6 +4317,53 @@ let MB_KAND=null;
 // Iedereen die zich voor een dienst heeft aangemeld en op antwoord wacht.
 // Groene vink = indelen, rood kruis = afwijzen (crew ziet dan "Rejected").
 let MB_AANM=[];
+// Shift ruilen (Manchester): verzoeken van medewerkers die niet kunnen.
+let MB_RUIL=[];
+async function mbRuilLaden(){
+  try{ const{data,error}=await sb.rpc('mcr_ruil_lijst'); MB_RUIL=error?[]:(data||[]); }
+  catch(e){ MB_RUIL=[]; }
+  return MB_RUIL;
+}
+function mbRuilBlok(){
+  if(!MB_RUIL.length)return '';
+  const gevraagd=MB_RUIL.filter(r=>r.status==='gevraagd'), open=MB_RUIL.filter(r=>r.status==='open');
+  const regel=r=>{
+    const dag=new Date(r.datum+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
+    const tijd=mbUur(r.start_tijd)+'\u2013'+(r.eind_tijd?mbUur(r.eind_tijd):'sluit');
+    const id=veiligJs(r.id);
+    return `<div class="mb-persoon" style="align-items:flex-start;flex-wrap:wrap;row-gap:6px;padding:12px 0">
+      <div style="width:86px;flex-shrink:0;font-size:12.5px;font-weight:700;padding-top:2px">${veiligTekst(dag)}</div>
+      <div style="flex:1 1 240px;min-width:0">
+        <div style="font-size:14.5px;font-weight:700">${veiligTekst(r.naam)}
+          ${r.status==='open'?mbChip('staat open','#2A4EA8','#EEF4FF'):mbChip('wil ruilen','#B45309','#FEF6E7')}</div>
+        <div style="font-size:13px;margin-top:3px">${mbStip(r.kleur)} <b>${veiligTekst(r.kraam||'')} &middot; ${veiligTekst(tijd)}</b></div>
+        ${r.reden?`<div style="font-size:12.5px;color:var(--muted);margin-top:3px">&ldquo;${veiligTekst(r.reden)}&rdquo;</div>`:''}
+        ${r.status==='open'?`<div style="font-size:12px;color:var(--muted);margin-top:3px">${r.aanmeldingen?`<b style="color:#2A4EA8">${r.aanmeldingen} ${r.aanmeldingen===1?'aanmelding':'aanmeldingen'}</b> &mdash; deel iemand in, dan gaat ${veiligTekst((r.naam||'').split(' ')[0])} er vanzelf af.`:`Nog niemand aangemeld. ${veiligTekst((r.naam||'').split(' ')[0])} blijft ingedeeld tot iemand het overneemt.`}</div>`:''}
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;flex-shrink:0">
+        ${r.status==='gevraagd'?`<button class="mb-mini zwart" onclick="mbRuilBeslis('${id}','open')" title="Iedereen kan zich aanmelden; ${veiligTekst(r.naam)} blijft ingedeeld tot iemand het overneemt">Openzetten</button>`:''}
+        <button class="mb-mini" onclick="mbRuilBeslis('${id}','eraf')" title="Meteen van de shift halen; de plek komt open">Meteen eraf</button>
+        <button class="mb-mini rood" onclick="mbRuilBeslis('${id}','afwijzen')">${r.status==='open'?'Toch niet':'Afwijzen'}</button>
+      </div></div>`;
+  };
+  return `<div class="mb-kaart" style="border-left:4px solid #B45309">
+    <div class="mb-kop" style="margin-bottom:2px">Shift ruilen <span style="color:#B45309">(${MB_RUIL.length})</span></div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.55">Iemand kan zijn shift niet doen. <b>Openzetten</b>: anderen kunnen zich aanmelden en krijgen een melding; hij blijft ingedeeld tot jij iemand anders indeelt. <b>Meteen eraf</b>: hij gaat er nu af en de plek komt open.</div>
+    ${gevraagd.map(regel).join('')}${open.map(regel).join('')}
+  </div>`;
+}
+async function mbRuilBeslis(id,actie){
+  const r=MB_RUIL.find(x=>x.id===id); if(!r)return;
+  const naam=r.naam||'', vn=naam.split(' ')[0];
+  const vraag={open:`De shift van ${naam} openzetten?\n\nIedereen die die dag kan krijgt een melding en kan zich aanmelden. ${vn} blijft ingedeeld tot jij iemand anders indeelt.`,
+               eraf:`${naam} meteen van deze shift halen?\n\nDe plek komt open en iedereen die die dag kan krijgt een melding.`,
+               afwijzen:`Het verzoek van ${naam} afwijzen?\n\n${vn} blijft ingedeeld en krijgt daar bericht van.`}[actie];
+  if(!confirm(vraag))return;
+  try{ const{error}=await sb.rpc('mcr_ruil_beslissen',{p_id:id,p_actie:actie}); if(error)throw error;
+       toast(actie==='afwijzen'?'Afgewezen':(actie==='open'?'Staat open':'Van de shift gehaald en opengezet')); }
+  catch(e){ alert(mbFout(e)); }
+  mbNaar(MB_TAB||'shifts');
+}
 // Ervaring per persoon (werkt sinds, beoordeling, gewerkte shifts). Wordt
 // gebruikt om aanmeldingen te sorteren: beoordeling eerst, dan hoe lang
 // iemand al bij ons werkt, dan het aantal gewerkte shifts.
@@ -4398,7 +4449,9 @@ function mbAanmBlok(dagen){
       <div style="flex:1 1 260px;min-width:0">
         <div style="font-size:14.5px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${veiligTekst(r.naam)} ${mbErvaringHtml(r.gebruiker_id)}</div>
         ${rij('Meldt zich aan voor',`${mbStip(r.kleur)} <b>${veiligTekst(r.kraam)} &middot; ${veiligTekst(mbShiftVol(r))}</b>${naamLosVanTijd}
-          <span style="color:${vol?'#B4472B':'var(--muted)'};font-size:12px"> &middot; ${r.ingedeeld} van ${r.nodig||'?'} ingedeeld${vol?' (vol)':''}</span>`)}
+          ${(()=>{const ru=MB_RUIL.find(x=>x.shift_id===r.shift_id&&x.status==='open');
+            return ru?`<span style="color:#2A4EA8;font-size:12px;font-weight:600"> &middot; ruil: neemt de shift van ${veiligTekst(ru.naam)} over</span>`
+                     :`<span style="color:${vol?'#B4472B':'var(--muted)'};font-size:12px"> &middot; ${r.ingedeeld} van ${r.nodig||'?'} ingedeeld${vol?' (vol)':''}</span>`;})()}`)}
         ${rij('Kan',mbKanTekst(r))}
         ${r.al_waar?rij('Staat al ingedeeld',`<span style="color:#B4472B;font-weight:600">${veiligTekst(r.al_waar).split('; ').join('<br>')}</span>`):''}
         ${ook.length?rij('Ook aangemeld voor',ook.map(x=>veiligTekst(x.kraam+' · '+mbShiftVol(x))).join('<br>')):''}
@@ -6554,9 +6607,28 @@ async function mcrGa(tab){
 // ─── Mijn diensten ─────────────────────────────────────────────────
 async function mcrShifts(){
   const vandaag=new Date().toISOString().slice(0,10);
-  const [sh,mg]=await Promise.all([sb.rpc('mcr_mijn_shifts',{p_van:vandaag,p_tot:null}), sb.rpc('mcr_mijn_managers',{p_van:vandaag,p_tot:null})]);
+  const [sh,mg,rl]=await Promise.all([sb.rpc('mcr_mijn_shifts',{p_van:vandaag,p_tot:null}), sb.rpc('mcr_mijn_managers',{p_van:vandaag,p_tot:null}),
+    sb.rpc('mcr_mijn_ruilen').then(x=>x,()=>({data:[]}))]);
   const{data,error}=sh;
   if(error)throw error;
+  const RUIL={}; ((rl&&!rl.error&&rl.data)||[]).forEach(x=>{ if(!RUIL[x.shift_id])RUIL[x.shift_id]=x; });
+  const nuMs=Date.now();
+  const ruilHtml=r=>{
+    if(!r.shift_id||r.ingeklokt_op||r.uitgeklokt_op)return '';
+    const start=new Date(String(r.datum)+'T'+String(r.start_tijd||'00:00').slice(0,5)+':00');
+    if(start.getTime()<=nuMs)return '';
+    const x=RUIL[r.shift_id], sid=veiligJs(r.shift_id);
+    if(x&&x.status==='gevraagd')return `<div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${mcrChip('Swap asked · waiting for Bram','#B45309','#FEF6E7')}
+        <button class="mcr-linkje" onclick="mcrRuilIntrekken('${veiligJs(x.id)}')">Cancel</button></div>`;
+    if(x&&x.status==='open')return `<div style="margin-top:6px">
+        ${mcrChip('Open for swap','#2A4EA8','#EEF4FF')}
+        <div style="font-size:12px;color:#6B6A66;margin-top:4px;line-height:1.45">You stay on the rota until someone takes over. We'll let you know.
+          <button class="mcr-linkje" onclick="mcrRuilIntrekken('${veiligJs(x.id)}')">I can work after all</button></div></div>`;
+    return `${x&&x.status==='afgewezen'?`<div style="margin-top:6px">${mcrChip('Swap not approved','#B4472B','#FBEDE9')}</div>`:''}
+      <div id="mcrRuil-${veiligTekst(r.shift_id)}" style="margin-top:4px">
+        <button class="mcr-linkje" onclick="mcrRuilOpen('${sid}')">Can't make it?</button></div>`;
+  };
   const MAN={}; (mg.error?[]:(mg.data||[])).forEach(x=>{ (MAN[x.datum+'|'+x.kraam]=MAN[x.datum+'|'+x.kraam]||[]).push(x); });
   const manRegel=r=>{ const l=MAN[r.datum+'|'+r.kraam]; if(!l||!l.length)return '';
     const p=x=>veiligTekst(x.naam)+(x.telefoon?` <a href="tel:${veiligTekst(String(x.telefoon).replace(/[^+\d]/g,''))}" style="color:#6D28D9">${veiligTekst(x.telefoon)}</a>`:'');
@@ -6582,6 +6654,7 @@ async function mcrShifts(){
           <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${veiligTekst(mcrTijd(r.start_tijd))} &ndash; ${veiligTekst(mcrTijd(r.eind_tijd))}${r.shift_naam?' &middot; '+veiligTekst(r.shift_naam):''}</div>
           ${manRegel(r)}
           ${chip?'<div style="margin-top:5px">'+chip+'</div>':''}
+          ${ruilHtml(r)}
         </div></div>`;
     });
     uit+='</div>';
@@ -6591,11 +6664,38 @@ async function mcrShifts(){
   m.innerHTML=uit;
 }
 
+// Shift ruilen: vraag Bram om je shift open te zetten.
+function mcrRuilOpen(shift){
+  const el=document.getElementById('mcrRuil-'+shift); if(!el)return;
+  el.innerHTML=`<div style="background:#F7F6F2;border:1px solid #E5E3DC;border-radius:11px;padding:11px 12px;margin-top:6px">
+    <div style="font-size:13px;font-weight:600;color:#1A1917">Ask Bram to open this shift for someone else</div>
+    <div style="font-size:12px;color:#6B6A66;margin-top:3px;line-height:1.45">You stay on the rota until Bram finds someone. If it's today or very soon, please call or text Bram as well.</div>
+    <textarea id="mcrRuilReden-${veiligTekst(shift)}" rows="2" maxlength="200" placeholder="Reason (optional)"
+      style="width:100%;margin-top:8px;font-family:var(--font);font-size:14px;padding:8px 10px;border:1px solid #D9D7D0;border-radius:9px;box-sizing:border-box"></textarea>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="mcr-knop" style="padding:10px 0;font-size:14px" onclick="mcrRuilVraag('${veiligJs(shift)}')">Ask Bram</button>
+      <button class="mcr-knop licht" style="padding:10px 0;font-size:14px" onclick="mcrGa('shifts')">Never mind</button></div></div>`;
+}
+async function mcrRuilVraag(shift){
+  const t=(document.getElementById('mcrRuilReden-'+shift)||{}).value||'';
+  try{ const{error}=await sb.rpc('mcr_ruil_vragen',{p_shift:shift,p_reden:t||null}); if(error)throw error;
+       toast('Sent to Bram. You\'ll get a message when he decides.'); }
+  catch(e){ alert(mcrFout(e)); }
+  await mcrGa('shifts');
+}
+async function mcrRuilIntrekken(id){
+  if(!confirm('Cancel your swap request? You stay on this shift.'))return;
+  try{ const{error}=await sb.rpc('mcr_ruil_intrekken',{p_id:id}); if(error)throw error; }
+  catch(e){ alert(mcrFout(e)); }
+  await mcrGa('shifts');
+}
+
 // ─── Open diensten ─────────────────────────────────────────────────
 async function mcrOpenShifts(){
   document.getElementById('mcrTitel').textContent='Open shifts';
   document.getElementById('mcrSub').textContent='Put your name down; Bram confirms.';
-  const{data,error}=await sb.rpc('mcr_open_shifts',{p_dagen:75});
+  let{data,error}=await sb.rpc('mcr_open_shifts2',{p_dagen:75});
+  if(error){ ({data,error}=await sb.rpc('mcr_open_shifts',{p_dagen:75})); }
   if(error)throw error;
   const m=document.getElementById('mcrMain');
   let uit=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="mcrGa('shifts')">&lsaquo; Back to my shifts</button>`;
@@ -6614,7 +6714,7 @@ async function mcrOpenShifts(){
           </div>
           <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${r.eind_tijd
             ?veiligTekst(mcrTijd(r.start_tijd))+' &ndash; '+veiligTekst(mcrTijd(r.eind_tijd))
-            :'From '+veiligTekst(mcrTijd(r.start_tijd))+' till close'} &middot; ${vrij} place${vrij===1?'':'s'} left</div>
+            :'From '+veiligTekst(mcrTijd(r.start_tijd))+' till close'} &middot; ${r.ruil?'<b style="color:#2A4EA8">swap</b> &middot; someone can\'t make it':vrij+' place'+(vrij===1?'':'s')+' left'}</div>
         </div>
         <div style="flex-shrink:0;align-self:center">${
           r.afgewezen
@@ -17822,7 +17922,7 @@ async function okNaBeschikbaarheid(dagen){
 async function vraagMensen(id){
   const k=(KLUSSEN||[]).find(x=>x.id===id); if(!k)return;
   const ok=await vraagBevestiging('Mensen vragen voor deze klus?',
-    'De part-timers die het best passen (eerst wie die dag beschikbaar is, dan wie het vaakst heeft gewerkt) krijgen binnen een kwartier een pushmelding met een directe knop. Wie al heeft gereageerd, niet kan of meldingen uit heeft staan, slaan we over.','Ja, vraag ze');
+    'Alle part-timers krijgen binnen een kwartier een pushmelding met een directe knop. Wie al op de klus staat, die dag al ergens anders werkt, al heeft gereageerd, vrij heeft of meldingen uit heeft staan, slaan we over.','Ja, vraag ze');
   if(!ok)return;
   const{data,error}=await sb.rpc('vraag_mensen',{p_klus:id});
   if(error){ toast(error.message,'fout'); return; }
@@ -20283,6 +20383,12 @@ async function initPushNotifications(){
         if(d.klus&&/^[0-9a-f-]{36}$/i.test(d.klus))OK_DEEPLINK=d.klus;
         const ga=()=>{
           if(OK_DEEPLINK){ okDeeplinkOpen(); return; }
+          if(d.pagina==='mcr-beheer'){ if(typeof mbNaar==='function')mbNaar('shifts'); return; }
+          if(d.pagina==='mcr-shifts'||d.pagina==='mcr-open'){
+            const app=document.getElementById('mcrApp');
+            if(app&&app.style.display==='flex'&&typeof mcrGa==='function')mcrGa(d.pagina==='mcr-open'?'open':'shifts');
+            return;
+          }
           if(d.pagina==='open-klussen'||d.pagina==='beschikbaarheid'){
             const kn=document.querySelector(".bnav-item[onclick*=\"'"+d.pagina+"'\"]");
             if(kn)switchNav(d.pagina,kn); else showPage(d.pagina);
