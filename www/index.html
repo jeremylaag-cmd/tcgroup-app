@@ -85,6 +85,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mb-klein{font-size:12px;color:var(--muted)}
 .mb-leg{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted)}
 .mb-leg span{width:10px;height:10px;border-radius:3px;display:inline-block}
+.mb-naamlink{font-size:13.5px;font-weight:600;color:inherit;text-decoration:underline;text-decoration-color:rgba(0,0,0,.25);text-underline-offset:3px;cursor:pointer}
+.mb-naamlink:hover{text-decoration-color:currentColor}
 .mb-chip{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
 .mb-av{width:30px;height:30px;border-radius:50%;background:#B4472B;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:600;flex-shrink:0}
 .mb-persoon{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border);flex-wrap:wrap}
@@ -5612,6 +5614,7 @@ async function mbMensen(){
   const{data,error}=await sb.rpc('mcr_mensen');
   if(error)throw error;
   const alle=data||[];
+  MB_MENSEN_LIJST=alle;
   const uitDienst=alle.filter(m=>m.gearchiveerd_op);
   const wacht=alle.filter(m=>!m.goedgekeurd&&!m.gearchiveerd_op);
   const actief=alle.filter(m=>m.goedgekeurd&&m.beoordeling!=='niet meer');
@@ -5733,7 +5736,7 @@ function mbPersoonRij(m){
   return `<tr data-zoek="${veiligTekst(mbZoekSleutel(m))}"${m.beoordeling==='niet meer'?' style="opacity:.55"':''}>
     <td class="mb-nr" style="text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12.5px"></td>
     <td style="min-width:210px"><div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
-      <div><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
+      <div><a href="#" class="mb-naamlink" onclick="mbPersoonKaart('${veiligJs(m.id)}');return false" title="Planning en aanvragen bekijken">${veiligTekst(m.naam)}</a>
       ${extra.length?`<div style="font-size:11.5px;color:var(--muted)">${extra.map(veiligTekst).join(' &middot; ')}</div>`:''}</div></div></td>
     <td style="text-align:right">${m.leeftijd||'&mdash;'}</td>
     <td style="text-align:right">${(()=>{const b=mbMinLoon(m.leeftijd),o=mbOnderMin(m);
@@ -5794,6 +5797,136 @@ async function mbPersoonTerug(id){
   try{ const{error}=await sb.rpc('account_terughalen',{p_id:id}); if(error)throw error;
        toast('Teruggehaald. Geef het account hierboven weer vrij.'); mbNaar('mensen'); }
   catch(e){ alert(mbFout(e)); }
+}
+
+// ── Persoonskaart: planning, aanvragen en beschikbaarheid ─────────
+// Tik op een naam bij Mensen. Gegroepeerd per dag, zodat je in één oogopslag
+// ziet waar iemand staat, waar hij om gevraagd heeft en wanneer hij kan.
+let MB_MENSEN_LIJST=[];
+function mbKaartDicht(){ const o=document.getElementById('mbKaartLaag'); if(o)o.remove(); document.removeEventListener('keydown',mbKaartEsc); }
+function mbKaartEsc(e){ if(e.key==='Escape')mbKaartDicht(); }
+function mbTijdVak(a,b){ return a||b?(a&&b?mbUur(a)+'\u2013'+mbUur(b):(a?'vanaf '+mbUur(a):'tot '+mbUur(b))):''; }
+function mbDagKop(d){
+  const dt=new Date(String(d)+'T00:00:00'), vd=new Date(mbVandaagStr()+'T00:00:00');
+  const verschil=Math.round((dt-vd)/86400000);
+  const naam=dt.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
+  return verschil===0?'Vandaag \u00b7 '+naam:(verschil===1?'Morgen \u00b7 '+naam:naam);
+}
+async function mbPersoonKaart(id){
+  mbKaartDicht();
+  const m=(MB_MENSEN_LIJST||[]).find(x=>x.id===id)||{id,naam:''};
+  const ov=document.createElement('div');
+  ov.id='mbKaartLaag';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto';
+  ov.onclick=e=>{ if(e.target===ov)mbKaartDicht(); };
+  ov.innerHTML=`<div class="mb-kaart" id="mbKaartBinnen" style="width:100%;max-width:640px;margin:0;padding:18px 18px 20px;box-shadow:0 12px 40px rgba(0,0,0,.18)">
+    <div style="color:var(--muted);font-size:13px">Bezig&hellip;</div></div>`;
+  document.body.appendChild(ov);
+  document.addEventListener('keydown',mbKaartEsc);
+  let rijen=[];
+  try{
+    const{data,error}=await sb.rpc('mcr_persoon_planning',{p_id:id});
+    if(error)throw error; rijen=data||[];
+  }catch(e){
+    document.getElementById('mbKaartBinnen').innerHTML=`<div style="color:#B4472B">${veiligTekst(mbFout(e))}</div>
+      <button class="mb-mini" style="margin-top:12px" onclick="mbKaartDicht()">Sluiten</button>`;
+    return;
+  }
+  const b=document.getElementById('mbKaartBinnen'); if(!b)return;
+  b.innerHTML=mbPersoonKaartHtml(m,rijen);
+}
+function mbPersoonKaartHtml(m,rijen){
+  const vandaag=mbVandaagStr();
+  const ingedeeld=rijen.filter(r=>r.soort==='ingedeeld');
+  const komend=ingedeeld.filter(r=>String(r.datum)>=vandaag);
+  const voorbij=ingedeeld.filter(r=>String(r.datum)<vandaag).reverse();
+  const aanvragen=rijen.filter(r=>r.soort==='aangevraagd');
+  const open=aanvragen.filter(r=>r.status==='aangemeld');
+  const besch=rijen.filter(r=>r.soort==='beschikbaarheid');
+  const minuten=r=>{ if(!r.start_tijd||!r.eind_tijd)return 0; const[a,b]=[r.start_tijd,r.eind_tijd].map(t=>{const[h,mi]=String(t).split(':');return(+h)*60+(+mi);}); return Math.max(0,b-a); };
+  const urenKomend=komend.reduce((t,r)=>t+minuten(r),0)/60;
+  const gewerkt=voorbij.filter(r=>r.status==='gewerkt');
+
+  // per dag: ingedeeld, aangevraagd en beschikbaarheid samen
+  const dagen={};
+  const zet=(d,x)=>{(dagen[d]=dagen[d]||{in:[],aan:[],kan:[]})[x.k].push(x.r);};
+  komend.forEach(r=>zet(String(r.datum),{k:'in',r}));
+  aanvragen.forEach(r=>zet(String(r.datum),{k:'aan',r}));
+  besch.forEach(r=>{
+    const van=String(r.datum)<vandaag?vandaag:String(r.datum), tot=String(r.datum_eind||r.datum);
+    let d=new Date(van+'T00:00:00'), eind=new Date(tot+'T00:00:00'), n=0;
+    while(d<=eind&&n<92){ const ds=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+      zet(ds,{k:'kan',r}); d.setDate(d.getDate()+1); n++; }
+  });
+  const dagLijst=Object.keys(dagen).filter(d=>dagen[d].in.length||dagen[d].aan.length||dagen[d].kan.length).sort();
+
+  const shiftRegel=(r,chip)=>`<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:3px 0">
+      ${chip}${mbStip(r.kleur||'#6B6A66')}<span style="font-size:13.5px;font-weight:600">${veiligTekst(r.kraam||'')}</span>
+      <span style="font-size:13px;font-variant-numeric:tabular-nums">${veiligTekst(mbTijdVak(r.start_tijd,r.eind_tijd))}</span>
+      ${r.info?`<span style="font-size:12px;color:var(--muted)">&ldquo;${veiligTekst(r.info)}&rdquo;</span>`:''}</div>`;
+  const kanChip=r=>r.status==='onbeschikbaar'
+      ? mbChip('kan niet'+(r.info?' \u00b7 '+r.info:''),'#B4472B','#FBEDE9')
+      : mbChip(mbTijdVak(r.start_tijd,r.eind_tijd)?'kan '+mbTijdVak(r.start_tijd,r.eind_tijd):'kan hele dag','#0F7A52','#F2FBF6');
+
+  const tegel=(n,l,kl)=>`<div style="flex:1 1 120px;border:1px solid var(--border);border-radius:12px;padding:10px 12px">
+      <div style="font-size:22px;font-weight:700;font-variant-numeric:tabular-nums;color:${kl||'var(--text)'}">${n}</div>
+      <div style="font-size:11.5px;color:var(--muted)">${l}</div></div>`;
+
+  let uit=`<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
+      <div style="display:flex;align-items:center;gap:11px;min-width:0">
+        <div class="mb-av" style="width:42px;height:42px;font-size:14px">${veiligTekst(mbInit(m.naam||''))}</div>
+        <div style="min-width:0"><div style="font-size:18px;font-weight:700">${veiligTekst(m.naam||'')}</div>
+          <div style="font-size:12.5px;color:var(--muted);word-break:break-all">${m.leeftijd?m.leeftijd+' jaar &middot; ':''}${m.telefoon?`<a href="tel:${veiligTekst(m.telefoon)}" style="color:inherit">${veiligTekst(m.telefoon)}</a>`:''}${m.email?' &middot; '+veiligTekst(m.email):''}</div></div>
+      </div>
+      <button class="mb-mini" onclick="mbKaartDicht()" aria-label="Sluiten">&times;</button>
+    </div>
+    <div style="margin-top:8px">${mbErvaringHtml(m.id)}${m.uurloon!=null?` <span style="font-size:12px;color:var(--muted)">&middot; ${veiligTekst(mbPond(m.uurloon))} p/u</span>`:''}</div>
+    <div class="mb-rij4" style="gap:8px;margin-top:14px;display:flex;flex-wrap:wrap">
+      ${tegel(komend.length,komend.length===1?'shift ingepland':'shifts ingepland')}
+      ${tegel(mbNum(urenKomend,1),'uur ingepland')}
+      ${tegel(open.length,open.length===1?'aanvraag open':'aanvragen open',open.length?'#2A4EA8':null)}
+      ${tegel(gewerkt.length,'gewerkt (30 dagen)')}
+    </div>
+    <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;color:var(--muted)">
+      <span>${mbChip('ingedeeld','#fff','#0F7A52')} staat op het rooster</span>
+      <span>${mbChip('aangevraagd','#2A4EA8','#EEF4FF')} heeft zich aangemeld</span>
+      <span>${mbChip('kan 10:00\u201314:00','#0F7A52','#F2FBF6')} doorgegeven</span>
+    </div>
+    <div class="mb-kop" style="margin-top:16px">Komende planning</div>`;
+
+  if(!dagLijst.length){
+    uit+=`<div style="font-size:13px;color:var(--muted);padding:6px 0">Niets ingepland, niets aangevraagd en geen beschikbaarheid doorgegeven.</div>`;
+  }else{
+    dagLijst.forEach(d=>{
+      const x=dagen[d];
+      const alleenKan=!x.in.length&&!x.aan.length;
+      uit+=`<div style="display:flex;gap:12px;padding:9px 0;border-top:1px solid var(--border)${alleenKan?';opacity:.75':''}">
+        <div style="flex:0 0 104px;font-size:12.5px;font-weight:600;padding-top:4px">${veiligTekst(mbDagKop(d))}</div>
+        <div style="flex:1;min-width:0">
+          ${x.in.map(r=>shiftRegel(r,mbChip('ingedeeld','#fff','#0F7A52'))).join('')}
+          ${x.aan.map(r=>shiftRegel(r,r.status==='afgewezen'?mbChip('afgewezen','#6B6A66','#F3F2EE'):mbChip('aangevraagd','#2A4EA8','#EEF4FF'))).join('')}
+          ${x.kan.length?`<div style="padding:3px 0;display:flex;gap:6px;flex-wrap:wrap">${x.kan.map(kanChip).join('')}</div>`:''}
+        </div></div>`;
+    });
+  }
+
+  uit+=`<div class="mb-kop" style="margin-top:18px">Afgelopen 30 dagen</div>`;
+  if(!voorbij.length){
+    uit+=`<div style="font-size:13px;color:var(--muted);padding:6px 0">Niet ingedeeld geweest.</div>`;
+  }else{
+    voorbij.forEach(r=>{
+      const chip=r.status==='gewerkt'
+        ? mbChip('gewerkt'+(r.minuten?' \u00b7 '+mbNum(r.minuten/60,1)+' u':''),'#0F7A52','#F2FBF6')
+        : mbChip('niet geklokt','#B45309','#FEF6E7');
+      uit+=`<div style="display:flex;gap:12px;padding:7px 0;border-top:1px solid var(--border)">
+        <div style="flex:0 0 104px;font-size:12.5px;color:var(--muted);padding-top:4px">${veiligTekst(mbDagKop(String(r.datum)))}</div>
+        <div style="flex:1;min-width:0">${shiftRegel(r,chip)}</div></div>`;
+    });
+  }
+  uit+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
+      <button class="mb-mini" onclick="mbKaartDicht();mbPersoonOpen('${veiligJs(m.id)}')">Kleding, borg en voorvallen</button>
+      <button class="mb-mini zwart" onclick="mbKaartDicht()">Sluiten</button></div>`;
+  return uit;
 }
 
 // ── Eén persoon: kleding, borg en wat er misging ──────────────────
