@@ -3006,7 +3006,7 @@ const I18N_EN={
 'Je meldt jezelf ziek voor vandaag. Je beheerder krijgt er meteen bericht van en haalt je van de planning. Doorgaan?':'You are reporting sick for today. Your manager is notified straight away and takes you off the schedule. Continue?',
 'Ziek melden mislukt:':'Reporting sick failed:','Je stond vandaag al ziek gemeld':'You were already reported sick today','Je bent ziek gemeld voor vandaag':'You have been reported sick for today','Mislukt:':'Failed:',
 'Wacht nog op de planning — je kunt nu nog ingepland worden':'Still waiting for the planning team — you can still be scheduled','Klussen':'Jobs','Je hebt deze maand':'This month you have entered',
-'dagen doorgegeven waarop je kunt werken.':'days you can work.','dag doorgegeven waarop je kunt werken.':'day you can work.','geen klussen':'no jobs','tijd nog niet bekend':'time not known yet',
+'dagen doorgegeven waarop je kunt werken.':'days you can work.','Nog niet ingepland — de planning kan je hier nog inzetten':'Not scheduled yet — the planning team can still put you on','Toch niet beschikbaar?':'Not available after all?','Intrekken':'Withdraw','Ingetrokken':'Withdrawn','Deze dag zit in een periode — haal die weg onder "Wat ik heb doorgegeven"':'This day is part of a period — remove it under "What I have entered"','dag doorgegeven waarop je kunt werken.':'day you can work.','geen klussen':'no jobs','tijd nog niet bekend':'time not known yet',
 'Vrij aangevraagd':'Day off requested','Vrij':'Day off',
 'Er staat deze maand nog niets voor je ingepland. Geef hierboven door wanneer je kunt, of kijk bij':'Nothing is scheduled for you this month yet. Let us know above when you can work, or have a look at',
 'waar je je voor kunt aanmelden.':'that you can sign up for.','Er staat deze maand niets voor je ingepland.':'Nothing is scheduled for you this month.',
@@ -3136,7 +3136,7 @@ const I18N_EN_DELEN={'vertrek':'departure',
 'maandag':'Monday','dinsdag':'Tuesday','woensdag':'Wednesday','donderdag':'Thursday','vrijdag':'Friday','zaterdag':'Saturday','zondag':'Sunday',
 'Maandag':'Monday','Dinsdag':'Tuesday','Woensdag':'Wednesday','Donderdag':'Thursday','Vrijdag':'Friday','Zaterdag':'Saturday','Zondag':'Sunday',
 
-'Je hebt deze maand':'This month you have entered','doorgegeven waarop je kunt werken':'that you can work','Geen klus gevonden voor':'No job found for',
+'dagen beschikbaar':'days available','dag beschikbaar':'day available','Je hebt doorgegeven dat je op':'You said you can work on','kunt werken. Trek je dit in, dan kan de planning je die dag niet meer inzetten.':'. If you withdraw it, the planning team can no longer put you on that day.','Je hebt deze maand':'This month you have entered','doorgegeven waarop je kunt werken':'that you can work','Geen klus gevonden voor':'No job found for',
 'Er is hiervoor geen akkoord via de app':'There is no approval for this in the app','Weet je het zeker':'Are you sure','Probeer het opnieuw':'Please try again',
 'is mislukt':'failed','mislukt':'failed','plekken vrij':'places free','besteld door':'ordered by','Klaar gemeld door':'Marked ready by',
 'vandaag':'today','morgen':'tomorrow','ingeklokt':'clocked in','uitgeklokt':'clocked out','geleverd':'delivered','niet op voorraad':'out of stock',
@@ -15963,22 +15963,40 @@ function mmRender(){
     })
     .map(b=>({soort:'vrij',b,datum:(b.datum_start||'')<eersteDag?eersteDag:(b.datum_start||'')}));
 
-  const items=mijnKlussen.concat(mijnVrij)
-    .sort((a,b)=>a.datum.localeCompare(b.datum));
+  // Dagen die ik als beschikbaar heb doorgegeven en waarop ik nog niets heb.
+  // Vroeger stond hier een los blauw blok met alleen een aantal ("je hebt 4
+  // dagen doorgegeven"); dat las als een tegenstrijdigheid met het aantal
+  // klussen erboven. Nu staat elke open dag als eigen kaartje in de lijst,
+  // zodat je ziet wélke dagen het zijn en dat ze nog niet ingepland zijn.
+  // Alleen voor part-timers, alleen vanaf vandaag, en niet op dagen waarop
+  // je al een klus hebt.
+  const mijnBesch=[];
+  if(werktOpAanvraag(CURRENT_ROL)){
+    const klusDagen=new Set();
+    mijnKlussen.forEach(({k})=>{
+      const van=(k.datum||'').slice(0,10), tot=(k.datum_eind||k.datum||'').slice(0,10);
+      if(!van)return;
+      for(let d=parseDate(van);fmt(d)<=tot;d.setDate(d.getDate()+1))klusDagen.add(fmt(d));
+    });
+    const vanaf=vandaag>eersteDag?vandaag:eersteDag;
+    (MM_MIJNBESCH||[]).filter(b=>b.soort==='beschikbaar'&&b.status==='goedgekeurd').forEach(b=>{
+      const van=(b.datum_start||'').slice(0,10), tot=(b.datum_eind||b.datum_start||'').slice(0,10);
+      const begin=van>vanaf?van:vanaf, eind=tot<laatsteDag?tot:laatsteDag;
+      if(!van||begin>eind)return;
+      // Aaneengesloten open dagen binnen dezelfde opgave worden één kaartje.
+      let reeks=null;
+      for(let d=parseDate(begin);fmt(d)<=eind;d.setDate(d.getDate()+1)){
+        const ds=fmt(d);
+        if(klusDagen.has(ds)){reeks=null;continue;}
+        if(reeks)reeks.tot=ds,reeks.dagen++;
+        else{reeks={soort:'besch',b,datum:ds,tot:ds,dagen:1};mijnBesch.push(reeks);}
+      }
+    });
+  }
+  const kanDagen=mijnBesch.reduce((n,x)=>n+x.dagen,0);
 
-  // Hoeveel dagen heb ik deze maand doorgegeven dat ik kan? Alleen voor
-  // part-timers interessant; die zien het als één regel.
-  const kanDagen=werktOpAanvraag(CURRENT_ROL)
-    ?(MM_MIJNBESCH||[]).filter(b=>b.soort==='beschikbaar'&&b.status==='goedgekeurd')
-       .reduce((n,b)=>{
-          const van=(b.datum_start||'').slice(0,10);
-          const tot=(b.datum_eind||b.datum_start||'').slice(0,10);
-          let t=0;
-          for(let d=new Date(parseDate(van>eersteDag?van:eersteDag));
-              fmt(d)<=(tot<laatsteDag?tot:laatsteDag); d.setDate(d.getDate()+1))t++;
-          return n+Math.max(0,t);
-       },0)
-    :0;
+  const items=mijnKlussen.concat(mijnVrij,mijnBesch)
+    .sort((a,b)=>a.datum.localeCompare(b.datum));
 
   const aantalKlussen=mijnKlussen.length;
   const totaalUren=mijnKlussen.reduce((n,x)=>n+mmUren(x.k),0);
@@ -15986,6 +16004,7 @@ function mmRender(){
     aantalKlussen?aantalKlussen+(aantalKlussen===1?' klus':' klussen'):'geen klussen',
     totaalUren?Math.round(totaalUren)+' uur':'',
     mijnVrij.length?mijnVrij.length+(mijnVrij.length===1?' keer vrij':' keer vrij'):'',
+    kanDagen?kanDagen+(kanDagen===1?' dag beschikbaar':' dagen beschikbaar'):'',
   ].filter(Boolean).join(' · ');
 
   const dagBlok=(ds,extra)=>{
@@ -16041,6 +16060,22 @@ function mmRender(){
     </div>`;
   };
 
+  // Een dag (of reeks dagen) waarop je kunt maar nog niet ingepland bent.
+  // Grijs en met een stippelrand, zodat hij duidelijk anders oogt dan een
+  // klus (groen) of een vrije dag (rood/oranje).
+  const beschRegel=x=>{
+    const meerDagen=x.tot!==x.datum;
+    return`<div onclick="mmBeschTik('${veiligTekst(String(x.b.id))}','${x.datum}','${x.tot}')" style="display:flex;gap:10px;align-items:flex-start;background:transparent;border:1px dashed #CBD5E1;border-left:3px dashed #94A3B8;border-radius:10px;padding:10px 12px;cursor:pointer;-webkit-tap-highlight-color:transparent">
+      ${dagBlok(x.datum)}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:600;color:#475569">Beschikbaar</div>
+        ${meerDagen?`<div style="font-size:12px;color:var(--muted);margin-top:2px">t/m ${parseDate(x.tot).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'})}</div>`:''}
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">Nog niet ingepland — de planning kan je hier nog inzetten</div>
+      </div>
+      <div style="flex-shrink:0;color:var(--muted);font-size:18px;line-height:1">&rsaquo;</div>
+    </div>`;
+  };
+
   const leeg=werktOpAanvraag(CURRENT_ROL)
     ?'Er staat deze maand nog niets voor je ingepland. Geef hierboven door wanneer je kunt, of kijk bij <b>Klussen</b> waar je je voor kunt aanmelden.'
     :'Er staat deze maand niets voor je ingepland.';
@@ -16055,12 +16090,31 @@ function mmRender(){
       ${MM_OFFSET!==0?'<button class="btn-nav" onclick="mmWissel(0)" style="font-size:11px">Nu</button>':''}
       <button class="btn-nav" onclick="mmWissel(1)" title="Volgende maand">&#8594;</button>
     </div>
-    ${kanDagen?`<div style="font-size:12px;color:#1E40AF;background:#EFF6FF;border-radius:8px;padding:7px 10px;margin-bottom:.75rem">
-        Je hebt deze maand <b>${kanDagen}</b> ${kanDagen===1?'dag':'dagen'} doorgegeven waarop je kunt werken.
-      </div>`:''}
     ${items.length
-      ?`<div style="display:flex;flex-direction:column;gap:8px">${items.map(x=>x.soort==='klus'?klusRegel(x):vrijRegel(x)).join('')}</div>`
+      ?`<div style="display:flex;flex-direction:column;gap:8px">${items.map(x=>x.soort==='klus'?klusRegel(x):x.soort==='besch'?beschRegel(x):vrijRegel(x)).join('')}</div>`
       :`<div class="empty" style="padding:1rem .25rem;font-size:13px;line-height:1.5">${leeg}</div>`}`;
+}
+
+// Tik op een "Beschikbaar"-kaartje: die dag weer intrekken. Een losse dag
+// kan meteen; een periode van meerdere dagen haal je weg in de lijst
+// "Wat ik heb doorgegeven" (zelfde regel als in de kalender).
+async function mmBeschTik(id,van,tot){
+  const b=(MM_MIJNBESCH||[]).find(x=>String(x.id)===String(id));
+  if(!b)return;
+  const bVan=(b.datum_start||'').slice(0,10), bTot=(b.datum_eind||b.datum_start||'').slice(0,10);
+  if(bVan!==bTot){
+    toast('Deze dag zit in een periode — haal die weg onder "Wat ik heb doorgegeven"','fout');
+    return;
+  }
+  const dag=parseDate(van).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
+  const ja=await vraagBevestiging('Toch niet beschikbaar?',
+    `Je hebt doorgegeven dat je op <b>${dag}</b> kunt werken. Trek je dit in, dan kan de planning je die dag niet meer inzetten.`,
+    'Intrekken');
+  if(!ja)return;
+  const{error}=await sb.from('beschikbaarheid').delete().eq('id',b.id);
+  if(error){toast('Verwijderen mislukt: '+error.message,'fout');return;}
+  toast('Ingetrokken');
+  await loadPersoonlijkSchema();
 }
 
 // ── KALENDER: in één keer meerdere dagen beschikbaar melden ─────────────
