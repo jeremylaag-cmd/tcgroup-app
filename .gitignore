@@ -16,3 +16,6 @@ bouw-log.txt
 bouwlog.txt
 herbouw.txt
 Claude outputs/
+
+# Firebase (niet in de openbare GitHub-map)
+android/app/google-services.json
