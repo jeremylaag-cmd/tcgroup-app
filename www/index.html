@@ -8960,7 +8960,13 @@ function aanvulTijd(el){
   else{u=+cijfers.slice(0,2);m=+cijfers.slice(2,4);}
   if(u>23)u=23;
   if(m>59)m=59;
-  el.value=String(u).padStart(2,'0')+'.'+String(m).padStart(2,'0');
+  const nieuw=String(u).padStart(2,'0')+'.'+String(m).padStart(2,'0');
+  if(el.value!==nieuw){
+    el.value=nieuw;
+    // Velden die hun waarde via oninput bijhouden (zoals de shifttijden) kregen
+    // het aangevulde "09.00" anders nooit te zien en bewaarden "9" → geen tijd.
+    el.dispatchEvent(new Event('input',{bubbles:true}));
+  }
 }
 
 // Tijdvelden aanvullen bij verlaten, en overal waar alleen cijfers in horen
@@ -9039,7 +9045,19 @@ document.addEventListener('DOMContentLoaded',()=>{
     }).observe(document.body,{childList:true,subtree:true});
   }catch(e){}
 });
-function tijdToDb(v){if(!v)return null;const p=v.replace('.',':').split(':');if(p.length===2)return`${p[0].padStart(2,'0')}:${p[1].padEnd(2,'0')}:00`;return null;}
+function tijdToDb(v){
+  if(!v)return null;
+  v=String(v).trim();
+  const p=v.replace('.',':').split(':');
+  if(p.length===2&&p[0]!=='')return`${p[0].padStart(2,'0')}:${(p[1]||'0').padEnd(2,'0')}:00`;
+  // Alleen cijfers: 9 → 09:00, 930 → 09:30, 1745 → 17:45
+  const c=v.replace(/[^0-9]/g,'');
+  if(!c||c.length>4)return null;
+  let u,m;
+  if(c.length<=2){u=+c;m=0;}else if(c.length===3){u=+c.slice(0,1);m=+c.slice(1);}else{u=+c.slice(0,2);m=+c.slice(2);}
+  if(u>23||m>59)return null;
+  return String(u).padStart(2,'0')+':'+String(m).padStart(2,'0')+':00';
+}
 function tijdFromDb(t){return t?t.slice(0,5).replace(':','.'):''}
 // ══ MELDINGEN: RODE BOLLETJES ═══════════════════════════════════════
 // Een bolletje betekent "hier ligt iets op jou te wachten". De database telt
