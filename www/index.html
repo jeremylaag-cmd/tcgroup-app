@@ -10893,6 +10893,37 @@ async function togglePers(id){
 // Eén venster dat overal gebruikt wordt en een ja of nee teruggeeft.
 let bevestigResolve=null;
 
+// Dubbel ingepland bij het opslaan van een klus: wat doen we ermee?
+// 'weg' = van deze klus halen, 'laat' = laten staan (vrij gaat er altijd af), 'annuleer'.
+function klusConflictKeuze(conf,verplaatst){
+  return new Promise(res=>{
+    const ov=document.createElement('div');
+    ov.className='modal-overlay open'; ov.style.zIndex='9100';
+    const perPersoon={};
+    conf.forEach(c=>{ (perPersoon[c.gebruiker_id]=perPersoon[c.gebruiker_id]||{naam:c.naam,regels:[]}).regels.push(c); });
+    const metVrij=conf.some(c=>c.soort==='vrij'), metKlus=conf.some(c=>c.soort==='klus');
+    const regels=Object.values(perPersoon).map(p=>`<div style="padding:8px 0;border-top:1px solid var(--border)">
+        <div style="font-weight:600">${veiligTekst(p.naam)}</div>
+        ${p.regels.map(c=>`<div style="font-size:12.5px;color:${c.soort==='vrij'?'#B91C1C':'#92400E'};margin-top:2px">
+          ${veiligTekst(parseDate(c.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}))}:
+          ${c.soort==='vrij'?'heeft vrij ('+veiligTekst(c.wat)+', '+veiligTekst(c.tijd)+')':'staat al op <b>'+veiligTekst(c.wat)+'</b> ('+veiligTekst(c.tijd)+')'}</div>`).join('')}
+      </div>`).join('');
+    ov.innerHTML=`<div class="modal" style="max-width:440px">
+      <div class="modal-title">Dubbel ingepland</div>
+      <div style="font-size:13px;line-height:1.55;margin-bottom:6px">${verplaatst?'Door de nieuwe datum staan deze mensen':'Deze mensen staan'} op dezelfde tijd ook ergens anders${metVrij?' of hebben vrij':''}:</div>
+      <div style="font-size:13px;line-height:1.5;max-height:45vh;overflow:auto">${regels}</div>
+      ${metVrij?'<div style="font-size:12px;color:var(--muted);margin-top:8px">Wie goedgekeurd vrij heeft, gaat in elk geval van deze klus af.</div>':''}
+      <div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">
+        <button class="btn-sm" data-k="weg" style="width:100%">Haal ze van deze klus en sla op</button>
+        ${metKlus?`<button class="btn-ghost" data-k="laat" style="width:100%">Laat ze op beide klussen staan</button>`:''}
+        <button class="btn-ghost" data-k="annuleer" style="width:100%">Annuleren</button>
+      </div></div>`;
+    const klaar=k=>{ ov.remove(); res(k); };
+    ov.addEventListener('click',e=>{ const b=e.target.closest('[data-k]'); if(b)klaar(b.dataset.k); else if(e.target===ov)klaar('annuleer'); });
+    document.body.appendChild(ov);
+  });
+}
+
 function vraagBevestiging(titel,tekstHtml,jaLabel){
   return new Promise(res=>{
     // Stond er al een vraag open, dan tellen we die als "nee".
@@ -11442,12 +11473,42 @@ async function saveKlusIntern(){
   if(!personeel_nodig&&personeel_nodig!==0){showWarn('Vul het aantal benodigde personeelsleden in.');return;}
   const allSoortIds=[...new Set(Object.values(formTruckSoorten).flat())];
   const foodLabel=allSoortIds.length?SOORTEN.find(s=>s.id===allSoortIds[0])?.titel||'':'';
-  document.getElementById('savingMsg').style.display='inline';
 
   // Bepaal alle datums (herhaling)
   const allDatums=(!editId&&herhalingPatroon&&herhalingEind)
     ?herhalingDatums(datum,herhalingPatroon,herhalingEind)
     :[datum];
+
+  // Dubbel ingepland? Ook als alleen de datum of tijd van de klus verandert,
+  // want dan kan iemand die er al op stond ineens op twee plekken tegelijk staan.
+  const oudeKlus=editId?(KLUSSEN||[]).find(k=>k.id===editId):null;
+  const verplaatst=!!oudeKlus&&(oudeKlus.datum!==datum||(oudeKlus.datum_eind||null)!==(datum_eind||null));
+  const tijdAnders=!!oudeKlus&&(String(oudeKlus.start_tijd||'')!==String(start_tijd||'')||String(oudeKlus.einde_klus||'')!==String(einde_klus||'')
+    ||String(oudeKlus.einde_feest||'')!==String(einde_feest||''));
+  const alOp=new Set(((oudeKlus&&oudeKlus.personeel)||[]).map(p=>p.id));
+  const teControleren=(!editId||verplaatst||tijdAnders)?formPers.slice():formPers.filter(g=>!alOp.has(g));
+  let vanKlusGehaald=[];
+  if(teControleren.length){
+    const dagen=[];
+    allDatums.forEach(d=>{ dagen.push(d); });
+    if(datum_eind&&datum_eind>datum&&allDatums.length===1){
+      const x=new Date(datum+'T00:00:00'), eind=new Date(datum_eind+'T00:00:00');
+      x.setDate(x.getDate()+1); while(x<=eind&&dagen.length<40){ dagen.push(fmt(x)); x.setDate(x.getDate()+1); }
+    }
+    const{data:conf,error:confErr}=await sb.rpc('planning_conflicten',{p_gebruikers:teControleren,p_datums:dagen,p_klus:editId||null,
+      p_begin:start_tijd||vertrek_tijd||start_opbouw||null,p_eind:einde_klus||einde_feest||null});
+    if(!confErr&&conf&&conf.length){
+      const keuze=await klusConflictKeuze(conf,verplaatst);
+      if(keuze==='annuleer')return;
+      const weg=new Set(conf.filter(c=>keuze==='weg'||c.soort==='vrij').map(c=>c.gebruiker_id));
+      if(weg.size){
+        vanKlusGehaald=formPers.filter(g=>weg.has(g)&&alOp.has(g));
+        formPers=formPers.filter(g=>!weg.has(g));
+        weg.forEach(g=>{ if(formPersShift)delete formPersShift[g]; });
+      }
+    }
+  }
+  document.getElementById('savingMsg').style.display='inline';
 
   try{
     let klusId=editId;
@@ -11516,6 +11577,8 @@ async function saveKlusIntern(){
     };
 
     if(editId){
+      const dlNieuw=parseDate(datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
+      const dlOud=oudeKlus?parseDate(oudeKlus.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'}):'';
       const{error:updErr}=await sb.from('klussen').update({naam,datum,datum_eind,start_tijd,vertrek_tijd,start_opbouw,start_feest,einde_feest,einde_klus,personen,personeel_nodig,food:foodLabel,notitie,adres,milieuzone,contactpersoon,telefoon,klant,lat,lon,gemeente,...(MAG_CIJFERS?{verkoop_soort:FORM_VERKOOP}:{})}).eq('id',editId);
       if(updErr)throw new Error('Klus opslaan mislukt: '+updErr.message);
       await sb.from('klus_trucks').delete().eq('klus_id',editId);
@@ -11525,6 +11588,13 @@ async function saveKlusIntern(){
       await sb.from('klus_losse_personen').delete().eq('klus_id',editId);
       await sb.from('klus_shifts').delete().eq('klus_id',editId);
       await schrijfKoppelingen(editId);
+      // Pas na het opslaan: bericht aan wie eraf is gehaald en, bij een nieuwe datum, aan wie er nog op staat.
+      try{
+        vanKlusGehaald.forEach(g=>sendPushNotificatie(g,'Planning gewijzigd',
+          `Je staat niet meer op ${naam||'de klus'} van ${dlOud}${verplaatst?' (verplaatst naar '+dlNieuw+')':''}.`));
+        if(verplaatst)formPers.filter(g=>alOp.has(g)).forEach(g=>sendPushNotificatie(g,'Klus verplaatst',
+          `${naam||'Je klus'} is verplaatst van ${dlOud} naar ${dlNieuw}. Je staat er nog steeds op.`));
+      }catch(e){}
       await bewaarKlusFinancieel(editId);
       const removedPdfs=KLUSSEN.find(k=>k.id===editId)?.pdfs.filter(p=>!existingPdfs.find(e=>e.id===p.id))||[];
       for(const p of removedPdfs){
