@@ -2414,10 +2414,17 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       <div class="sc" id="uurKlusCard" style="margin-bottom:1rem"></div>
       <div class="sc" id="uurRegistratieCard"></div>
       <div class="sc" style="margin-top:1rem">
-        <div class="st" style="margin-bottom:.875rem">Mijn registraties</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.875rem;flex-wrap:wrap">
+          <div class="st">Mijn registraties</div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <button class="btn-nav" onclick="mijnUrenMaand(-1)" aria-label="Vorige maand">&#8592;</button>
+            <span id="mijnUrenMaandLabel" class="notr" style="font-size:12px;font-weight:600;min-width:112px;text-align:center"></span>
+            <button class="btn-nav" id="mijnUrenVolgende" onclick="mijnUrenMaand(1)" aria-label="Volgende maand">&#8594;</button>
+          </div>
+        </div>
+        <div id="mijnUrenTotaal"></div>
         <div id="mijnUrenList"><div class="spin">Laden...</div></div>
       </div>
-      <div class="sc" id="uurMaandCard" style="margin-top:1rem"></div>
     </div>
   </div>
 
@@ -2974,7 +2981,7 @@ const I18N_EN={
 'Bezig...':'Working...','Opslaan mislukt:':'Saving failed:','✓ Opgeslagen':'✓ Saved','Adres opslaan mislukt:':'Saving address failed:','Vul eerst een telefoonnummer in':'Fill in a phone number first',
 'Telefoonnummer opslaan mislukt:':'Saving phone number failed:','Locatie niet beschikbaar':'Location not available','Locatie geweigerd':'Location denied','Locatie ophalen...':'Getting location...',
 'Geklokt':'Clocked','Ingepland':'Scheduled','nog geen tijden ingevuld':'no times filled in yet','klus staan':'job have','klussen staan':'jobs have','in afwachting':'pending',
-'— je kunt altijd inklokken, ook zonder klus':'— you can always clock in, also without a job','Geen klus ingepland voor vandaag':'No job scheduled for today','Nog geen registraties':'No time records yet',
+'— je kunt altijd inklokken, ook zonder klus':'— you can always clock in, also without a job','Geen klus ingepland voor vandaag':'No job scheduled for today','Nog geen registraties':'No time records yet','Geen registraties in deze maand':'No time records this month','Totaal deze maand':'Total this month',
 'Ingeklokt':'Clocked in','nog niet uitgeklokt':'not clocked out yet','Mijn klus vandaag':'My job today','Mijn klussen vandaag':'My jobs today','Hal medewerker':'Warehouse staff',
 'Goedgekeurd':'Approved','Afgewezen':'Rejected','In afwachting':'Pending','min pauze':'min break','Hal':'Warehouse','Kantoor':'Office','Inklokken zonder klus':'Clock in without a job','Inklokken':'Clock in',
 'Zet je locatie aan —':'Turn on your location —','niet zonder.':'without it.','in- en uitklokken lukken':'clocking in and out won’t work','inklokken lukt':'clocking in won’t work','uitklokken lukt':'clocking out won’t work',
@@ -9246,6 +9253,7 @@ function renderAanmeldingen(){
           <select id="aanmRol-${a.id}" onchange="aanmRolGewijzigd('${a.id}')" style="${veld}">
             <option value="">Kies —</option>
             <option value="part-timer">Part-timer</option>
+            <option value="part-timer-extra">Parttimer extra</option>
             <option value="full-timer">Full-timer</option>
             <option value="hal">Hal medewerker</option>
             <option value="manager-franklins">Manager Franklins</option>
@@ -9289,13 +9297,14 @@ async function keurAanmeldingGoed(id){
   const foutEl=document.getElementById('aanmFout-'+id);
   const fout=t=>{if(foutEl){foutEl.textContent=t;foutEl.style.display='';}};
   if(foutEl)foutEl.style.display='none';
-  const rol=document.getElementById('aanmRol-'+id)?.value||'';
+  const rolKeuze=document.getElementById('aanmRol-'+id)?.value||'';
+  const rol=rolKeuze==='part-timer-extra'?'part-timer':rolKeuze;
   const loonRuw=(document.getElementById('aanmLoon-'+id)?.value||'').trim().replace(',','.');
   const urenRuw=(document.getElementById('aanmUren-'+id)?.value||'').trim();
   if(!rol){fout('Kies eerst een rol.');return;}
   if(loonRuw===''||isNaN(Number(loonRuw))||Number(loonRuw)<0){fout('Vul een geldig uurloon in.');return;}
 
-  const velden={rol,uurloon:Number(loonRuw),goedgekeurd:true};
+  const velden={rol,parttimer_extra:rolKeuze==='part-timer-extra',uurloon:Number(loonRuw),goedgekeurd:true};
   if(urenRuw!==''&&!isNaN(Number(urenRuw)))velden.contract_uren_per_week=Number(urenRuw);
   if(isVasteKracht(rol))velden.in_dienst_op=velden.in_dienst_op||fmt(new Date());
   const sub=document.getElementById('aanmSub-'+id);
@@ -9326,7 +9335,7 @@ let accRol='';
 let accSkills=new Set();
 let ACCOUNTS_ZICHTBAAR=[];
 
-const ACC_ROLLEN=['beheerder','full-timer','hal','manager-franklins','part-timer','personeel'];
+const ACC_ROLLEN=['beheerder','full-timer','hal','manager-franklins','part-timer','part-timer-extra','personeel'];
 
 function accSkillIdsVan(u){
   try{
@@ -9360,8 +9369,8 @@ function renderAccountFilters(zoektPast,rolPast,skillsPassen,rolLabels,aantalNu)
   if(!vak)return;
 
   // Alleen rollen die echt voorkomen, in een vaste volgorde.
-  const aanwezig=ACC_ROLLEN.filter(r=>(ACCOUNTS||[]).some(u=>u.rol===r));
-  const rolTelling=r=>(ACCOUNTS||[]).filter(u=>zoektPast(u)&&skillsPassen(u)&&u.rol===r).length;
+  const aanwezig=ACC_ROLLEN.filter(r=>(ACCOUNTS||[]).some(u=>rolSleutel(u)===r));
+  const rolTelling=r=>(ACCOUNTS||[]).filter(u=>zoektPast(u)&&skillsPassen(u)&&rolSleutel(u)===r).length;
 
   // Alleen skills die iemand ook echt heeft (en wat je zelf hebt aangevinkt).
   const inGebruik=(SKILLS||[]).filter(sk=>
@@ -9404,7 +9413,7 @@ function renderAccountFilters(zoektPast,rolPast,skillsPassen,rolLabels,aantalNu)
 function renderAccounts(){
   const acc=document.getElementById('accList');
   if(!acc)return;
-  const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','manager-franklins':'Manager Franklins','personeel':'Personeel'};
+  const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','part-timer-extra':'Parttimer extra','full-timer':'Full-timer','hal':'Hal medewerker','manager-franklins':'Manager Franklins','personeel':'Personeel'};
   const zoek=(document.getElementById('accZoek')?.value||'').trim().toLowerCase();
 
   const skillNamenVan=u=>{
@@ -9415,12 +9424,12 @@ function renderAccounts(){
 
   const zoektPast=u=>{
     if(!zoek)return true;
-    const hooiberg=[u.naam,rolLabels[u.rol]||u.rol,u.telefoon,u.email,u.plaats,u.straat,
+    const hooiberg=[u.naam,rolLabels[rolSleutel(u)]||u.rol,u.telefoon,u.email,u.plaats,u.straat,
       u.shirtmaat,u.rijbewijs,rijbewijsTekst(u.rijbewijs),u.contractvorm,...skillNamenVan(u)]
       .filter(Boolean).join(' ').toLowerCase();
     return zoek.split(/\s+/).every(woord=>hooiberg.includes(woord));
   };
-  const rolPast=u=>!accRol||u.rol===accRol;
+  const rolPast=u=>!accRol||rolSleutel(u)===accRol;
   const skillsPassen=u=>{
     if(!accSkills.size)return true;
     const heeft=new Set(accSkillIdsVan(u));
@@ -9452,7 +9461,7 @@ function renderAccounts(){
         <div class="acc-info" style="flex:1;min-width:0">
           <div class="acc-naam">${veiligTekst(u.naam||'–')}</div>
           <div style="font-size:10px;color:var(--muted);margin-top:2px;display:flex;gap:8px;flex-wrap:wrap">
-            <span>${rolLabels[u.rol]||u.rol}${u.beheer_rol?' \u00b7 '+beheerRolLabel(u.beheer_rol):''}</span>
+            <span>${rolLabels[rolSleutel(u)]||u.rol}${u.beheer_rol?' \u00b7 '+beheerRolLabel(u.beheer_rol):''}</span>
             ${u.telefoon?`<span>${veiligTekst(u.telefoon)}</span>`:''}
             ${u.shirtmaat?`<span>👕 ${veiligTekst(u.shirtmaat)}</span>`:''}
             ${u.rijbewijs?`<span title="${veiligTekst(rijbewijsTekst(u.rijbewijs))}">🚗 ${veiligTekst(rijbewijsKort(u.rijbewijs))}</span>`:''}
@@ -9491,7 +9500,7 @@ async function exportPersoneel(){
     }
 
     const skillNaam=Object.fromEntries((skillsData||[]).map(s=>[s.id,s.naam]));
-    const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','manager-franklins':'Manager Franklins','personeel':'Personeel'};
+    const rolLabels={'beheerder':'Beheerder','part-timer':'Part-timer','part-timer-extra':'Parttimer extra','full-timer':'Full-timer','hal':'Hal medewerker','manager-franklins':'Manager Franklins','personeel':'Personeel'};
 
     const geslachtLabel={'man':'Man','vrouw':'Vrouw','anders':'Anders','zeg-ik-liever-niet':'Zegt het liever niet'};
     const contractLabel={'oproep':'Oproepkracht','bepaalde-tijd':'Bepaalde tijd','onbepaalde-tijd':'Onbepaalde tijd','stage':'Stage','zzp':'ZZP','vakantiekracht':'Vakantiekracht'};
@@ -9504,7 +9513,7 @@ async function exportPersoneel(){
       const leeftijd=berekenLeeftijd(u.geboortedatum);
       rijen.push([
         u.naam||'',
-        rolLabels[u.rol]||u.rol||'',
+        rolLabels[rolSleutel(u)]||u.rol||'',
         u.email||'',
         u.telefoon||'',
         u.straat||'',
@@ -9551,7 +9560,10 @@ let persDetailId=null;
 let PD=null;            // medewerker die nu open staat, met zijn gegevens
 let pdAgendaOffset=0;   // 0 = deze maand
 
-const PD_ROLLABEL={'beheerder':'Beheerder','part-timer':'Part-timer','full-timer':'Full-timer','hal':'Hal medewerker','manager-franklins':'Manager Franklins','personeel':'Personeel'};
+// "Parttimer extra" is in de database gewoon een part-timer (rol = 'part-timer')
+// met parttimer_extra = true. Alles werkt dus precies hetzelfde; alleen de naam verschilt.
+function rolSleutel(u){ return (u&&u.rol==='part-timer'&&u.parttimer_extra)?'part-timer-extra':(u?u.rol:''); }
+const PD_ROLLABEL={'beheerder':'Beheerder','part-timer':'Part-timer','part-timer-extra':'Parttimer extra','full-timer':'Full-timer','hal':'Hal medewerker','manager-franklins':'Manager Franklins','personeel':'Personeel'};
 const PD_GESLACHT={'man':'Man','vrouw':'Vrouw','anders':'Anders','zeg-ik-liever-niet':'Zegt het liever niet'};
 const PD_CONTRACT={'oproep':'Oproepkracht','bepaalde-tijd':'Bepaalde tijd','onbepaalde-tijd':'Onbepaalde tijd','stage':'Stage','zzp':'ZZP','vakantiekracht':'Vakantiekracht'};
 const PD_MAANDEN=['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December'];
@@ -9619,7 +9631,7 @@ function openLosKaart(id){
 async function openMwKaart(uid){
   const basis=(PERSONEEL||[]).find(x=>x.id===uid)||{};
   const inhoud=document.getElementById('mwKaartInhoud');
-  inhoud.innerHTML=mwKop(basis.naam||'Medewerker',PD_ROLLABEL[basis.rol]||basis.rol||'')+
+  inhoud.innerHTML=mwKop(basis.naam||'Medewerker',PD_ROLLABEL[rolSleutel(basis)]||basis.rol||'')+
     '<div class="spin" style="padding:1rem 0">Laden...</div>';
   const pb=document.getElementById('mwKaartProfiel');
   if(pb)pb.style.display='none';
@@ -9629,7 +9641,7 @@ async function openMwKaart(uid){
   // bewaakt dat zelf. Voor de rest halen we het nummer uit de collegalijst die
   // bij de klus hoort — die mag iedereen zien die er zelf op staat.
   const [{data:u},{data:sk}]=await Promise.all([
-    sb.from('gebruikers').select('naam,rol,email,telefoon,straat,postcode,plaats,geboortedatum,shirtmaat,rijbewijs,skills,contractvorm').eq('id',uid).maybeSingle(),
+    sb.from('gebruikers').select('naam,rol,parttimer_extra,email,telefoon,straat,postcode,plaats,geboortedatum,shirtmaat,rijbewijs,skills,contractvorm').eq('id',uid).maybeSingle(),
     (SKILLS&&SKILLS.length)?Promise.resolve({data:SKILLS}):sb.from('skills').select('id,naam').order('naam'),
   ]);
   if(sk&&sk.length)SKILLS=sk;
@@ -9638,7 +9650,7 @@ async function openMwKaart(uid){
     // Geen rechten op het profiel: laat zien wat er wél bekend is.
     const tel=(COLLEGA_TEL||[]).find(x=>x.id===uid);
     const nr=tel?telSchoon(tel.telefoon):'';
-    inhoud.innerHTML=mwKop(basis.naam||'Medewerker',PD_ROLLABEL[basis.rol]||basis.rol||'')+
+    inhoud.innerHTML=mwKop(basis.naam||'Medewerker',PD_ROLLABEL[rolSleutel(basis)]||basis.rol||'')+
       `<div>`+
       mwRij('Telefoon',nr?`<a href="tel:${nr}" style="color:#2563EB;text-decoration:none;font-weight:500">${veiligTekst(tel.telefoon)}</a>`:'<span style="color:var(--muted);font-style:italic">geen nummer bekend</span>')+
       `</div>
@@ -9657,7 +9669,7 @@ async function openMwKaart(uid){
   const leeftijd=berekenLeeftijd(u.geboortedatum);
   const adres=[u.straat,[u.postcode,u.plaats].filter(Boolean).join(' ')].filter(Boolean).join(', ');
 
-  inhoud.innerHTML=mwKop(u.naam||basis.naam,PD_ROLLABEL[u.rol]||u.rol||'')+
+  inhoud.innerHTML=mwKop(u.naam||basis.naam,PD_ROLLABEL[rolSleutel(u)]||u.rol||'')+
     `<div>`+
     mwRij('Telefoon',nr?`<a href="tel:${nr}" style="color:#2563EB;text-decoration:none;font-weight:500">${veiligTekst(u.telefoon)}</a>`:'<span style="color:var(--muted);font-style:italic">geen nummer bekend</span>')+
     mwRij('E-mail',u.email?`<a href="mailto:${veiligTekst(u.email)}" style="color:#2563EB;text-decoration:none">${veiligTekst(u.email)}</a>`:'')+
@@ -9942,7 +9954,7 @@ function pdRenderZij(){
   document.getElementById('pdZij').innerHTML=
     `<div class="pd-av">${initialen}</div>
      <div class="pd-naam">${veiligTekst(u.naam||'Onbekend')}</div>
-     ${rij('&#9679;',PD_ROLLABEL[u.rol]||u.rol||'')}
+     ${rij('&#9679;',PD_ROLLABEL[rolSleutel(u)]||u.rol||'')}
      ${rij('&#9787;',persoon)}
      ${rij('&#128196;',PD_CONTRACT[u.contractvorm]||'')}
      ${rij('&euro;',u.uurloon!=null?('&euro; '+Number(u.uurloon).toFixed(2).replace('.',',')+' <span style="color:var(--muted)">per uur</span>'):'')}
@@ -10152,7 +10164,8 @@ function pdRenderGegevens(){
      <div class="fr"><span class="fl">Rol</span>
        <select id="pdRol" onchange="pdRolGewijzigd()"${u.beheer_rol==='administrator'?' disabled':''} style="font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);width:100%">
          ${u.rol==='personeel'?'<option value="personeel" selected>Personeel (verouderd)</option>':''}
-         <option value="part-timer"${u.rol==='part-timer'?' selected':''}>Part-timer</option>
+         <option value="part-timer"${u.rol==='part-timer'&&!u.parttimer_extra?' selected':''}>Part-timer</option>
+         <option value="part-timer-extra"${u.rol==='part-timer'&&u.parttimer_extra?' selected':''}>Parttimer extra</option>
          <option value="full-timer"${u.rol==='full-timer'?' selected':''}>Full-timer</option>
          <option value="hal"${u.rol==='hal'?' selected':''}>Hal medewerker</option>
          <option value="manager-franklins"${u.rol==='manager-franklins'?' selected':''}>Manager Franklins</option>
@@ -10264,7 +10277,8 @@ function pdRolGewijzigd(){
 async function savePersDetail(){
   const uid=persDetailId;if(!uid)return;
   const naam=document.getElementById('pdNaam').value.trim();
-  const rol=document.getElementById('pdRol').value;
+  const rolKeuze=document.getElementById('pdRol').value;
+  const rol=rolKeuze==='part-timer-extra'?'part-timer':rolKeuze;
   const email=document.getElementById('pdEmail').value.trim();
   const telefoon=document.getElementById('pdTel').value.trim();
   const straat=document.getElementById('pdStraat').value.trim();
@@ -10290,7 +10304,7 @@ async function savePersDetail(){
   if(!naam){wb.textContent='Naam is verplicht.';wb.className='warn-box show';return;}
   if(uurloon!==null&&(isNaN(uurloon)||uurloon<0)){wb.textContent='Uurloon klopt niet.';wb.className='warn-box show';return;}
   wb.className='warn-box';
-  const velden={naam,rol,email,telefoon,straat,postcode,plaats,shirtmaat,rijbewijs,
+  const velden={naam,rol,parttimer_extra:rolKeuze==='part-timer-extra',email,telefoon,straat,postcode,plaats,shirtmaat,rijbewijs,
       contract_uren_per_week,in_dienst_op,uit_dienst_op,werkdagen,
              geslacht,geboortedatum,contractvorm,uurloon};
   // De beheerdersrol sturen we alleen mee als de administrator hem echt mocht
@@ -12414,7 +12428,7 @@ function tekenKlusPersoneel(){
   if(!vak||!lijst||!k)return;
 
   const mij=CURRENT_USER?CURRENT_USER.id:null;
-  const maak=(p)=>({id:p.id,naam:p.naam,rol:PD_ROLLABEL[p.rol]||p.rol||'',
+  const maak=(p)=>({id:p.id,naam:p.naam,rol:PD_ROLLABEL[rolSleutel(p)]||p.rol||'',
                     telefoon:KP_TEL[p.id]||null,ikzelf:p.id===mij,los:false,shift_id:p.shift_id||null});
   const maakLos=(l)=>({id:l.id,naam:l.naam,rol:'Losse kracht',telefoon:l.telefoon||null,
                        ikzelf:false,los:true,shift_id:l.shift_id||null});
@@ -13413,16 +13427,50 @@ async function loadUrenPersoneel(){
     renderInklokken(klussenVandaag,regCard,kanInklokken);
   }
 
-  // Laad registratie geschiedenis
-  const{data:hist}=await sb.from('urenregistraties')
-    .select('*').eq('gebruiker_id',CURRENT_USER.id)
-    .neq('status','lopend').order('ingeklokt_op',{ascending:false}).limit(20);
+  await laadMijnUrenMaand();
+}
 
+// Mijn registraties per maand, met pijltjes naar eerdere maanden.
+let MIJN_UREN_MAAND=null;   // eerste dag van de getoonde maand
+function mijnUrenMaand(stap){
+  const nu=new Date(), basis=MIJN_UREN_MAAND||new Date(nu.getFullYear(),nu.getMonth(),1);
+  const n=new Date(basis.getFullYear(),basis.getMonth()+stap,1);
+  if(n>new Date(nu.getFullYear(),nu.getMonth(),1))return;   // niet verder dan deze maand
+  MIJN_UREN_MAAND=n; laadMijnUrenMaand();
+}
+async function laadMijnUrenMaand(){
   const listEl=document.getElementById('mijnUrenList');
-  if(!listEl)return;
-  if(!hist||!hist.length){listEl.innerHTML='<div class="empty">Nog geen registraties</div>';return;}
+  if(!listEl||!CURRENT_USER)return;
+  const nu=new Date(), deze=new Date(nu.getFullYear(),nu.getMonth(),1);
+  const mStart=MIJN_UREN_MAAND||deze;
+  const mEind=new Date(mStart.getFullYear(),mStart.getMonth()+1,1);
+  const lab=document.getElementById('mijnUrenMaandLabel');
+  if(lab)lab.textContent=mStart.toLocaleDateString(TAAL==='en'?'en-GB':'nl-NL',{month:'long',year:'numeric'});
+  const volg=document.getElementById('mijnUrenVolgende');
+  if(volg){ volg.disabled=mStart>=deze; volg.style.opacity=mStart>=deze?'.35':''; }
+  listEl.innerHTML='<div class="spin">Laden...</div>';
+  let{data:hist,error}=await sb.from('urenregistraties')
+    .select('*,klussen(naam,food)').eq('gebruiker_id',CURRENT_USER.id)
+    .neq('status','lopend').gte('ingeklokt_op',mStart.toISOString()).lt('ingeklokt_op',mEind.toISOString())
+    .order('ingeklokt_op',{ascending:false});
+  if(error){
+    ({data:hist}=await sb.from('urenregistraties').select('*').eq('gebruiker_id',CURRENT_USER.id)
+      .neq('status','lopend').gte('ingeklokt_op',mStart.toISOString()).lt('ingeklokt_op',mEind.toISOString())
+      .order('ingeklokt_op',{ascending:false}));
+  }
+  const totEl=document.getElementById('mijnUrenTotaal');
+  let tot=0,goed=0,wacht=0,km=0,kmBed=0;
+  (hist||[]).forEach(r=>{ if(r.status==='afgewezen')return; const m=r.totaal_minuten||0; tot+=m;
+    if(r.status==='goedgekeurd')goed+=m; else wacht+=m;
+    if(Number(r.km)>0){km+=Number(r.km);kmBed+=kmBedrag(r.km,r.km_tarief)||0;} });
+  if(totEl)totEl.innerHTML=(hist&&hist.length)?`<div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:4px">Totaal deze maand</div>
+      <div style="font-size:24px;font-weight:600;color:var(--text);line-height:1.1">${minToStr(tot)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:5px">${minToStr(goed)} goedgekeurd${wacht?' · '+minToStr(wacht)+' in afwachting':''}${km?' · 🚗 '+String(Math.round(km*10)/10).replace('.',',')+' km':''}</div>
+    </div>`:'';
+  if(!hist||!hist.length){listEl.innerHTML=`<div class="empty">${mStart>=deze?'Nog geen registraties':'Geen registraties in deze maand'}</div>`;return;}
   listEl.innerHTML=hist.map(r=>{
-    const k=KLUSSEN.find(x=>x.id===r.klus_id);
+    const k=(r.klussen&&(r.klussen.naam||r.klussen.food))?r.klussen:KLUSSEN.find(x=>x.id===r.klus_id);
     const datum=new Date(r.ingeklokt_op).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
     const in_t=new Date(r.ingeklokt_op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'});
     const uit_t=r.uitgeklokt_op?new Date(r.uitgeklokt_op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}):'–';
@@ -17405,7 +17453,7 @@ async function exportVerlof(jaar,gebruikerId,knopTekst){
     'Ziekmeldingen','Nog in te delen']);
   CIJFERS.forEach(c=>{
     const pd=Number(c.uren_per_dag||8);
-    rijen.push([c.naam,PD_ROLLABEL[c.rol]||c.rol,nl(c.contract_uren),c.in_dienst||'',c.uit_dienst||'',
+    rijen.push([c.naam,PD_ROLLABEL[rolSleutel(c)]||c.rol,nl(c.contract_uren),c.in_dienst||'',c.uit_dienst||'',
       nl(pd),nl(c.beginsaldo),nl(c.jaarrecht),Math.round(Number(c.opbouw_factor)*100),
       nl(c.opgebouwd),nl(c.correcties),nl(c.opgenomen),nl(c.aangevraagd),nl(c.saldo),
       nl(Number(c.saldo)/pd),nl(c.ziek_uren),nl(Number(c.ziek_uren)/pd),c.ziek_meldingen,c.nog_in_te_delen]);
