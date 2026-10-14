@@ -1095,6 +1095,91 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
 .db-tabel td{padding:7px 8px 7px 0;border-top:1px solid var(--border);vertical-align:top}
 .db-tabel td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
 @media(max-width:640px){.db-wrap{padding:1rem 1rem 5rem}}
+/* ══ CRM · Aanvragen (Nederland) ══ */
+.crm-wrap{padding:1rem;max-width:1360px;margin:0 auto}
+.crm-sub{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+.crm-tab{font-size:13px;padding:8px 14px;border-radius:99px;border:1px solid var(--border);background:var(--card,#fff);color:var(--text);font-family:var(--font);font-weight:600;cursor:pointer}
+.crm-tab.aan{background:var(--text);border-color:var(--text);color:#fff}
+.crm-knop{font-size:13px;padding:9px 14px;border-radius:9px;border:1px solid var(--border);background:var(--card,#fff);color:var(--text);font-family:var(--font);font-weight:600;cursor:pointer;line-height:1.2}
+.crm-knop.zwart{background:var(--text);border-color:var(--text);color:#fff}
+.crm-knop.blauw{background:#EFF6FF;border-color:#C9D6F2;color:#1E40AF}
+.crm-knop.klein{font-size:12px;padding:6px 10px}
+.crm-knop:disabled{opacity:.5;cursor:default}
+.crm-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.crm-kpi{background:var(--card,#fff);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.crm-kpi.oranje{background:#FEF6E7;border-color:#F6E1B5}
+.crm-kpi-l{font-size:11.5px;font-weight:600;color:var(--muted)}
+.crm-kpi.oranje .crm-kpi-l{color:#92400E}
+.crm-kpi-w{font-size:23px;font-weight:700;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
+.crm-kpi-s{font-size:11.5px;color:var(--muted);margin-top:1px}
+.crm-filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.crm-zoek{margin-left:auto;font-size:13px;padding:8px 12px;border:1px solid var(--border);border-radius:99px;font-family:var(--font);background:var(--surface);color:var(--text);min-width:180px}
+.crm-bord{display:flex;gap:10px;overflow-x:auto;padding-bottom:10px;align-items:flex-start;-webkit-overflow-scrolling:touch}
+.crm-kol{flex:1 0 236px;min-width:236px;background:#EFEDE6;border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:7px}
+.crm-kol-kop{display:flex;align-items:center;justify-content:space-between;padding:4px 6px 4px;font-size:13.5px;font-weight:700}
+.crm-kol-kop span.n{font-weight:500;color:var(--muted);font-size:12px;margin-left:6px}
+.crm-stip{width:9px;height:9px;border-radius:50%;display:inline-block;flex-shrink:0;margin-right:7px}
+.crm-kaart{background:var(--card,#fff);border:1px solid var(--border);border-radius:11px;padding:11px;cursor:pointer;text-align:left;font-family:var(--font);display:flex;flex-direction:column;gap:6px;width:100%;color:var(--text)}
+.crm-kaart:hover{border-color:#B9B6AB}
+.crm-k-naam{font-size:14px;font-weight:600;line-height:1.25}
+.crm-k-sub{font-size:12px;color:var(--muted)}
+.crm-k-info{font-size:12px;color:#4A4945;display:flex;flex-wrap:wrap;gap:2px 8px}
+.crm-k-voet{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.crm-pil{display:inline-block;font-size:11px;font-weight:600;padding:3px 8px;border-radius:99px;white-space:nowrap}
+.crm-pil.wij{color:#92400E;background:#FEF6E7}
+.crm-pil.laat{color:#8E3520;background:#FBEDE9}
+.crm-pil.klant{color:#4A4945;background:#F3F2EE}
+.crm-pil.herin{color:#8E3520;background:#FBEDE9}
+.crm-sig{font-size:12px;line-height:1.35;background:#FBEDE9;color:#8E3520;border-radius:7px;padding:6px 8px}
+.crm-plan{font-size:11.5px;display:flex;align-items:center;gap:5px}
+.crm-meer{font-size:12.5px;font-weight:600;color:#B45309;background:none;border:none;cursor:pointer;padding:6px;font-family:var(--font)}
+.crm-lijst{display:flex;flex-direction:column;gap:8px}
+.crm-groep{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:12px 4px 2px}
+.crm-rij{display:flex;gap:12px;background:var(--card,#fff);border:1px solid var(--border);border-radius:13px;padding:12px 14px;cursor:pointer;text-align:left;font-family:var(--font);width:100%;color:var(--text)}
+.crm-rij-balk{flex:none;width:5px;border-radius:3px}
+.crm-paneel{background:var(--card,#fff);border:1px solid var(--border);border-radius:14px;padding:16px}
+.crm-paneel h3{margin:0 0 10px;font-size:15px;font-weight:700}
+.crm-detail{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+.crm-d-l{flex:1 1 280px;max-width:380px;display:flex;flex-direction:column;gap:14px}
+.crm-d-m{flex:999 1 420px;min-width:0;display:flex;flex-direction:column;gap:14px}
+.crm-d-r{flex:1 1 260px;max-width:350px;display:flex;flex-direction:column;gap:14px}
+@media(max-width:900px){.crm-d-l,.crm-d-r{max-width:none}.crm-d-m{order:1}.crm-d-r{order:2}.crm-d-l{order:3}}
+.crm-veld{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--muted);font-weight:600}
+.crm-in{width:100%;box-sizing:border-box;font-size:13.5px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text);font-weight:400}
+textarea.crm-in{resize:vertical;line-height:1.5}
+.crm-raster{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.crm-raster .vol{grid-column:1/-1}
+.crm-stappen{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px;padding:0;list-style:none}
+.crm-stap{flex:1 1 110px;font-size:12.5px;font-weight:600;padding:9px 10px;border-radius:9px;border:1px solid var(--border);background:var(--card,#fff);color:var(--muted);cursor:pointer;font-family:var(--font);text-align:left}
+.crm-stap.klaar{background:#F2FBF6;border-color:#CDEBD9;color:#0F7A52}
+.crm-stap.nu{background:var(--text);border-color:var(--text);color:#fff}
+.crm-tl{display:flex;flex-direction:column;gap:10px}
+.crm-tl-item{display:flex;gap:11px}
+.crm-tl-ico{flex:none;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;background:#F3F2EE;color:#6B6A66}
+.crm-tl-blok{flex:1;min-width:0;border-radius:10px;padding:9px 11px;display:flex;flex-direction:column;gap:3px;font-size:13px;line-height:1.45}
+.crm-tl-blok.uit{background:#F7F6F2}
+.crm-tl-blok.in{background:var(--card,#fff);border:1px solid var(--border)}
+.crm-tl-blok.plat{padding:5px 0 0}
+.crm-tl-kop{font-size:12.5px;color:var(--muted)}
+.crm-tl-kop b{color:var(--text);font-weight:600}
+.crm-chips{display:flex;gap:6px;flex-wrap:wrap}
+.crm-chip{font-size:12.5px;padding:7px 12px;border-radius:99px;border:1px solid var(--border);background:var(--card,#fff);color:var(--text);font-family:var(--font);font-weight:500;cursor:pointer}
+.crm-chip.aan{background:var(--text);border-color:var(--text);color:#fff}
+.crm-banner{border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.45;display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.crm-banner.rood{background:#FBEDE9;color:#8E3520}
+.crm-banner.oranje{background:#FEF6E7;color:#92400E}
+.crm-banner .crm-knop{margin-left:auto}
+.crm-tabel{width:100%;border-collapse:collapse;font-size:13px}
+.crm-tabel th{font-size:11px;font-weight:600;color:var(--muted);text-align:left;padding:0 10px 8px 0;text-transform:uppercase;letter-spacing:.04em}
+.crm-tabel td{padding:10px 10px 10px 0;border-top:1px solid var(--border);vertical-align:top}
+.crm-tabel tr.klik{cursor:pointer}
+.crm-tabel tr.klik:hover td{background:#FAFAF7}
+.crm-nav-n{position:absolute;top:4px;right:calc(50% - 22px);min-width:16px;height:16px;padding:0 4px;box-sizing:border-box;border-radius:8px;background:#B4472B;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;line-height:1}
+.htab .crm-nav-n{position:static;display:inline-flex;margin-left:6px;vertical-align:1px}
+@media(max-width:640px){
+  .crm-wrap{padding:.75rem .75rem 5rem}
+  .crm-zoek{margin-left:0;flex:1 1 100%}
+}
 </style>
 </head>
 <body>
@@ -2362,6 +2447,8 @@ header{padding:0 1rem;height:52px;position:sticky;top:0;z-index:50;padding-top:e
       </div>
     </div>
   </div>
+  <!-- AANVRAGEN (CRM) — alleen zichtbaar voor wie in crm_toegang staat -->
+  <div id="page-aanvragen" class="page"><div id="crmInhoud"></div></div>
   <div id="page-open-klussen" class="page">
     <div style="padding:1rem;max-width:700px;margin:0 auto">
       <div class="sc">
@@ -8755,6 +8842,8 @@ async function initApp(user){
   }
 
   document.getElementById('detailEditBtn').style.display=isBeheerder?'':'none';
+  // CRM (testfase): het tabblad Aanvragen komt er alleen bij als de database zegt dat het mag.
+  if(isBeheerder&&!mcrModus&&typeof crmNavToevoegen==='function')crmNavToevoegen();
 
   // Meldingen: nu we weten wie je bent, kan het toesteltoken worden bewaard.
   initPushNotifications();
@@ -9120,6 +9209,7 @@ function showPage(id,btn){
   if(id==='taken')loadTaken();
   if(id==='bestellen')loadBestellen();
   if(id==='finance')loadFinance();
+  if(id==='aanvragen'&&typeof crmOpenPagina==='function')crmOpenPagina();
 
   if(id==='mcrbeheer')loadMcrBeheer();
   if(id==='planning-beheer'){pbInit();loadAanmeldingen();}
@@ -20720,6 +20810,741 @@ window.addEventListener('load', ()=>{
     });
   }
 });
+</script>
+<script>
+// ══════════════════════════════════════════════════════════════════
+//  CRM · AANVRAGEN (Nederland)
+//  Testfase: alleen zichtbaar voor wie in de tabel crm_toegang staat. De
+//  database controleert dat zelf (crm_mag()); dit scherm volgt alleen.
+//  Fase 1: aanvragen, klanten, tijdlijn, sjablonen, optie/klus aanmaken.
+//  De live Gmail-koppeling (fase 2) vult de tijdlijn straks vanzelf.
+// ══════════════════════════════════════════════════════════════════
+let CRM={mag:false,aanvragen:[],klanten:[],berichten:[],sjablonen:[],geladen:false,
+  tab:'aanvragen',weergave:null,filter:'alle',zoek:'',open:null,klant:null,nieuw:false,
+  sjabloon:null,sjabloonBewerk:null,mijnTel:'',kolomAlles:{},bezig:false};
+const CRM_STATUS=[['nieuw','Nieuw','#B4472B'],['vragen','Vragen gesteld','#B45309'],['offerte','Offerte verstuurd','#6B6A66'],
+  ['optie','Optie','#2A4EA8'],['bevestigd','Bevestigd','#0F7A52'],['verloren','Verloren','#8A8984']];
+const CRM_REDENEN=['al iets anders','te duur','gaat niet door','datum vol','geen reactie','past niet bij ons','anders'];
+const CRM_AFHAAK=/(zien?|zie) (er )?(van )?(van ?)?af\b|vanaf (te )?zien|geen gebruik (van )?(maken|make)|al iets anders|iets anders gekozen|inmiddels voorzien|al voorzien|boven (ons|het) budget|gaat (toch )?niet door|toch niet door|geen interesse/i;
+const CRM_BRONNEN=['foodtruckhuren-offerte.nl','telefoon','mail','tcgroup.nl','poffertjesontour.nl','anders'];
+
+const crmE=t=>veiligTekst(t);
+const crmNaamStatus=s=>(CRM_STATUS.find(x=>x[0]===s)||[s,s])[1];
+const crmKleurStatus=s=>(CRM_STATUS.find(x=>x[0]===s)||[0,0,'#888'])[2];
+function crmCap(s){s=String(s||'').trim();return s?s.charAt(0).toUpperCase()+s.slice(1):'';}
+function crmDatum(d,opt){ if(!d)return ''; const x=new Date(String(d).slice(0,10)+'T00:00:00'); if(isNaN(x))return '';
+  return x.toLocaleDateString('nl-NL',opt||{weekday:'short',day:'numeric',month:'short',year:'numeric'}); }
+function crmTijdstip(t){ if(!t)return ''; const x=new Date(t); return x.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'})+' '+x.toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'}); }
+function crmDuur(ms){ if(ms==null||isNaN(ms))return ''; const m=Math.max(0,Math.round(ms/60000));
+  if(m<60)return m+'m'; const u=Math.floor(m/60); if(u<24)return u+'u'+(m%60&&u<5?' '+(m%60)+'m':''); const d=Math.floor(u/24); return d+(d===1?' dag':' dagen'); }
+function crmEuro(n){ if(n==null||n==='')return ''; return '€ '+Number(n).toLocaleString('nl-NL',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function crmVal(id){ const el=document.getElementById(id); return el?String(el.value||'').trim():''; }
+function crmLeeg(v){ return v===''?null:v; }
+function crmGmailDraad(a,threadHex){
+  const inbox=encodeURIComponent(a.inbox||'info@foodtruckhuren-offerte.nl');
+  let id=threadHex; try{ id='thread-f:'+BigInt('0x'+threadHex).toString(); }catch(e){}
+  return `https://mail.google.com/mail/?authuser=${inbox}#all/${id}`;
+}
+
+// ── wie is aan zet, herinnering na 48 uur ─────────────────────────
+function crmHerinneringOp(a){
+  if(!['vragen','offerte'].includes(a.status)||a.aan_zet!=='klant'||!a.laatste_uitgaand)return null;
+  let d=new Date(new Date(a.laatste_uitgaand).getTime()+48*3600e3);
+  const dag=d.getDay();
+  if(dag===6||dag===0)d=new Date(d.getFullYear(),d.getMonth(),d.getDate()+(dag===6?2:1),9,0);
+  if(a.herinnering_pauze_tot){ const p=new Date(a.herinnering_pauze_tot+'T09:00:00'); if(p>d)d=p; }
+  return d;
+}
+function crmHerinneringNu(a){ const d=crmHerinneringOp(a); return !!d&&d<=new Date(); }
+function crmOpen(a){ return !['bevestigd','verloren'].includes(a.status); }
+function crmWijAanZet(a){ return crmOpen(a)&&(a.aan_zet==='wij'||crmHerinneringNu(a)); }
+function crmWacht(a){
+  const nu=Date.now();
+  if(crmHerinneringNu(a))return nu-crmHerinneringOp(a).getTime();
+  if(a.aan_zet==='wij'){ const t=Math.max(new Date(a.laatste_inkomend||0).getTime(),new Date(a.ontvangen_op).getTime()); return nu-t; }
+  return a.laatste_uitgaand?nu-new Date(a.laatste_uitgaand).getTime():null;
+}
+function crmBerichtenVan(id){ return CRM.berichten.filter(b=>b.aanvraag_id===id); }
+function crmAfhaakSignaal(a){
+  if(!crmOpen(a))return null;
+  const laatsteIn=crmBerichtenVan(a.id).filter(b=>b.soort==='mail_in').pop();
+  if(!laatsteIn)return null;
+  if(a.laatste_uitgaand&&new Date(a.laatste_uitgaand)>new Date(laatsteIn.tijd))return null;
+  const t=(laatsteIn.samenvatting||'')+' '+(laatsteIn.onderwerp||'');
+  if(!CRM_AFHAAK.test(t))return null;
+  const reden=/anders gekozen|iets anders|voorzien/i.test(t)?'al iets anders':/budget|duur/i.test(t)?'te duur':'gaat niet door';
+  return {reden,tekst:laatsteIn.samenvatting||''};
+}
+
+// ── planning op een datum ─────────────────────────────────────────
+function crmPlanning(datum){
+  if(!datum||typeof KLUSSEN==='undefined')return null;
+  const klussen=(KLUSSEN||[]).filter(k=>(k.vestiging||'NL')==='NL'&&k.datum&&k.datum<=datum&&(k.datum_eind||k.datum)>=datum);
+  const trucks=(typeof TRUCKS!=='undefined'?TRUCKS:[]).filter(t=>(t.vestiging||'NL')==='NL');
+  const bezet={};
+  klussen.forEach(k=>(k.trucks||[]).forEach(t=>{ bezet[t.id]=k.naam||'klus'; }));
+  const vrij=trucks.filter(t=>!bezet[t.id]);
+  return {klussen,trucks,bezet,vrij};
+}
+function crmPlanningKort(a){
+  if(!a.datum)return {tekst:a.datum_tekst?'Datum onduidelijk':'Geen datum',kleur:'#8A8984'};
+  if(a.datum<todayStr)return {tekst:'Datum is voorbij',kleur:'#8A8984'};
+  const p=crmPlanning(a.datum); if(!p)return {tekst:'',kleur:'#8A8984'};
+  const n=p.klussen.filter(k=>!a.klus_id||k.id!==a.klus_id).length;
+  return {tekst:`${p.vrij.length} van ${p.trucks.length} trucks vrij · ${n} ${n===1?'klus':'klussen'}`,kleur:n>=3?'#B4472B':'#0F7A52'};
+}
+
+// ── navigatie ─────────────────────────────────────────────────────
+async function crmNavToevoegen(){
+  try{ const{data,error}=await sb.rpc('crm_mag'); if(error||data!==true)return; }catch(e){ return; }
+  CRM.mag=true;
+  const tabs=document.getElementById('headerTabs');
+  if(tabs&&!tabs.querySelector('[data-crm]')){
+    const b=document.createElement('button');
+    b.className='htab'; b.dataset.crm='1'; b.setAttribute('onclick',"showPage('aanvragen',this)");
+    b.innerHTML='Aanvragen<span class="crm-nav-n" style="display:none"></span>';
+    const plan=[...tabs.children].find(x=>(x.getAttribute('onclick')||'').includes("'planning-beheer'"));
+    if(plan)plan.after(b); else tabs.appendChild(b);
+  }
+  const bn=document.getElementById('bottomNav');
+  if(bn&&bn.classList.contains('visible')&&!bn.querySelector('[data-crm]')){
+    const b=document.createElement('button');
+    b.className='bnav-item'; b.dataset.crm='1'; b.setAttribute('onclick',"switchNav('aanvragen',this)");
+    b.innerHTML=`<div class="bnav-icon"><svg width="20" height="20" viewBox="0 0 24 24"><rect class="ni" x="3" y="5" width="18" height="14" rx="2"/><path class="ni" d="M3 7l9 6 9-6"/></svg></div><span class="bnav-label">Aanvragen</span><span class="crm-nav-n" style="display:none"></span>`;
+    const plan=[...bn.children].find(x=>(x.getAttribute('onclick')||'').includes("'planning-beheer'"));
+    if(plan)plan.after(b); else bn.appendChild(b);
+  }
+  crmTellerLaden();
+  setInterval(()=>{ if(document.visibilityState==='visible')crmTellerLaden(); },180000);
+}
+async function crmTellerLaden(){
+  if(!CRM.mag)return;
+  try{
+    const{data}=await sb.from('crm_aanvragen').select('id,status,aan_zet,laatste_uitgaand,laatste_inkomend,ontvangen_op,herinnering_pauze_tot').not('status','in','(bevestigd,verloren)');
+    crmTellerZet((data||[]).filter(crmWijAanZet).length);
+  }catch(e){}
+}
+function crmTellerZet(n){
+  document.querySelectorAll('[data-crm] .crm-nav-n').forEach(el=>{ el.textContent=n>99?'99+':n; el.style.display=n?'':'none'; });
+}
+
+async function crmOpenPagina(){
+  const el=document.getElementById('crmInhoud'); if(!el)return;
+  if(!CRM.mag){ el.innerHTML='<div class="mb-kaart">Dit onderdeel staat nog niet voor je open.</div>'; return; }
+  if(!CRM.geladen)el.innerHTML='<div class="mb-kaart" style="text-align:center;color:var(--muted)">Aanvragen laden&hellip;</div>';
+  try{ await crmLaden(); crmTeken(); }
+  catch(e){ console.error(e); el.innerHTML=`<div class="mb-kaart">De aanvragen konden niet geladen worden.<br><span style="color:var(--muted);font-size:12.5px">${crmE(e.message||e)}</span></div>`; }
+}
+async function crmLaden(){
+  const vragen=[
+    sb.from('crm_aanvragen').select('*').order('ontvangen_op',{ascending:false}),
+    sb.from('crm_klanten').select('*').order('naam'),
+    sb.from('crm_berichten').select('id,aanvraag_id,soort,van,aan,onderwerp,samenvatting,gmail_thread_id,gmail_message_id,tijd,door').order('tijd'),
+    sb.from('crm_sjablonen').select('*').order('volgorde'),
+  ];
+  if(!CRM.geladen)vragen.push(sb.from('gebruikers').select('telefoon').eq('id',CURRENT_USER.id).maybeSingle());
+  const [a,k,b,s,ik]=await Promise.all(vragen);
+  for(const r of [a,k,b,s])if(r.error)throw r.error;
+  CRM.aanvragen=a.data||[]; CRM.klanten=k.data||[]; CRM.berichten=b.data||[]; CRM.sjablonen=s.data||[];
+  if(ik&&ik.data&&ik.data.telefoon)CRM.mijnTel=ik.data.telefoon;
+  CRM.geladen=true;
+  crmTellerZet(CRM.aanvragen.filter(crmWijAanZet).length);
+}
+function crmGa(tab,extra){
+  CRM.tab=tab; CRM.open=null; CRM.klant=null; CRM.nieuw=false; CRM.sjabloonBewerk=null;
+  Object.assign(CRM,extra||{});
+  crmTeken(); window.scrollTo(0,0);
+}
+function crmOpenAanvraag(id){ CRM.open=id; CRM.sjabloon=null; crmTeken(); window.scrollTo(0,0); }
+function crmOpenKlant(id){ CRM.tab='klanten'; CRM.open=null; CRM.klant=id; crmTeken(); window.scrollTo(0,0); }
+
+function crmTeken(){
+  const el=document.getElementById('crmInhoud'); if(!el)return;
+  const wijN=CRM.aanvragen.filter(crmWijAanZet).length;
+  let kop=`<div class="crm-sub">
+    <button class="crm-tab${CRM.tab==='aanvragen'?' aan':''}" onclick="crmGa('aanvragen')">Aanvragen${wijN?` · ${wijN}`:''}</button>
+    <button class="crm-tab${CRM.tab==='klanten'?' aan':''}" onclick="crmGa('klanten')">Klanten</button>
+    <button class="crm-tab${CRM.tab==='sjablonen'?' aan':''}" onclick="crmGa('sjablonen')">Sjablonen</button>
+    <span style="flex:1"></span>
+    <button class="crm-knop zwart" onclick="crmGa('aanvragen',{nieuw:true})">+ Aanvraag</button>
+  </div>`;
+  let body='';
+  if(CRM.nieuw)body=crmNieuwHtml();
+  else if(CRM.open)body=crmDetailHtml(CRM.aanvragen.find(x=>x.id===CRM.open));
+  else if(CRM.tab==='klanten')body=CRM.klant?crmKlantHtml(CRM.klanten.find(x=>x.id===CRM.klant)):crmKlantenHtml();
+  else if(CRM.tab==='sjablonen')body=crmSjablonenHtml();
+  else body=crmOverzichtHtml();
+  el.innerHTML=`<div class="crm-wrap">${kop}${body}</div>`;
+}
+
+// ── overzicht: cijfers, filters, bord of lijst ────────────────────
+function crmGefilterd(){
+  const z=CRM.zoek.toLowerCase().trim();
+  return CRM.aanvragen.filter(a=>{
+    if(CRM.filter==='wij'&&!crmWijAanZet(a))return false;
+    if(CRM.filter==='herinnering'&&!crmHerinneringNu(a))return false;
+    if(CRM.filter==='verloren'&&a.status!=='verloren')return false;
+    if(z){ const t=[a.contact_naam,a.email,a.plaats,a.ref,a.formulier_nr,a.soort_food,a.gelegenheid,a.telefoon].join(' ').toLowerCase(); if(!t.includes(z))return false; }
+    return true;
+  });
+}
+function crmCijfers(){
+  const nu=Date.now(), dag=864e5;
+  const wij=CRM.aanvragen.filter(crmWijAanZet), herin=CRM.aanvragen.filter(crmHerinneringNu);
+  const oud=wij.filter(a=>crmWacht(a)>2*dag).length;
+  const nieuweWeek=CRM.aanvragen.filter(a=>nu-new Date(a.ontvangen_op)<7*dag);
+  const reacties=[];
+  CRM.aanvragen.filter(a=>nu-new Date(a.ontvangen_op)<30*dag).forEach(a=>{
+    const eerste=crmBerichtenVan(a.id).find(b=>b.soort==='mail_uit'&&new Date(b.tijd)>=new Date(a.ontvangen_op));
+    if(eerste)reacties.push(new Date(eerste.tijd)-new Date(a.ontvangen_op));
+  });
+  reacties.sort((x,y)=>x-y);
+  const mediaan=reacties.length?reacties[Math.floor(reacties.length/2)]:null;
+  const offertes=CRM.aanvragen.filter(a=>a.status==='offerte');
+  const som=offertes.reduce((s,a)=>s+(Number(a.bedrag)||0),0);
+  const gewonnen=CRM.aanvragen.filter(a=>a.status==='bevestigd'&&nu-new Date(a.status_sinds)<30*dag).length;
+  const verloren=CRM.aanvragen.filter(a=>a.status==='verloren'&&nu-new Date(a.status_sinds)<30*dag).length;
+  const per={}; nieuweWeek.forEach(a=>{per[a.bron]=(per[a.bron]||0)+1;});
+  const topBron=Object.entries(per).sort((x,y)=>y[1]-x[1])[0];
+  return `<div class="crm-kpis">
+    <div class="crm-kpi oranje"><div class="crm-kpi-l">Wij aan zet</div><div class="crm-kpi-w">${wij.length}</div><div class="crm-kpi-s">${herin.length?herin.length+' herinnering'+(herin.length===1?'':'en')+' · ':''}${oud} al 2+ dagen</div></div>
+    <div class="crm-kpi"><div class="crm-kpi-l">Nieuw deze week</div><div class="crm-kpi-w">${nieuweWeek.length}</div><div class="crm-kpi-s">${topBron?topBron[1]+' via '+crmE(topBron[0]):'&nbsp;'}</div></div>
+    <div class="crm-kpi"><div class="crm-kpi-l">Eerste reactie (mediaan)</div><div class="crm-kpi-w">${mediaan==null?'&mdash;':crmDuur(mediaan)}</div><div class="crm-kpi-s">laatste 30 dagen · doel 2 uur</div></div>
+    <div class="crm-kpi"><div class="crm-kpi-l">Open offertes</div><div class="crm-kpi-w">${offertes.length}</div><div class="crm-kpi-s">${som?crmEuro(som)+' excl. btw':'bedragen nog niet ingevuld'}</div></div>
+    <div class="crm-kpi"><div class="crm-kpi-l">Gewonnen · 30 dagen</div><div class="crm-kpi-w">${gewonnen} van ${gewonnen+verloren}</div><div class="crm-kpi-s">afgeronde aanvragen</div></div>
+  </div>`;
+}
+function crmOverzichtHtml(){
+  const lijstStand=CRM.weergave||(window.innerWidth<768?'lijst':'bord');
+  const tel=f=>CRM.aanvragen.filter(f).length;
+  const filters=[['alle','Alles'],['wij',`Wij aan zet (${tel(crmWijAanZet)})`],['herinnering',`Herinnering sturen (${tel(crmHerinneringNu)})`],['verloren','Verloren']];
+  let h=crmCijfers();
+  h+=`<div class="crm-filters">
+    ${filters.map(([k,l])=>`<button class="crm-chip${CRM.filter===k?' aan':''}" onclick="CRM.filter='${k}';crmTeken()">${l}</button>`).join('')}
+    <button class="crm-chip" onclick="CRM.weergave='${lijstStand==='bord'?'lijst':'bord'}';crmTeken()">${lijstStand==='bord'?'Als lijst':'Als bord'}</button>
+    <input class="crm-zoek" id="crmZoek" placeholder="Zoek naam, plaats, ref&hellip;" value="${crmE(CRM.zoek)}" autocomplete="off" autocorrect="off" spellcheck="false"
+      oninput="CRM.zoek=this.value;clearTimeout(window.CRM_ZT);window.CRM_ZT=setTimeout(()=>{crmTeken();const z=document.getElementById('crmZoek');if(z){z.focus();z.setSelectionRange(z.value.length,z.value.length);}},250)">
+  </div>`;
+  const rijen=crmGefilterd();
+  if(!rijen.length)return h+'<div class="mb-kaart" style="color:var(--muted)">Geen aanvragen gevonden.</div>';
+  return h+(lijstStand==='lijst'?crmLijstHtml(rijen):crmBordHtml(rijen));
+}
+function crmSorteer(rijen){
+  return [...rijen].sort((x,y)=>{
+    const wx=crmWijAanZet(x)?1:0, wy=crmWijAanZet(y)?1:0;
+    if(wx!==wy)return wy-wx;
+    if(wx)return (crmWacht(y)||0)-(crmWacht(x)||0);
+    return new Date(y.ontvangen_op)-new Date(x.ontvangen_op);
+  });
+}
+function crmPilHtml(a){
+  if(!crmOpen(a))return '';
+  const w=crmWacht(a);
+  if(crmHerinneringNu(a))return `<span class="crm-pil herin">Herinnering sturen</span>`;
+  if(a.aan_zet==='wij')return `<span class="crm-pil ${w>2*864e5?'laat':'wij'}">Wij aan zet · ${crmDuur(w)}</span>`;
+  return `<span class="crm-pil klant">Klant aan zet${w!=null?' · '+crmDuur(w):''}</span>`;
+}
+function crmKaartHtml(a){
+  const plan=crmPlanningKort(a), sig=crmAfhaakSignaal(a);
+  const info=[a.datum?crmDatum(a.datum):(a.datum_tekst||'geen datum'),(a.gasten||a.gasten_tekst)?(a.gasten||a.gasten_tekst)+' gasten':'',a.soort_food||''].filter(Boolean);
+  return `<button class="crm-kaart" onclick="crmOpenAanvraag('${a.id}')">
+    <div><div class="crm-k-naam">${crmE(a.contact_naam||'Onbekend')}</div>
+      <div class="crm-k-sub">${crmE([a.gelegenheid?crmCap(a.gelegenheid):'',a.plaats].filter(Boolean).join(' · ')||a.bron)}</div></div>
+    <div class="crm-k-info">${info.map(t=>`<span>${crmE(t)}</span>`).join('<span>·</span>')}</div>
+    ${sig?`<div class="crm-sig">Lijkt af te zien: ${crmE(sig.reden)}</div>`:''}
+    ${a.status==='verloren'&&a.verlies_reden?`<div class="crm-k-sub">Reden: ${crmE(a.verlies_reden)}</div>`:''}
+    <div class="crm-k-voet">${crmPilHtml(a)||'<span></span>'}<span style="font-size:12px;font-weight:600">${a.bedrag?crmEuro(a.bedrag):''}</span></div>
+    ${plan.tekst&&crmOpen(a)?`<div class="crm-plan" style="color:${plan.kleur}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>${crmE(plan.tekst)}</div>`:''}
+  </button>`;
+}
+function crmBordHtml(rijen){
+  const kolommen=CRM.filter==='verloren'?['verloren']:['nieuw','vragen','offerte','optie','bevestigd'];
+  let h='<div class="crm-bord">';
+  kolommen.forEach(st=>{
+    const lijst=crmSorteer(rijen.filter(a=>a.status===st));
+    const som=lijst.reduce((s,a)=>s+(Number(a.bedrag)||0),0);
+    const max=CRM.kolomAlles[st]?9999:25;
+    h+=`<section class="crm-kol"><div class="crm-kol-kop"><span><span class="crm-stip" style="background:${crmKleurStatus(st)}"></span>${crmNaamStatus(st)}<span class="n">${lijst.length}</span></span><span style="font-size:12px;font-weight:500;color:var(--muted)">${som?crmEuro(som):''}</span></div>`;
+    lijst.slice(0,max).forEach(a=>{h+=crmKaartHtml(a);});
+    if(lijst.length>max)h+=`<button class="crm-meer" onclick="CRM.kolomAlles['${st}']=true;crmTeken()">Toon alle ${lijst.length}</button>`;
+    if(!lijst.length)h+='<div style="font-size:12px;color:var(--muted);padding:6px">Leeg</div>';
+    h+='</section>';
+  });
+  if(CRM.filter!=='verloren'){
+    const verl=CRM.aanvragen.filter(a=>a.status==='verloren'&&Date.now()-new Date(a.status_sinds)<30*864e5);
+    const per={}; verl.forEach(a=>{const r=a.verlies_reden||'onbekend';per[r]=(per[r]||0)+1;});
+    h+=`<section class="crm-kol" style="flex:0 0 190px;min-width:190px;background:none;border:1px dashed #C9C6BC">
+      <div class="crm-kol-kop"><span><span class="crm-stip" style="background:#8A8984"></span>Verloren</span></div>
+      <div style="font-size:12px;color:var(--muted);padding:0 6px">${verl.length} in 30 dagen</div>
+      <div style="font-size:12.5px;line-height:1.7;padding:0 6px">${Object.entries(per).sort((x,y)=>y[1]-x[1]).map(([r,n])=>`${crmE(crmCap(r))} · ${n}`).join('<br>')||'&nbsp;'}</div>
+      <button class="crm-meer" style="text-align:left" onclick="CRM.filter='verloren';crmTeken()">Bekijk alles</button></section>`;
+  }
+  return h+'</div>';
+}
+function crmLijstHtml(rijen){
+  const groepen=CRM.filter==='verloren'?[['Verloren',rijen]]:[
+    ['Herinnering sturen',rijen.filter(crmHerinneringNu)],
+    ['Wij aan zet · oudste eerst',rijen.filter(a=>crmOpen(a)&&a.aan_zet==='wij')],
+    ['Wacht op de klant',rijen.filter(a=>crmOpen(a)&&a.aan_zet==='klant'&&!crmHerinneringNu(a))],
+    ['Bevestigd',rijen.filter(a=>a.status==='bevestigd')],
+  ];
+  let h='<div class="crm-lijst">';
+  groepen.forEach(([titel,lijst])=>{
+    if(!lijst.length)return;
+    const s=titel==='Wacht op de klant'||titel==='Bevestigd'||titel==='Verloren'?[...lijst].sort((x,y)=>new Date(y.ontvangen_op)-new Date(x.ontvangen_op)):crmSorteer(lijst);
+    h+=`<div class="crm-groep">${titel} · ${lijst.length}</div>`;
+    s.slice(0,CRM.kolomAlles[titel]?9999:30).forEach(a=>{
+      const kleur=crmHerinneringNu(a)||(a.aan_zet==='wij'&&crmWacht(a)>2*864e5)?'#B4472B':crmKleurStatus(a.status);
+      h+=`<button class="crm-rij" onclick="crmOpenAanvraag('${a.id}')"><span class="crm-rij-balk" style="background:${kleur}"></span>
+        <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+          <span style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:14.5px;font-weight:600">${crmE(a.contact_naam||'Onbekend')}</span>${crmPilHtml(a)}</span>
+          <span style="font-size:12.5px;color:#4A4945">${crmE([a.plaats,a.datum?crmDatum(a.datum):(a.datum_tekst||''),(a.gasten||a.gasten_tekst)?(a.gasten||a.gasten_tekst)+' gasten':''].filter(Boolean).join(' · '))}</span>
+          <span style="font-size:12px;color:var(--muted)">${crmNaamStatus(a.status)}${a.soort_food?' · '+crmE(a.soort_food):''}</span>
+        </span></button>`;
+    });
+    if(lijst.length>30&&!CRM.kolomAlles[titel])h+=`<button class="crm-meer" onclick="CRM.kolomAlles['${titel}']=true;crmTeken()">Toon alle ${lijst.length}</button>`;
+  });
+  return h+'</div>';
+}
+
+// ── één aanvraag ──────────────────────────────────────────────────
+function crmDetailHtml(a){
+  if(!a)return '<div class="mb-kaart">Deze aanvraag bestaat niet meer.</div>';
+  const klant=CRM.klanten.find(k=>k.id===a.klant_id);
+  const sig=crmAfhaakSignaal(a), herinOp=crmHerinneringOp(a), herinNu=crmHerinneringNu(a);
+  const stapIdx=['nieuw','vragen','offerte','optie','bevestigd'].indexOf(a.status);
+  let h=`<button class="crm-meer" style="padding:0 0 10px" onclick="CRM.open=null;crmTeken()">&lsaquo; Alle aanvragen</button>
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin-bottom:12px">
+    <div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><span class="mb-h1">${crmE(a.contact_naam||'Onbekend')}${a.plaats?' · '+crmE(a.plaats):''}</span>${crmPilHtml(a)}</div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:3px">${[a.ref?'Ref. '+crmE(a.ref):'',a.formulier_nr?'Formulier #'+crmE(a.formulier_nr):'','via '+crmE(a.bron),'binnen '+crmTijdstip(a.ontvangen_op)].filter(Boolean).join(' · ')}</div></div>
+  </div>`;
+  if(sig)h+=`<div class="crm-banner rood"><span><b>Klant lijkt af te zien.</b> &ldquo;${crmE(sig.tekst.slice(0,140))}&rdquo;</span><button class="crm-knop klein" onclick="crmVerloren('${a.id}','${sig.reden}')">Markeer als verloren (${crmE(sig.reden)})</button></div>`;
+  if(herinNu)h+=`<div class="crm-banner oranje"><span><b>Herinnering sturen.</b> De klant heeft sinds ${crmTijdstip(a.laatste_uitgaand)} niet gereageerd.</span><button class="crm-knop klein" onclick="crmKiesSjabloonNaam('Herinnering')">Herinnering klaarzetten</button></div>`;
+  if(a.status==='verloren')h+=`<div class="crm-banner" style="background:#F3F2EE;color:#4A4945"><span><b>Verloren</b>${a.verlies_reden?' · '+crmE(a.verlies_reden):''}${a.verlies_toelichting?' &mdash; '+crmE(a.verlies_toelichting):''}</span><button class="crm-knop klein" onclick="crmZetStatus('${a.id}','nieuw')">Weer openen</button></div>`;
+
+  h+=`<ol class="crm-stappen">${['nieuw','vragen','offerte','optie','bevestigd'].map((s,i)=>{
+      const cl=a.status==='verloren'?'':i<stapIdx?' klaar':i===stapIdx?' nu':'';
+      return `<li style="flex:1 1 110px;display:flex"><button class="crm-stap${cl}" style="width:100%" onclick="crmStapKlik('${a.id}','${s}')">${i<stapIdx&&a.status!=='verloren'?'✓ ':''}${crmNaamStatus(s)}</button></li>`;}).join('')}
+    <li style="flex:0 1 auto;display:flex"><select class="crm-in" style="width:auto;font-weight:600" onchange="if(this.value)crmVerloren('${a.id}',this.value);this.value=''">
+      <option value="">Verloren&hellip;</option>${CRM_REDENEN.map(r=>`<option value="${crmE(r)}">${crmE(crmCap(r))}</option>`).join('')}</select></li></ol>`;
+
+  // links: gegevens
+  const tijdOpties=v=>crmE(v?String(v).slice(0,5):'');
+  h+=`<div class="crm-detail"><div class="crm-d-l"><div class="crm-paneel">
+    <h3>Gegevens</h3>
+    <div class="crm-raster">
+      <label class="crm-veld vol">Naam<input class="crm-in" id="crmF_contact_naam" value="${crmE(a.contact_naam)}"></label>
+      <label class="crm-veld">E-mail<input class="crm-in" id="crmF_email" type="email" value="${crmE(a.email)}"></label>
+      <label class="crm-veld">Telefoon<input class="crm-in" id="crmF_telefoon" type="tel" value="${crmE(a.telefoon)}"></label>
+      <label class="crm-veld">Datum<input class="crm-in" id="crmF_datum" type="date" value="${crmE(a.datum||'')}"></label>
+      <label class="crm-veld">Gasten<input class="crm-in" id="crmF_gasten" type="number" min="0" value="${crmE(a.gasten??'')}"></label>
+      ${a.datum_tekst&&!a.datum?`<div class="vol" style="font-size:12px;color:#8E3520">Formulier zei: &ldquo;${crmE(a.datum_tekst)}&rdquo;</div>`:''}
+      <label class="crm-veld">Start uitgifte<input class="crm-in" id="crmF_start_tijd" type="time" value="${tijdOpties(a.start_tijd)}"></label>
+      <label class="crm-veld">Einde uitgifte<input class="crm-in" id="crmF_eind_tijd" type="time" value="${tijdOpties(a.eind_tijd)}"></label>
+      ${a.tijd_tekst?`<div class="vol" style="font-size:12px;color:var(--muted)">Formulier: &ldquo;${crmE(a.tijd_tekst)}&rdquo;${a.gasten_tekst&&String(a.gasten_tekst)!==String(a.gasten)?` · gasten: &ldquo;${crmE(a.gasten_tekst)}&rdquo;`:''}</div>`:''}
+      <label class="crm-veld">Plaats<input class="crm-in" id="crmF_plaats" value="${crmE(a.plaats)}"></label>
+      <label class="crm-veld">Gelegenheid<input class="crm-in" id="crmF_gelegenheid" placeholder="bv. verjaardag" value="${crmE(a.gelegenheid)}"></label>
+      <label class="crm-veld vol">Adres<input class="crm-in" id="crmF_adres" placeholder="${a.adres?'':'nog niet bekend'}" value="${crmE(a.adres)}"></label>
+      <label class="crm-veld vol">Soort food<input class="crm-in" id="crmF_soort_food" value="${crmE(a.soort_food)}"></label>
+      <label class="crm-veld vol">Wensen / bijzonderheden<textarea class="crm-in" id="crmF_wensen" rows="3">${crmE(a.wensen)}</textarea></label>
+      <label class="crm-veld">Bedrag (excl. btw)<input class="crm-in" id="crmF_bedrag" type="number" min="0" step="0.01" value="${crmE(a.bedrag??'')}"></label>
+      <label class="crm-veld">Bron<select class="crm-in" id="crmF_bron">${[...new Set([a.bron,...CRM_BRONNEN])].map(b=>`<option${b===a.bron?' selected':''}>${crmE(b)}</option>`).join('')}</select></label>
+    </div>
+    <button class="crm-knop zwart" style="margin-top:12px;width:100%" onclick="crmBewaarGegevens('${a.id}')">Opslaan</button>
+    ${klant?`<div style="margin-top:12px;font-size:12.5px;color:var(--muted)">Klant: <a href="#" onclick="event.preventDefault();crmOpenKlant('${klant.id}')" style="color:#B45309;font-weight:600">${crmE(klant.naam)}</a> · ${CRM.aanvragen.filter(x=>x.klant_id===klant.id).length} aanvra${CRM.aanvragen.filter(x=>x.klant_id===klant.id).length===1?'ag':'gen'}</div>`:''}
+    <div style="display:flex;gap:8px;margin-top:10px">
+      ${a.telefoon?`<a class="crm-knop" style="flex:1;text-align:center;text-decoration:none" href="tel:${crmE(String(a.telefoon).replace(/[^0-9+]/g,''))}">Bellen</a>
+      <a class="crm-knop" style="flex:1;text-align:center;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${crmE(crmWhatsapp(a.telefoon))}">WhatsApp</a>`:''}
+    </div>
+  </div></div>`;
+
+  // midden: tijdlijn + antwoorden
+  h+=`<div class="crm-d-m"><div class="crm-paneel"><h3>Tijdlijn</h3><div class="crm-tl">${crmTijdlijnHtml(a)}</div>
+    <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+      <input class="crm-in" id="crmNotitie" placeholder="Notitie toevoegen (bv. gebeld, adres nagevraagd)&hellip;" style="flex:1;min-width:200px" onkeydown="if(event.key==='Enter')crmNotitie('${a.id}','notitie')">
+      <button class="crm-knop" onclick="crmNotitie('${a.id}','notitie')">Notitie</button>
+      <button class="crm-knop" onclick="crmNotitie('${a.id}','telefoon')">Gebeld</button>
+    </div></div>
+    ${crmAntwoordHtml(a)}</div>`;
+
+  // rechts: planning + opvolging
+  h+=`<div class="crm-d-r">${crmPlanningHtml(a)}
+    <div class="crm-paneel"><h3>Opvolging</h3>
+      <div style="font-size:13px;line-height:1.5;color:#4A4945">${
+        !crmOpen(a)?'Deze aanvraag is afgerond.':
+        a.aan_zet==='wij'?'<b style="color:#92400E">Wij zijn aan zet.</b> De klant wacht op een antwoord.':
+        herinOp?(herinNu?'<b style="color:#8E3520">Herinnering is nu aan de beurt.</b>':`Reageert de klant niet, dan staat er <b>${crmTijdstip(herinOp)}</b> een herinnering klaar.`):'De klant is aan zet.'}</div>
+      ${crmOpen(a)&&a.aan_zet==='klant'?`<label class="crm-veld" style="margin-top:10px">Herinnering pauzeren tot<input class="crm-in" type="date" value="${crmE(a.herinnering_pauze_tot||'')}" onchange="crmPauze('${a.id}',this.value)"></label>`:''}
+      ${crmOpen(a)?`<div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+        <button class="crm-knop klein" onclick="crmAanZet('${a.id}','${a.aan_zet==='wij'?'klant':'wij'}')">${a.aan_zet==='wij'?'Klant is aan zet':'Wij zijn aan zet'}</button></div>`:''}
+    </div></div></div>`;
+  return h;
+}
+function crmWhatsapp(t){ let n=String(t||'').replace(/[^0-9+]/g,''); if(n.startsWith('+'))return n.slice(1); if(n.startsWith('00'))return n.slice(2); if(n.startsWith('0'))return '31'+n.slice(1); return n; }
+function crmTijdlijnHtml(a){
+  const lijst=crmBerichtenVan(a.id);
+  if(!lijst.length)return '<div style="font-size:13px;color:var(--muted)">Nog niets op de tijdlijn.</div>';
+  const pen='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4z"/></svg>';
+  const tel='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 005 5L15 13l5 2v4a2 2 0 01-2 2A16 16 0 013 6a2 2 0 012-2"/></svg>';
+  const form='<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16v16H4zM8 9h8M8 13h8M8 17h5"/></svg>';
+  const init=n=>String(n||'?').split(/[\s@.]+/).filter(Boolean).map(x=>x[0]).slice(0,2).join('').toUpperCase();
+  return lijst.map(b=>{
+    const link=b.gmail_thread_id?` · <a href="${crmGmailDraad(a,b.gmail_thread_id)}" target="_blank" rel="noopener" style="color:#B45309">in Gmail</a>`:'';
+    if(b.soort==='mail_in'||b.soort==='mail_uit'){
+      const uit=b.soort==='mail_uit';
+      return `<div class="crm-tl-item"><div class="crm-tl-ico" style="${uit?'background:#1A1917;color:#fff':'background:#FEF6E7;color:#92400E'}">${uit?'TC':crmE(init(a.contact_naam))}</div>
+        <div class="crm-tl-blok ${uit?'uit':'in'}"><div class="crm-tl-kop"><b>${uit?'Wij → klant':'Klant → wij'}</b> · ${crmTijdstip(b.tijd)}${link}</div>
+        ${b.onderwerp?`<div style="font-weight:600">${crmE(b.onderwerp)}</div>`:''}<div style="color:#4A4945">${crmE(b.samenvatting||'')}</div></div></div>`;
+    }
+    const ico=b.soort==='formulier'?form:b.soort==='telefoon'?tel:pen;
+    const titel=b.soort==='formulier'?'Formulier ontvangen':b.soort==='telefoon'?'Gebeld':b.soort==='status'?'Status':'Notitie';
+    return `<div class="crm-tl-item"><div class="crm-tl-ico">${ico}</div><div class="crm-tl-blok plat">
+      <div class="crm-tl-kop"><b>${titel}</b> · ${crmTijdstip(b.tijd)}${b.soort==='formulier'?link:''}</div><div style="color:#4A4945">${crmE(b.samenvatting||b.onderwerp||'')}</div></div></div>`;
+  }).join('');
+}
+
+// ── sjablonen invullen ────────────────────────────────────────────
+function crmVelden(a){
+  const k=CRM.klanten.find(x=>x.id===a.klant_id);
+  const naam=String(a.contact_naam||'').trim();
+  const particulier=!k||k.soort==='particulier';
+  const voornaam=particulier&&naam&&naam!=='Onbekend'?crmCap(naam.split(/\s+/)[0]):'';
+  const d=a.datum?new Date(a.datum+'T00:00:00'):null;
+  const datum=d?d.toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'}):(a.datum_tekst||'de gevraagde datum');
+  const dag=d?d.toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):datum;
+  const laatste=crmBerichtenVan(a.id).filter(b=>b.soort==='mail_uit'||b.soort==='mail_in').pop();
+  const ref=a.ref||(a.datum?a.datum.replace(/-/g,''):(a.formulier_nr?'#'+a.formulier_nr:''));
+  const tijd=a.start_tijd?String(a.start_tijd).slice(0,5).replace(':','.')+(a.eind_tijd?' tot '+String(a.eind_tijd).slice(0,5).replace(':','.'):'')+' uur':(a.tijd_tekst||'');
+  const hand=[CURRENT_NAAM,'TC Group','Het Steenland 39, 3751 LA Bunschoten',CRM.mijnTel,'tcgroup.nl'].filter(Boolean).join('\n');
+  return {voornaam,aanhef:voornaam||'heer/mevrouw',datum,dag_datum:dag,plaats:a.plaats||'',gasten:a.gasten||a.gasten_tekst||'',
+    gelegenheid:a.gelegenheid||'feest',soort_food:a.soort_food||'',tijd,ref,
+    onderwerp_laatste:laatste&&laatste.onderwerp?laatste.onderwerp.replace(/^((re|aw|fw|fwd)\s*:\s*)+/i,''):`Uw aanvraag voor ${dag}${a.plaats?' in '+a.plaats:''}`,
+    mijn_naam:CURRENT_NAAM||'',handtekening:hand,bedrag:a.bedrag?crmEuro(a.bedrag):''};
+}
+function crmVul(t,a){ const v=crmVelden(a); return String(t||'').replace(/\{([a-z_]+)\}/g,(m,k)=>k in v?String(v[k]):m); }
+function crmSjablonenVoor(a){
+  const merk=/poffertjes/i.test(a.bron||a.inbox||'')?'Poffertjes on Tour':'Foodtruckhuren';
+  const alle=CRM.sjablonen.filter(s=>s.actief&&(!s.eigenaar_id||s.eigenaar_id===CURRENT_USER.id));
+  const eigenMerk=alle.filter(s=>s.merk===merk);
+  return eigenMerk.length?eigenMerk:alle;
+}
+function crmKiesSjabloonNaam(naam){ const a=CRM.aanvragen.find(x=>x.id===CRM.open); const s=a&&crmSjablonenVoor(a).find(x=>x.naam===naam); if(s){CRM.sjabloon=s.id;crmTeken();setTimeout(()=>{const el=document.getElementById('crmAntwoord');if(el)el.scrollIntoView({behavior:'smooth',block:'start'});},50);} }
+function crmAntwoordHtml(a){
+  const lijst=crmSjablonenVoor(a);
+  const s=lijst.find(x=>x.id===CRM.sjabloon);
+  let h=`<div class="crm-paneel" id="crmAntwoord"><h3>Antwoorden</h3>
+    <div style="font-size:12.5px;color:var(--muted);margin:-4px 0 10px">Kies een sjabloon: naam, datum, plaats en je handtekening staan er al in.</div>
+    <div class="crm-chips">${lijst.map(x=>`<button class="crm-chip${x.id===CRM.sjabloon?' aan':''}" onclick="CRM.sjabloon='${x.id}';crmTeken()">${crmE(x.naam)}</button>`).join('')||'<span style="font-size:13px;color:var(--muted)">Nog geen sjablonen.</span>'}</div>`;
+  if(s){
+    h+=`<label class="crm-veld" style="margin-top:12px">Aan<input class="crm-in" id="crmMailAan" value="${crmE(a.email||'')}"></label>
+      <label class="crm-veld" style="margin-top:8px">Onderwerp<input class="crm-in" id="crmMailOnderwerp" value="${crmE(crmVul(s.onderwerp,a))}"></label>
+      <label class="crm-veld" style="margin-top:8px">Bericht<textarea class="crm-in" id="crmMailTekst" rows="12">${crmE(crmVul(s.tekst,a))}</textarea></label>
+      ${/\[[A-Z]+\]/.test(s.tekst)?'<div style="font-size:12px;color:#8E3520;margin-top:6px">Vul de [HOOFDLETTER]-plekken nog zelf in.</div>':''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="crm-knop" onclick="crmKopieer()">Kopieer tekst</button>
+        <button class="crm-knop" onclick="crmOpenGmail('${a.id}')">Open in Gmail</button>
+        <button class="crm-knop zwart" onclick="crmGemaild('${a.id}')">Verstuurd &mdash; zet op tijdlijn</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5">Tot de Gmail-koppeling live staat: verstuur de mail in Gmail en druk daarna op &ldquo;Verstuurd&rdquo;. Dan zet de app de klant aan zet en loopt de herinnering van 48 uur.</div>`;
+  }
+  return h+'</div>';
+}
+function crmKopieer(){
+  const t=crmVal('crmMailTekst');
+  const klaar=()=>toast('Tekst gekopieerd');
+  if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(klaar).catch(()=>{crmKopieerOud(t);klaar();});
+  else{crmKopieerOud(t);klaar();}
+}
+function crmKopieerOud(t){ const ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} ta.remove(); }
+function crmOpenGmail(id){
+  const a=CRM.aanvragen.find(x=>x.id===id); if(!a)return;
+  const u='https://mail.google.com/mail/?authuser='+encodeURIComponent(a.inbox||'info@foodtruckhuren-offerte.nl')+'&view=cm&fs=1'
+    +'&to='+encodeURIComponent(crmVal('crmMailAan'))+'&su='+encodeURIComponent(crmVal('crmMailOnderwerp'))+'&body='+encodeURIComponent(document.getElementById('crmMailTekst').value);
+  window.open(u,'_blank');
+}
+async function crmGemaild(id){
+  const a=CRM.aanvragen.find(x=>x.id===id); if(!a)return;
+  const onderwerp=crmVal('crmMailOnderwerp'), tekst=document.getElementById('crmMailTekst').value;
+  const s=CRM.sjablonen.find(x=>x.id===CRM.sjabloon);
+  const{error}=await sb.from('crm_berichten').insert({aanvraag_id:id,soort:'mail_uit',van:a.inbox,aan:crmVal('crmMailAan')||a.email,onderwerp,
+    samenvatting:(s?'['+s.naam+'] ':'')+tekst.replace(/\s+/g,' ').slice(0,220)});
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  CRM.sjabloon=null; toast('Op de tijdlijn gezet · klant is aan zet');
+  await crmLaden(); crmTeken();
+}
+
+// ── planning-paneel: optie of klus aanmaken ───────────────────────
+function crmPlanningHtml(a){
+  let h='<div class="crm-paneel"><h3>Past het in de planning?</h3>';
+  const k=a.klus_id&&typeof KLUSSEN!=='undefined'?(KLUSSEN||[]).find(x=>x.id===a.klus_id):null;
+  if(!a.datum){
+    h+='<div style="font-size:13px;color:var(--muted)">Vul eerst een datum in bij de gegevens.</div>';
+  }else{
+    const p=crmPlanning(a.datum);
+    const andere=p?p.klussen.filter(x=>x.id!==a.klus_id):[];
+    h+=`<div style="font-size:12.5px;color:var(--muted);margin:-4px 0 8px">${crmE(crmDatum(a.datum,{weekday:'long',day:'numeric',month:'long',year:'numeric'}))} · ${andere.length} ${andere.length===1?'klus':'klussen'} gepland</div>`;
+    if(p){
+      const bezet=p.trucks.filter(t=>p.bezet[t.id]&&!(k&&(k.trucks||[]).some(x=>x.id===t.id)));
+      h+=`<div style="font-size:13px;line-height:1.55"><b style="color:#0F7A52">${p.vrij.length} vrij</b>${bezet.length?` · <b style="color:#8E3520">${bezet.length} bezet</b>`:''}</div>`;
+      if(bezet.length)h+=`<div style="font-size:12.5px;color:#4A4945;margin-top:6px;line-height:1.6">${bezet.map(t=>`${crmE(t.label)} <span style="color:var(--muted)">&middot; ${crmE(p.bezet[t.id])}</span>`).join('<br>')}</div>`;
+      if(andere.length)h+=`<div style="font-size:12px;color:var(--muted);margin-top:8px">Die dag: ${andere.slice(0,4).map(x=>crmE(x.naam||'klus')+(x.is_optie?' (optie)':'')).join(', ')}${andere.length>4?'&hellip;':''}</div>`;
+    }
+  }
+  h+='<div style="height:1px;background:var(--border);margin:12px 0"></div>';
+  if(k){
+    h+=`<div style="font-size:13px;margin-bottom:8px">${k.is_optie?'<b style="color:#2A4EA8">Staat als optie in de planning</b>':'<b style="color:#0F7A52">Staat als klus in de planning</b>'}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="crm-knop" onclick="openDetail('${k.id}')">Open klus</button>
+      ${k.is_optie?`<button class="crm-knop zwart" onclick="crmBevestig('${a.id}')">Bevestigen</button>`:''}</div>`;
+  }else if(crmOpen(a)){
+    h+=`<div style="display:flex;flex-direction:column;gap:8px">
+      <button class="crm-knop blauw" ${a.datum?'':'disabled'} onclick="crmMaakOptie('${a.id}')">Zet als optie in de planning</button>
+      <button class="crm-knop zwart" ${a.datum?'':'disabled'} onclick="crmBevestig('${a.id}')">Bevestigd &mdash; maak klus aan</button></div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5">Klant, datum, gasten, adres en tijden gaan mee. Trucks en personeel plan je daarna in de klus.</div>`;
+  }else if(a.klus_id){
+    h+='<div style="font-size:13px;color:var(--muted)">De gekoppelde klus is niet (meer) te vinden.</div>';
+  }
+  return h+'</div>';
+}
+function crmKlusVelden(a){
+  const naam=[a.gelegenheid?crmCap(a.gelegenheid):'',a.contact_naam||'',a.plaats?'· '+a.plaats:''].filter(Boolean).join(' ').replace(/\s+·/,' ·');
+  const notitie=['Uit CRM'+(a.ref?' · ref. '+a.ref:'')+(a.formulier_nr?' · formulier #'+a.formulier_nr:''),a.soort_food?'Food: '+a.soort_food:'',a.wensen||'',a.email?'Mail: '+a.email:''].filter(Boolean).join('\n');
+  return {naam:naam||'Aanvraag',datum:a.datum,notitie,personen:a.gasten||0,personeel_nodig:0,food:a.soort_food||'',adres:a.adres||'',
+    contactpersoon:a.contact_naam||'',telefoon:a.telefoon||'',klant:a.contact_naam||null,categorie:'klus',
+    start_feest:a.start_tijd||null,einde_feest:a.eind_tijd||null};
+}
+async function crmMaakOptie(id){
+  if(CRM.bezig)return; const a=CRM.aanvragen.find(x=>x.id===id); if(!a||!a.datum)return;
+  CRM.bezig=true;
+  try{
+    const{data,error}=await sb.from('klussen').insert({...crmKlusVelden(a),is_optie:true}).select('id').single();
+    if(error)throw error;
+    const upd={klus_id:data.id}; if(['nieuw','vragen','offerte'].includes(a.status))upd.status='optie';
+    const r=await sb.from('crm_aanvragen').update(upd).eq('id',id); if(r.error)throw r.error;
+    await sb.from('crm_berichten').insert({aanvraag_id:id,soort:'status',samenvatting:'Als optie in de planning gezet'});
+    toast('Optie staat in de planning');
+    if(typeof loadAll==='function')await loadAll();
+    await crmLaden(); crmTeken();
+  }catch(e){ toast('Optie maken mislukt: '+(e.message||e),'fout'); }
+  finally{ CRM.bezig=false; }
+}
+async function crmBevestig(id){
+  if(CRM.bezig)return; const a=CRM.aanvragen.find(x=>x.id===id); if(!a||!a.datum)return;
+  if(!confirm(`Aanvraag van ${a.contact_naam||'deze klant'} bevestigen? Er komt dan een klus in de planning die voor iedereen zichtbaar is.`))return;
+  CRM.bezig=true;
+  try{
+    let klusId=a.klus_id;
+    if(klusId){ const r=await sb.from('klussen').update({is_optie:false}).eq('id',klusId); if(r.error)throw r.error; }
+    else{ const{data,error}=await sb.from('klussen').insert({...crmKlusVelden(a),is_optie:false}).select('id').single(); if(error)throw error; klusId=data.id; }
+    const r=await sb.from('crm_aanvragen').update({klus_id:klusId,status:'bevestigd'}).eq('id',id); if(r.error)throw r.error;
+    await sb.from('crm_berichten').insert({aanvraag_id:id,soort:'status',samenvatting:'Bevestigd · klus aangemaakt in de planning'});
+    toast('Bevestigd · vul nu trucks en personeel in');
+    if(typeof loadAll==='function')await loadAll();
+    await crmLaden(); crmTeken();
+    if(typeof openModal==='function')openModal(klusId);
+  }catch(e){ toast('Bevestigen mislukt: '+(e.message||e),'fout'); }
+  finally{ CRM.bezig=false; }
+}
+
+// ── wijzigen ──────────────────────────────────────────────────────
+async function crmBewaarGegevens(id){
+  const g=v=>crmLeeg(crmVal('crmF_'+v));
+  const gasten=crmVal('crmF_gasten'), bedrag=crmVal('crmF_bedrag');
+  const upd={contact_naam:g('contact_naam'),email:(g('email')||'').toLowerCase()||null,telefoon:g('telefoon'),datum:g('datum'),
+    gasten:gasten===''?null:parseInt(gasten,10),start_tijd:g('start_tijd'),eind_tijd:g('eind_tijd'),plaats:g('plaats'),
+    gelegenheid:g('gelegenheid'),adres:g('adres'),soort_food:g('soort_food'),wensen:crmLeeg(crmVal('crmF_wensen')),
+    bedrag:bedrag===''?null:Number(bedrag),bron:g('bron')||'anders'};
+  const{error}=await sb.from('crm_aanvragen').update(upd).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  toast('Opgeslagen'); await crmLaden(); crmTeken();
+}
+async function crmZetStatus(id,status,extra){
+  const a=CRM.aanvragen.find(x=>x.id===id); if(!a||a.status===status&&!extra)return;
+  const upd={status,...(extra||{})};
+  if(status!=='verloren'){ upd.verlies_reden=null; upd.verlies_toelichting=null; }
+  const{error}=await sb.from('crm_aanvragen').update(upd).eq('id',id);
+  if(error){toast('Status wijzigen mislukt: '+error.message,'fout');return;}
+  await sb.from('crm_berichten').insert({aanvraag_id:id,soort:'status',samenvatting:`Status: ${crmNaamStatus(status)}${upd.verlies_reden?' · '+upd.verlies_reden:''}`});
+  await crmLaden(); crmTeken();
+}
+function crmStapKlik(id,status){
+  const a=CRM.aanvragen.find(x=>x.id===id); if(!a)return;
+  if(status==='bevestigd'&&a.datum&&!(a.klus_id&&(KLUSSEN||[]).some(k=>k.id===a.klus_id&&!k.is_optie)))return crmBevestig(id);
+  if(status==='optie'&&a.datum&&!a.klus_id)return crmMaakOptie(id);
+  crmZetStatus(id,status);
+}
+function crmVerloren(id,reden){
+  const sig=crmAfhaakSignaal(CRM.aanvragen.find(x=>x.id===id)||{});
+  crmZetStatus(id,'verloren',{verlies_reden:reden,verlies_toelichting:sig?sig.tekst.slice(0,160):null});
+}
+async function crmNotitie(id,soort){
+  const t=crmVal('crmNotitie');
+  if(!t&&soort==='notitie'){toast('Typ eerst een notitie','fout');return;}
+  const{error}=await sb.from('crm_berichten').insert({aanvraag_id:id,soort,samenvatting:t||(soort==='telefoon'?'Gebeld':'')});
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  await crmLaden(); crmTeken();
+}
+async function crmPauze(id,datum){
+  const{error}=await sb.from('crm_aanvragen').update({herinnering_pauze_tot:datum||null}).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  toast(datum?'Herinnering gepauzeerd':'Pauze eraf'); await crmLaden(); crmTeken();
+}
+async function crmAanZet(id,wie){
+  const{error}=await sb.from('crm_aanvragen').update({aan_zet:wie,...(wie==='klant'?{laatste_uitgaand:new Date().toISOString()}:{})}).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  await crmLaden(); crmTeken();
+}
+
+// ── nieuwe aanvraag met de hand ───────────────────────────────────
+function crmNieuwHtml(){
+  const k=CRM.nieuwKlant?CRM.klanten.find(x=>x.id===CRM.nieuwKlant):null;
+  return `<button class="crm-meer" style="padding:0 0 10px" onclick="CRM.nieuw=false;crmTeken()">&lsaquo; Terug</button>
+  <div class="crm-paneel" style="max-width:640px"><h3>Nieuwe aanvraag</h3>
+    <div class="crm-raster">
+      <label class="crm-veld vol">Naam<input class="crm-in" id="crmN_contact_naam" value="${crmE(k?k.naam:'')}"></label>
+      <label class="crm-veld">E-mail<input class="crm-in" id="crmN_email" type="email" value="${crmE(k?k.email:'')}"></label>
+      <label class="crm-veld">Telefoon<input class="crm-in" id="crmN_telefoon" type="tel" value="${crmE(k?k.telefoon:'')}"></label>
+      <label class="crm-veld">Datum<input class="crm-in" id="crmN_datum" type="date"></label>
+      <label class="crm-veld">Gasten<input class="crm-in" id="crmN_gasten" type="number" min="0"></label>
+      <label class="crm-veld">Start uitgifte<input class="crm-in" id="crmN_start_tijd" type="time"></label>
+      <label class="crm-veld">Einde uitgifte<input class="crm-in" id="crmN_eind_tijd" type="time"></label>
+      <label class="crm-veld">Plaats<input class="crm-in" id="crmN_plaats" value="${crmE(k?k.plaats:'')}"></label>
+      <label class="crm-veld">Gelegenheid<input class="crm-in" id="crmN_gelegenheid" placeholder="bv. bruiloft"></label>
+      <label class="crm-veld vol">Soort food<input class="crm-in" id="crmN_soort_food"></label>
+      <label class="crm-veld vol">Wensen<textarea class="crm-in" id="crmN_wensen" rows="3"></textarea></label>
+      <label class="crm-veld">Binnengekomen via<select class="crm-in" id="crmN_bron">${CRM_BRONNEN.map(b=>`<option${b==='telefoon'?' selected':''}>${crmE(b)}</option>`).join('')}</select></label>
+    </div>
+    <button class="crm-knop zwart" style="margin-top:12px" onclick="crmBewaarNieuw()">Aanvraag opslaan</button>
+  </div>`;
+}
+async function crmBewaarNieuw(){
+  const g=v=>crmLeeg(crmVal('crmN_'+v));
+  const naam=g('contact_naam'); if(!naam){toast('Vul een naam in','fout');return;}
+  const email=(g('email')||'').toLowerCase()||null;
+  try{
+    let klant=CRM.nieuwKlant?CRM.klanten.find(x=>x.id===CRM.nieuwKlant):null;
+    if(!klant&&email)klant=CRM.klanten.find(x=>(x.email||'').toLowerCase()===email);
+    if(!klant){
+      const{data,error}=await sb.from('crm_klanten').insert({naam,email,telefoon:g('telefoon'),plaats:g('plaats')}).select('*').single();
+      if(error)throw error; klant=data;
+    }
+    const gasten=crmVal('crmN_gasten');
+    const bron=g('bron')||'anders';
+    const{data,error}=await sb.from('crm_aanvragen').insert({klant_id:klant.id,contact_naam:naam,email,telefoon:g('telefoon'),datum:g('datum'),
+      gasten:gasten===''?null:parseInt(gasten,10),start_tijd:g('start_tijd'),eind_tijd:g('eind_tijd'),plaats:g('plaats'),gelegenheid:g('gelegenheid'),
+      soort_food:g('soort_food'),wensen:crmLeeg(crmVal('crmN_wensen')),bron,inbox:/poffertjes/.test(bron)?'info@poffertjesontour.nl':'info@foodtruckhuren-offerte.nl',
+      eigenaar_id:CURRENT_USER.id}).select('id').single();
+    if(error)throw error;
+    await sb.from('crm_berichten').insert({aanvraag_id:data.id,soort:'notitie',samenvatting:'Aanvraag met de hand ingevoerd (via '+bron+')'});
+    CRM.nieuw=false; CRM.nieuwKlant=null;
+    await crmLaden(); crmOpenAanvraag(data.id); toast('Aanvraag opgeslagen');
+  }catch(e){ toast('Opslaan mislukt: '+(e.message||e),'fout'); }
+}
+
+// ── klanten ───────────────────────────────────────────────────────
+function crmKlantenHtml(){
+  const z=(CRM.klantZoek||'').toLowerCase();
+  const rijen=CRM.klanten.filter(k=>!z||[k.naam,k.email,k.plaats,k.telefoon].join(' ').toLowerCase().includes(z));
+  const perKlant={}; CRM.aanvragen.forEach(a=>{ if(a.klant_id)(perKlant[a.klant_id]=perKlant[a.klant_id]||[]).push(a); });
+  let h=`<div class="crm-filters"><input class="crm-zoek" id="crmKlantZoek" style="margin-left:0" placeholder="Zoek klant&hellip;" value="${crmE(CRM.klantZoek||'')}"
+    oninput="CRM.klantZoek=this.value;clearTimeout(window.CRM_KZ);window.CRM_KZ=setTimeout(()=>{crmTeken();const z=document.getElementById('crmKlantZoek');if(z){z.focus();z.setSelectionRange(z.value.length,z.value.length);}},250)">
+    <span style="font-size:12.5px;color:var(--muted)">${rijen.length} klanten</span></div>
+    <div class="crm-paneel" style="overflow-x:auto"><table class="crm-tabel"><thead><tr><th>Naam</th><th>Plaats</th><th>Aanvragen</th><th>Laatste</th></tr></thead><tbody>`;
+  rijen.slice(0,300).forEach(k=>{
+    const lijst=(perKlant[k.id]||[]).sort((x,y)=>new Date(y.ontvangen_op)-new Date(x.ontvangen_op));
+    const l=lijst[0];
+    h+=`<tr class="klik" onclick="crmOpenKlant('${k.id}')"><td><b style="font-weight:600">${crmE(k.naam)}</b>${k.soort!=='particulier'?` <span class="crm-pil klant">${crmE(k.soort)}</span>`:''}<div style="font-size:12px;color:var(--muted)">${crmE(k.email||'')}</div></td>
+      <td>${crmE(k.plaats||'')}</td><td>${lijst.length}</td><td>${l?crmE(crmNaamStatus(l.status))+'<div style="font-size:12px;color:var(--muted)">'+crmE(l.datum?crmDatum(l.datum):(l.datum_tekst||''))+'</div>':''}</td></tr>`;
+  });
+  return h+'</tbody></table></div>';
+}
+function crmKlantHtml(k){
+  if(!k)return '<div class="mb-kaart">Klant niet gevonden.</div>';
+  const lijst=CRM.aanvragen.filter(a=>a.klant_id===k.id).sort((x,y)=>new Date(y.ontvangen_op)-new Date(x.ontvangen_op));
+  const omzet=lijst.filter(a=>a.status==='bevestigd').reduce((s,a)=>s+(Number(a.bedrag)||0),0);
+  return `<button class="crm-meer" style="padding:0 0 10px" onclick="CRM.klant=null;crmTeken()">&lsaquo; Alle klanten</button>
+  <div class="crm-detail"><div class="crm-d-l"><div class="crm-paneel"><h3>${crmE(k.naam)}</h3>
+    <div class="crm-raster">
+      <label class="crm-veld vol">Naam<input class="crm-in" id="crmK_naam" value="${crmE(k.naam)}"></label>
+      <label class="crm-veld">Soort<select class="crm-in" id="crmK_soort">${['particulier','zakelijk','vereniging'].map(s=>`<option${s===k.soort?' selected':''}>${s}</option>`).join('')}</select></label>
+      <label class="crm-veld">Plaats<input class="crm-in" id="crmK_plaats" value="${crmE(k.plaats)}"></label>
+      <label class="crm-veld">E-mail<input class="crm-in" id="crmK_email" type="email" value="${crmE(k.email)}"></label>
+      <label class="crm-veld">Telefoon<input class="crm-in" id="crmK_telefoon" type="tel" value="${crmE(k.telefoon)}"></label>
+      <label class="crm-veld vol">Adres<input class="crm-in" id="crmK_adres" value="${crmE(k.adres)}"></label>
+      <label class="crm-veld vol">Goed om te weten<textarea class="crm-in" id="crmK_notities" rows="4" placeholder="bv. truck achter de kantine, stroom via de buitenkast">${crmE(k.notities)}</textarea></label>
+    </div>
+    <button class="crm-knop zwart" style="margin-top:12px;width:100%" onclick="crmBewaarKlant('${k.id}')">Opslaan</button>
+  </div></div>
+  <div class="crm-d-m"><div class="crm-kpis" style="margin:0">
+      <div class="crm-kpi"><div class="crm-kpi-l">Aanvragen</div><div class="crm-kpi-w">${lijst.length}</div></div>
+      <div class="crm-kpi"><div class="crm-kpi-l">Bevestigd</div><div class="crm-kpi-w">${lijst.filter(a=>a.status==='bevestigd').length}</div></div>
+      <div class="crm-kpi"><div class="crm-kpi-l">Omzet bevestigd</div><div class="crm-kpi-w">${omzet?crmEuro(omzet):'&mdash;'}</div></div></div>
+    <div class="crm-paneel"><h3>Aanvragen</h3><div class="crm-lijst">${lijst.map(a=>`<button class="crm-rij" onclick="crmOpenAanvraag('${a.id}')"><span class="crm-rij-balk" style="background:${crmKleurStatus(a.status)}"></span>
+      <span style="flex:1;display:flex;flex-direction:column;gap:2px"><span style="font-weight:600">${crmE(a.datum?crmDatum(a.datum):(a.datum_tekst||'geen datum'))}${a.plaats?' · '+crmE(a.plaats):''}</span>
+      <span style="font-size:12.5px;color:var(--muted)">${crmE(crmNaamStatus(a.status))}${a.soort_food?' · '+crmE(a.soort_food):''}${a.bedrag?' · '+crmEuro(a.bedrag):''}</span></span></button>`).join('')||'<div style="color:var(--muted);font-size:13px">Nog geen aanvragen.</div>'}</div>
+      <button class="crm-knop" style="margin-top:10px" onclick="crmGa('aanvragen',{nieuw:true,nieuwKlant:'${k.id}'})">+ Nieuwe aanvraag voor deze klant</button></div>
+  </div></div>`;
+}
+async function crmBewaarKlant(id){
+  const g=v=>crmLeeg(crmVal('crmK_'+v));
+  if(!g('naam')){toast('Naam mag niet leeg zijn','fout');return;}
+  const{error}=await sb.from('crm_klanten').update({naam:g('naam'),soort:g('soort')||'particulier',plaats:g('plaats'),email:(g('email')||'').toLowerCase()||null,
+    telefoon:g('telefoon'),adres:g('adres'),notities:crmLeeg(crmVal('crmK_notities'))}).eq('id',id);
+  if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
+  toast('Klant opgeslagen'); await crmLaden(); crmTeken();
+}
+
+// ── sjablonen beheren ─────────────────────────────────────────────
+const CRM_VELDEN_UITLEG=[['{aanhef}','voornaam, of "heer/mevrouw"'],['{voornaam}','voornaam (particulier)'],['{dag_datum}','zaterdag 28 november 2026'],['{datum}','28 november 2026'],
+  ['{tijd}','17.00 tot 19.00 uur'],['{plaats}','plaats'],['{gasten}','aantal gasten'],['{gelegenheid}','bv. verjaardag'],['{soort_food}','gevraagde food'],
+  ['{ref}','ref-nummer'],['{bedrag}','offertebedrag'],['{onderwerp_laatste}','onderwerp van de laatste mail'],['{mijn_naam}','jouw naam'],['{handtekening}','naam, TC Group, adres, telefoon']];
+function crmSjablonenHtml(){
+  const b=CRM.sjabloonBewerk;
+  let h=`<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start"><div style="flex:999 1 420px;min-width:0;display:flex;flex-direction:column;gap:10px">`;
+  CRM.sjablonen.forEach(s=>{
+    if(b===s.id){ h+=crmSjabloonForm(s); return; }
+    h+=`<div class="crm-paneel"><div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+      <div><div style="font-size:15px;font-weight:700">${crmE(s.naam)}${s.actief?'':' <span class="crm-pil klant">uit</span>'}</div>
+      <div style="font-size:12.5px;color:var(--muted)">${crmE(s.merk)}${s.eigenaar_id?' · alleen voor jou':''} · ${crmE(s.onderwerp||'')}</div></div>
+      <button class="crm-knop klein" onclick="CRM.sjabloonBewerk='${s.id}';crmTeken()">Bewerken</button></div>
+      <div style="font-size:13px;color:#4A4945;white-space:pre-line;margin-top:8px;max-height:7.5em;overflow:hidden">${crmE(s.tekst)}</div></div>`;
+  });
+  if(b==='nieuw')h+=crmSjabloonForm({naam:'',merk:'Foodtruckhuren',onderwerp:'Re: {onderwerp_laatste}',tekst:'Beste {aanhef},\n\n\n\nMet vriendelijke groet,\n\n{handtekening}',actief:true,volgorde:CRM.sjablonen.length+1});
+  else h+=`<button class="crm-knop" style="align-self:flex-start" onclick="CRM.sjabloonBewerk='nieuw';crmTeken()">+ Nieuw sjabloon</button>`;
+  h+=`</div><div class="crm-paneel" style="flex:1 1 260px;max-width:340px"><h3>Velden die vanzelf worden ingevuld</h3>
+    <div style="font-size:12.5px;line-height:1.8">${CRM_VELDEN_UITLEG.map(([v,u])=>`<code style="background:#F3F2EE;padding:1px 5px;border-radius:4px">${v}</code> ${crmE(u)}`).join('<br>')}</div>
+    <div style="font-size:12px;color:var(--muted);margin-top:10px;line-height:1.5">Schrijf [HOOFDLETTERS] tussen haken voor iets dat je per klant zelf invult; de app waarschuwt dan.</div></div></div>`;
+  return h;
+}
+function crmSjabloonForm(s){
+  return `<div class="crm-paneel"><div class="crm-raster">
+    <label class="crm-veld">Naam<input class="crm-in" id="crmS_naam" value="${crmE(s.naam)}"></label>
+    <label class="crm-veld">Merk<select class="crm-in" id="crmS_merk">${['Foodtruckhuren','Poffertjes on Tour','TC Group'].map(m=>`<option${m===s.merk?' selected':''}>${m}</option>`).join('')}</select></label>
+    <label class="crm-veld vol">Onderwerp<input class="crm-in" id="crmS_onderwerp" value="${crmE(s.onderwerp)}"></label>
+    <label class="crm-veld vol">Tekst<textarea class="crm-in" id="crmS_tekst" rows="12">${crmE(s.tekst)}</textarea></label>
+    <label class="crm-veld" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="crmS_actief" ${s.actief?'checked':''}> Actief</label>
+    <label class="crm-veld" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" id="crmS_eigen" ${s.eigenaar_id?'checked':''}> Alleen voor mij</label>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+    <button class="crm-knop zwart" onclick="crmBewaarSjabloon(${s.id?`'${s.id}'`:'null'})">Opslaan</button>
+    <button class="crm-knop" onclick="CRM.sjabloonBewerk=null;crmTeken()">Annuleren</button>
+    ${s.id?`<button class="crm-knop" style="margin-left:auto;color:#B91C1C" onclick="crmVerwijderSjabloon('${s.id}')">Verwijderen</button>`:''}
+  </div></div>`;
+}
+async function crmBewaarSjabloon(id){
+  const rij={naam:crmVal('crmS_naam'),merk:crmVal('crmS_merk'),onderwerp:crmVal('crmS_onderwerp')||null,tekst:document.getElementById('crmS_tekst').value,
+    actief:document.getElementById('crmS_actief').checked,eigenaar_id:document.getElementById('crmS_eigen').checked?CURRENT_USER.id:null};
+  if(!rij.naam||!rij.tekst.trim()){toast('Naam en tekst zijn verplicht','fout');return;}
+  const r=id?await sb.from('crm_sjablonen').update(rij).eq('id',id):await sb.from('crm_sjablonen').insert({...rij,volgorde:CRM.sjablonen.length+1});
+  if(r.error){toast('Opslaan mislukt: '+r.error.message,'fout');return;}
+  CRM.sjabloonBewerk=null; toast('Sjabloon opgeslagen'); await crmLaden(); crmTeken();
+}
+async function crmVerwijderSjabloon(id){
+  if(!confirm('Dit sjabloon verwijderen?'))return;
+  const{error}=await sb.from('crm_sjablonen').delete().eq('id',id);
+  if(error){toast('Verwijderen mislukt: '+error.message,'fout');return;}
+  CRM.sjabloonBewerk=null; await crmLaden(); crmTeken();
+}
+
 </script>
 
 <!-- ══════════════════════════════════════════════════════════════════
