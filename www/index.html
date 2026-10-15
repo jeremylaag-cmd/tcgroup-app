@@ -16130,12 +16130,42 @@ function logWanneer(op){
 const LOG_KLEUR={'toegevoegd':['#F0FDF4','#166534'],'gewijzigd':['#EFF6FF','#1E40AF'],'verwijderd':['#FEF2F2','#991B1B']};
 
 // Een veldnaam als 'start_tijd' lezen mensen niet; 'start tijd' wel.
-function logVeldNaam(k){return String(k||'').replace(/_/g,' ');}
+const LOG_VELD_NL={datum_start:'van',datum_eind:'t/m',tijd_start:'vanaf (tijd)',tijd_eind:'tot (tijd)',
+  verlofsoort:'soort verlof',soort:'soort',reden:'reden',status:'status',uren:'uren',gebruiker_id:'medewerker'};
+function logVeldNaam(k,tabel){
+  if(tabel==='beschikbaarheid'&&LOG_VELD_NL[k])return LOG_VELD_NL[k];
+  return String(k||'').replace(/_/g,' ');
+}
 function logWaarde(v){
   if(v===null||v===undefined||v==='')return '<span style="color:var(--muted);font-style:italic">leeg</span>';
   if(typeof v==='boolean')return v?'ja':'nee';
-  const t=String(v);
+  let t=String(v);
+  // Datums leesbaar: 2027-06-26 → 26 jun 2027
+  if(/^\d{4}-\d{2}-\d{2}$/.test(t))t=new Date(t+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'});
+  else if(/^\d{2}:\d{2}:\d{2}$/.test(t))t=t.slice(0,5);
   return veiligTekst(t.length>60?t.slice(0,60)+'\u2026':t);
+}
+// Wie hoort bij een gebruiker_id (voor oude logregels zonder naam erin).
+function logPersoon(id){
+  if(!id)return '';
+  const p=(typeof ACCOUNTS!=='undefined'&&ACCOUNTS||[]).find(x=>x.id===id)||(PERSONEEL||[]).find(x=>x.id===id);
+  return p?p.naam:'';
+}
+// Verlof/beschikbaarheid toegevoegd of verwijderd: laat zien wát er stond.
+function logVerlofDetail(r){
+  const v=r.velden||{};
+  const wie=v._persoon||logPersoon(v.gebruiker_id);
+  const soort=v.soort==='beschikbaar'?'beschikbaar':(v.verlofsoort&&v.verlofsoort!=='geen'?'verlof ('+v.verlofsoort+')':'vrij');
+  const periode=logWaarde(v.datum_start)+((v.datum_eind&&v.datum_eind!==v.datum_start)?' t/m '+logWaarde(v.datum_eind):'');
+  const tijd=(v.tijd_start||v.tijd_eind)?(v.tijd_start?String(v.tijd_start).slice(0,5):'…')+'–'+(v.tijd_eind?String(v.tijd_eind).slice(0,5):'…'):'hele dag';
+  const regel=(l,w)=>`<div style="font-size:11.5px;color:var(--muted);line-height:1.6"><span style="color:var(--text)">${l}</span>: ${w}</div>`;
+  return (wie?regel('medewerker',veiligTekst(wie)):'')
+    +regel('soort',veiligTekst(soort))
+    +regel('periode',periode)
+    +regel('tijd',veiligTekst(tijd))
+    +(v.reden?regel('reden',logWaarde(v.reden)):'')
+    +(v.status?regel('status',logWaarde(v.status)):'')
+    +(Number(v.uren)>0?regel('uren',logWaarde(v.uren)):'');
 }
 
 // Klapt de overige gewijzigde velden van een logregel uit of in.
@@ -16167,13 +16197,15 @@ function tekenLogboek(){
     }
     const[bg,kl]=LOG_KLEUR[r.actie]||['#F3F4F6','#374151'];
     let detail='';
-    if(r.actie==='gewijzigd'&&r.velden&&typeof r.velden==='object'){
+    if(r.tabel==='beschikbaarheid'&&r.actie!=='gewijzigd'&&r.velden&&typeof r.velden==='object'){
+      detail=logVerlofDetail(r);
+    }else if(r.actie==='gewijzigd'&&r.velden&&typeof r.velden==='object'){
       const veldRij=([k,v])=>
         `<div style="font-size:11.5px;color:var(--muted);line-height:1.6">
-           <span style="color:var(--text)">${veiligTekst(logVeldNaam(k))}</span>:
+           <span style="color:var(--text)">${veiligTekst(logVeldNaam(k,r.tabel))}</span>:
            ${logWaarde(v&&v.oud)} &rarr; <b style="color:var(--text)">${logWaarde(v&&v.nieuw)}</b>
          </div>`;
-      const alle=Object.entries(r.velden);
+      const alle=Object.entries(r.velden).filter(([k])=>k!=='_persoon');
       const rijen=alle.slice(0,6).map(veldRij).join('');
       const over=alle.length-6;
       // De rest staat er ook, maar ingeklapt: tik op "en nog 3 velden" om ze te zien.
@@ -16207,8 +16239,12 @@ function logExport(){
     const d=new Date(r.op);
     let wat='';
     if(r.actie==='gewijzigd'&&r.velden&&typeof r.velden==='object'){
-      wat=Object.entries(r.velden).map(([k,v])=>
-        `${logVeldNaam(k)}: ${(v&&v.oud)==null?'leeg':v.oud} -> ${(v&&v.nieuw)==null?'leeg':v.nieuw}`).join(' | ');
+      wat=Object.entries(r.velden).filter(([k])=>k!=='_persoon').map(([k,v])=>
+        `${logVeldNaam(k,r.tabel)}: ${(v&&v.oud)==null?'leeg':v.oud} -> ${(v&&v.nieuw)==null?'leeg':v.nieuw}`).join(' | ');
+    }else if(r.tabel==='beschikbaarheid'&&r.velden){
+      const v=r.velden;
+      wat=[(v._persoon||logPersoon(v.gebruiker_id)),v.soort==='beschikbaar'?'beschikbaar':(v.verlofsoort&&v.verlofsoort!=='geen'?'verlof ('+v.verlofsoort+')':'vrij'),
+           (v.datum_start||'')+(v.datum_eind&&v.datum_eind!==v.datum_start?' t/m '+v.datum_eind:''),v.reden||'',v.status||''].filter(Boolean).join(' | ');
     }
     rijen.push([d.toLocaleDateString('nl-NL'),d.toLocaleTimeString('nl-NL'),r.wie_naam||'',
                 r.onderdeel||r.tabel,r.actie,r.omschrijving||'',wat].map(esc).join(';'));
