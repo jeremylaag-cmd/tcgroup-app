@@ -4307,7 +4307,7 @@ function mbDagHtml(datum, rijen){
         uit+=`<div style="display:flex;align-items:center;gap:9px;padding:5px 0">
           <div class="mb-av" style="width:26px;height:26px;font-size:10.5px${binnenNu?';background:#0F7A52':''}">${veiligTekst(mbInit(m.naam))}</div>
           <div style="flex-grow:1;min-width:0">
-            <div style="font-size:13px;font-weight:600">${veiligTekst(m.naam)}</div>
+            <div style="font-size:13px;font-weight:600">${mbNaamLink(m.gebruiker_id,m.naam,'font-size:13px')}</div>
             ${m.telefoon?`<a href="tel:${veiligTekst(String(m.telefoon).replace(/[^0-9+]/g,''))}" style="font-size:11.5px;color:var(--muted);text-decoration:none">${veiligTekst(m.telefoon)}</a>`:''}
           </div>
           ${binnenNu?mbChip('ingeklokt '+veiligTekst(mbKlokT(m.ingeklokt_op)),'#0F7A52','#F2FBF6')
@@ -4354,7 +4354,7 @@ async function mbShiftOpen(id){
   ing.forEach(m=>{
     uit+=`<div class="mb-persoon">
       <div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
-      <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
+      <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${mbNaamLink(m.gebruiker_id,m.naam)}</div>
       <div style="font-size:11.5px;color:var(--muted)">${veiligTekst(m.telefoon||'')}${m.uurloon?' &middot; '+veiligTekst(mbPond(m.uurloon))+' p/u':''}</div></div>
       <button class="mb-mini" onclick="mbUitdelen('${veiligJs(id)}','${veiligJs(m.gebruiker_id)}')">Eraf</button></div>`;
   });
@@ -4363,7 +4363,7 @@ async function mbShiftOpen(id){
     aan.forEach(m=>{
       uit+=`<div class="mb-persoon">
         <div class="mb-av" style="background:#2A4EA8">${veiligTekst(mbInit(m.naam))}</div>
-        <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
+        <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${mbNaamLink(m.gebruiker_id,m.naam)}</div>
         <div style="margin-top:3px">${mbErvaringHtml(m.gebruiker_id)}</div>
         ${m.notitie?`<div style="font-size:11.5px;color:var(--muted)">${veiligTekst(m.notitie)}</div>`:''}</div>
         <div style="display:flex;gap:6px;flex-shrink:0">${MB_AANM.some(x=>x.aanmelding_id===m.aanmelding_id)
@@ -4388,7 +4388,7 @@ async function mbShiftOpen(id){
              : (k.beschikbaar==='onbeschikbaar' ? ['#B4472B','#FBEDE9','niet beschikbaar'] : ['#6B6A66','#F3F2EE','niet ingevuld']));
     uit+=`<div class="mb-persoon"${k.al_bezet?' style="opacity:.5"':''}>
       <div class="mb-av" style="background:#8A8984">${veiligTekst(mbInit(k.naam))}</div>
-      <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(k.naam)}</div>
+      <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${mbNaamLink(k.gebruiker_id,k.naam)}</div>
         <div style="margin-top:3px">${mbErvaringHtml(k.gebruiker_id)}</div>
         <div style="font-size:11.5px;color:var(--muted);margin-top:2px">
           ${mbChip(kl[2],kl[0],kl[1])}${(k.beschikbaar==='beschikbaar'&&venster)?' '+mbChip(venster,'#0F7A52','#F2FBF6'):''}${k.al_bezet?' staat vandaag al ergens':''}
@@ -4541,7 +4541,7 @@ function mbAanmBlok(dagen){
     uit+=`<div class="mb-persoon" id="mbA-${veiligTekst(r.aanmelding_id)}" style="align-items:flex-start;flex-wrap:wrap;row-gap:4px;padding-top:12px;padding-bottom:12px">
       <div style="width:86px;flex-shrink:0;font-size:12.5px;font-weight:700;padding-top:2px">${veiligTekst(dag)}</div>
       <div style="flex:1 1 260px;min-width:0">
-        <div style="font-size:14.5px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${veiligTekst(r.naam)} ${mbErvaringHtml(r.gebruiker_id)}</div>
+        <div style="font-size:14.5px;font-weight:700;display:flex;align-items:center;gap:6px;flex-wrap:wrap">${mbNaamLink(r.gebruiker_id,r.naam,'font-size:14.5px;font-weight:700')} ${mbErvaringHtml(r.gebruiker_id)}</div>
         ${rij('Meldt zich aan voor',`${mbStip(r.kleur)} <b>${veiligTekst(r.kraam)} &middot; ${veiligTekst(mbShiftVol(r))}</b>${naamLosVanTijd}
           ${(()=>{const ru=MB_RUIL.find(x=>x.shift_id===r.shift_id&&x.status==='open');
             return ru?`<span style="color:#2A4EA8;font-size:12px;font-weight:600"> &middot; ruil: neemt de shift van ${veiligTekst(ru.naam)} over</span>`
@@ -5959,9 +5959,15 @@ function mbDagKop(d){
   const naam=dt.toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'});
   return verschil===0?'Vandaag \u00b7 '+naam:(verschil===1?'Morgen \u00b7 '+naam:naam);
 }
+// Een naam die je overal in Manchester-beheer kunt aantikken (aanvragen,
+// shifts, dagoverzicht): opent dezelfde persoonskaart als bij Mensen.
+function mbNaamLink(id,naam,stijl){
+  if(!id)return veiligTekst(naam||'');
+  return `<a href="#" class="mb-naamlink"${stijl?` style="${stijl}"`:''} onclick="event.stopPropagation();mbPersoonKaart('${veiligJs(id)}');return false" title="Gegevens, rooster en aanvragen bekijken">${veiligTekst(naam||'')}</a>`;
+}
 async function mbPersoonKaart(id){
   mbKaartDicht();
-  const m=(MB_MENSEN_LIJST||[]).find(x=>x.id===id)||{id,naam:''};
+  let m=(MB_MENSEN_LIJST||[]).find(x=>x.id===id);
   const ov=document.createElement('div');
   ov.id='mbKaartLaag';
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding:24px 12px;overflow-y:auto';
@@ -5970,19 +5976,55 @@ async function mbPersoonKaart(id){
     <div style="color:var(--muted);font-size:13px">Bezig&hellip;</div></div>`;
   document.body.appendChild(ov);
   document.addEventListener('keydown',mbKaartEsc);
-  let rijen=[];
+  let rijen=[], info={};
   try{
-    const{data,error}=await sb.rpc('mcr_persoon_planning',{p_id:id});
-    if(error)throw error; rijen=data||[];
+    const [pl,inf,mens]=await Promise.all([
+      sb.rpc('mcr_persoon_planning',{p_id:id}),
+      sb.rpc('mcr_persoon_info',{p_id:id}),
+      m?null:sb.rpc('mcr_mensen'),
+      Object.keys(MB_ERV).length?null:mbErvaringLaden()]);
+    if(pl.error)throw pl.error; rijen=pl.data||[];
+    info=(!inf.error&&inf.data&&inf.data[0])||{};
+    if(!m){ if(mens&&!mens.error){ MB_MENSEN_LIJST=mens.data||[]; m=MB_MENSEN_LIJST.find(x=>x.id===id); } }
+    if(!m)m={id,naam:''};
   }catch(e){
     document.getElementById('mbKaartBinnen').innerHTML=`<div style="color:#B4472B">${veiligTekst(mbFout(e))}</div>
       <button class="mb-mini" style="margin-top:12px" onclick="mbKaartDicht()">Sluiten</button>`;
     return;
   }
   const b=document.getElementById('mbKaartBinnen'); if(!b)return;
-  b.innerHTML=mbPersoonKaartHtml(m,rijen);
+  b.innerHTML=mbPersoonKaartHtml(m,rijen,info);
 }
-function mbPersoonKaartHtml(m,rijen){
+// Alle gegevens van een persoon in één blok, alleen wat is ingevuld.
+function mbGegevensHtml(m,info){
+  const r=[];
+  const zet=(l,w)=>{ if(w!==null&&w!==undefined&&String(w).trim()!=='')r.push([l,w]); };
+  const adres=[info.straat,[info.postcode,info.plaats].filter(Boolean).join(' ')].filter(x=>x&&String(x).trim()).join(', ');
+  zet('Adres',veiligTekst(adres));
+  zet('Geboortedatum',info.geboortedatum?veiligTekst(mbDatum(String(info.geboortedatum)))+(m.leeftijd?' ('+m.leeftijd+' jaar)':''):'');
+  zet('Shirtmaat',veiligTekst(info.shirtmaat||''));
+  zet('Noodcontact',[info.noodcontact_naam,info.noodcontact_tel].filter(Boolean).length
+      ? veiligTekst(info.noodcontact_naam||'')+(info.noodcontact_tel?` &middot; <a href="tel:${veiligTekst(String(info.noodcontact_tel).replace(/[^0-9+]/g,''))}" style="color:inherit">${veiligTekst(info.noodcontact_tel)}</a>`:''):'');
+  zet('Bank',[info.bank_account?'account '+info.bank_account:'',info.sort_code?'sort code '+info.sort_code:'',info.iban?'IBAN '+info.iban:''].filter(Boolean).map(veiligTekst).join(' &middot; ')
+      ||'<span style="color:#B45309">nog niet ingevuld</span>');
+  zet('UTR',veiligTekst(info.utr||''));
+  zet('Beoordeling',m.beoordeling?veiligTekst(m.beoordeling)+(m.beoordeling_door?` <span style="color:var(--muted)">door ${veiligTekst(m.beoordeling_door)}</span>`:''):'');
+  zet('Via',veiligTekst(m.aangebracht_door||''));
+  zet('Wil werken',[m.max_dagen?'max '+m.max_dagen+' dagen per week':'',m.vroegste_start?'vanaf '+mbUur(m.vroegste_start):''].filter(Boolean).map(veiligTekst).join(' &middot; '));
+  zet('Eigen opmerking',m.eigen_opmerking?'&ldquo;'+veiligTekst(m.eigen_opmerking)+'&rdquo;':'');
+  zet('Kraammanager',m.kraammanager?'ja'+(m.manager_kraam?' &middot; '+veiligTekst(m.manager_kraam):''):'');
+  zet('Kleding',m.kleding_uit?m.kleding_uit+'&times; uitgegeven'+(m.borg?' &middot; borg '+veiligTekst(mbPond(m.borg)):''):'');
+  const mis=(m.niet_gekomen||0)+(m.afgemeld||0)+(m.te_laat||0);
+  zet('Misgegaan',mis?`<span style="color:#B4472B">${m.niet_gekomen||0}&times; niet gekomen &middot; ${m.afgemeld||0}&times; afgemeld &middot; ${m.te_laat||0}&times; te laat</span>`:'');
+  zet('Huisregels',m.huisregels_op?'gelezen op '+veiligTekst(mbDatum(String(m.huisregels_op).slice(0,10))):'<span style="color:#B45309">nog niet gelezen</span>');
+  zet('Totaal',m.shifts!=null?`${m.shifts} shifts &middot; ${veiligTekst(mbNum(m.uren||0,1))} uur${m.verdiend?' &middot; '+veiligTekst(mbPondKort(m.verdiend)):''}`:'');
+  if(!r.length)return '';
+  return `<div class="mb-kop" style="margin-top:16px">Gegevens</div>
+    <div style="display:grid;grid-template-columns:max-content 1fr;gap:5px 14px;font-size:13px;line-height:1.45">
+      ${r.map(([l,w])=>`<div style="color:var(--muted);font-size:12px;padding-top:1px">${l}</div><div style="min-width:0;word-break:break-word">${w}</div>`).join('')}
+    </div>`;
+}
+function mbPersoonKaartHtml(m,rijen,info){
   const vandaag=mbVandaagStr();
   const ingedeeld=rijen.filter(r=>r.soort==='ingedeeld');
   const komend=ingedeeld.filter(r=>String(r.datum)>=vandaag);
@@ -6039,7 +6081,8 @@ function mbPersoonKaartHtml(m,rijen){
       <span>${mbChip('aangevraagd','#2A4EA8','#EEF4FF')} heeft zich aangemeld</span>
       <span>${mbChip('kan 10:00\u201314:00','#0F7A52','#F2FBF6')} doorgegeven</span>
     </div>
-    <div class="mb-kop" style="margin-top:16px">Komende planning</div>`;
+    ${mbGegevensHtml(m,info||{})}
+    <div class="mb-kop" style="margin-top:16px">Rooster en aanvragen</div>`;
 
   if(!dagLijst.length){
     uit+=`<div style="font-size:13px;color:var(--muted);padding:6px 0">Niets ingepland, niets aangevraagd en geen beschikbaarheid doorgegeven.</div>`;
@@ -6071,7 +6114,7 @@ function mbPersoonKaartHtml(m,rijen){
     });
   }
   uit+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:16px">
-      <button class="mb-mini" onclick="mbKaartDicht();mbPersoonOpen('${veiligJs(m.id)}')">Kleding, borg en voorvallen</button>
+      <button class="mb-mini" onclick="mbKaartDicht();MB_PERSOON='${veiligJs(m.id)}';mbNaar('mensen')">Kleding, borg en voorvallen</button>
       <button class="mb-mini zwart" onclick="mbKaartDicht()">Sluiten</button></div>`;
   return uit;
 }
