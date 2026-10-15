@@ -2605,8 +2605,8 @@ textarea.crm-in{resize:vertical;line-height:1.5}
         </div>
         <div class="sc" id="urenGoedgekeurdCard" style="display:none">
           <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:.5rem;flex-wrap:wrap">
-            <div class="st">Goedgekeurd &middot; terugdraaien of verwijderen</div>
-            <span style="font-size:11px;color:var(--muted)">alleen jij als administrator</span>
+            <div class="st" id="gkKopTekst">Goedgekeurd &middot; terugdraaien of verwijderen</div>
+            <span style="font-size:11px;color:var(--muted)" id="gkWieMag">alleen administrator en financieel</span>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:.75rem">
             <input type="date" id="gkVan" onchange="laadGoedgekeurd()" style="font-size:12px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;font-family:var(--font);background:var(--surface);color:var(--text)">
@@ -14181,18 +14181,23 @@ function planVerschil(reg){
   };
 }
 
-// ── GOEDGEKEURDE UREN TERUGDRAAIEN (alleen de administrator) ────────────
+// ── GOEDGEKEURDE UREN TERUGDRAAIEN (administrator en financieel) ────────
 // Goedgekeurd is dicht: de database laat alleen de administrator er nog aan
 // komen, en nooit als de factuur al als ontvangen is gestempeld. Terugdraaien
 // zet de regel terug op "wacht" zodat hij weer in de accordeerlijst staat.
+// Sinds 15 okt mag ook de financiële beheerder (Justin) terugdraaien;
+// verwijderen blijft alleen voor de administrator.
 let GK_VAN=null, GK_TOT=null;
+function magUrenTerugdraaien(){ return (typeof isAdmin==='function'&&isAdmin())||CURRENT_BEHEER_ROL==='financieel'; }
 function gkKaartTonen(){
   const el=document.getElementById('urenGoedgekeurdCard'); if(!el)return;
-  el.style.display=(typeof isAdmin==='function'&&isAdmin())?'':'none';
+  el.style.display=magUrenTerugdraaien()?'':'none';
+  const kop=document.getElementById('gkKopTekst'), wie=document.getElementById('gkWieMag');
+  if(kop)kop.innerHTML=isAdmin()?'Goedgekeurd &middot; terugdraaien of verwijderen':'Goedgekeurd &middot; terugdraaien';
 }
 async function laadGoedgekeurd(){
   const lijst=document.getElementById('urenGoedgekeurdList'); if(!lijst)return;
-  if(!(typeof isAdmin==='function'&&isAdmin())){lijst.innerHTML='';return;}
+  if(!magUrenTerugdraaien()){lijst.innerHTML='';return;}
   const van=document.getElementById('gkVan'), tot=document.getElementById('gkTot'), wie=document.getElementById('gkWie');
   if(van&&!van.value){const d=new Date();d.setDate(d.getDate()-30);van.value=fmt(d);}
   if(tot&&!tot.value)tot.value=fmt(new Date());
@@ -14222,7 +14227,7 @@ async function laadGoedgekeurd(){
         <div class="uur-item-tijd">${minToStr(r.minuten||0)}</div>
         ${dicht?'':`<div class="uur-acc-btns">
           <button class="btn-sm" style="padding:5px 10px;font-size:11px" onclick="gkTerugdraaien('${veiligJs(r.uren_id)}')">Terugdraaien</button>
-          <button class="btn-uur-af" style="padding:5px 10px;font-size:11px" onclick="gkVerwijderen('${veiligJs(r.uren_id)}')">Verwijderen</button>
+          ${isAdmin()?`<button class="btn-uur-af" style="padding:5px 10px;font-size:11px" onclick="gkVerwijderen('${veiligJs(r.uren_id)}')">Verwijderen</button>`:''}
         </div>`}
       </div></div>`;
   }).join('');
