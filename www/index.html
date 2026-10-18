@@ -3719,13 +3719,20 @@ function mbMeer(){
 // ── OVERZICHT ─────────────────────────────────────────────────────
 async function mbOverzicht(){
   if(!MB_DATUM)MB_DATUM=await mbPeil();
-  const [ovz, wacht, balk, , agd] = await Promise.all([
+  const [ovz, wacht, balk, , agd, dag, man] = await Promise.all([
     sb.rpc('mcr_overzicht',{p_datum:MB_DATUM}),
     sb.rpc('mcr_wacht_op_jou'),
     sb.rpc('mcr_bezetting_balk',{p_dagen:25}),
     mbRuilLaden(),
     sb.rpc('mcr_agenda_lijst',{p_van:MB_DATUM,p_tot:MB_DATUM}).then(x=>x,()=>({data:[]})),
+    sb.rpc('mcr_dag',{p_datum:MB_DATUM}).then(x=>x,()=>({data:[]})),
+    sb.rpc('mcr_managers_week',{p_van:mbMaandag(MB_DATUM)}).then(x=>x,()=>({data:[]})),
   ]);
+  // Wie er per shift staat (uit mcr_dag) en wie die dag manager is.
+  const MENSEN={};
+  ((dag&&!dag.error&&dag.data)||[]).forEach(r=>{ if(r.shift_id&&r.gebruiker_id)(MENSEN[r.shift_id]=MENSEN[r.shift_id]||[]).push(r); });
+  Object.values(MENSEN).forEach(l=>l.sort((a,b)=>String(a.naam||'').localeCompare(String(b.naam||''))));
+  const MANDAG=((man&&!man.error&&man.data)||[]).filter(x=>x.soort==='manager'||x.datum===MB_DATUM);
   if(ovz.error)throw ovz.error;
   const w=(wacht.data&&wacht.data[0])||{};
   const perKraam={};
@@ -3752,18 +3759,40 @@ async function mbOverzicht(){
         <span style="font-size:17px;font-weight:700;letter-spacing:.12em;font-variant-numeric:tabular-nums">${k.dicht?'&mdash;':veiligTekst(k.code)}</span>
       </div>
       <div style="font-size:12px;color:var(--muted);margin:2px 0 6px">${veiligTekst(k.adres||'')}</div>`;
+    if(!k.dicht){
+      const mg=MANDAG.filter(x=>x.kraam_id===k.kraam_id);
+      const mw=mg.filter(x=>x.soort==='manager'), ww=mg.filter(x=>x.soort==='weekend');
+      if(mg.length)uit+=`<div style="font-size:12px;color:#6D28D9;margin:-2px 0 6px;line-height:1.5">${
+        mw.length?'Manager: '+mw.map(x=>mbNaamLink(x.id,x.naam,'color:#6D28D9;font-weight:600')).join(', '):''}${mw.length&&ww.length?' &middot; ':''}${
+        ww.length?'Weekend: '+ww.map(x=>'<b>'+veiligTekst(x.naam)+'</b>').join(', '):''}</div>`;
+    }
     if(k.dicht)uit+='<div style="font-size:12.5px;color:var(--muted);padding-top:8px;border-top:1px solid var(--border)">Deze dag is de kraam dicht.</div>';
     else if(!o.shifts.length)uit+='<div style="font-size:12.5px;color:var(--muted);padding-top:8px;border-top:1px solid var(--border)">Nog geen diensten.</div>';
     o.shifts.forEach(sh=>{
       const vol=(sh.bezet||0)>=(sh.nodig||0);
-      uit+=`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--border)">
-        <div style="flex-grow:1">
-          <div style="font-size:13.5px;font-weight:600">${veiligTekst(sh.shift_naam||'')}</div>
-          <div style="font-size:12px;color:var(--muted);margin-top:1px">${veiligTekst(mbUur(sh.start_tijd))} &ndash; ${veiligTekst(mbUur(sh.eind_tijd))}</div>
-        </div>
-        ${sh.aanmeldingen?mbChip(sh.aanmeldingen+' aanvr.','#2A4EA8','#EEF4FF'):''}
-        <span class="mb-chip" style="color:${vol?'#0F7A52':'#B45309'};background:${vol?'#F2FBF6':'#FEF6E7'};font-variant-numeric:tabular-nums">${sh.bezet}/${sh.nodig}</span>
-      </div>`;
+      const mensen=MENSEN[sh.shift_id]||[];
+      const open=Math.max(0,(sh.nodig||0)-mensen.length);
+      uit+=`<div style="padding:9px 0 6px;border-top:1px solid var(--border)">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex-grow:1;min-width:0">
+            <span style="font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbUur(sh.start_tijd))}&ndash;${veiligTekst(sh.eind_tijd?mbUur(sh.eind_tijd):'sluit')}</span>
+            ${sh.shift_naam&&!String(sh.shift_naam).startsWith(mbUur(sh.start_tijd))?`<span style="font-size:12px;color:var(--muted);margin-left:5px">${veiligTekst(sh.shift_naam)}</span>`:''}
+          </div>
+          ${sh.aanmeldingen?mbChip(sh.aanmeldingen+' aanvr.','#2A4EA8','#EEF4FF'):''}
+          <span class="mb-chip" style="color:${vol?'#0F7A52':'#B45309'};background:${vol?'#F2FBF6':'#FEF6E7'};font-variant-numeric:tabular-nums">${sh.bezet}/${sh.nodig}</span>
+        </div>`;
+      mensen.forEach(m=>{
+        const binnen=m.ingeklokt_op&&!m.uitgeklokt_op;
+        uit+=`<div style="display:flex;align-items:center;gap:8px;padding:3px 0 0 2px;font-size:13px">
+          <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${binnen?'#0F7A52':(m.uitgeklokt_op?'#B4B2A9':'#1A1917')}"></span>
+          <span style="flex-grow:1;min-width:0">${mbNaamLink(m.gebruiker_id,m.naam,'font-size:13px')}</span>
+          ${binnen?`<span style="font-size:11.5px;color:#0F7A52;white-space:nowrap">in ${veiligTekst(mbKlokT(m.ingeklokt_op))}</span>`
+            :(m.uitgeklokt_op?`<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">${veiligTekst(mbKlokT(m.ingeklokt_op))}&ndash;${veiligTekst(mbKlokT(m.uitgeklokt_op))}</span>`:'')}
+        </div>`;
+      });
+      if(open)uit+=`<button class="mb-linktekst" style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#B45309;text-decoration:none;padding:3px 0 0 2px"
+        onclick="MB_WEEK=mbMaandag(MB_DATUM);mbNaar('shifts')" title="Naar Shifts om iemand in te delen"><span style="width:6px;height:6px;border-radius:50%;border:1.5px dashed #B45309;box-sizing:border-box"></span>${open} ${open===1?'plek':'plekken'} open</button>`;
+      uit+='</div>';
     });
     uit+='</div>';
   });
