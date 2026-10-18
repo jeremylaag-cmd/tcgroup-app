@@ -42,6 +42,7 @@ create table public.mcr_agenda (
 );
 create index mcr_agenda_datum on public.mcr_agenda (vestiging, datum);
 
+revoke all on public.mcr_agenda from anon, authenticated;
 grant select, insert, update, delete on public.mcr_agenda to app_rpc, service_role;
 alter table public.mcr_agenda enable row level security;
 create policy "rpc mcr_agenda" on public.mcr_agenda for all to app_rpc using (true) with check (true);
@@ -159,6 +160,37 @@ as $$ select * from (
    order by a.datum, a.tijd_van nulls first, a.aangemaakt_op
 ) _rijen where public.is_kraammanager() $$;
 
+-- ── Melding naar de beheerders als een manager iets toevoegt ─────
+-- Eigenaar postgres (niet app_rpc): de beheerders staan vaak bij vestiging NL
+-- en zijn voor een MCR-manager onzichtbaar via de regels op gebruikers. Alleen
+-- app_rpc mag hem aanroepen; hij doet alleen iets voor een bestaand item dat een
+-- kraammanager heeft gezet, en maar één keer per item.
+create or replace function public.mcr_agenda_melden(p_id uuid)
+returns void
+language plpgsql security definer set search_path to 'public'
+as $$
+declare r record;
+begin
+  select a.id, a.titel, a.datum, a.tijd_van, a.vestiging, k.naam as kraam, g.naam as door
+    into r
+    from public.mcr_agenda a
+    join public.gebruikers g on g.id = a.aangemaakt_door and g.kraammanager
+    left join public.kramen k on k.id = a.kraam_id
+   where a.id = p_id;
+  if not found then return; end if;
+  if exists (select 1 from public.push_wachtrij w where w.agenda_id = p_id) then return; end if;
+  insert into public.push_wachtrij (gebruiker_id, soort, agenda_id, regel)
+  select b.id, 'mcr_agenda_manager', r.id,
+         coalesce(r.door,'Een kraammanager') || ': ' || r.titel
+           || ' (' || to_char(r.datum,'DD-MM') || coalesce(' ' || to_char(r.tijd_van,'HH24.MI'),'')
+           || ', ' || coalesce(r.kraam,'alle kramen') || ')'
+    from public.gebruikers b
+   where b.rol = 'beheerder' and b.gearchiveerd_op is null
+     and (coalesce(b.alle_vestigingen,false) or b.vestiging = r.vestiging);
+end $$;
+revoke all on function public.mcr_agenda_melden(uuid) from public, anon, authenticated;
+grant execute on function public.mcr_agenda_melden(uuid) to app_rpc, service_role;
+
 -- ── Kraammanager: toevoegen of wijzigen (eigen kraam, eigen items) ─
 create or replace function public.mgr_agenda_zetten(
   p_id uuid, p_datum date, p_van time, p_tot time, p_kraam uuid,
@@ -167,7 +199,7 @@ returns uuid
 language plpgsql security definer set search_path to 'public'
 as $$
 declare v_uid uuid := public.huidige_gebruiker(); v_id uuid; v_vest text; v_mijn uuid; v_kraam uuid := p_kraam;
-        v_naam text; v_kraamnaam text;
+        v_naam text;
 begin
   if not public.is_kraammanager() then
     raise exception 'Only stall managers can add to the calendar.' using errcode='P0002';
@@ -190,14 +222,7 @@ begin
             nullif(btrim(coalesce(p_contact,'')),''), nullif(btrim(coalesce(p_notitie,'')),''), v_uid)
     returning id into v_id;
     -- Bram (en wie MCR beheert) krijgt een melding.
-    select k.naam into v_kraamnaam from public.kramen k where k.id = v_kraam;
-    insert into public.push_wachtrij (gebruiker_id, soort, agenda_id, regel)
-    select b.id, 'mcr_agenda_manager', v_id,
-           coalesce(v_naam,'Een kraammanager') || ': ' || btrim(p_titel)
-             || ' (' || to_char(p_datum,'DD-MM') || coalesce(' ' || to_char(p_van,'HH24.MI'),'')
-             || ', ' || coalesce(v_kraamnaam,'alle kramen') || ')'
-      from public.gebruikers b
-     where b.rol = 'beheerder' and b.gearchiveerd_op is null and (coalesce(b.alle_vestigingen,false) or b.vestiging = v_vest);
+    perform public.mcr_agenda_melden(v_id);
   else
     update public.mcr_agenda a
        set datum = p_datum, tijd_van = p_van, tijd_tot = p_tot, kraam_id = v_kraam,
