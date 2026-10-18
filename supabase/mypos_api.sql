@@ -16,6 +16,19 @@
 --   tellen kan niet: pin_referenties onthoudt elke betalingsreferentie, ook van
 --   handmatig ingelezen bestanden.
 -- * mypos_nu_ophalen(): knop "Nu ophalen".
+--
+-- Daarna (zelfde avond): "ik heb best wel wat terminals op 1 account alleen zijn
+-- maar een aantal terminals van toepassing. kan ik kiezen welke terminals bij
+-- welke stand horen?" De API levert per rekening alles, niet per terminal. Dus:
+-- * mypos_transacties: elke pinbetaling van de rekening (alleen referentie, TID,
+--   dag, uur, bedrag, kosten; geen kaartgegevens) komt eerst hier.
+-- * mypos_doorzetten(vestiging): alleen betalingen van een terminal die aan een
+--   kraam hangt gaan door naar het dagrapport (pin_import_kern). Koppel je later
+--   een terminal, dan zet een trigger op terminals zijn eerdere betalingen alsnog
+--   door; opnieuw ophalen bij myPOS is niet nodig.
+-- * terminals.negeren: "hoort niet bij Manchester"; verdwijnt uit de lijsten.
+-- * mypos_terminals_gezien(): welke terminals de rekeningen hebben, met aantal,
+--   omzet en kraam. mypos_tid_kiezen(tid, kraam): kraam kiezen of negeren.
 
 create table public.mypos_accounts (
   id              uuid primary key default gen_random_uuid(),
@@ -132,6 +145,160 @@ end $function$;
 revoke all on function public.pin_import_kern(text, jsonb) from public, anon, authenticated;
 grant execute on function public.pin_import_kern(text, jsonb) to service_role;
 
+-- ── Alles van de rekening eerst hier; alleen gekoppelde terminals gaan door ──
+alter table public.terminals add column if not exists negeren boolean not null default false;
+
+create table public.mypos_transacties (
+  referentie   text primary key,
+  account_id   uuid not null references public.mypos_accounts(id) on delete cascade,
+  vestiging    text not null references public.vestigingen(code),
+  tid          text not null,
+  dag          date not null,
+  uur          integer not null,
+  bedrag       numeric not null,
+  kosten       numeric not null default 0,
+  ingelezen    boolean not null default false,
+  opgehaald_op timestamptz not null default now()
+);
+create index mypos_transacties_tid on public.mypos_transacties (vestiging, tid, dag);
+create index mypos_transacties_wacht on public.mypos_transacties (vestiging) where not ingelezen;
+revoke all on public.mypos_transacties from anon, authenticated, app_rpc;
+grant select, insert, update, delete on public.mypos_transacties to service_role;
+alter table public.mypos_transacties enable row level security;
+
+create or replace function public.mypos_doorzetten(p_vest text)
+returns integer
+language plpgsql security definer set search_path to 'public'
+as $$
+declare v jsonb; n int;
+begin
+  select jsonb_agg(jsonb_build_object('ref',t.referentie,'tid',t.tid,'dag',t.dag,'uur',t.uur,
+                                      'bedrag',t.bedrag,'kosten',t.kosten,'fooi',0,'merk','')), count(*)
+    into v, n
+    from public.mypos_transacties t
+   where t.vestiging = p_vest and not t.ingelezen
+     and public.kraam_van_tid(p_vest, t.tid, t.dag) is not null;
+  if coalesce(n,0) = 0 then return 0; end if;
+  perform public.pin_import_kern(p_vest, v);
+  update public.mypos_transacties t set ingelezen = true
+   where t.vestiging = p_vest and not t.ingelezen
+     and public.kraam_van_tid(p_vest, t.tid, t.dag) is not null;
+  return n;
+end $$;
+revoke all on function public.mypos_doorzetten(text) from public, anon, authenticated;
+grant execute on function public.mypos_doorzetten(text) to service_role;
+
+-- Door de edge-functie: nieuwe betalingen opslaan en doorzetten wat bij een kraam hoort.
+create or replace function public.mypos_verwerk(p_account uuid, p_rijen jsonb)
+returns table(opgeslagen integer, doorgezet integer)
+language plpgsql security definer set search_path to 'public'
+as $$
+declare v_vest text;
+begin
+  select a.vestiging into v_vest from public.mypos_accounts a where a.id = p_account;
+  if v_vest is null then raise exception 'onbekende rekening'; end if;
+  insert into public.mypos_transacties (referentie, account_id, vestiging, tid, dag, uur, bedrag, kosten)
+  select r->>'ref', p_account, v_vest, r->>'tid', (r->>'dag')::date, coalesce((r->>'uur')::int,0),
+         coalesce((r->>'bedrag')::numeric,0), coalesce((r->>'kosten')::numeric,0)
+    from jsonb_array_elements(p_rijen) r
+   where r->>'ref' is not null and r->>'tid' is not null and r->>'dag' is not null
+  on conflict (referentie) do nothing;
+  get diagnostics opgeslagen = row_count;
+  doorgezet := public.mypos_doorzetten(v_vest);
+  return next;
+end $$;
+revoke all on function public.mypos_verwerk(uuid, jsonb) from public, anon, authenticated;
+grant execute on function public.mypos_verwerk(uuid, jsonb) to service_role;
+
+-- Koppel je (ook via het bestaande Terminals-blok) een terminal aan een kraam,
+-- dan gaan zijn eerder opgehaalde betalingen meteen door.
+create or replace function public.terminals_mypos_doorzetten()
+returns trigger
+language plpgsql security definer set search_path to 'public'
+as $$
+begin
+  if new.kraam_id is not null and not new.negeren then
+    perform public.mypos_doorzetten(new.vestiging);
+  end if;
+  return null;
+end $$;
+create trigger zz_mypos_doorzetten after insert or update of kraam_id, negeren, vanaf, tot on public.terminals
+  for each row execute function public.terminals_mypos_doorzetten();
+
+-- Welke terminals de gekoppelde rekeningen hebben.
+create or replace function public.mypos_terminals_gezien()
+returns table(tid text, rekening text, aantal integer, omzet numeric, eerste date, laatste date,
+              kraam_id uuid, kraam text, negeren boolean, naam text)
+language sql stable security definer set search_path to 'public'
+as $$ select * from (
+  select x.tid, string_agg(distinct a.naam, ', '), sum(x.n)::int, sum(x.som), min(x.eerste), max(x.laatste),
+         t.kraam_id, k.naam, coalesce(t.negeren,false), t.naam
+    from (select m.account_id, m.vestiging, m.tid, count(*) n, sum(m.bedrag) som, min(m.dag) eerste, max(m.dag) laatste
+            from public.mypos_transacties m group by 1,2,3) x
+    join public.mypos_accounts a on a.id = x.account_id
+    left join lateral (select tt.kraam_id, tt.negeren, tt.naam from public.terminals tt
+                        where tt.vestiging = x.vestiging and tt.tid = x.tid
+                        order by tt.vanaf desc nulls last limit 1) t on true
+    left join public.kramen k on k.id = t.kraam_id
+   where public.vest_ok(x.vestiging) and public.in_actieve_vestiging(x.vestiging)
+   group by x.tid, t.kraam_id, k.naam, t.negeren, t.naam
+   order by coalesce(t.negeren,false), (t.kraam_id is null) desc, max(x.laatste) desc
+) _r where public.mag_kraambeheer() $$;
+
+-- Kraam kiezen (p_kraam) of "hoort niet bij Manchester" (p_kraam leeg).
+create or replace function public.mypos_tid_kiezen(p_tid text, p_kraam uuid)
+returns void
+language plpgsql security definer set search_path to 'public'
+as $$
+declare v_vest text := public.actieve_vestiging(); v_id uuid;
+begin
+  if not public.mag_kraambeheer() then
+    raise exception 'Alleen een beheerder van deze vestiging.' using errcode='P0002'; end if;
+  if nullif(btrim(coalesce(p_tid,'')),'') is null then raise exception 'Geen terminal.' using errcode='P0002'; end if;
+  if p_kraam is not null and not exists (select 1 from public.kramen k where k.id = p_kraam and k.vestiging = v_vest) then
+    raise exception 'Onbekende kraam.' using errcode='P0002'; end if;
+  select t.id into v_id from public.terminals t
+   where t.vestiging = v_vest and t.tid = btrim(p_tid) order by t.vanaf desc nulls last limit 1;
+  if v_id is null then
+    insert into public.terminals (vestiging, tid, kraam_id, negeren) values (v_vest, btrim(p_tid), p_kraam, p_kraam is null);
+  else
+    update public.terminals set kraam_id = p_kraam, negeren = (p_kraam is null) where id = v_id;
+  end if;
+  update public.pin_dag d set kraam_id = public.kraam_van_tid(v_vest, d.tid, d.datum)
+   where d.vestiging = v_vest and d.tid = btrim(p_tid);
+end $$;
+
+-- Genegeerde terminals niet meer in het Terminals-blok.
+create or replace function public.terminals_lijst()
+ returns table(tid text, naam text, kraam_id uuid, kraam text, vanaf date, tot date, dagen integer, omzet numeric)
+ language sql stable security definer set search_path to 'public'
+as $function$
+  select * from (
+    with uit_data as (
+      select d.tid, (array_agg(d.kraam_id))[1] kraam_id, count(*)::int dagen, sum(d.omzet) omzet
+        from public.pin_dag d
+       where d.vestiging = public.actieve_vestiging()
+       group by d.tid
+    ), klaargezet as (
+      select t.tid, t.naam, t.kraam_id, t.vanaf, t.tot
+        from public.terminals t
+       where t.vestiging = public.actieve_vestiging() and not t.negeren
+    )
+    select coalesce(k.tid, u.tid),
+           k.naam,
+           coalesce(u.kraam_id, k.kraam_id),
+           kr.naam,
+           k.vanaf, k.tot,
+           coalesce(u.dagen,0), coalesce(u.omzet,0)
+      from klaargezet k
+      full outer join uit_data u on u.tid = k.tid
+      left join public.kramen kr on kr.id = coalesce(u.kraam_id, k.kraam_id)
+     where not exists (select 1 from public.terminals n where n.vestiging = public.actieve_vestiging()
+                         and n.tid = coalesce(k.tid, u.tid) and n.negeren)
+     order by 1
+  ) _rijen where public.mag_kraambeheer()
+$function$;
+
 -- ── App: lijst (zonder geheim) ───────────────────────────────────
 create or replace function public.mypos_accounts_lijst()
 returns table(id uuid, naam text, vestiging text, valuta text, klantnummer text, heeft_geheim boolean,
@@ -232,6 +399,10 @@ revoke all on function public.mypos_accounts_lijst() from public, anon;
 revoke all on function public.mypos_account_zetten(uuid,text,text,text,date,boolean,text) from public, anon;
 revoke all on function public.mypos_account_weg(uuid) from public, anon;
 revoke all on function public.mypos_nu_ophalen() from public, anon;
+revoke all on function public.mypos_terminals_gezien() from public, anon;
+revoke all on function public.mypos_tid_kiezen(text, uuid) from public, anon;
+grant execute on function public.mypos_terminals_gezien() to authenticated, service_role;
+grant execute on function public.mypos_tid_kiezen(text, uuid) to authenticated, service_role;
 grant execute on function public.mypos_accounts_lijst() to authenticated, service_role;
 grant execute on function public.mypos_account_zetten(uuid,text,text,text,date,boolean,text) to authenticated, service_role;
 grant execute on function public.mypos_account_weg(uuid) to authenticated, service_role;

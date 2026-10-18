@@ -1,6 +1,7 @@
-// Haalt de pinbetalingen van de myPOS-rekening(en) op en zet ze in het
-// Manchester-dagrapport (pin_dag, pin_uur), net als het handmatig inlezen
-// van de myPOS-exportbestanden.
+// Haalt de pinbetalingen van de myPOS-rekening(en) op. Alles van de rekening
+// komt in mypos_transacties; alleen betalingen van terminals die aan een kraam
+// hangen gaan door naar het Manchester-dagrapport (pin_dag, pin_uur), net als
+// het handmatig inlezen van de myPOS-exportbestanden (rpc mypos_verwerk).
 //
 // Wordt elke 15 minuten aangeroepen door de klok in de database (pg_cron), en
 // meteen via de knop "Nu ophalen" (rpc mypos_nu_ophalen). Beide sturen een
@@ -98,7 +99,7 @@ function dagUur(utc: string) {
   return { dag: `${d.year}-${d.month}-${d.day}`, uur: Number(d.hour) };
 }
 
-// Van ruwe transacties naar regels voor pin_import_kern.
+// Van ruwe transacties naar regels voor mypos_verwerk.
 function naarRijen(lijst: Tx[], valuta: string) {
   const bedragVan = (x: Tx) => {
     const oc = (x.original_currency || x.transaction_currency || "").toUpperCase();
@@ -186,29 +187,27 @@ Deno.serve(async (req) => {
     const start = new Date();
     try {
       // Vanaf de laatst opgehaalde dag (één dag terug voor de zekerheid); dubbel tellen kan
-      // niet, want elke betalingsreferentie wordt maar één keer ingelezen.
+      // niet, want elke betalingsreferentie wordt maar één keer opgeslagen.
       const basis = a.opgehaald_tot ? new Date(new Date(a.opgehaald_tot).getTime() - 86400000) : new Date(a.vanaf ?? start);
       const vanaf = a.vanaf && datum(basis) < a.vanaf ? a.vanaf : datum(basis);
       const tot = datum(new Date(start.getTime() + 86400000));
       const token = await haalToken(PROD, a.client_id, a.client_geheim);
       const h = await haalTransacties(PROD, token, a.client_id, vanaf, tot);
       const r = naarRijen(h.transacties, (a.valuta || "GBP").toUpperCase());
-      let nieuw = 0, dubbel = 0, onbekend = "";
+      let nieuw = 0, door = 0;
       for (let i = 0; i < r.rijen.length; i += 800) {
-        const { data, error: f } = await db.rpc("pin_import_kern", { p_vest: a.vestiging, p_rijen: r.rijen.slice(i, i + 800) });
+        const { data, error: f } = await db.rpc("mypos_verwerk", { p_account: a.id, p_rijen: r.rijen.slice(i, i + 800) });
         if (f) throw new Error("Wegschrijven lukte niet: " + f.message);
         const x = (data && data[0]) || {};
-        nieuw += x.transacties || 0; dubbel += x.dubbel || 0;
-        if (x.onbekende_tids) onbekend = [...new Set([...onbekend.split(", "), ...String(x.onbekende_tids).split(", ")].filter(Boolean))].join(", ");
+        nieuw += x.opgeslagen || 0; door += x.doorgezet || 0;
       }
-      const status = `${nieuw} nieuw · ${dubbel} al bekend · ${h.transacties.length} regels bekeken (${vanaf} t/m ${tot})`
-        + (r.andereMunt ? ` · ${r.andereMunt} in een andere munt overgeslagen` : "")
-        + (onbekend ? ` · nog toewijzen: ${onbekend}` : "");
+      const status = `${nieuw} nieuwe betalingen · ${door} in het dagrapport gezet`
+        + (r.andereMunt ? ` · ${r.andereMunt} in een andere munt overgeslagen` : "");
       await db.from("mypos_accounts").update({
         laatst_gedraaid: start.toISOString(), opgehaald_tot: start.toISOString(), laatste_status: status, laatste_fout: null,
-        laatst_nieuw: nieuw, onbekende_tids: onbekend || null,
+        laatst_nieuw: nieuw,
       }).eq("id", a.id);
-      uitslagen.push({ account: a.naam, nieuw, dubbel, bekeken: h.transacties.length, onbekend });
+      uitslagen.push({ account: a.naam, nieuw, door, bekeken: h.transacties.length });
     } catch (e) {
       const fout = String((e as Error)?.message ?? e).slice(0, 500);
       await db.from("mypos_accounts").update({ laatst_gedraaid: start.toISOString(), laatste_fout: fout }).eq("id", a.id);

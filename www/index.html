@@ -5216,9 +5216,11 @@ async function mbLeesBestand(file){
   return {rijen:uit, overgeslagen:over, geweigerd, tid, naam, omzet, bestand:file.name};
 }
 async function mbInlezen(){
-  const [kramen,terminals,mp]=await Promise.all([mbKramenLijst(), sb.rpc('terminals_lijst'),
-    sb.rpc('mypos_accounts_lijst').then(x=>x,()=>({data:null,error:true}))]);
+  const [kramen,terminals,mp,mt]=await Promise.all([mbKramenLijst(), sb.rpc('terminals_lijst'),
+    sb.rpc('mypos_accounts_lijst').then(x=>x,()=>({data:null,error:true})),
+    sb.rpc('mypos_terminals_gezien').then(x=>x,()=>({data:[]}))]);
   MB_MYPOS=(mp&&!mp.error)?(mp.data||[]):null;
+  MB_MYPOS_TID=(mt&&!mt.error)?(mt.data||[]):[];
   let uit=mbKop('Pinomzet inlezen',
     'Gooi alle myPOS-bestanden er in &eacute;&eacute;n keer in &mdash; de app leest het TID en weet welke kraam dat is');
   if(MB_MYPOS)uit+=mbMyposHtml();
@@ -5413,7 +5415,7 @@ async function mbTerminal(tid,kraam){
 // REST API). De server haalt elke 15 minuten de nieuwe pinbetalingen op
 // (edge-functie mypos-ophalen) en zet ze in het dagrapport, net als inlezen.
 // Het geheim gaat alleen de database in; de app krijgt het nooit terug.
-let MB_MYPOS=null, MB_MYPOS_OPEN=null;
+let MB_MYPOS=null, MB_MYPOS_OPEN=null, MB_MYPOS_TID=[], MB_MYPOS_NEG=false;
 function mbMyposTijd(t){ if(!t)return ''; const d=new Date(t);
   const vandaag=d.toDateString()===new Date().toDateString();
   return vandaag?'vandaag '+mbKlokT(t):d.toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }
@@ -5439,13 +5441,51 @@ function mbMyposHtml(){
           ?'Laatst gekeken '+veiligTekst(mbMyposTijd(a.laatst_gedraaid))+(a.laatste_status&&!fout?' &middot; '+veiligTekst(a.laatste_status):'')
           :'Nog niet opgehaald. De eerste keer gebeurt binnen 15 minuten, of druk op Nu ophalen.'}</div>
         ${fout?`<div style="font-size:12.5px;color:#B4472B;margin-top:3px">${veiligTekst(fout)}</div>`:''}
-        ${a.onbekende_tids?`<div style="font-size:12.5px;color:#B45309;margin-top:3px">Nieuwe pinautomaat: ${veiligTekst(a.onbekende_tids)}. Wijs hem hieronder bij Terminals aan een kraam toe.</div>`:''}
       </div>
       ${isAdmin()?`<div style="display:flex;gap:6px"><button class="mb-mini" onclick="mbMyposOpen('${veiligJs(a.id)}')">Wijzigen</button>
         <button class="mb-mini" onclick="mbMyposWeg('${veiligJs(a.id)}')" aria-label="Ontkoppelen">&times;</button></div>`:''}
     </div>`;
   });
+  if(l.length)h+=mbMyposTidHtml();
   return h+'</div>';
+}
+// Welke pinautomaten op de rekeningen staan, en bij welke kraam ze horen.
+// Alleen gekoppelde automaten tellen mee in het dagrapport; koppel je er
+// later een, dan gaan zijn eerdere betalingen er meteen alsnog in.
+function mbMyposTidHtml(){
+  const t=MB_MYPOS_TID||[];
+  const open=t.filter(x=>!x.kraam_id&&!x.negeren), neg=t.filter(x=>x.negeren);
+  const kramen=MB_KRAMEN||[];
+  let h=`<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:12px">
+    <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <div style="font-size:13.5px;font-weight:700">Pinautomaten op deze rekeningen</div>
+      ${open.length?`<span style="font-size:12.5px;color:#B45309;font-weight:600">${open.length} ${open.length===1?'automaat wacht':'automaten wachten'} op een keuze</span>`:''}</div>
+    <div style="font-size:12.5px;color:var(--muted);margin:3px 0 6px;line-height:1.5">Kies per automaat bij welke kraam hij staat. Alleen die tellen mee;
+      automaten die niet bij Manchester horen zet je op <i>hoort er niet bij</i>.</div>`;
+  if(!t.length)h+=`<div style="font-size:12.5px;color:var(--muted);padding:6px 0">Nog niets opgehaald. Na de eerste keer ophalen staan hier alle automaten van je rekeningen.</div>`;
+  const rij=x=>`<div style="display:flex;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--border);flex-wrap:wrap${x.negeren?';opacity:.6':''}">
+      <div style="flex:1 1 220px;min-width:0">
+        <div style="font-size:13.5px;font-weight:600">TID ${veiligTekst(x.tid)}${x.naam?` <span style="font-weight:400;color:var(--muted)">&middot; ${veiligTekst(x.naam)}</span>`:''}</div>
+        <div style="font-size:11.5px;color:var(--muted)">${veiligTekst(x.rekening||'')} &middot; ${x.aantal} ${x.aantal===1?'betaling':'betalingen'} &middot; ${veiligTekst(mbPond(x.omzet))}
+          &middot; ${x.eerste===x.laatste?veiligTekst(mbKort(x.laatste)):veiligTekst(mbKort(x.eerste))+' t/m '+veiligTekst(mbKort(x.laatste))}</div></div>
+      <select class="mb-veld" style="width:auto;min-width:190px;${!x.kraam_id&&!x.negeren?'border-color:#B45309':''}" onchange="mbMyposTidKies('${veiligJs(x.tid)}',this.value)">
+        ${!x.kraam_id&&!x.negeren?'<option value="" selected>Kies een kraam&hellip;</option>':''}
+        ${kramen.map(k=>`<option value="${veiligTekst(k.id)}"${x.kraam_id===k.id?' selected':''}>${veiligTekst(k.naam)}</option>`).join('')}
+        <option value="-"${x.negeren?' selected':''}>Hoort er niet bij</option></select>
+    </div>`;
+  t.filter(x=>!x.negeren).forEach(x=>{ h+=rij(x); });
+  if(neg.length){
+    h+=`<button class="mb-linktekst" style="font-size:12.5px;margin-top:8px" onclick="MB_MYPOS_NEG=!MB_MYPOS_NEG;mbNaar('inlezen')">${MB_MYPOS_NEG?'Verberg':'Toon'} ${neg.length} ${neg.length===1?'automaat':'automaten'} die er niet bij ${neg.length===1?'hoort':'horen'}</button>`;
+    if(MB_MYPOS_NEG)neg.forEach(x=>{ h+=rij(x); });
+  }
+  return h+'</div>';
+}
+async function mbMyposTidKies(tid,waarde){
+  if(waarde==='')return;
+  const{error}=await sb.rpc('mypos_tid_kiezen',{p_tid:tid,p_kraam:waarde==='-'?null:waarde});
+  if(error){ alert(mbFout(error)); return; }
+  toast(waarde==='-'?'TID '+tid+' telt niet mee':'TID '+tid+' gekoppeld; de betalingen staan nu in het dagrapport');
+  mbNaar('inlezen');
 }
 function mbMyposOpen(id){ MB_MYPOS_OPEN=id; mbMyposTeken(); }
 function mbMyposTeken(){
