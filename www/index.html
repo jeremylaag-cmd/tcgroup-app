@@ -3719,7 +3719,7 @@ function mbMeer(){
 // ── OVERZICHT ─────────────────────────────────────────────────────
 async function mbOverzicht(){
   if(!MB_DATUM)MB_DATUM=await mbPeil();
-  const [ovz, wacht, balk, , agd, dag, man] = await Promise.all([
+  const [ovz, wacht, balk, , agd, dag, man, dr] = await Promise.all([
     sb.rpc('mcr_overzicht',{p_datum:MB_DATUM}),
     sb.rpc('mcr_wacht_op_jou'),
     sb.rpc('mcr_bezetting_balk',{p_dagen:25}),
@@ -3727,7 +3727,10 @@ async function mbOverzicht(){
     sb.rpc('mcr_agenda_lijst',{p_van:MB_DATUM,p_tot:MB_DATUM}).then(x=>x,()=>({data:[]})),
     sb.rpc('mcr_dag',{p_datum:MB_DATUM}).then(x=>x,()=>({data:[]})),
     sb.rpc('mcr_managers_week',{p_van:mbMaandag(MB_DATUM)}).then(x=>x,()=>({data:[]})),
+    sb.rpc('mcr_dagrapport',{p_van:MB_DATUM,p_tot:MB_DATUM,p_kraam:null}).then(x=>x,()=>({data:[]})),
   ]);
+  // Pinomzet per kraam die dag (uit myPOS, via ophalen of inlezen).
+  const PIN={}; ((dr&&!dr.error&&dr.data)||[]).forEach(r=>{ PIN[r.kraam_id]=r; });
   // Wie er per shift staat (uit mcr_dag) en wie die dag manager is.
   const MENSEN={};
   ((dag&&!dag.error&&dag.data)||[]).forEach(r=>{ if(r.shift_id&&r.gebruiker_id)(MENSEN[r.shift_id]=MENSEN[r.shift_id]||[]).push(r); });
@@ -3759,6 +3762,13 @@ async function mbOverzicht(){
         <span style="font-size:17px;font-weight:700;letter-spacing:.12em;font-variant-numeric:tabular-nums">${k.dicht?'&mdash;':veiligTekst(k.code)}</span>
       </div>
       <div style="font-size:12px;color:var(--muted);margin:2px 0 6px">${veiligTekst(k.adres||'')}</div>`;
+    const pin=PIN[k.kraam_id];
+    if(!k.dicht&&pin&&Number(pin.omzet_pin)){
+      const pct=Number(pin.forecast)>0?Math.round(Number(pin.omzet_totaal||pin.omzet_pin)/Number(pin.forecast)*100):null;
+      uit+=`<div style="display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;font-size:12.5px;margin:-2px 0 6px">
+        <span style="font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(pin.omzet_pin))}</span>
+        <span style="color:var(--muted)">pin &middot; ${Number(pin.transacties)||0} bonnen${pct!==null?` &middot; ${pct}% van forecast`:''}</span></div>`;
+    }
     if(!k.dicht){
       const mg=MANDAG.filter(x=>x.kraam_id===k.kraam_id);
       const mw=mg.filter(x=>x.soort==='manager'), ww=mg.filter(x=>x.soort==='weekend');
@@ -5206,9 +5216,12 @@ async function mbLeesBestand(file){
   return {rijen:uit, overgeslagen:over, geweigerd, tid, naam, omzet, bestand:file.name};
 }
 async function mbInlezen(){
-  const [kramen,terminals]=await Promise.all([mbKramenLijst(), sb.rpc('terminals_lijst')]);
+  const [kramen,terminals,mp]=await Promise.all([mbKramenLijst(), sb.rpc('terminals_lijst'),
+    sb.rpc('mypos_accounts_lijst').then(x=>x,()=>({data:null,error:true}))]);
+  MB_MYPOS=(mp&&!mp.error)?(mp.data||[]):null;
   let uit=mbKop('Pinomzet inlezen',
     'Gooi alle myPOS-bestanden er in &eacute;&eacute;n keer in &mdash; de app leest het TID en weet welke kraam dat is');
+  if(MB_MYPOS)uit+=mbMyposHtml();
   uit+=`<div class="mb-rij2"><div style="flex:1.3;min-width:320px">
     <div class="mb-drop" id="mbDrop">
       <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#C9C6BD" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -5394,6 +5407,105 @@ async function mbTerminal(tid,kraam){
   try{ const{error}=await sb.rpc('terminal_koppelen',{p_tid:tid,p_kraam:kraam,p_naam:null,p_vanaf:null,p_tot:null});
     if(error)throw error; mbNaar('inlezen'); }
   catch(e){ alert(mbFout(e)); }
+}
+// ── myPOS: pinomzet automatisch ophalen ───────────────────────────
+// Per myPOS-rekening een klantnummer en klantgeheim (myPOS › Integraties ›
+// REST API). De server haalt elke 15 minuten de nieuwe pinbetalingen op
+// (edge-functie mypos-ophalen) en zet ze in het dagrapport, net als inlezen.
+// Het geheim gaat alleen de database in; de app krijgt het nooit terug.
+let MB_MYPOS=null, MB_MYPOS_OPEN=null;
+function mbMyposTijd(t){ if(!t)return ''; const d=new Date(t);
+  const vandaag=d.toDateString()===new Date().toDateString();
+  return vandaag?'vandaag '+mbKlokT(t):d.toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }
+function mbMyposHtml(){
+  const l=MB_MYPOS||[];
+  let h=`<div class="mb-kaart"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
+      <div><div class="mb-kop" style="margin:0">Automatisch uit myPOS</div>
+        <div style="font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.5">${l.length
+          ?'Elke 15 minuten haalt de app de nieuwe pinbetalingen op. Bestanden inlezen blijft kunnen; dubbel tellen kan niet.'
+          :'Koppel je myPOS-rekening(en), dan komt de pinomzet vanzelf in het dagrapport en hoef je geen bestanden meer in te lezen.'}</div></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        ${l.length?`<button class="mb-mini" id="mbMyposNuKnop" onclick="mbMyposNu()">Nu ophalen</button>`:''}
+        ${isAdmin()?`<button class="mb-mini zwart" onclick="mbMyposOpen('nieuw')">+ Rekening koppelen</button>`:''}</div></div>
+    <div id="mbMyposForm"></div>`;
+  l.forEach(a=>{
+    const fout=a.laatste_fout;
+    h+=`<div style="display:flex;gap:12px;align-items:flex-start;padding:11px 0;border-top:1px solid var(--border);margin-top:10px;flex-wrap:wrap">
+      <div style="flex:1 1 240px;min-width:0">
+        <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap"><span style="font-size:14px;font-weight:700">${veiligTekst(a.naam)}</span>
+          ${a.actief?(fout?mbChip('werkt niet','#B4472B','#FBEDE9'):mbChip('aan','#0F7A52','#F2FBF6')):mbChip('uit','#6B6A66','#F3F2EE')}
+          <span style="font-size:11.5px;color:var(--muted)">${veiligTekst(a.valuta)} &middot; klantnummer ${veiligTekst(a.klantnummer||'—')}${a.vanaf?' &middot; vanaf '+veiligTekst(mbKort(a.vanaf)):''}</span></div>
+        <div style="font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.5">${a.laatst_gedraaid
+          ?'Laatst gekeken '+veiligTekst(mbMyposTijd(a.laatst_gedraaid))+(a.laatste_status&&!fout?' &middot; '+veiligTekst(a.laatste_status):'')
+          :'Nog niet opgehaald. De eerste keer gebeurt binnen 15 minuten, of druk op Nu ophalen.'}</div>
+        ${fout?`<div style="font-size:12.5px;color:#B4472B;margin-top:3px">${veiligTekst(fout)}</div>`:''}
+        ${a.onbekende_tids?`<div style="font-size:12.5px;color:#B45309;margin-top:3px">Nieuwe pinautomaat: ${veiligTekst(a.onbekende_tids)}. Wijs hem hieronder bij Terminals aan een kraam toe.</div>`:''}
+      </div>
+      ${isAdmin()?`<div style="display:flex;gap:6px"><button class="mb-mini" onclick="mbMyposOpen('${veiligJs(a.id)}')">Wijzigen</button>
+        <button class="mb-mini" onclick="mbMyposWeg('${veiligJs(a.id)}')" aria-label="Ontkoppelen">&times;</button></div>`:''}
+    </div>`;
+  });
+  return h+'</div>';
+}
+function mbMyposOpen(id){ MB_MYPOS_OPEN=id; mbMyposTeken(); }
+function mbMyposTeken(){
+  const el=document.getElementById('mbMyposForm'); if(!el)return;
+  if(!MB_MYPOS_OPEN){ el.innerHTML=''; return; }
+  const nieuw=MB_MYPOS_OPEN==='nieuw';
+  const a=nieuw?{valuta:'GBP',actief:true}:((MB_MYPOS||[]).find(x=>x.id===MB_MYPOS_OPEN)||{});
+  el.innerHTML=`<div style="border:1px solid var(--text);border-radius:12px;padding:13px 15px;margin-top:12px">
+    <div style="font-size:14px;font-weight:700">${nieuw?'myPOS-rekening koppelen':'Rekening wijzigen'}</div>
+    <div style="font-size:12.5px;color:var(--muted);margin-top:3px;line-height:1.55">In myPOS: <b>Integraties &rsaquo; REST API &rsaquo; Nieuwe referenties genereren</b>.
+      Kopieer het klantnummer en het klantgeheim hierheen. Het geheim wordt opgeslagen maar nooit meer getoond.</div>
+    <div class="mb-veldrij">
+      <div style="flex:1 1 180px"><label class="mb-lab">Naam (voor jezelf)</label><input class="mb-veld" id="mpNaam" maxlength="60" placeholder="Pat's Poffertjes UK" value="${veiligTekst(a.naam||'')}"></div>
+      <div style="flex:0 1 110px"><label class="mb-lab">Valuta</label><select class="mb-veld" id="mpValuta">
+        <option value="GBP"${a.valuta==='GBP'?' selected':''}>GBP</option><option value="EUR"${a.valuta==='EUR'?' selected':''}>EUR</option></select></div>
+      <div style="flex:1 1 150px"><label class="mb-lab">Ophalen vanaf</label><input class="mb-veld" type="date" id="mpVanaf" value="${veiligTekst(a.vanaf||'')}"></div>
+    </div>
+    <div class="mb-veldrij">
+      <div style="flex:1 1 220px"><label class="mb-lab">Klantnummer</label><input class="mb-veld" id="mpKlant" autocomplete="off" spellcheck="false" placeholder="${nieuw?'':'laat leeg om te houden ('+veiligTekst(a.klantnummer||'')+')'}"></div>
+      <div style="flex:1 1 220px"><label class="mb-lab">Klantgeheim</label><input class="mb-veld" id="mpGeheim" type="password" autocomplete="new-password" spellcheck="false" placeholder="${nieuw?'':'laat leeg om te houden'}"></div>
+    </div>
+    ${nieuw?'':`<label style="display:flex;gap:8px;align-items:center;font-size:13px;margin-top:10px"><input type="checkbox" id="mpActief"${a.actief?' checked':''}> Automatisch ophalen aan</label>`}
+    <div id="mpUit" style="font-size:13px;margin-top:8px"></div>
+    <div style="display:flex;gap:9px;margin-top:10px">
+      <button class="mb-mini zwart" id="mpOpslaan" onclick="mbMyposOpslaan()">Opslaan</button>
+      <button class="mb-mini" onclick="MB_MYPOS_OPEN=null;mbMyposTeken()">Annuleren</button></div>
+  </div>`;
+}
+async function mbMyposOpslaan(){
+  const v=id=>{const e=document.getElementById(id);return e?e.value.trim():'';};
+  const uit=document.getElementById('mpUit');
+  const fout=t=>{ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(t)}</span>`; };
+  const nieuw=MB_MYPOS_OPEN==='nieuw';
+  if(!v('mpNaam'))return fout('Geef de rekening een naam.');
+  if(nieuw&&(!v('mpKlant')||!v('mpGeheim')))return fout('Vul het klantnummer en het klantgeheim in.');
+  const kn=document.getElementById('mpOpslaan'); if(kn){kn.disabled=true;kn.textContent='Bezig…';}
+  const act=document.getElementById('mpActief');
+  const{error}=await sb.rpc('mypos_account_zetten',{p_id:nieuw?null:MB_MYPOS_OPEN,p_naam:v('mpNaam'),
+    p_klantnummer:v('mpKlant')||null,p_geheim:v('mpGeheim')||null,p_vanaf:v('mpVanaf')||null,
+    p_actief:act?act.checked:true,p_valuta:v('mpValuta')||'GBP'});
+  const g=document.getElementById('mpGeheim'); if(g)g.value='';
+  if(kn){kn.disabled=false;kn.textContent='Opslaan';}
+  if(error)return fout(mbFout(error));
+  MB_MYPOS_OPEN=null; toast('Opgeslagen. De app haalt nu de pinbetalingen op.');
+  try{ await sb.rpc('mypos_nu_ophalen'); }catch(e){}
+  mbNaar('inlezen'); setTimeout(()=>{ if(MB_TAB==='inlezen'&&!MB_MYPOS_OPEN)mbNaar('inlezen'); },15000);
+}
+async function mbMyposWeg(id){
+  const a=(MB_MYPOS||[]).find(x=>x.id===id); if(!a)return;
+  if(!confirm(`"${a.naam}" ontkoppelen? De sleutels worden gewist. Wat al is opgehaald blijft in het dagrapport staan.`))return;
+  const{error}=await sb.rpc('mypos_account_weg',{p_id:id});
+  if(error){alert(mbFout(error));return;}
+  mbNaar('inlezen');
+}
+async function mbMyposNu(){
+  const kn=document.getElementById('mbMyposNuKnop'); if(kn){kn.disabled=true;kn.textContent='Bezig…';}
+  const{error}=await sb.rpc('mypos_nu_ophalen');
+  if(error){ if(kn){kn.disabled=false;kn.textContent='Nu ophalen';} alert(mbFout(error)); return; }
+  toast('myPOS wordt opgehaald, even geduld…');
+  setTimeout(()=>{ if(MB_TAB==='inlezen'&&!MB_MYPOS_OPEN)mbNaar('inlezen'); },12000);
 }
 async function mbImportStart(bestanden){
   const inp=document.getElementById('mbBestanden');
@@ -8845,6 +8957,7 @@ function liveMagNu(){
   if(typeof MB_UITZ_VRAAG!=='undefined'&&MB_UITZ_VRAAG)return false;
   if(typeof MB_FORECAST!=='undefined'&&MB_FORECAST)return false;
   if(typeof MB_AG_OPEN!=='undefined'&&MB_AG_OPEN)return false;
+  if(typeof MB_MYPOS_OPEN!=='undefined'&&MB_MYPOS_OPEN)return false;
   if(typeof MGR_AG_OPEN!=='undefined'&&MGR_AG_OPEN)return false;
   // Crew: niet midden in het inklokken of een open beschikbaarheidsvel.
   if(typeof MCR_DAGVEL!=='undefined'&&MCR_DAGVEL)return false;
