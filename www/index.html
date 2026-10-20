@@ -127,6 +127,106 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mb-shiftnaam{font-size:12px;color:var(--text);flex-grow:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mb-shiftop{font-size:10.5px;font-weight:700;color:#B45309}
 .mb-dicht{font-size:11px;color:var(--muted);text-align:center;padding:8px 0}
+/* Planbord (Shifts) */
+.mpb-nav{display:flex;gap:4px;background:#ECEAE3;padding:4px;border-radius:11px;flex-wrap:wrap;margin:0 0 14px;width:fit-content;max-width:100%;box-sizing:border-box}
+.mpb-nav button{border:none;background:none;padding:8px 13px;border-radius:8px;font-family:var(--font);font-size:13.5px;font-weight:600;color:#55534E;cursor:pointer;min-height:36px}
+.mpb-nav button.aan{background:#fff;color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.07)}
+.mpb-dagen{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-bottom:14px}
+.mpb-dag{display:flex;flex-direction:column;align-items:flex-start;text-align:left;min-width:0;padding:9px 10px;border-radius:12px;cursor:pointer;background:#F0EEE8;border:2px solid transparent;font-family:var(--font);color:var(--text)}
+.mpb-dag.aan{background:#fff;border-color:var(--text)}
+.mpb-dag-wd{font-size:11.5px;color:var(--muted);font-weight:600}
+.mpb-dag-nr{font-size:19px;font-weight:700;line-height:1.1}
+.mpb-balk{display:block;width:100%;height:6px;border-radius:3px;background:#E2DFD7;overflow:hidden;margin:6px 0 5px}
+.mpb-balk span{display:block;height:100%}
+.mpb-dag-r1{font-size:11.5px;color:#55534E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.mpb-dag-r2{font-size:11.5px;color:#2A4EA8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.mpb-twee{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
+.mpb-links{flex:999 1 560px;min-width:0}
+.mpb-rechts{flex:1 1 320px;min-width:0;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto}
+.mpb-kraamkop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.mpb-kraamkop h2{margin:0;font-size:15.5px;font-weight:700}
+.mpb-samen{font-size:12.5px;color:var(--muted)}
+.mpb-leeg{font-size:13px;color:var(--muted);padding:6px 0}
+.mpb-scroll{overflow-x:auto}
+.mpb-tijdlijn{min-width:560px}
+.mpb-uren{position:relative;height:16px}
+.mpb-uren span{position:absolute;top:0;font-size:11px;color:var(--muted);font-weight:600}
+.mpb-dekking{position:relative;height:24px;margin:2px 0 6px}
+.mpb-dek{position:absolute;top:0;height:22px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;background:#F3F2EE;color:#9C9990}
+.mpb-dek.vol{background:#DDF1E6;color:#0B5E3E}.mpb-dek.deels{background:#FDF0D5;color:#7A4A07}.mpb-dek.leeg{background:#F9DDD2;color:#8A2E12}
+.mpb-rij{position:relative;height:40px;border-top:1px solid #F1EFE9}
+.mpb-blok{position:absolute;top:4px;bottom:4px;display:flex;align-items:center;gap:7px;padding:0 8px;border-radius:8px;font-size:12.5px;cursor:pointer;text-align:left;overflow:hidden;font-family:var(--font);color:var(--text);min-width:0}
+.mpb-blok b{white-space:nowrap;font-weight:700}
+.mpb-blok.vol{background:#DDF1E6;border:1px solid #8CCAA8}
+.mpb-blok.deels{background:#FDF0D5;border:1px solid #D9A35B}
+.mpb-blok.leeg{background:#fff;border:1px dashed #C4672E}
+.mpb-blok.leeg .mpb-namen{color:#9A4A12}
+.mpb-blok.gekozen{outline:2px solid var(--text);outline-offset:1px}
+.mpb-namen{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.mpb-tel{margin-left:auto;flex-shrink:0;font-size:11px;font-weight:700;color:#fff;background:#2A4EA8;border-radius:10px;padding:1px 7px}
+.mpb-tel.ruil{background:#B45309}
+.mpb-tel.ruil+.mpb-tel{margin-left:4px}
+.mpb-legenda{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:12px;color:var(--muted);padding:2px 4px 12px;align-items:center}
+.mpb-legenda>span{display:flex;align-items:center;gap:6px}
+.mpb-legenda i{width:14px;height:10px;border-radius:3px;display:inline-block}
+.mpb-legenda i.vol{background:#DDF1E6;border:1px solid #8CCAA8}.mpb-legenda i.deels{background:#FDF0D5;border:1px solid #D9A35B}.mpb-legenda i.leeg{background:#fff;border:1px dashed #C4672E}
+.mpb-samenvat{margin-top:14px;padding:12px;background:var(--bg);border-radius:10px;font-size:13px;line-height:1.55}
+.mpb-sectie{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin:16px 0 4px}
+.mpb-sectie.blauw{color:#2A4EA8}.mpb-sectie.groen{color:#0F7A52}
+.mpb-pers{display:flex;align-items:flex-start;gap:10px;padding:9px 0;border-top:1px solid #F1EFE9;flex-wrap:wrap}
+.mpb-pers-tekst{flex:1 1 150px;min-width:0}
+.mpb-knoppen{display:flex;gap:6px;flex-wrap:wrap}
+.mpb-av{width:32px;height:32px;flex-shrink:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11.5px;font-weight:700;color:#fff}
+.mpb-meta{font-size:12px;color:var(--muted);line-height:1.45}
+.mpb-let{font-size:12.5px;color:#9A4A12;line-height:1.45;margin-top:3px}
+.mpb-ok{margin-top:14px;padding:10px 12px;background:#EAF6EF;border-radius:10px;font-size:13px;color:#0B5E3E}
+.mpb-tegels{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.mpb-tegels.drie{grid-template-columns:repeat(3,minmax(0,1fr))}
+.mpb-tegels>.mb-kaart{margin:0}
+.mpb-wtab{width:100%;border-collapse:collapse;min-width:1020px;table-layout:fixed}
+.mpb-wtab th{background:#FAF9F6;padding:8px;border-bottom:1px solid var(--border);border-left:1px solid #EFEDE7;text-align:left;vertical-align:top}
+.mpb-wtab td{padding:6px;border-bottom:1px solid #EFEDE7;border-left:1px solid #EFEDE7;vertical-align:top}
+.mpb-wtab .mpb-wie{width:190px;border-left:none;font-size:12px;color:var(--muted)}
+.mpb-wtab .mpb-tot{width:96px}
+.mpb-wtab th.mpb-tot{font-size:12px;font-weight:700;color:var(--muted)}
+.mpb-wtab tr.wacht td{background:#FFFBF2}
+.mpb-wkop{background:none;border:none;padding:0;font-family:var(--font);font-size:12px;font-weight:700;color:var(--text);cursor:pointer;text-decoration:underline;text-decoration-color:rgba(0,0,0,.2);text-underline-offset:3px}
+.mpb-wnaam{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text)}
+.mpb-cel{display:flex;flex-direction:column;gap:4px;min-width:0}
+.mpb-chip{display:block;font-family:var(--font);font-size:11px;font-weight:700;border-radius:6px;padding:3px 6px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-height:24px;cursor:pointer;border:1px solid}
+.mpb-chip.vraag{color:#2A4EA8;background:#EEF3FF;border-color:#2A4EA8}
+.mpb-chip.grijs{color:#8A877F;background:#F3F2EE;border:1px dashed #B4B1A8}
+.mpb-legenda .mpb-chip{display:inline-block;cursor:default}
+.mpb-noot{font-size:11.5px;font-weight:600;color:#8A877F}
+.mpb-noot.groen{color:#0F7A52}
+.mpb-sticky{display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:sticky;top:0;z-index:3;background:var(--bg);padding:8px 0;margin-bottom:8px}
+.mpb-vkop{padding:11px 16px;background:#FAF9F6;border-bottom:1px solid #EFEDE7;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.mpb-vkop h2{margin:0;font-size:14.5px;font-weight:700;text-transform:capitalize}
+.mpb-vkop span{font-size:12.5px;color:var(--muted)}
+.mpb-vrij{display:flex;align-items:center;gap:12px;flex-wrap:wrap;width:100%;text-align:left;padding:11px 16px;border:none;border-top:1px solid #F1EFE9;background:#fff;cursor:pointer;font-family:var(--font);color:var(--text)}
+.mpb-vrij:first-of-type{border-top:none}
+.mpb-vrij.uit{background:var(--bg);opacity:.7}
+.mpb-vink{width:24px;height:24px;flex-shrink:0;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:2px solid var(--text);background:var(--text);color:#fff}
+.mpb-vrij.uit .mpb-vink{border-color:#B4B1A8;background:#fff}
+.mpb-vtijd{flex:0 0 140px;font-size:12.5px;color:var(--muted)}
+.mpb-vtijd b{color:var(--text)}
+.mpb-vnaam{flex:1 1 220px;min-width:0;font-size:14px}
+.mpb-vook{flex:1 1 180px;font-size:12px;color:var(--muted);min-width:0}
+.mpb-bron{font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;white-space:nowrap}
+.mpb-bron.aanvraag{color:#2A4EA8;background:#EEF3FF}
+.mpb-bron.besch{color:#0F7A52;background:#EAF6EF}
+.mpb-vopen{padding:10px 16px 12px;border-top:1px solid #EFEDE7;background:#FFFBF2}
+@media(max-width:820px){
+  .mpb-dagen{gap:4px}
+  .mpb-dag{padding:7px 6px}
+  .mpb-dag-r1{font-size:10px}
+  .mpb-dag-r2{display:none}
+  .mpb-dag-nr{font-size:16px}
+  .mpb-rechts{position:static;max-height:none}
+  .mpb-tegels{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .mpb-tegels.drie{grid-template-columns:1fr}
+  .mpb-vtijd{flex-basis:110px}
+}
 .mb-man{white-space:normal;font-weight:500;font-size:11.5px;color:var(--muted);margin-top:5px;line-height:1.5}
 .mb-man b{color:#6D28D9;font-weight:600}
 .mb-wkm{display:block;width:100%;text-align:left;font-size:11px;line-height:1.35;padding:4px 6px;margin-bottom:4px;border-radius:7px;border:1px dashed #C4B5FD;background:#F5F3FF;color:#6D28D9;cursor:pointer;font-family:var(--font)}
@@ -3801,7 +3901,7 @@ async function mbOverzicht(){
         </div>`;
       });
       if(open)uit+=`<button class="mb-linktekst" style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#B45309;text-decoration:none;padding:3px 0 0 2px"
-        onclick="MB_WEEK=mbMaandag(MB_DATUM);mbNaar('shifts')" title="Naar Shifts om iemand in te delen"><span style="width:6px;height:6px;border-radius:50%;border:1.5px dashed #B45309;box-sizing:border-box"></span>${open} ${open===1?'plek':'plekken'} open</button>`;
+        onclick="MB_WEEK=mbMaandag(MB_DATUM);MB_PB_TAB='dag';MB_PB_DAG=MB_DATUM;MB_PB_SEL=null;mbNaar('shifts')" title="Naar het dagbord om iemand in te delen"><span style="width:6px;height:6px;border-radius:50%;border:1.5px dashed #B45309;box-sizing:border-box"></span>${open} ${open===1?'plek':'plekken'} open</button>`;
       uit+='</div>';
     });
     uit+='</div>';
@@ -3978,9 +4078,510 @@ function mbAgendaVandaagHtml(rijen){
       <span style="font-size:12px;color:var(--muted)">${veiligTekst(r.kraam||'Alle kramen')}</span></div>`).join('')}</div>`;
 }
 
+// ── SHIFTS — planbord ─────────────────────────────────────────────
+// Vier weergaven onder Shifts: Dagbord (tijdlijn per kraam), Week per persoon
+// (zoals de oude Excel), Voorstel invullen (de app vult de open plekken, eerst
+// met wie erom vroeg, dan met wie beschikbaar is) en Diensten beheren (het
+// oude weekrooster om diensten aan te maken, managers, week kopiëren).
+let MB_PB_TAB='dag', MB_PB=null, MB_PB_DAG=null, MB_PB_SEL=null, MB_PB_VOLG='oordeel',
+    MB_PB_VERBERG=true, MB_PB_UIT={}, MB_PB_ALLE=false, MB_PB_RESULT=null;
+const MPB_TABS=[['dag','Dagbord'],['week','Week per persoon'],['voorstel','Voorstel invullen'],['diensten','Diensten beheren']];
+function mpbNav(){
+  return `<div class="mpb-nav" role="tablist" aria-label="Weergave">${MPB_TABS.map(([k,l])=>
+    `<button role="tab" aria-selected="${MB_PB_TAB===k}" class="${MB_PB_TAB===k?'aan':''}" onclick="mpbTab('${k}')">${l}</button>`).join('')}</div>`;
+}
+function mpbTab(k){ MB_PB_TAB=k; MB_PB_SEL=null; MB_PB_ALLE=false; if(k!=='voorstel')MB_PB_RESULT=null; mbNaar('shifts'); }
+function mpbMin(t){ if(!t)return null; const p=String(t).split(':'); return (+p[0])*60+(+p[1]||0); }
+function mpbTijd(s){ return mbUur(s.start)+'–'+(s.eind?mbUur(s.eind):'sluit'); }
+function mpbKortTijd(s){ const k=t=>mbUur(t).replace(/:00$/,''); return k(s.start)+(s.eind?'–'+k(s.eind):''); }
+
+async function mbShiftsPlannen(){
+  if(!MB_WEEK)MB_WEEK=mbMaandag(MB_DATUM||await mbPeil());
+  if(MB_PB_TAB==='diensten')return mbShiftsDiensten();
+  const [pb]=await Promise.all([sb.rpc('mcr_planbord',{p_van:MB_WEEK}), mbRuilLaden(), mbErvaringLaden()]);
+  if(pb.error)throw pb.error;
+  MB_PB=pb.data; mpbIndex();
+  mpbTeken();
+}
+async function mpbHerlaad(){
+  const{data,error}=await sb.rpc('mcr_planbord',{p_van:MB_WEEK});
+  if(error){ alert(mbFout(error)); return; }
+  MB_PB=data; mpbIndex(); await mbRuilLaden(); mpbTeken();
+}
+function mpbIndex(){
+  const P=MB_PB;
+  ['kramen','dagen','shifts','mensen','besch'].forEach(k=>{ if(!Array.isArray(P[k]))P[k]=[]; });
+  P.M={}; P.mensen.forEach(m=>{ P.M[m.id]=m; });
+  P.K={}; P.kramen.forEach(k=>{ P.K[k.id]=k; });
+  P.D={}; P.dagen.forEach(d=>{ P.D[d.kraam+'|'+d.datum]=d; });
+  P.S={};
+  P.shifts.forEach(s=>{
+    P.S[s.id]=s; s.inn=s.inn||[]; s.aanv=s.aanv||[]; s.ruil=s.ruil||[];
+    s.st=mpbMin(s.start); s.et=mpbMin(s.eind_echt)||1439;
+    const dg=P.D[s.kraam+'|'+s.datum];
+    s.etKort=s.eind?mpbMin(s.eind):(dg&&dg.sluit?Math.min(mpbMin(dg.sluit),s.et):s.et);
+    s.dicht=!!(dg&&dg.dicht);
+  });
+  // Beschikbaarheid per persoon per dag; "kan niet" wint van "kan".
+  P.B={};
+  P.besch.forEach(b=>{
+    const d=new Date(b.van+'T00:00:00');
+    for(let i=0;i<40&&fmt(d)<=b.tot;i++,d.setDate(d.getDate()+1)){
+      const key=b.g+'|'+fmt(d), oud=P.B[key];
+      if(!oud||b.soort!=='beschikbaar')P.B[key]=b;
+    }
+  });
+  P.dagenLijst=[]; for(let i=0;i<7;i++){ const d=new Date(P.van+'T00:00:00'); d.setDate(d.getDate()+i); P.dagenLijst.push(fmt(d)); }
+}
+function mpbWeekTel(g){ return MB_PB.shifts.filter(s=>s.inn.includes(g)).length; }
+function mpbDagenSet(g){ return new Set(MB_PB.shifts.filter(s=>s.inn.includes(g)).map(s=>s.datum)); }
+function mpbBotsing(g,s){ return MB_PB.shifts.find(x=>x.id!==s.id&&x.datum===s.datum&&x.inn.includes(g)&&x.st<s.et&&s.st<x.et)||null; }
+function mpbKan(g,s){
+  const b=MB_PB.B[g+'|'+s.datum]; if(!b)return {st:null};
+  if(b.soort!=='beschikbaar')return {st:'nee',b};
+  const v=mpbMin(b.ts), t=mpbMin(b.te);
+  if((t!=null&&t<=s.st)||(v!=null&&v>=s.etKort))return {st:'buiten',b};
+  if((v!=null&&v>s.st)||(t!=null&&t<s.etKort))return {st:'deels',b};
+  return {st:'ja',b};
+}
+function mpbVenster(b){ const v=b.ts?mbUur(b.ts):null, t=b.te?mbUur(b.te):null; return v&&t?v+'–'+t:(v?'vanaf '+v:(t?'tot '+t:'de hele dag')); }
+function mpbKanTekst(k){
+  if(!k.st)return 'beschikbaarheid niet ingevuld';
+  if(k.st==='nee')return 'kan niet';
+  return 'kan '+mpbVenster(k.b)+(k.st==='deels'?' (past deels)':(k.st==='buiten'?' (past niet)':''));
+}
+function mpbRang(g){ return MB_OORDEEL_RANG[((MB_PB.M[g]||{}).oordeel)||'']??3; }
+function mpbNieuw(m){ const j=new Date().getFullYear(); if(m.sinds)return m.sinds>=j; const e=MB_ERV[m.id]; return !(e&&e.shifts_gewerkt); }
+function mpbAv(g){
+  const m=MB_PB.M[g]||{naam:'?'}, r=mpbRang(g);
+  const kl=r===0?'#1A1917':(r===1?'#55534E':(r===2?'#8A877F':(r>=4?'#B4472B':'#B4B1A8')));
+  return `<span class="mpb-av" style="background:${kl}${mpbNieuw(m)?';box-shadow:inset 0 0 0 2px #E8A33A':''}" aria-hidden="true">${veiligTekst(mbInit(m.naam))}</span>`;
+}
+function mpbMeta(g){
+  const m=MB_PB.M[g]||{}, w=mpbWeekTel(g), d=[];
+  d.push(m.oordeel||'geen oordeel');
+  d.push(mpbNieuw(m)?'nieuw':(m.sinds?'sinds '+m.sinds:'sinds ?'));
+  d.push(w===0?'nog geen dienst deze week':w+(w===1?' dienst':' diensten')+' deze week');
+  if(m.max_dagen)d.push('wil max '+m.max_dagen+' dagen');
+  return veiligTekst(d.join(' · '));
+}
+function mpbNaam(g){ const m=MB_PB.M[g]; return m?m.naam:'Onbekend'; }
+// Zijn de dagen van deze week op? (max dagen per week, alleen als het een nieuwe dag is)
+function mpbMaxVol(g,s){ const m=MB_PB.M[g]; if(!m||!m.max_dagen)return false; const d=mpbDagenSet(g); return !d.has(s.datum)&&d.size>=m.max_dagen; }
+
+function mpbKop(){
+  const P=MB_PB, eind=P.dagenLijst[6];
+  let uit=mbKop('Shifts &middot; week van '+veiligTekst(mbKort(P.van)),'',
+    `<button class="mb-mini" onclick="mbWeek(-7)">&lsaquo; vorige</button>
+     <button class="mb-mini" onclick="mbWeek(7)">volgende &rsaquo;</button>`);
+  uit+=mpbNav();
+  if(P.aanmelden_tot&&eind>P.aanmelden_tot){
+    const vanaf=new Date(P.aanmelden_tot+'T00:00:00'); vanaf.setDate(vanaf.getDate()+1);
+    const kunnen=P.mensen.filter(m=>m.kan);
+    const ingevuld=kunnen.filter(m=>P.dagenLijst.some(d=>P.B[m.id+'|'+d])).length;
+    uit+=`<div class="mb-kaart" style="background:#EEF4FF;border-color:#C7D7FE;font-size:13px;line-height:1.55;color:#1E3A8A">
+      Vanaf <b>${veiligTekst(mbLang(fmt(vanaf)))}</b> vraagt personeel niet meer zelf om diensten; ze geven alleen hun beschikbaarheid op.
+      Deze week heeft <b>${ingevuld} van de ${kunnen.length}</b> mensen beschikbaarheid ingevuld.
+      <span style="color:#3B5BA8">(Datum aanpassen: Instellingen &rsaquo; Gegevens.)</span></div>`;
+  }
+  return uit;
+}
+function mpbTeken(){
+  const el=document.getElementById('mbInhoud'); if(!el||!MB_PB)return;
+  const y=window.scrollY;
+  let uit=mpbKop();
+  if(MB_PB_TAB==='week')uit+=mpbWeekHtml();
+  else if(MB_PB_TAB==='voorstel')uit+=mpbVoorstelHtml();
+  else uit+=mbRuilBlok()+mpbDagbordHtml();
+  el.innerHTML=uit;
+  window.scrollTo(0,y);
+}
+
+// ── Dagbord ──
+function mpbDagStats(d){
+  let nodig=0,bezet=0,vr=0;
+  MB_PB.shifts.forEach(s=>{ if(s.datum!==d||s.dicht)return; nodig+=s.nodig; bezet+=Math.min(s.inn.length,s.nodig); vr+=s.aanv.filter(a=>!s.inn.includes(a.g)).length; });
+  return {nodig,bezet,vr};
+}
+function mpbDagbordHtml(){
+  const P=MB_PB;
+  if(!MB_PB_DAG||!P.dagenLijst.includes(MB_PB_DAG)){
+    const v=mbVandaagStr(); MB_PB_DAG=P.dagenLijst.includes(v)?v:(P.dagenLijst.find(d=>P.shifts.some(s=>s.datum===d))||P.dagenLijst[0]);
+  }
+  const dag=MB_PB_DAG;
+  let uit='<div class="mpb-dagen">';
+  P.dagenLijst.forEach(d=>{
+    const t=mpbDagStats(d), dt=new Date(d+'T00:00:00');
+    const pct=t.nodig?Math.round(t.bezet/t.nodig*100):0;
+    const kl=!t.nodig?'#D6D3CB':(pct>=100?'#0F7A52':(pct>=60?'#D9A35B':'#C4672E'));
+    uit+=`<button class="mpb-dag${d===dag?' aan':''}" onclick="MB_PB_DAG='${d}';MB_PB_SEL=null;mpbTeken()" aria-pressed="${d===dag}">
+      <span class="mpb-dag-wd">${veiligTekst(dt.toLocaleDateString('nl-NL',{weekday:'short'}))}</span>
+      <span class="mpb-dag-nr">${dt.getDate()}</span>
+      <span class="mpb-balk"><span style="width:${pct}%;background:${kl}"></span></span>
+      <span class="mpb-dag-r1">${t.nodig?(t.nodig-t.bezet?(t.nodig-t.bezet)+' open':'vol'):'geen diensten'}</span>
+      <span class="mpb-dag-r2">${t.vr?t.vr+(t.vr===1?' aanvraag':' aanvragen'):'&nbsp;'}</span></button>`;
+  });
+  uit+='</div><div class="mpb-twee"><div class="mpb-links">';
+  const tot={open:0,vr:0,gat:[]};
+  P.kramen.forEach(k=>{
+    const dg=P.D[k.id+'|'+dag]||{};
+    const sh=P.shifts.filter(s=>s.kraam===k.id&&s.datum===dag).sort((a,b)=>a.st-b.st||a.etKort-b.etKort);
+    let nodig=0,bezet=0,vr=0;
+    sh.forEach(s=>{ nodig+=s.nodig; bezet+=Math.min(s.inn.length,s.nodig); vr+=s.aanv.filter(a=>!s.inn.includes(a.g)).length; });
+    uit+=`<section class="mb-kaart mpb-kraam"><div class="mpb-kraamkop">${mbStip(k.kleur)}<h2>${veiligTekst(k.naam)}</h2>
+      <span class="mpb-samen">${dg.dicht?'dicht':(sh.length?bezet+' van '+nodig+' plekken gevuld'+(vr?' · '+vr+(vr===1?' aanvraag':' aanvragen'):''):'')}</span>
+      <button class="mb-mini" style="margin-left:auto" onclick="mpbNieuweDienst('${veiligJs(k.id)}','${dag}')">+ dienst</button></div>`;
+    if(dg.dicht){ uit+='<div class="mpb-leeg">Deze kraam is dicht op deze dag.</div></section>'; return; }
+    if(!sh.length){ uit+='<div class="mpb-leeg">Geen diensten op deze dag.</div></section>'; return; }
+    tot.open+=nodig-bezet; tot.vr+=vr;
+    const O=mpbMin(dg.open)||Math.min(...sh.map(s=>s.st)), C=Math.max(mpbMin(dg.sluit)||0,O+60);
+    const span=C-O, pos=m=>Math.max(0,Math.min(100,(m-O)/span*100));
+    uit+='<div class="mpb-scroll"><div class="mpb-tijdlijn"><div class="mpb-uren">';
+    for(let h=Math.ceil(O/60);h<=Math.floor(C/60);h++){
+      const l=pos(h*60), tr=h*60===O?'0':(h*60>=C?'-100%':'-50%');
+      uit+=`<span style="left:${l}%;transform:translateX(${tr})">${h*60>=C?'sluit':h}</span>`;
+    }
+    uit+='</div><div class="mpb-dekking">';
+    for(let m=Math.floor(O/60)*60;m<C;m+=60){
+      const van=Math.max(m,O), totm=Math.min(m+60,C), mid=(van+totm)/2;
+      let plan=0,staan=0;
+      sh.forEach(s=>{ if(s.st<=mid&&s.etKort>mid){ plan+=s.nodig; staan+=Math.min(s.inn.length,s.nodig); } });
+      const cls=!plan?'':(staan>=plan?' vol':(staan>0?' deels':' leeg'));
+      if(plan&&staan<plan)tot.gat.push(k.naam.split(' ')[0]+' '+mbUur(String(Math.floor(m/60)).padStart(2,'0')+':00'));
+      uit+=`<span class="mpb-dek${cls}" style="left:${pos(van)}%;width:calc(${pos(totm)-pos(van)}% - 2px)" title="${mbUur(String(Math.floor(m/60)).padStart(2,'0')+':00')}: ${staan} van ${plan}">${plan?staan+'/'+plan:'–'}</span>`;
+    }
+    uit+='</div>';
+    sh.forEach(s=>{
+      const open=Math.max(0,s.nodig-s.inn.length), namen=s.inn.map(mpbNaam);
+      for(let i=0;i<open;i++)namen.push('open');
+      const st=open===0?'vol':(s.inn.length?'deels':'leeg');
+      const va=s.aanv.filter(a=>!s.inn.includes(a.g)).length;
+      const ruil=s.ruil.some(r=>r.status==='open');
+      uit+=`<div class="mpb-rij"><button class="mpb-blok ${st}${MB_PB_SEL===s.id?' gekozen':''}" style="left:${pos(s.st)}%;width:calc(${pos(Math.min(s.etKort,C))-pos(s.st)}% - 2px)"
+          onclick="mpbKies('${veiligJs(s.id)}')" aria-label="${veiligTekst(k.naam+' '+mpbTijd(s)+', '+namen.join(', '))}">
+        <b>${veiligTekst(mpbTijd(s))}</b><span class="mpb-namen">${veiligTekst(namen.join(' · '))}</span>
+        ${ruil?'<span class="mpb-tel ruil">ruil</span>':''}${va?`<span class="mpb-tel">${va}</span>`:''}</button></div>`;
+    });
+    uit+='</div></div></section>';
+  });
+  uit+=`<div class="mpb-legenda"><span><i class="vol"></i>vol</span><span><i class="deels"></i>deels</span><span><i class="leeg"></i>nog niemand</span>
+    <span><b class="mpb-tel" style="position:static">2</b> aanvragen</span><span>Bovenste rij per kraam: hoeveel mensen er per uur staan tegen hoeveel er gepland zijn.</span></div>`;
+  uit+='</div><aside class="mb-kaart mpb-rechts" id="mpbPaneel">'+mpbPaneelHtml(tot)+'</aside></div>';
+  return uit;
+}
+function mpbKies(id){
+  MB_PB_SEL=MB_PB_SEL===id?null:id; MB_PB_ALLE=false; mpbTeken();
+  if(MB_PB_SEL&&window.innerWidth<900){ const p=document.getElementById('mpbPaneel'); if(p)p.scrollIntoView({behavior:'smooth',block:'start'}); }
+}
+function mpbNieuweDienst(kraam,datum){ MB_PB_TAB='diensten'; mbDienstOpen(kraam,datum); mbNaar('shifts'); }
+function mpbDienstBeheren(id){ MB_PB_TAB='diensten'; MB_SHIFT=id; mbNaar('shifts'); }
+function mpbOpenShift(id){ const s=MB_PB.S[id]; if(!s)return; MB_PB_TAB='dag'; MB_PB_DAG=s.datum; MB_PB_SEL=id; MB_PB_ALLE=false; mpbTeken(); }
+function mpbPersoonRij(g,extra,knoppen){
+  return `<div class="mpb-pers">${mpbAv(g)}<div class="mpb-pers-tekst"><div>${mbNaamLink(g,mpbNaam(g),'font-size:14px;font-weight:600')}</div>
+    <div class="mpb-meta">${mpbMeta(g)}</div>${extra||''}</div><div class="mpb-knoppen">${knoppen||''}</div></div>`;
+}
+function mpbPaneelHtml(tot){
+  const P=MB_PB, s=MB_PB_SEL&&P.S[MB_PB_SEL];
+  if(!s||s.datum!==MB_PB_DAG){
+    return `<div style="font-size:15px;font-weight:700">Kies een dienst</div>
+      <div style="font-size:13px;color:var(--muted);line-height:1.55;margin-top:6px">Tik links op een balk. Hier zie je dan wie erom vroeg, wie die dag kan en wie al veel heeft, en deel je iemand in met &eacute;&eacute;n tik.</div>
+      <div class="mpb-samenvat"><b>${veiligTekst(mbLang(MB_PB_DAG))}</b><br>${tot.open} ${tot.open===1?'plek':'plekken'} open, ${tot.vr} ${tot.vr===1?'aanvraag wacht':'aanvragen wachten'} op jou.
+      ${tot.gat.length?'<br>Gaten: '+veiligTekst(tot.gat.slice(0,8).join(', '))+(tot.gat.length>8?' &hellip;':''):'<br>Geen gaten.'}</div>`;
+  }
+  const k=P.K[s.kraam]||{naam:'',kleur:'#999'}, open=Math.max(0,s.nodig-s.inn.length), sid=veiligJs(s.id);
+  let uit=`<div style="display:flex;align-items:center;gap:8px">${mbStip(k.kleur)}<span style="font-size:13px;font-weight:600;color:var(--muted)">${veiligTekst(k.naam)}</span>
+    <button class="mb-mini" style="margin-left:auto;padding:5px 10px" onclick="MB_PB_SEL=null;mpbTeken()" aria-label="Sluiten">&times;</button></div>
+    <div style="font-size:20px;font-weight:700;margin-top:4px">${veiligTekst(mpbTijd(s))}${s.naam&&!/\d{1,2}[:.]\d{2}/.test(s.naam)?' <span style="font-size:13px;font-weight:600;color:var(--muted)">'+veiligTekst(s.naam)+'</span>':''}</div>
+    <div style="font-size:13px;color:var(--muted)">${veiligTekst(mbLang(s.datum))} &middot; ${Math.min(s.inn.length,s.nodig)} van ${s.nodig} ${s.nodig===1?'plek':'plekken'} gevuld</div>`;
+  uit+='<div class="mpb-sectie">Ingedeeld</div>';
+  if(!s.inn.length)uit+='<div class="mpb-leeg">Nog niemand.</div>';
+  s.inn.forEach(g=>{
+    const r=s.ruil.find(x=>x.g===g);
+    const extra=r?`<div class="mpb-let" style="color:#2A4EA8">${r.status==='open'?'Shift staat open om te ruilen':'Wil deze shift ruilen'}</div>`:'';
+    uit+=mpbPersoonRij(g,extra,`<button class="mb-mini" onclick="mpbEraf('${sid}','${veiligJs(g)}')">Eraf</button>`);
+  });
+  const gezien=new Set(s.inn);
+  const vragers=s.aanv.filter(a=>!s.inn.includes(a.g)).sort((a,b)=>mpbRang(a.g)-mpbRang(b.g)||mpbWeekTel(a.g)-mpbWeekTel(b.g)||mbErvVergelijk(a.g,b.g));
+  if(vragers.length){
+    uit+='<div class="mpb-sectie blauw">Vroegen om deze dienst</div>';
+    vragers.forEach(a=>{
+      gezien.add(a.g);
+      const b=mpbBotsing(a.g,s), kan=mpbKan(a.g,s), let_=[];
+      if(b)let_.push('Staat die dag al op '+((P.K[b.kraam]||{}).naam||'')+' '+mpbTijd(b)+'.');
+      if(kan.st==='nee')let_.push('Heeft deze dag als “kan niet” opgegeven.');
+      else if(kan.st==='deels'||kan.st==='buiten')let_.push('Gaf op: '+mpbKanTekst(kan)+'.');
+      if(mpbMaxVol(a.g,s))let_.push('Wil max '+P.M[a.g].max_dagen+' dagen per week en zit daar al aan.');
+      if((P.M[a.g]||{}).oordeel==='niet meer')let_.push('Beoordeling: niet meer.');
+      const extra=(let_.length?`<div class="mpb-let">${veiligTekst(let_.join(' '))}</div>`:'')+(a.notitie?`<div class="mpb-meta">&ldquo;${veiligTekst(a.notitie)}&rdquo;</div>`:'');
+      uit+=mpbPersoonRij(a.g,extra,(open>0&&!b?`<button class="mb-mini zwart" onclick="mpbIndelen('${sid}','${veiligJs(a.g)}')">Indelen</button>`:'')
+        +`<button class="mb-mini" onclick="mpbAfwijzen('${veiligJs(a.id)}')">Afwijzen</button>`);
+    });
+  }
+  if(open>0){
+    const kunnen=[], anderen=[];
+    P.mensen.forEach(m=>{
+      if(!m.kan||gezien.has(m.id)||mpbBotsing(m.id,s))return;
+      const kan=mpbKan(m.id,s);
+      if(kan.st==='ja'||kan.st==='deels')kunnen.push({g:m.id,kan});
+      else if(!kan.st&&m.oordeel!=='niet meer')anderen.push({g:m.id,kan});
+    });
+    const dz=new Set(MB_PB.shifts.filter(x=>x.datum===s.datum).flatMap(x=>x.inn));
+    const srt=(a,b)=>(a.kan.st==='ja'?0:1)-(b.kan.st==='ja'?0:1)||(dz.has(a.g)?1:0)-(dz.has(b.g)?1:0)||mpbRang(a.g)-mpbRang(b.g)||mpbWeekTel(a.g)-mpbWeekTel(b.g)||mbErvVergelijk(a.g,b.g);
+    kunnen.sort(srt); anderen.sort(srt);
+    const rij=x=>{
+      const let_=[];
+      if(mpbMaxVol(x.g,s))let_.push('zit al aan max '+P.M[x.g].max_dagen+' dagen');
+      if(mpbDagenSet(x.g).has(s.datum))let_.push('werkt die dag al een andere dienst');
+      const vr=(P.M[x.g]||{}).vroegst; if(vr&&mpbMin(vr)>s.st)let_.push('wil het liefst niet voor '+mbUur(vr)+' beginnen');
+      return mpbPersoonRij(x.g,`<div class="mpb-meta" style="color:${x.kan.st==='ja'?'#0F7A52':(x.kan.st?'#B45309':'var(--muted)')};font-weight:600">${veiligTekst(mpbKanTekst(x.kan))}</div>`
+        +(let_.length?`<div class="mpb-let">${veiligTekst(let_.join(' · '))}</div>`:''),
+        `<button class="mb-mini${x.kan.st==='ja'?' zwart':''}" onclick="mpbIndelen('${sid}','${veiligJs(x.g)}')">Indelen</button>`);
+    };
+    uit+='<div class="mpb-sectie groen">Gaven op dat ze kunnen</div>';
+    uit+=kunnen.length?kunnen.map(rij).join(''):'<div class="mpb-leeg">Niemand heeft deze dag als beschikbaar opgegeven.</div>';
+    uit+='<div class="mpb-sectie">Nog niets opgegeven voor deze dag</div>';
+    const toon=MB_PB_ALLE?anderen:anderen.slice(0,5);
+    uit+=toon.length?toon.map(rij).join(''):'<div class="mpb-leeg">Niemand anders vrij.</div>';
+    if(!MB_PB_ALLE&&anderen.length>5)uit+=`<button class="mb-linktekst" style="margin-top:8px;font-size:13px" onclick="MB_PB_ALLE=true;mpbTeken()">Toon alle ${anderen.length}</button>`;
+  }else{
+    uit+='<div class="mpb-ok">Deze dienst is vol. Wil je wisselen, haal dan eerst iemand eraf.</div>';
+  }
+  uit+=`<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)"><button class="mb-linktekst" style="font-size:12.5px" onclick="mpbDienstBeheren('${sid}')">Dienst wijzigen of weghalen</button></div>`;
+  return uit;
+}
+async function mpbIndelen(sid,g){
+  const s=MB_PB.S[sid], m=MB_PB.M[g]; if(!s||!m)return;
+  const vn=veiligTekst(String(m.naam).split(' ')[0]);
+  const kan=mpbKan(g,s);
+  if(kan.st==='nee'||kan.st==='buiten'||kan.st==='deels'){
+    const ok=await vraagBevestiging(kan.st==='deels'?'Past maar deels':'Past niet bij de beschikbaarheid',
+      `<div style="margin-bottom:8px;color:#B91C1C;font-weight:500">⚠ ${veiligTekst(m.naam)} ${kan.st==='nee'?'heeft op '+veiligTekst(mbLang(s.datum))+' doorgegeven <b>niet te kunnen</b>':'gaf voor '+veiligTekst(mbLang(s.datum))+' op: <b>'+veiligTekst(mpbKanTekst(kan))+'</b>'}.</div>
+       <div style="color:var(--muted)">De dienst is ${veiligTekst(mpbTijd(s))}. Is dit met ${vn} overlegd?</div>`,'Ja, overlegd – indelen');
+    if(!ok)return;
+  }
+  if(mpbMaxVol(g,s)){
+    const ok=await vraagBevestiging('Meer dagen dan gewenst',
+      `${veiligTekst(m.naam)} wil maximaal ${m.max_dagen} dagen per week werken en staat deze week al op ${mpbDagenSet(g).size} dagen. Toch indelen?`,'Ja, toch indelen');
+    if(!ok)return;
+  }
+  try{
+    const{error}=await sb.rpc('mcr_indelen',{p_shift:sid,p_gebruiker:g}); if(error)throw error;
+    toast(m.naam+' ingedeeld'); await mpbHerlaad();
+  }catch(e){ alert(mbFout(e)); }
+}
+async function mpbEraf(sid,g){
+  const s=MB_PB.S[sid]; if(!s)return;
+  const ok=await vraagBevestiging('Van de dienst halen?',
+    `${veiligTekst(mpbNaam(g))} van ${veiligTekst(((MB_PB.K[s.kraam]||{}).naam)||'')} ${veiligTekst(mbLang(s.datum))} ${veiligTekst(mpbTijd(s))} halen? ${veiligTekst(mpbNaam(g).split(' ')[0])} krijgt daar een melding van.`,'Ja, eraf halen');
+  if(!ok)return;
+  try{ const{error}=await sb.rpc('mcr_uitdelen',{p_shift:sid,p_gebruiker:g}); if(error)throw error;
+    toast('Van de dienst gehaald'); await mpbHerlaad(); }
+  catch(e){ alert(mbFout(e)); }
+}
+async function mpbAfwijzen(aid){
+  let s=null,a=null; MB_PB.shifts.forEach(x=>x.aanv.forEach(y=>{ if(y.id===aid){s=x;a=y;} }));
+  if(!a)return;
+  const ok=await vraagBevestiging('Aanvraag afwijzen?',
+    `${veiligTekst(mpbNaam(a.g))} voor ${veiligTekst(((MB_PB.K[s.kraam]||{}).naam)||'')}, ${veiligTekst(mbLang(s.datum))} ${veiligTekst(mpbTijd(s))}. In de app ziet ${veiligTekst(mpbNaam(a.g).split(' ')[0])} dan “Rejected”.`,'Ja, afwijzen');
+  if(!ok)return;
+  try{ const{error}=await sb.rpc('mcr_aanmelding_afwijzen',{p_aanmelding:aid}); if(error)throw error;
+    toast('Afgewezen'); await mpbHerlaad(); }
+  catch(e){ alert(mbFout(e)); }
+}
+
+// ── Week per persoon ──
+function mpbWeekHtml(){
+  const P=MB_PB;
+  let nodigT=0,bezetT=0,vrT=0;
+  const kop=P.dagenLijst.map(d=>{ const t=mpbDagStats(d); nodigT+=t.nodig; bezetT+=t.bezet; vrT+=t.vr; return {d,open:t.nodig-t.bezet,nodig:t.nodig}; });
+  const jaar=new Date().getFullYear();
+  let rijen=P.mensen.filter(m=>m.kan||P.shifts.some(s=>s.inn.includes(m.id)||s.aanv.some(a=>a.g===m.id))).map(m=>{
+    let tel=0,min=0,vroeg=0,iets=0;
+    const cellen=P.dagenLijst.map(d=>{
+      let html='';
+      P.shifts.filter(s=>s.datum===d&&s.inn.includes(m.id)).sort((a,b)=>a.st-b.st).forEach(s=>{
+        const k=P.K[s.kraam]||{}; tel++; min+=s.etKort-s.st;
+        html+=`<button class="mpb-chip" style="background:${veiligTekst(k.kleur||'#555')};border-color:${veiligTekst(k.kleur||'#555')};color:#fff" onclick="mpbOpenShift('${veiligJs(s.id)}')" title="${veiligTekst((k.naam||'')+' '+mpbTijd(s))}">${veiligTekst(mpbKraamCode(k)+' '+mpbKortTijd(s))}</button>`;
+      });
+      P.shifts.filter(s=>s.datum===d&&!s.inn.includes(m.id)&&s.aanv.some(a=>a.g===m.id)).sort((a,b)=>a.st-b.st).forEach(s=>{
+        const k=P.K[s.kraam]||{}; vroeg++;
+        const vol=s.inn.length>=s.nodig, bots=!!mpbBotsing(m.id,s), kan=!vol&&!bots;
+        html+=`<button class="mpb-chip ${kan?'vraag':'grijs'}" ${kan?`onclick="mpbIndelen('${veiligJs(s.id)}','${veiligJs(m.id)}')"`:`onclick="mpbOpenShift('${veiligJs(s.id)}')"`}
+          title="${veiligTekst(kan?'Tik om in te delen: '+(k.naam||'')+' '+mpbTijd(s):(vol?'Deze dienst is al vol':'Botst met een dienst waar '+m.naam+' al op staat'))}">${veiligTekst(mpbKraamCode(k)+' '+mpbKortTijd(s)+(kan?' ?':(vol?' · vol':' · botst')))}</button>`;
+      });
+      const b=P.B[m.id+'|'+d];
+      if(b){ iets++; html+=b.soort==='beschikbaar'?`<span class="mpb-noot groen">${veiligTekst(b.ts||b.te?'kan '+mpbVenster(b):'kan hele dag')}</span>`:'<span class="mpb-noot">kan niet</span>'; }
+      return html;
+    });
+    return {m,tel,min,vroeg,iets:tel+vroeg+iets,cellen,r:mpbRang(m.id)};
+  });
+  const zonder=rijen.filter(x=>x.m.kan&&x.tel===0).length;
+  if(MB_PB_VERBERG)rijen=rijen.filter(x=>x.iets>0);
+  rijen.sort((a,b)=>{
+    if(MB_PB_VOLG==='diensten')return a.tel-b.tel||a.r-b.r||a.m.naam.localeCompare(b.m.naam);
+    if(MB_PB_VOLG==='naam')return a.m.naam.localeCompare(b.m.naam);
+    return a.r-b.r||mbErvVergelijk(a.m.id,b.m.id)||a.m.naam.localeCompare(b.m.naam);
+  });
+  let uit=`<div class="mpb-tegels">
+    <div class="mb-kaart"><div class="mb-groot">${bezetT}/${nodigT}</div><div class="mb-klein">plekken gevuld deze week</div></div>
+    <div class="mb-kaart"><div class="mb-groot" style="color:${nodigT-bezetT?'#9A4A12':'#0F7A52'}">${nodigT-bezetT}</div><div class="mb-klein">plekken nog open</div></div>
+    <div class="mb-kaart"><div class="mb-groot" style="color:#2A4EA8">${vrT}</div><div class="mb-klein">aanvragen wachten op jou</div></div>
+    <div class="mb-kaart"><div class="mb-groot">${zonder}</div><div class="mb-klein">mensen nog zonder dienst</div></div></div>`;
+  uit+=`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+    <span style="font-size:13px;color:var(--muted);font-weight:600">Volgorde:</span>
+    ${[['oordeel','Beste eerst'],['diensten','Minste diensten eerst'],['naam','Naam']].map(([k,l])=>`<button class="mb-mini${MB_PB_VOLG===k?' zwart':''}" onclick="MB_PB_VOLG='${k}';mpbTeken()">${l}</button>`).join('')}
+    <label style="display:flex;align-items:center;gap:7px;font-size:13px;margin-left:6px;cursor:pointer;min-height:36px">
+      <input type="checkbox" ${MB_PB_VERBERG?'checked':''} onchange="MB_PB_VERBERG=this.checked;mpbTeken()" style="width:17px;height:17px">Verberg wie deze week niets heeft</label></div>`;
+  uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mpb-wtab"><thead><tr><th class="mpb-wie">Wie</th>';
+  kop.forEach(x=>{
+    const dt=new Date(x.d+'T00:00:00');
+    uit+=`<th><button class="mpb-wkop" onclick="MB_PB_TAB='dag';MB_PB_DAG='${x.d}';MB_PB_SEL=null;mpbTeken()" title="Dagbord van deze dag">
+      ${veiligTekst(dt.toLocaleDateString('nl-NL',{weekday:'short'}))} ${dt.getDate()}</button>
+      <div style="font-size:11.5px;font-weight:600;color:${x.open?'#9A4A12':'#0F7A52'}">${x.nodig?(x.open?x.open+' open':'vol'):'–'}</div></th>`;
+  });
+  uit+='<th class="mpb-tot">Deze week</th></tr></thead><tbody>';
+  rijen.forEach(x=>{
+    uit+=`<tr${x.tel===0&&x.vroeg>0?' class="wacht"':''}><td class="mpb-wie"><div style="display:flex;align-items:center;gap:9px">${mpbAv(x.m.id)}
+      <div style="min-width:0"><div class="mpb-wnaam">${mbNaamLink(x.m.id,x.m.naam,'font-size:13.5px;font-weight:600')}</div>
+      <div class="mpb-meta">${veiligTekst((x.m.oordeel||'geen oordeel')+' · '+(mpbNieuw(x.m)?'nieuw':(x.m.sinds?'sinds '+x.m.sinds:'sinds ?'))+(x.m.max_dagen?' · max '+x.m.max_dagen+' d':''))}</div></div></div></td>`;
+    x.cellen.forEach(c=>{ uit+=`<td><div class="mpb-cel">${c}</div></td>`; });
+    uit+=`<td class="mpb-tot"><div style="font-size:13px;font-weight:700;color:${x.tel?'var(--text)':'#9A4A12'}">${x.tel?x.tel+(x.tel===1?' dienst':' diensten'):'niets'}</div>
+      <div class="mpb-meta">${x.tel?'± '+Math.round(x.min/60)+' uur':(x.vroeg?x.vroeg+' gevraagd':'')}</div></td></tr>`;
+  });
+  if(!rijen.length)uit+=`<tr><td colspan="9" style="padding:18px;text-align:center;color:var(--muted)">Niemand met diensten, aanvragen of beschikbaarheid deze week.</td></tr>`;
+  uit+='</tbody></table></div>';
+  uit+=`<div class="mpb-legenda"><span><b class="mpb-chip" style="background:#B4472B;border-color:#B4472B;color:#fff">EX 10–14</b> ingedeeld (kleur = kraam)</span>
+    <span><b class="mpb-chip vraag">CG 12 ?</b> vroeg erom &middot; tik om in te delen</span>
+    <span><span class="mpb-noot groen">kan 17:00+</span> opgegeven beschikbaar</span><span><span class="mpb-noot">kan niet</span></span>
+    <span>${P.kramen.map(k=>veiligTekst(mpbKraamCode(k)+' '+k.naam)).join(' &middot; ')}</span></div>`;
+  return uit;
+}
+function mpbKraamCode(k){
+  if(k.code&&String(k.code).length<=3)return String(k.code).toUpperCase();
+  const w=String(k.naam||'?').split(' ').filter(Boolean);
+  return (w.length>1?w[0][0]+w[1][0]:String(k.naam||'?').slice(0,2)).toUpperCase();
+}
+
+// ── Voorstel invullen ──
+// Ronde 1: per open plek wie erom vroeg. Ronde 2: wat dan nog open is, met wie
+// voor die dag "kan" heeft opgegeven (de hele dienst). Volgorde: beoordeling,
+// dan wie deze week het minst heeft, dan hoe lang iemand bij ons werkt.
+// Nooit twee diensten tegelijk, niet op een "kan niet"-dag, niet boven het
+// maximum aantal dagen, en uit beschikbaarheid hooguit één dienst per dag.
+function mpbVoorstel(){
+  const P=MB_PB, vandaag=mbVandaagStr();
+  const plan={}; P.shifts.forEach(s=>{ plan[s.id]=s.inn.slice(); });
+  const week={}, dagen={};
+  const tel=(g,d)=>{ week[g]=(week[g]||0)+1; (dagen[g]=dagen[g]||new Set()).add(d); };
+  P.shifts.forEach(s=>s.inn.forEach(g=>tel(g,s.datum)));
+  const volg=P.shifts.filter(s=>s.datum>=vandaag&&!s.dicht).sort((a,b)=>a.datum.localeCompare(b.datum)||a.st-b.st||a.etKort-b.etKort);
+  const botst=(g,s)=>P.shifts.some(x=>x.id!==s.id&&x.datum===s.datum&&plan[x.id].includes(g)&&x.st<s.et&&s.st<x.et);
+  const magDag=(g,s)=>{ const m=P.M[g], d=dagen[g]; return !(m&&m.max_dagen&&d&&!d.has(s.datum)&&d.size>=m.max_dagen); };
+  const sorteer=(a,b)=>mpbRang(a)-mpbRang(b)||(week[a]||0)-(week[b]||0)||mbErvVergelijk(a,b);
+  const uit=[];
+  const zet=(s,g,bron,ook)=>{ plan[s.id].push(g); tel(g,s.datum); uit.push({s,g,bron,aan:true,nr:week[g],ook:ook||[]}); };
+  volg.forEach(s=>{
+    const vragers=s.aanv.map(a=>a.g).filter(g=>!plan[s.id].includes(g));
+    const kand=()=>vragers.filter(g=>!plan[s.id].includes(g)&&P.M[g]&&P.M[g].kan&&P.M[g].oordeel!=='niet meer'
+      &&mpbKan(g,s).st!=='nee'&&!botst(g,s)&&magDag(g,s));
+    kand().filter(g=>MB_PB_UIT[s.id+'|'+g]).forEach(g=>uit.push({s,g,bron:'aanvraag',aan:false}));
+    let open=s.nodig-plan[s.id].length;
+    while(open>0){
+      const k=kand().filter(g=>!MB_PB_UIT[s.id+'|'+g]).sort(sorteer); if(!k.length)break;
+      zet(s,k[0],'aanvraag',vragers.filter(x=>x!==k[0])); open--;
+    }
+  });
+  volg.forEach(s=>{
+    let open=s.nodig-plan[s.id].length; if(open<=0)return;
+    const kand=()=>P.mensen.filter(m=>m.kan&&m.oordeel!=='niet meer'&&!plan[s.id].includes(m.id)
+      &&mpbKan(m.id,s).st==='ja'&&!(dagen[m.id]&&dagen[m.id].has(s.datum))&&!botst(m.id,s)&&magDag(m.id,s)
+      &&!(m.vroegst&&mpbMin(m.vroegst)>s.st)).map(m=>m.id);
+    kand().filter(g=>MB_PB_UIT[s.id+'|'+g]).forEach(g=>uit.push({s,g,bron:'besch',aan:false}));
+    while(open>0){
+      const k=kand().filter(g=>!MB_PB_UIT[s.id+'|'+g]).sort(sorteer); if(!k.length)break;
+      zet(s,k[0],'besch'); open--;
+    }
+    if(open>0)uit.push({s,g:null,open});
+  });
+  return {uit,plan};
+}
+function mpbVoorstelHtml(){
+  const P=MB_PB, v=mpbVoorstel();
+  const aan=v.uit.filter(x=>x.g&&x.aan), open=v.uit.filter(x=>!x.g);
+  const nMensen=new Set(aan.map(x=>x.g)).size, nOpen=open.reduce((t,x)=>t+x.open,0);
+  const nVraag=aan.filter(x=>x.bron==='aanvraag').length, nBesch=aan.length-nVraag;
+  let uit='';
+  if(MB_PB_RESULT){
+    const r=MB_PB_RESULT, f=r.fouten||[];
+    uit+=`<div class="mb-kaart" style="background:${f.length?'#FEF6E7':'#EAF6EF'};border-color:${f.length?'#F3D9A4':'#8CCAA8'}">
+      <div style="font-size:14px;font-weight:700;color:${f.length?'#8A5307':'#0B5E3E'}">${r.ingedeeld} ${r.ingedeeld===1?'dienst':'diensten'} in het rooster gezet. Iedereen krijgt een melding.</div>
+      ${f.length?`<div style="font-size:13px;margin-top:6px;color:#8A5307">${f.length} lukte niet:</div>`+f.map(x=>{ const s=P.S[x.shift]; return `<div style="font-size:12.5px;margin-top:3px">${veiligTekst(mpbNaam(x.gebruiker))} &middot; ${s?veiligTekst(((P.K[s.kraam]||{}).naam||'')+' '+mbKort(s.datum)+' '+mpbTijd(s)):''} &mdash; ${veiligTekst(mbFout({message:x.fout}))}</div>`; }).join(''):''}
+      <button class="mb-mini" style="margin-top:10px" onclick="MB_PB_RESULT=null;MB_PB_TAB='dag';mpbTeken()">Naar het dagbord</button></div>`;
+  }
+  uit+=`<div class="mb-kaart" style="font-size:13px;line-height:1.6">
+    <b>Hoe de app kiest.</b> Eerst krijgt elke open plek iemand die erom vroeg; daarna vult de app wat nog open is met wie voor die dag &ldquo;kan&rdquo; heeft opgegeven (voor de hele dienst).
+    Binnen elke groep: hoogste beoordeling eerst, bij gelijke beoordeling wie deze week het minst heeft, dan wie het langst bij je werkt.
+    Nooit twee diensten tegelijk, nooit op een dag die iemand als &ldquo;kan niet&rdquo; opgaf, en niet boven het aantal dagen dat iemand maximaal wil.
+    Vink je iemand uit, dan schuift de volgende door. Er verandert niets tot je op de zwarte knop drukt.</div>`;
+  uit+=`<div class="mpb-tegels drie">
+    <div class="mb-kaart"><div class="mb-groot" style="color:#0B5E3E">${aan.length}</div><div class="mb-klein">plekken die de app invult <span style="white-space:nowrap">(${nVraag} gevraagd, ${nBesch} uit beschikbaarheid)</span></div></div>
+    <div class="mb-kaart"><div class="mb-groot">${nMensen}</div><div class="mb-klein">mensen die een dienst krijgen</div></div>
+    <div class="mb-kaart"><div class="mb-groot" style="color:#9A4A12">${nOpen}</div><div class="mb-klein">plekken blijven open</div></div></div>`;
+  if(!aan.length&&!v.uit.some(x=>x.g)){
+    uit+=`<div class="mb-kaart" style="color:var(--muted);font-size:13.5px">${nOpen?'Er is niemand die erom vroeg of beschikbaar is voor de open plekken van deze week.':'Alle diensten van deze week zijn al gevuld.'}</div>`;
+  }else{
+    uit+=`<div class="mpb-sticky"><button class="mb-mini zwart" id="mpbToepasKnop" style="font-size:14.5px;padding:11px 18px" ${aan.length?'':'disabled'} onclick="mpbToepassen()">Zet ${aan.length} ${aan.length===1?'dienst':'diensten'} in het rooster</button>
+      <span style="font-size:12.5px;color:var(--muted)">Tik op een regel om hem uit of weer aan te vinken.</span></div>`;
+  }
+  P.dagenLijst.forEach(d=>{
+    const rij=v.uit.filter(x=>x.s.datum===d);
+    if(!rij.length)return;
+    const voorst=rij.filter(x=>x.g).sort((a,b)=>a.s.st-b.s.st||String((P.K[a.s.kraam]||{}).naam).localeCompare(String((P.K[b.s.kraam]||{}).naam))), op=rij.filter(x=>!x.g), nAan=voorst.filter(x=>x.aan).length;
+    uit+=`<section class="mb-kaart" style="padding:0;overflow:hidden"><div class="mpb-vkop"><h2>${veiligTekst(mbLang(d))}</h2>
+      <span>${nAan} ${nAan===1?'voorstel':'voorstellen'}${op.length?' · '+op.reduce((t,x)=>t+x.open,0)+' blijft open':''}</span></div>`;
+    voorst.forEach(x=>{
+      const s=x.s, k=P.K[s.kraam]||{}, m=P.M[x.g]||{naam:'?'}, key=s.id+'|'+x.g;
+      const waarom=[m.oordeel||'geen oordeel', mpbNieuw(m)?'nieuw':(m.sinds?'sinds '+m.sinds:'sinds ?')];
+      if(x.aan)waarom.push(x.nr===1?'1e dienst deze week':x.nr+'e dienst deze week');
+      const bron=x.bron==='aanvraag'?'vroeg erom':'gaf op: '+mpbKanTekst(mpbKan(x.g,s));
+      const ook=x.ook&&x.ook.length?'Vroegen ook: '+x.ook.map(mpbNaam).join(', '):'';
+      uit+=`<button class="mpb-vrij${x.aan?'':' uit'}" aria-pressed="${!!x.aan}" onclick="mpbVinken('${veiligJs(key)}')">
+        <span class="mpb-vink">${x.aan?'✓':''}</span>${mbStip(k.kleur||'#999')}
+        <span class="mpb-vtijd"><b>${veiligTekst(mpbTijd(s))}</b><br>${veiligTekst(k.naam||'')}</span>
+        <span class="mpb-vnaam"><b>${veiligTekst(m.naam)}</b> <span class="mpb-bron ${x.bron}">${veiligTekst(bron)}</span><br><span class="mpb-meta">${veiligTekst(x.aan?waarom.join(' · '):'uitgevinkt · '+waarom.slice(0,2).join(' · '))}</span></span>
+        <span class="mpb-vook">${veiligTekst(ook)}</span></button>`;
+    });
+    if(op.length){
+      uit+='<div class="mpb-vopen"><div style="font-size:12px;font-weight:700;color:#9A4A12;margin-bottom:3px">Blijft open &middot; niemand vroeg erom of gaf op dat ze kunnen</div>';
+      op.forEach(x=>{ const k=P.K[x.s.kraam]||{};
+        uit+=`<div style="font-size:13px;line-height:1.65">${veiligTekst((k.naam||'')+' '+mpbTijd(x.s))}${x.open>1?' ('+x.open+' plekken)':''}
+          <button class="mb-linktekst" style="font-size:12px;margin-left:6px" onclick="mpbOpenShift('${veiligJs(x.s.id)}')">zelf kiezen</button></div>`; });
+      uit+='</div>';
+    }
+    uit+='</section>';
+  });
+  return uit;
+}
+function mpbVinken(key){ if(MB_PB_UIT[key])delete MB_PB_UIT[key]; else MB_PB_UIT[key]=1; mpbTeken(); }
+async function mpbToepassen(){
+  const v=mpbVoorstel(), paren=v.uit.filter(x=>x.g&&x.aan).map(x=>({shift:x.s.id,gebruiker:x.g}));
+  if(!paren.length)return;
+  const n=new Set(paren.map(p=>p.gebruiker)).size;
+  const ok=await vraagBevestiging('Voorstel in het rooster zetten?',
+    `${paren.length} ${paren.length===1?'dienst':'diensten'} voor ${n} ${n===1?'persoon':'mensen'}. Iedereen krijgt meteen een melding dat ze ingedeeld zijn.
+     Wie erom vroeg en het niet kreeg, blijft gewoon in de lijst staan tot jij antwoordt.`,'Ja, in het rooster');
+  if(!ok)return;
+  const kn=document.getElementById('mpbToepasKnop'); if(kn){ kn.disabled=true; kn.textContent='Bezig…'; }
+  try{
+    const{data,error}=await sb.rpc('mcr_indelen_bulk',{p_paren:paren}); if(error)throw error;
+    MB_PB_RESULT=data||{ingedeeld:0,fouten:[]}; MB_PB_UIT={};
+    toast((MB_PB_RESULT.ingedeeld||0)+' ingedeeld'); await mpbHerlaad();
+  }catch(e){ alert(mbFout(e)); if(kn){ kn.disabled=false; kn.textContent='Opnieuw proberen'; } }
+}
+
 // ── SHIFTS — weekrooster ──────────────────────────────────────────
 function mbMaandag(d){ const x=new Date(String(d)+'T00:00:00'); const w=(x.getDay()+6)%7; x.setDate(x.getDate()-w); return fmt(x); }
-async function mbShiftsPlannen(){
+async function mbShiftsDiensten(){
   if(!MB_WEEK)MB_WEEK=mbMaandag(MB_DATUM||await mbPeil());
   const [,wk,aanm,man,waar]=await Promise.all([mbErvaringLaden(),sb.rpc('mcr_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_open'), sb.rpc('mcr_managers_week',{p_van:MB_WEEK}), sb.rpc('mcr_aanmeldingen_al_ingedeeld'), mbRuilLaden()]);
   MB_MAN=man.error?[]:(man.data||[]);
@@ -4005,7 +4606,7 @@ async function mbShiftsPlannen(){
      <button class="mb-mini" onclick="mbWeek(7)">volgende &rsaquo;</button>
      <button class="mb-mini" onclick="mbWeekKopieren()">Deze week kopi&euml;ren naar volgende</button>
      <button class="mb-mini zwart" onclick="mbDienstOpen(null,null)">+ Diensten toevoegen</button>`);
-
+  uit+=mpbNav();
   uit+=mbRuilBlok();
   uit+=mbAanmBlok(dagen);
   uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-week">'
@@ -4190,7 +4791,10 @@ async function mbWmOpslaan(id){
   toast('Opgeslagen'); mbWmBeheer().catch(e=>alert(mbFout(e)));
 }
 function mbWeek(stap){
-  const d=new Date(MB_WEEK+'T00:00:00'); d.setDate(d.getDate()+stap); MB_WEEK=fmt(d); MB_SHIFT=null; mbNaar('shifts');
+  const d=new Date(MB_WEEK+'T00:00:00'); d.setDate(d.getDate()+stap); MB_WEEK=fmt(d); MB_SHIFT=null;
+  MB_PB_SEL=null; MB_PB_UIT={}; MB_PB_RESULT=null;
+  if(MB_PB_DAG){ const x=new Date(MB_PB_DAG+'T00:00:00'); x.setDate(x.getDate()+stap); MB_PB_DAG=fmt(x); }
+  mbNaar('shifts');
 }
 async function mbWeekKopieren(){
   if(!confirm('De diensten van deze week kopiëren naar de week erna? Wat er al staat blijft staan.'))return;
@@ -6865,6 +7469,7 @@ const MB_SLEUTELS=[
   ['afzegtermijn_uren','Afzegtermijn (uren)'],['te_laat_boete','Boete niet opdagen (£)'],
   ['borg_kleding','Borg kleding (£)'],['borg_kleding_extra','Tweede kledingstuk (£)'],
   ['noodnummer_1','Noodnummer 1'],['noodnummer_2','Noodnummer 2'],
+  ['aanmelden_tot','Personeel vraagt zelf om diensten t/m (leeg = altijd)'],
 ];
 async function mbGegevens(){
   const{data,error}=await sb.from('vestiging_instellingen').select('sleutel,waarde,omschrijving').eq('vestiging','MCR');
@@ -6883,7 +7488,7 @@ async function mbGegevens(){
   uit+='<div class="mb-kaart"><div class="mb-kop">Werkafspraken en bedragen</div><div class="mb-veldrij">';
   MB_SLEUTELS.slice(5).forEach(([sl,lab])=>{
     uit+=`<div style="flex:1 1 170px"><label class="mb-lab">${veiligTekst(lab)}</label>
-      <input class="mb-veld" id="mbI_${veiligTekst(sl)}" value="${veiligTekst((k[sl]||{}).waarde||'')}"></div>`;
+      <input class="mb-veld" ${sl==='aanmelden_tot'?'type="date" ':''}id="mbI_${veiligTekst(sl)}" value="${veiligTekst((k[sl]||{}).waarde||'')}"></div>`;
   });
   uit+=`</div><div class="mb-veldrij" style="margin-top:10px">
     <div style="flex:1 1 170px"><label class="mb-lab">Tijdzone</label><div class="mb-veld vast">Europe/London</div></div>
@@ -7212,13 +7817,28 @@ async function mcrRuilIntrekken(id){
 async function mcrOpenShifts(){
   document.getElementById('mcrTitel').textContent='Open shifts';
   document.getElementById('mcrSub').textContent='Put your name down; Bram confirms.';
-  let{data,error}=await sb.rpc('mcr_open_shifts2',{p_dagen:75});
+  const [os,tr]=await Promise.all([sb.rpc('mcr_open_shifts2',{p_dagen:75}), sb.rpc('mcr_aanmelden_tot')]);
+  let{data,error}=os;
   if(error){ ({data,error}=await sb.rpc('mcr_open_shifts',{p_dagen:75})); }
   if(error)throw error;
+  const tot=(!tr.error&&tr.data)?String(tr.data):null;
   const m=document.getElementById('mcrMain');
   let uit=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="mcrGa('shifts')">&lsaquo; Back to my shifts</button>`;
+  if(tot){
+    // Na deze datum vraagt personeel niet meer zelf; alleen beschikbaarheid (en ruil-shifts).
+    const dag=x=>new Date(x+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+    const na=new Date(tot+'T00:00:00'); na.setDate(na.getDate()+1);
+    const dicht=fmt(new Date())>tot;
+    uit+=`<div class="mcr-kaart" style="background:#EEF4FF;border-color:#C7D7FE">
+      <div style="font-size:14px;font-weight:700;color:#1E3A8A">${dicht?'Asking for shifts has closed':'From '+veiligTekst(dag(fmt(na)))+': availability only'}</div>
+      <div style="font-size:13px;color:#1E3A8A;line-height:1.55;margin-top:4px">${dicht
+        ?'Fill in the days and times you can work. Bram puts the rota together from that and you get a message for every shift.'
+        :'You can ask for shifts up to '+veiligTekst(dag(tot))+'. After that, just fill in the days and times you can work. Bram puts the rota together from that and you get a message for every shift.'}
+        Shifts someone wants to swap still show up here.</div>
+      <button class="mcr-knop" style="margin-top:10px" onclick="mcrGa('avail')">Fill in my availability</button></div>`;
+  }
   if(!data||!data.length){
-    uit+=mcrLeeg('Nothing open at the moment. Check again in a day or two.');
+    uit+=mcrLeeg(tot&&fmt(new Date())>tot?'No swaps open at the moment.':'Nothing open at the moment. Check again in a day or two.');
   }else{
     uit+='<div class="mcr-kaart" style="padding:2px 15px">';
     data.forEach(r=>{
