@@ -6740,9 +6740,12 @@ function mbMensenZoek(w){
 }
 async function mbMensen(){
   await mbErvaringLaden();
-  const{data,error}=await sb.rpc('mcr_mensen');
+  const [res,al]=await Promise.all([sb.rpc('mcr_mensen'), sb.rpc('mcr_alleen_lijst').then(x=>x,()=>({data:[]}))]);
+  const{data,error}=res;
   if(error)throw error;
   const alle=data||[];
+  const ALLEEN=new Set(((al&&!al.error&&al.data)||[]).map(x=>typeof x==='string'?x:(x&&(x.mcr_alleen_lijst||x.id))));
+  alle.forEach(m=>{ m.alleen=ALLEEN.has(m.id); });
   MB_MENSEN_LIJST=alle;
   const uitDienst=alle.filter(m=>m.gearchiveerd_op);
   const wacht=alle.filter(m=>!m.goedgekeurd&&!m.gearchiveerd_op);
@@ -6859,6 +6862,7 @@ function mbPersoonRij(m){
             'minder dan verwacht':['#B45309','#FEF6E7'],'niet meer':['#B4472B','#FBEDE9']}[m.beoordeling]||['#6B6A66','#F3F2EE'];
   const extra=[];
   if(m.kraammanager)extra.push('kraammanager'+(m.manager_kraam?' '+m.manager_kraam:''));
+  if(m.alleen)extra.push('alleen beschikbaarheid');
   if(m.aangebracht_door)extra.push('via '+m.aangebracht_door);
   if(m.eigen_opmerking)extra.push(m.eigen_opmerking);
   if(!m.iban)extra.push('geen bankrekening');
@@ -7116,6 +7120,7 @@ async function mbPersoonOpen(id){
     if(mensen.error)throw mensen.error;
     const m=(mensen.data||[]).find(x=>x.id===id);
     if(!m){ el.innerHTML='<div class="mb-kaart" style="margin-top:14px">Die persoon staat er niet meer.</div>'; return; }
+    const oud=(MB_MENSEN_LIJST||[]).find(x=>x.id===id); m.alleen=!!(oud&&oud.alleen);
     el.innerHTML=mbPersoonHtml(m, voorvallen.data||[]);
     el.scrollIntoView({behavior:'smooth',block:'nearest'});
   }catch(e){
@@ -7157,6 +7162,12 @@ function mbPersoonHtml(m, vv){
             ${(MB_KRAMEN||[]).map(k=>`<option value="${veiligTekst(k.id)}"${m.manager_kraam_id===k.id?' selected':''}>${veiligTekst(k.naam)}</option>`).join('')}</select></span>
         <span id="mbMgrUit${id}" style="display:block;font-size:12px;margin-top:3px"></span></span>
     </label>
+    ${m.kraammanager?'':`<label style="display:flex;align-items:flex-start;gap:9px;margin-top:10px;padding:11px 13px;border:1px solid var(--border);border-radius:12px;cursor:pointer;background:${m.alleen?'var(--bg)':'#fff'}">
+      <input type="checkbox" id="mbAlleen${id}" ${m.alleen?'checked':''} onchange="mbAlleenZetten('${veiligJs(m.id)}')" style="margin-top:3px">
+      <span style="font-size:13px;line-height:1.5;flex:1"><b>Alleen beschikbaarheid</b> &mdash; vraagt niet zelf om diensten (ook niet om ruil-shifts), geeft alleen op wanneer hij kan. Jij deelt in via het planbord.
+        Nieuwe Manchester-accounts krijgen dit vanzelf bij goedkeuren; haal het vinkje weg als iemand toch zelf mag vragen.
+        <span id="mbAlleenUit${id}" style="display:block;font-size:12px;margin-top:3px"></span></span>
+    </label>`}
 
     <div class="mb-rij2" style="margin-top:14px">
       <div style="flex:1;min-width:280px;border:1px solid var(--border);border-radius:12px;padding:12px 14px">
@@ -7242,6 +7253,18 @@ async function mbManagerZetten(id){
     if(uit)uit.innerHTML=`<span style="color:#0F7A52">${aan?'Is nu kraammanager'+(sel&&sel.value?' van '+veiligTekst(sel.options[sel.selectedIndex].text):' van alle kramen')+'. De app schakelt om zodra hij hem opnieuw opent.'
       +(weg?` Van ${weg} ${weg===1?'dienst':'diensten'} vanaf vandaag gehaald: een manager werkt niet zelf mee.`:''):'Is geen kraammanager meer.'}</span>`;
     MB_PERSOON=id; mbMensen();
+  }catch(e){
+    if(cb)cb.checked=!aan;
+    if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`;
+  }
+}
+async function mbAlleenZetten(id){
+  const cb=document.getElementById('mbAlleen'+id), uit=document.getElementById('mbAlleenUit'+id);
+  const aan=!!(cb&&cb.checked);
+  try{
+    const{error}=await sb.rpc('mcr_alleen_zetten',{p_id:id,p_aan:aan}); if(error)throw error;
+    const m=(MB_MENSEN_LIJST||[]).find(x=>x.id===id); if(m)m.alleen=aan;
+    if(uit)uit.innerHTML=`<span style="color:#0F7A52">${aan?'Kan nu alleen beschikbaarheid opgeven.':'Mag nu zelf om diensten vragen (tot de datum bij Gegevens).'}</span>`;
   }catch(e){
     if(cb)cb.checked=!aan;
     if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`;
@@ -7730,8 +7753,9 @@ async function mcrGa(tab){
 // ─── Mijn diensten ─────────────────────────────────────────────────
 async function mcrShifts(){
   const vandaag=new Date().toISOString().slice(0,10);
-  const [sh,mg,rl]=await Promise.all([sb.rpc('mcr_mijn_shifts',{p_van:vandaag,p_tot:null}), sb.rpc('mcr_mijn_managers',{p_van:vandaag,p_tot:null}),
-    sb.rpc('mcr_mijn_ruilen').then(x=>x,()=>({data:[]}))]);
+  const [sh,mg,rl,al]=await Promise.all([sb.rpc('mcr_mijn_shifts',{p_van:vandaag,p_tot:null}), sb.rpc('mcr_mijn_managers',{p_van:vandaag,p_tot:null}),
+    sb.rpc('mcr_mijn_ruilen').then(x=>x,()=>({data:[]})), sb.rpc('mcr_alleen_beschikbaarheid').then(x=>x,()=>({data:false}))]);
+  const alleen=!!(al&&!al.error&&al.data===true);
   const{data,error}=sh;
   if(error)throw error;
   const RUIL={}; ((rl&&!rl.error&&rl.data)||[]).forEach(x=>{ if(!RUIL[x.shift_id])RUIL[x.shift_id]=x; });
@@ -7761,7 +7785,7 @@ async function mcrShifts(){
   const m=document.getElementById('mcrMain');
   let uit='';
   if(!data||!data.length){
-    uit=mcrLeeg('No shifts yet. Tap "Find more shifts" below to put your name down.');
+    uit=mcrLeeg(alleen?'No shifts yet. Fill in your availability below; Bram puts the rota together from that and you get a message for every shift.':'No shifts yet. Tap "Find more shifts" below to put your name down.');
   }else{
     uit='<div class="mcr-kaart" style="padding:2px 15px">';
     data.forEach(r=>{
@@ -7782,7 +7806,8 @@ async function mcrShifts(){
     });
     uit+='</div>';
   }
-  uit+=`<button class="mcr-knop" onclick="mcrGa('open')">Find more shifts</button>
+  uit+=alleen?`<button class="mcr-knop" onclick="mcrGa('avail')">My availability</button>`
+    :`<button class="mcr-knop" onclick="mcrGa('open')">Find more shifts</button>
         <button class="mcr-knop licht" style="margin-top:9px" onclick="mcrGa('avail')">My availability</button>`;
   m.innerHTML=uit;
 }
@@ -7817,13 +7842,22 @@ async function mcrRuilIntrekken(id){
 async function mcrOpenShifts(){
   document.getElementById('mcrTitel').textContent='Open shifts';
   document.getElementById('mcrSub').textContent='Put your name down; Bram confirms.';
-  const [os,tr]=await Promise.all([sb.rpc('mcr_open_shifts2',{p_dagen:75}), sb.rpc('mcr_aanmelden_tot')]);
+  const [os,tr,al]=await Promise.all([sb.rpc('mcr_open_shifts2',{p_dagen:75}), sb.rpc('mcr_aanmelden_tot'),
+    sb.rpc('mcr_alleen_beschikbaarheid').then(x=>x,()=>({data:false}))]);
+  const alleen=!!(al&&!al.error&&al.data===true);
   let{data,error}=os;
   if(error){ ({data,error}=await sb.rpc('mcr_open_shifts',{p_dagen:75})); }
   if(error)throw error;
   const tot=(!tr.error&&tr.data)?String(tr.data):null;
   const m=document.getElementById('mcrMain');
   let uit=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="mcrGa('shifts')">&lsaquo; Back to my shifts</button>`;
+  if(alleen){
+    uit+=`<div class="mcr-kaart" style="background:#EEF4FF;border-color:#C7D7FE">
+      <div style="font-size:14px;font-weight:700;color:#1E3A8A">You don't need to ask for shifts</div>
+      <div style="font-size:13px;color:#1E3A8A;line-height:1.55;margin-top:4px">Just fill in the days and times you can work. Bram puts the rota together from that and you get a message for every shift he puts you on.</div>
+      <button class="mcr-knop" style="margin-top:10px" onclick="mcrGa('avail')">Fill in my availability</button></div>`;
+    m.innerHTML=uit; return;
+  }
   if(tot){
     // Na deze datum vraagt personeel niet meer zelf; alleen beschikbaarheid (en ruil-shifts).
     const dag=x=>new Date(x+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
