@@ -5741,7 +5741,28 @@ const MB_KOST_CAT=[['inkoop','Inkoop ingrediënten'],['verpakking','Verpakking &
 function mbPosten(n){ return n===1?'1 post':n+' posten'; }
 function mbKostCat(k){ const c=MB_KOST_CAT.find(x=>x[0]===k); return c?c[1]:k; }
 function mbGeld(n,val){ return (val==='EUR'?'€ ':'£ ')+(Number(n)||0).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-let MB_KOST_BEWERK=null, MB_KOST_RIJEN=[], MB_KOST_VAL='GBP', MB_KOST_FILTER='alle', MB_KOST_VAN=null, MB_KOST_TOT=null;
+let MB_KOST_BEWERK=null, MB_KOST_RIJEN=[], MB_KOST_VAL='GBP', MB_KOST_FILTER='alle', MB_KOST_VAN=null, MB_KOST_TOT=null, MB_KOST_ZOEK='';
+// Zoeken in Alle posten: omschrijving, opmerking, betaald via, door, kraam, categorie, bedrag of datum.
+function mbKostZoekSleutel(x){
+  const bedrag=Number(x.bedrag||0);
+  return [x.omschrijving,x.opmerking,x.betaald_via,x.door,x.kraam_id?x.kraam:'algemeen',mbKostCat(x.categorie),
+    bedrag.toFixed(2),bedrag.toFixed(2).replace('.',','),bedrag.toLocaleString('nl-NL',{minimumFractionDigits:2}),
+    x.datum,mbKort(x.datum),x.valuta==='EUR'?'euro €':'pond £'].filter(Boolean).join(' ').toLowerCase();
+}
+function mbKostZoek(w){
+  MB_KOST_ZOEK=w||'';
+  const q=MB_KOST_ZOEK.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let n=0,gbp=0,eur=0;
+  document.querySelectorAll('#mbKostLijst tr[data-zoek]').forEach(tr=>{
+    const ok=!q.length||q.every(t=>tr.dataset.zoek.includes(t));
+    tr.style.display=ok?'':'none';
+    if(ok){ n++; if(tr.dataset.val==='EUR')eur+=Number(tr.dataset.bedrag); else gbp+=Number(tr.dataset.bedrag); }
+  });
+  const tel=document.getElementById('mbKostTeller');
+  if(tel)tel.innerHTML=[mbPosten(n),(gbp||!eur)?veiligTekst(mbGeld(gbp,'GBP')):'',eur?veiligTekst(mbGeld(eur,'EUR')):''].filter(Boolean).join(' &middot; ');
+  const leeg=document.getElementById('mbKostLeeg'); if(leeg)leeg.style.display=n?'none':'';
+  const wis=document.getElementById('mbKostWis'); if(wis)wis.style.display=MB_KOST_ZOEK?'':'none';
+}
 
 async function mbKosten(){
   const [kramen,res]=await Promise.all([mbKramenLijst(), sb.rpc('mcr_kosten_lijst',{p_van:MB_KOST_VAN,p_tot:MB_KOST_TOT})]);
@@ -5826,13 +5847,20 @@ async function mbKosten(){
     const zicht=MB_KOST_FILTER==='alle'?r:(MB_KOST_FILTER==='algemeen'?r.filter(x=>!x.kraam_id):r.filter(x=>x.kraam_id===MB_KOST_FILTER));
     uit+=`<div class="mb-kaart" style="padding:0;overflow-x:auto">
       <div style="padding:14px 16px 8px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-        <span style="font-size:15px;font-weight:700">Alle posten</span>
+        <span style="font-size:15px;font-weight:700">Alle posten <span id="mbKostTeller" style="font-size:12.5px;font-weight:500;color:var(--muted)"></span></span>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;flex:1;justify-content:flex-end">
+        <div style="position:relative;flex:1 1 220px;max-width:320px">
+          <input id="mbKostZoekVeld" class="mb-veld" type="search" autocomplete="off" placeholder="Zoek op omschrijving, kraam, bedrag…"
+            value="${veiligTekst(MB_KOST_ZOEK)}" oninput="mbKostZoek(this.value)" style="width:100%;padding-right:32px">
+          <button id="mbKostWis" type="button" onclick="const z=document.getElementById('mbKostZoekVeld');z.value='';mbKostZoek('');z.focus()"
+            style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:18px;color:var(--muted);cursor:pointer" aria-label="Wissen">&times;</button>
+        </div>
         <select class="mb-getal" style="text-align:left" onchange="MB_KOST_FILTER=this.value;mbNaar('kosten')">
           <option value="alle">Alles</option><option value="algemeen"${MB_KOST_FILTER==='algemeen'?' selected':''}>Algemeen</option>
           ${kramen.map(k=>`<option value="${veiligTekst(k.id)}"${MB_KOST_FILTER===k.id?' selected':''}>${veiligTekst(k.naam)}</option>`).join('')}
-        </select></div>
-      <table class="mb-tabel2"><thead><tr><th>Datum</th><th>Omschrijving</th><th>Kraam</th><th>Categorie</th><th style="text-align:right">Bedrag</th><th></th></tr></thead><tbody>
-      ${zicht.map(x=>`<tr${x.id===MB_KOST_BEWERK?' style="background:#FEF6E7"':''}>
+        </select></div></div>
+      <table class="mb-tabel2" id="mbKostLijst"><thead><tr><th>Datum</th><th>Omschrijving</th><th>Kraam</th><th>Categorie</th><th style="text-align:right">Bedrag</th><th></th></tr></thead><tbody>
+      ${zicht.map(x=>`<tr data-zoek="${veiligTekst(mbKostZoekSleutel(x))}" data-val="${veiligTekst(x.valuta)}" data-bedrag="${Number(x.bedrag||0)}"${x.id===MB_KOST_BEWERK?' style="background:#FEF6E7"':''}>
         <td style="white-space:nowrap;color:var(--muted)">${veiligTekst(mbKort(x.datum))}</td>
         <td>${veiligTekst(x.omschrijving)}
           ${x.opmerking?`<div style="font-size:12px;color:#8A5307;margin-top:2px">${veiligTekst(x.opmerking)}</div>`:''}
@@ -5843,11 +5871,13 @@ async function mbKosten(){
         <td style="white-space:nowrap;text-align:right">
           <button class="mb-mini" onclick="MB_KOST_BEWERK='${veiligJs(x.id)}';mbNaar('kosten')">Bewerken</button>
           <button class="mb-mini rood" onclick="mbKostWeg('${veiligJs(x.id)}')">Weg</button></td></tr>`).join('')}
-      </tbody></table></div>`;
+      </tbody></table>
+      <div id="mbKostLeeg" style="display:none;padding:14px 16px;font-size:13px;color:var(--muted)">Niets gevonden. Pas je zoekwoord aan of kies bij de kraam &ldquo;Alles&rdquo;.</div></div>`;
   }else{
     uit+='<div class="mb-kaart" style="color:var(--muted);font-size:13px">Nog geen kosten in deze periode. Vul hierboven de eerste in.</div>';
   }
   document.getElementById('mbInhoud').innerHTML=uit;
+  mbKostZoek(MB_KOST_ZOEK);
   if(b){ const f=document.getElementById('mbKostForm'); if(f)f.scrollIntoView({block:'start'}); }
 }
 let MB_KOST_LAATSTE_DATUM=null, MB_KOST_LAATSTE_CAT='inkoop', MB_KOST_LAATSTE_VIA='';
