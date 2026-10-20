@@ -5741,6 +5741,35 @@ const MB_KOST_CAT=[['inkoop','Inkoop ingrediënten'],['verpakking','Verpakking &
 function mbPosten(n){ return n===1?'1 post':n+' posten'; }
 function mbKostCat(k){ const c=MB_KOST_CAT.find(x=>x[0]===k); return c?c[1]:k; }
 function mbGeld(n,val){ return (val==='EUR'?'€ ':'£ ')+(Number(n)||0).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+// Btw per kostenpost: bedrag in- of exclusief btw ingevoerd, met het tarief.
+// Euro's: geen / 9% / 21% (Nederland). Ponden: geen / 5% / 20% (VK).
+const MB_BTW_TARIEVEN={EUR:[0,9,21],GBP:[0,5,20]};
+let MB_KOST_BTW=null, MB_KOST_BTWIN='incl';
+function mbBtwStandaard(val){ return val==='EUR'?21:20; }
+function mbBtwKnoppen(){
+  const val=MB_KOST_VAL, lijst=MB_BTW_TARIEVEN[val]||[0];
+  if(MB_KOST_BTW==null||!lijst.includes(Number(MB_KOST_BTW)))MB_KOST_BTW=mbBtwStandaard(val);
+  const kn=(aan,label,klik)=>`<button type="button" class="mb-mini${aan?' zwart':''}" style="padding:9px 12px" onclick="${klik}">${label}</button>`;
+  return `<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+      ${kn(MB_KOST_BTWIN==='incl','Incl. btw',"mbKostBtw(null,'incl')")}${kn(MB_KOST_BTWIN==='excl','Excl. btw',"mbKostBtw(null,'excl')")}
+      <span style="width:10px"></span>
+      ${lijst.map(t=>kn(Number(MB_KOST_BTW)===t,t?t+'%':'Geen btw',`mbKostBtw(${t},null)`)).join('')}
+    </div>`;
+}
+function mbKostBtw(t,inv){
+  if(t!=null)MB_KOST_BTW=t; if(inv)MB_KOST_BTWIN=inv;
+  const el=document.getElementById('mbKbtw'); if(el)el.innerHTML=mbBtwKnoppen();
+  mbKostBtwUitleg();
+}
+function mbKostBtwUitleg(){
+  const el=document.getElementById('mbKbtwUit'); if(!el)return;
+  const n=finGetal((document.getElementById('mbKbedrag')||{}).value);
+  const t=Number(MB_KOST_BTW||0);
+  if(n==null||Number.isNaN(n)||n<=0){ el.textContent=t?`${t}% btw · bedrag is ${MB_KOST_BTWIN==='excl'?'zonder':'met'} btw`:'Geen btw'; return; }
+  const incl=MB_KOST_BTWIN==='excl'?n*(1+t/100):n, ex=MB_KOST_BTWIN==='excl'?n:n/(1+t/100);
+  el.innerHTML=t?`Excl. <b>${veiligTekst(mbGeld(ex,MB_KOST_VAL))}</b> + ${t}% btw ${veiligTekst(mbGeld(incl-ex,MB_KOST_VAL))} = incl. <b>${veiligTekst(mbGeld(incl,MB_KOST_VAL))}</b>`
+                :`Geen btw: ${veiligTekst(mbGeld(n,MB_KOST_VAL))}`;
+}
 let MB_KOST_BEWERK=null, MB_KOST_RIJEN=[], MB_KOST_VAL='GBP', MB_KOST_FILTER='alle', MB_KOST_VAN=null, MB_KOST_TOT=null, MB_KOST_ZOEK='';
 // Zoeken in Alle posten: omschrijving, opmerking, betaald via, door, kraam, categorie, bedrag of datum.
 function mbKostZoekSleutel(x){
@@ -5765,7 +5794,8 @@ function mbKostZoek(w){
 }
 
 async function mbKosten(){
-  const [kramen,res]=await Promise.all([mbKramenLijst(), sb.rpc('mcr_kosten_lijst',{p_van:MB_KOST_VAN,p_tot:MB_KOST_TOT})]);
+  let [kramen,res]=await Promise.all([mbKramenLijst(), sb.rpc('mcr_kosten_lijst2',{p_van:MB_KOST_VAN,p_tot:MB_KOST_TOT})]);
+  if(res.error)res=await sb.rpc('mcr_kosten_lijst',{p_van:MB_KOST_VAN,p_tot:MB_KOST_TOT});
   if(res.error)throw res.error;
   MB_KOST_RIJEN=res.data||[];
   const r=MB_KOST_RIJEN;
@@ -5779,7 +5809,8 @@ async function mbKosten(){
 
   // Invoer
   const b=MB_KOST_BEWERK?r.find(x=>x.id===MB_KOST_BEWERK):null;
-  if(b)MB_KOST_VAL=b.valuta;
+  if(b){ MB_KOST_VAL=b.valuta; MB_KOST_BTWIN=b.btw_invoer||'incl'; MB_KOST_BTW=b.btw_tarief!=null?Number(b.btw_tarief):null; }
+  const bBedrag=b?((b.btw_invoer==='excl'&&b.bedrag_ex!=null)?b.bedrag_ex:b.bedrag):null;
   const vandaag=mbVandaagStr();
   uit+=`<div class="mb-kaart" id="mbKostForm">
     <div class="mb-kop">${b?'Kostenpost bewerken':'Nieuwe kostenpost'}</div>
@@ -5798,13 +5829,18 @@ async function mbKosten(){
                onkeydown="if(event.key==='Enter')mbKostOpslaan()"></div>
       <div style="flex:1 1 120px"><label class="mb-lab">Bedrag</label>
         <input class="mb-veld" id="mbKbedrag" inputmode="decimal" autocomplete="off" placeholder="0,00"
-               value="${b?veiligTekst(Number(b.bedrag).toLocaleString('nl-NL',{minimumFractionDigits:2})):''}" style="text-align:right"
-               onkeydown="if(event.key==='Enter')mbKostOpslaan()"></div>
+               value="${b?veiligTekst(Number(bBedrag).toLocaleString('nl-NL',{minimumFractionDigits:2})):''}" style="text-align:right"
+               oninput="mbKostBtwUitleg()" onkeydown="if(event.key==='Enter')mbKostOpslaan()"></div>
       <div style="flex:0 0 auto"><label class="mb-lab">Valuta</label>
         <div style="display:flex;gap:4px" id="mbKval">
           <button class="mb-mini${MB_KOST_VAL==='GBP'?' zwart':''}" style="padding:9px 14px" onclick="mbKostVal('GBP')">£</button>
           <button class="mb-mini${MB_KOST_VAL==='EUR'?' zwart':''}" style="padding:9px 14px" onclick="mbKostVal('EUR')">€</button>
         </div></div>
+    </div>
+    <div class="mb-veldrij">
+      <div style="flex:1 1 100%"><label class="mb-lab">Btw</label>
+        <div id="mbKbtw">${mbBtwKnoppen()}</div>
+        <div id="mbKbtwUit" style="font-size:12.5px;color:var(--muted);margin-top:6px"></div></div>
     </div>
     <div class="mb-veldrij">
       <div style="flex:1 1 180px"><label class="mb-lab">Betaald via</label>
@@ -5826,8 +5862,10 @@ async function mbKosten(){
     <div style="font-size:24px;font-weight:700;letter-spacing:-.5px;font-variant-numeric:tabular-nums">${v}</div>
     ${sub?`<div style="font-size:12px;color:var(--muted);margin-top:2px">${sub}</div>`:''}</div>`;
   const algGbp=som(r.filter(x=>!x.kraam_id),'GBP');
-  uit+='<div class="mb-rij4">'+tegel('Totaal in ponden',veiligTekst(mbGeld(gbp,'GBP')),mbPosten(r.filter(x=>x.valuta==='GBP').length))
-    +tegel('Totaal in euro\'s',veiligTekst(mbGeld(eur,'EUR')),eur?mbPosten(r.filter(x=>x.valuta==='EUR').length)+' &middot; niet omgerekend':'nog niets in euro\'s')
+  const btwVan=val=>r.filter(x=>x.valuta===val&&x.bedrag_ex!=null).reduce((a,x)=>a+Number(x.bedrag||0)-Number(x.bedrag_ex||0),0);
+  const btwG=btwVan('GBP'), btwE=btwVan('EUR');
+  uit+='<div class="mb-rij4">'+tegel('Totaal in ponden',veiligTekst(mbGeld(gbp,'GBP')),mbPosten(r.filter(x=>x.valuta==='GBP').length)+(btwG?' &middot; waarvan btw '+veiligTekst(mbGeld(btwG,'GBP')):'')+' &middot; incl. btw')
+    +tegel('Totaal in euro\'s',veiligTekst(mbGeld(eur,'EUR')),eur?mbPosten(r.filter(x=>x.valuta==='EUR').length)+(btwE?' &middot; waarvan btw '+veiligTekst(mbGeld(btwE,'EUR')):'')+' &middot; incl. btw, niet omgerekend':'nog niets in euro\'s')
     +tegel('Algemeen',veiligTekst(mbGeld(algGbp,'GBP')),'niet aan één kraam toe te wijzen')+'</div>';
 
   if(r.length){
@@ -5867,7 +5905,8 @@ async function mbKosten(){
           <div style="font-size:11px;color:var(--muted)">${[x.betaald_via?'via '+veiligTekst(x.betaald_via):'',x.door?'door '+veiligTekst(x.door):''].filter(Boolean).join(' &middot; ')}</div></td>
         <td style="white-space:nowrap">${x.kraam_id?`<div style="display:flex;align-items:center;gap:7px">${mbStip(x.kleur)}${veiligTekst(x.kraam)}</div>`:'<span style="color:var(--muted)">Algemeen</span>'}</td>
         <td style="white-space:nowrap;color:var(--muted)">${veiligTekst(mbKostCat(x.categorie))}</td>
-        <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">${veiligTekst(mbGeld(x.bedrag,x.valuta))}</td>
+        <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">${veiligTekst(mbGeld(x.bedrag,x.valuta))}
+          ${x.btw_tarief!=null?`<div style="font-size:11px;font-weight:400;color:var(--muted)">${Number(x.btw_tarief)?'excl. '+veiligTekst(mbGeld(x.bedrag_ex,x.valuta))+' &middot; '+Number(x.btw_tarief)+'%':'geen btw'}</div>`:''}</td>
         <td style="white-space:nowrap;text-align:right">
           <button class="mb-mini" onclick="MB_KOST_BEWERK='${veiligJs(x.id)}';mbNaar('kosten')">Bewerken</button>
           <button class="mb-mini rood" onclick="mbKostWeg('${veiligJs(x.id)}')">Weg</button></td></tr>`).join('')}
@@ -5877,6 +5916,7 @@ async function mbKosten(){
     uit+='<div class="mb-kaart" style="color:var(--muted);font-size:13px">Nog geen kosten in deze periode. Vul hierboven de eerste in.</div>';
   }
   document.getElementById('mbInhoud').innerHTML=uit;
+  mbKostBtwUitleg();
   mbKostZoek(MB_KOST_ZOEK);
   if(b){ const f=document.getElementById('mbKostForm'); if(f)f.scrollIntoView({block:'start'}); }
 }
@@ -5884,6 +5924,7 @@ let MB_KOST_LAATSTE_DATUM=null, MB_KOST_LAATSTE_CAT='inkoop', MB_KOST_LAATSTE_VI
 function mbKostVal(v){
   MB_KOST_VAL=v;
   document.querySelectorAll('#mbKval button').forEach((b,i)=>b.classList.toggle('zwart',(i===0?'GBP':'EUR')===v));
+  mbKostBtw(null,null);
 }
 async function mbKostOpslaan(){
   const uit=document.getElementById('mbKuit');
@@ -5899,8 +5940,9 @@ async function mbKostOpslaan(){
   if(!oms){zeg('Vul een omschrijving in.','#B4472B');return;}
   if(bedrag==null||Number.isNaN(bedrag)||bedrag<=0){zeg('Vul een geldig bedrag in, bv. 245,50.','#B4472B');return;}
   zeg('Opslaan…');
-  const{error}=await sb.rpc('mcr_kosten_zetten',{p_id:MB_KOST_BEWERK,p_datum:datum,p_kraam:kraam,p_categorie:cat,
-    p_omschrijving:oms,p_bedrag:bedrag,p_valuta:MB_KOST_VAL,p_betaald_via:via||null,p_opmerking:opm||null});
+  const{error}=await sb.rpc('mcr_kosten_zetten2',{p_id:MB_KOST_BEWERK,p_datum:datum,p_kraam:kraam,p_categorie:cat,
+    p_omschrijving:oms,p_bedrag:bedrag,p_valuta:MB_KOST_VAL,p_betaald_via:via||null,p_opmerking:opm||null,
+    p_btw_tarief:Number(MB_KOST_BTW||0),p_btw_invoer:MB_KOST_BTWIN});
   if(error){zeg(mbFout(error),'#B4472B');return;}
   MB_KOST_LAATSTE_DATUM=datum; MB_KOST_LAATSTE_CAT=cat; MB_KOST_LAATSTE_VIA=via;
   const wasBewerk=!!MB_KOST_BEWERK; MB_KOST_BEWERK=null;
