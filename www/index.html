@@ -6979,10 +6979,15 @@ async function mbPersoonKaart(id){
     return;
   }
   const b=document.getElementById('mbKaartBinnen'); if(!b)return;
+  MB_KAART={m,info};
   b.innerHTML=mbPersoonKaartHtml(m,rijen,info);
 }
 // Alle gegevens van een persoon in één blok, alleen wat is ingevuld.
+let MB_KAART=null;   // {m, info} van de persoonskaart die open staat
 function mbGegevensHtml(m,info){
+  return `<div id="mbGegevensVak">${mbGegevensLeesHtml(m,info)}</div>`;
+}
+function mbGegevensLeesHtml(m,info){
   const r=[];
   const zet=(l,w)=>{ if(w!==null&&w!==undefined&&String(w).trim()!=='')r.push([l,w]); };
   const adres=[info.straat,[info.postcode,info.plaats].filter(Boolean).join(' ')].filter(x=>x&&String(x).trim()).join(', ');
@@ -7004,11 +7009,79 @@ function mbGegevensHtml(m,info){
   zet('Misgegaan',mis?`<span style="color:#B4472B">${m.niet_gekomen||0}&times; niet gekomen &middot; ${m.afgemeld||0}&times; afgemeld &middot; ${m.te_laat||0}&times; te laat</span>`:'');
   zet('Huisregels',m.huisregels_op?'gelezen op '+veiligTekst(mbDatum(String(m.huisregels_op).slice(0,10))):'<span style="color:#B45309">nog niet gelezen</span>');
   zet('Totaal',m.shifts!=null?`${m.shifts} shifts &middot; ${veiligTekst(mbNum(m.uren||0,1))} uur${m.verdiend?' &middot; '+veiligTekst(mbPondKort(m.verdiend)):''}`:'');
-  if(!r.length)return '';
-  return `<div class="mb-kop" style="margin-top:16px">Gegevens</div>
-    <div style="display:grid;grid-template-columns:max-content 1fr;gap:5px 14px;font-size:13px;line-height:1.45">
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px">
+      <div class="mb-kop" style="margin:0">Gegevens</div>
+      <button class="mb-mini" onclick="mbGegevensBewerk()">Wijzigen</button></div>
+    ${r.length?`<div style="display:grid;grid-template-columns:max-content 1fr;gap:5px 14px;font-size:13px;line-height:1.45;margin-top:8px">
       ${r.map(([l,w])=>`<div style="color:var(--muted);font-size:12px;padding-top:1px">${l}</div><div style="min-width:0;word-break:break-word">${w}</div>`).join('')}
-    </div>`;
+    </div>`:'<div style="font-size:13px;color:var(--muted);margin-top:6px">Nog niets ingevuld.</div>'}`;
+}
+// Bram past alles aan: naam, telefoon, adres, bank, noodcontact, via wie, voorkeuren.
+function mbGegevensBewerk(){
+  const vak=document.getElementById('mbGegevensVak'); if(!vak||!MB_KAART)return;
+  const m=MB_KAART.m, i=MB_KAART.info||{};
+  const jaar=new Date().getFullYear();
+  const via=[...new Set((MB_MENSEN_LIJST||[]).map(x=>(x.aangebracht_door||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const veld=(id,label,waarde,extra,breed)=>`<div style="flex:1 1 ${breed||170}px;min-width:0"><label class="mb-lab" for="mbG_${id}">${label}</label>
+    <input class="mb-veld" id="mbG_${id}" value="${veiligTekst(waarde==null?'':String(waarde))}" ${extra||''}></div>`;
+  const groep=(titel,inhoud)=>`<div style="font-size:11.5px;font-weight:700;color:var(--muted);margin:14px 0 2px">${titel}</div><div class="mb-veldrij">${inhoud}</div>`;
+  vak.innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:16px">
+      <div class="mb-kop" style="margin:0">Gegevens wijzigen</div></div>
+    <div style="border:1px solid var(--border);border-radius:12px;padding:4px 14px 14px;margin-top:8px">
+    ${groep('Persoon',
+      veld('naam','Naam',m.naam,'autocomplete="off"',220)
+      +veld('telefoon','Telefoon',m.telefoon,'type="tel"')
+      +veld('geboortedatum','Geboortedatum',i.geboortedatum||m.geboortedatum?String(i.geboortedatum||m.geboortedatum).slice(0,10):'','type="date"')
+      +`<div style="flex:1 1 200px;min-width:0"><label class="mb-lab">E-mail (inlog)</label><div class="mb-veld vast" style="word-break:break-all">${veiligTekst(m.email||'–')}</div></div>`)}
+    ${groep('Adres',
+      veld('straat','Straat en huisnummer',i.straat,'',220)+veld('postcode','Postcode',i.postcode,'',110)+veld('plaats','Plaats',i.plaats,'',150))}
+    ${groep('Noodcontact',veld('noodcontact_naam','Naam',i.noodcontact_naam)+veld('noodcontact_tel','Telefoon',i.noodcontact_tel,'type="tel"'))}
+    ${groep('Uitbetaling',
+      veld('bank_account','Account number',i.bank_account,'inputmode="numeric"',140)+veld('sort_code','Sort code',i.sort_code,'inputmode="numeric"',110)
+      +veld('iban','IBAN',i.iban,'',200)+veld('utr','UTR',i.utr,'inputmode="numeric"',130))}
+    ${groep('Werk',
+      `<div style="flex:1 1 180px;min-width:0"><label class="mb-lab" for="mbG_aangebracht_door">Aangedragen door</label>
+        <input class="mb-veld" id="mbG_aangebracht_door" list="mbG_vialijst" value="${veiligTekst(m.aangebracht_door||'')}" placeholder="bv. Kirsty, Indeed, flyer">
+        <datalist id="mbG_vialijst">${via.map(v=>`<option value="${veiligTekst(v)}">`).join('')}</datalist></div>`
+      +`<div style="flex:1 1 130px;min-width:0"><label class="mb-lab" for="mbG_werkt_sinds">Werkt sinds</label>
+        <select class="mb-veld" id="mbG_werkt_sinds"><option value="">onbekend</option>${Array.from({length:jaar-2009},(_,k)=>jaar-k).map(j=>`<option value="${j}"${Number(m.werkt_sinds||(MB_ERV[m.id]||{}).werkt_sinds)===j?' selected':''}>${j}</option>`).join('')}</select></div>`
+      +veld('uurloon','Uurloon (£)',m.uurloon!=null?String(m.uurloon).replace('.',','):'','inputmode="decimal"',110)
+      +veld('shirtmaat','Shirtmaat',i.shirtmaat,'',100))}
+    ${groep('Wat hij of zij zelf aangaf',
+      `<div style="flex:1 1 130px;min-width:0"><label class="mb-lab" for="mbG_max_dagen">Max dagen per week</label>
+        <select class="mb-veld" id="mbG_max_dagen"><option value="">geen voorkeur</option>${[1,2,3,4,5,6,7].map(n=>`<option value="${n}"${Number(m.max_dagen)===n?' selected':''}>${n}</option>`).join('')}</select></div>`
+      +veld('vroegste_start','Liefst niet voor',m.vroegste_start?mbUur(m.vroegste_start):'','type="time"',120)
+      +veld('eigen_opmerking','Opmerking',m.eigen_opmerking,'',260))}
+    <div id="mbG_uit" style="font-size:12.5px;margin-top:10px"></div>
+    <div style="display:flex;gap:9px;margin-top:10px">
+      <button class="mb-mini zwart" id="mbG_opslaan" onclick="mbGegevensOpslaan('${veiligJs(m.id)}')">Opslaan</button>
+      <button class="mb-mini" onclick="mbGegevensAnnuleer()">Annuleren</button></div></div>`;
+  const n=document.getElementById('mbG_naam'); if(n)n.focus();
+}
+function mbGegevensAnnuleer(){ const vak=document.getElementById('mbGegevensVak'); if(vak&&MB_KAART)vak.innerHTML=mbGegevensLeesHtml(MB_KAART.m,MB_KAART.info||{}); }
+async function mbGegevensOpslaan(id){
+  const v=k=>{ const el=document.getElementById('mbG_'+k); return el?el.value.trim():''; };
+  const sleutels=['naam','telefoon','geboortedatum','straat','postcode','plaats','noodcontact_naam','noodcontact_tel',
+    'bank_account','sort_code','iban','utr','aangebracht_door','werkt_sinds','uurloon','shirtmaat','max_dagen','vroegste_start','eigen_opmerking'];
+  const g={}; sleutels.forEach(k=>{ if(document.getElementById('mbG_'+k))g[k]=v(k); });
+  const uit=document.getElementById('mbG_uit'), kn=document.getElementById('mbG_opslaan');
+  if(!g.naam){ if(uit)uit.innerHTML='<span style="color:#B4472B">Vul een naam in.</span>'; return; }
+  if(kn){ kn.disabled=true; kn.textContent='Bezig…'; }
+  try{
+    const{error}=await sb.rpc('mcr_persoon_gegevens_zetten',{p_id:id,p_gegevens:g}); if(error)throw error;
+    toast('Gegevens opgeslagen');
+    const res=await sb.rpc('mcr_mensen');
+    if(!res.error&&res.data){
+      const oud={}; (MB_MENSEN_LIJST||[]).forEach(x=>{ oud[x.id]=x.alleen; });
+      MB_MENSEN_LIJST=res.data; MB_MENSEN_LIJST.forEach(x=>{ x.alleen=!!oud[x.id]; });
+    }
+    MB_ERV={}; await mbErvaringLaden();
+    await mbPersoonKaart(id);
+    if(MB_TAB==='mensen'&&document.getElementById('mbZoekMens'))mbMensen().catch(()=>{});
+  }catch(e){
+    if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`;
+    if(kn){ kn.disabled=false; kn.textContent='Opslaan'; }
+  }
 }
 function mbPersoonKaartHtml(m,rijen,info){
   const vandaag=mbVandaagStr();
@@ -7146,7 +7219,9 @@ function mbPersoonHtml(m, vv){
         <div><div style="font-size:16px;font-weight:700">${veiligTekst(m.naam)}</div>
           <div style="font-size:12.5px;color:var(--muted)">${veiligTekst(m.telefoon||'')}${m.email?' &middot; '+veiligTekst(m.email):''}</div></div>
       </div>
-      <button class="mb-mini" onclick="mbPersoonOpen('${veiligJs(m.id)}')">Sluiten</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="mb-mini zwart" onclick="mbPersoonKaart('${veiligJs(m.id)}').then(()=>mbGegevensBewerk())">Gegevens wijzigen</button>
+        <button class="mb-mini" onclick="mbPersoonOpen('${veiligJs(m.id)}')">Sluiten</button></div>
     </div>
 
     <label style="display:flex;align-items:flex-start;gap:9px;margin-top:14px;padding:11px 13px;border:1px solid var(--border);border-radius:12px;cursor:pointer;background:${m.kraammanager?'var(--bg)':'#fff'}">
