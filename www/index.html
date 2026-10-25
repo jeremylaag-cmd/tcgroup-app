@@ -3721,7 +3721,7 @@ async function mbTagScannen(){
 let MB_TAB='overzicht', MB_DATUM=null, MB_WEEK=null, MB_SHIFT=null, MB_KRAAM=null;
 let MB_UREN_TAB='akkoord', MB_INST='kramen', MB_CIJ_VAN=null, MB_CIJ_TOT=null;
 let MB_WEEKRIJEN=null;   // de diensten van de week die nu op het scherm staat
-let MB_DAG_KRAAM=null, MB_KRAMEN=null, MB_INST_DATA=null;
+let MB_DAG_KRAAM=null, MB_KRAMEN=null, MB_INST_DATA=null, MB_DAG_BEOORDEEL=[];
 const MB_WEEKDAGEN=['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
 const MB_TABS=[['overzicht','Overzicht'],['shifts','Shifts'],['agenda','Agenda'],['uren','Uren'],['dagrapport','Dagrapport'],
                ['inlezen','Inlezen'],['cijfers','Cijfers'],['kosten','Kosten'],['bezetting','Bezetting'],
@@ -4159,13 +4159,17 @@ function mpbAv(g){
 }
 function mpbMeta(g){
   const m=MB_PB.M[g]||{}, w=mpbWeekTel(g), d=[];
-  d.push(m.oordeel||'geen oordeel');
+  d.push(m.oordeel||mpbProefTekst(m));
   d.push(mpbNieuw(m)?'nieuw':(m.sinds?'sinds '+m.sinds:'sinds ?'));
   d.push(w===0?'nog geen dienst deze week':w+(w===1?' dienst':' diensten')+' deze week');
   if(m.max_dagen)d.push('wil max '+m.max_dagen+' dagen');
   return veiligTekst(d.join(' · '));
 }
 function mpbNaam(g){ const m=MB_PB.M[g]; return m?m.naam:'Onbekend'; }
+// Zonder beoordeling hooguit 2 Manchester-diensten (de database bewaakt dit ook).
+const MPB_PROEF_MAX=2;
+function mpbProefVol(g,extra){ const m=MB_PB.M[g]; return !!(m&&!m.oordeel&&((m.totaal||0)+(extra||0))>=MPB_PROEF_MAX); }
+function mpbProefTekst(m){ return 'geen oordeel · '+Math.min(m.totaal||0,MPB_PROEF_MAX)+' van '+MPB_PROEF_MAX+' proefdiensten'; }
 // Zijn de dagen van deze week op? (max dagen per week, alleen als het een nieuwe dag is)
 function mpbMaxVol(g,s){ const m=MB_PB.M[g]; if(!m||!m.max_dagen)return false; const d=mpbDagenSet(g); return !d.has(s.datum)&&d.size>=m.max_dagen; }
 
@@ -4312,8 +4316,10 @@ function mpbPaneelHtml(tot){
       else if(kan.st==='deels'||kan.st==='buiten')let_.push('Gaf op: '+mpbKanTekst(kan)+'.');
       if(mpbMaxVol(a.g,s))let_.push('Wil max '+P.M[a.g].max_dagen+' dagen per week en zit daar al aan.');
       if((P.M[a.g]||{}).oordeel==='niet meer')let_.push('Beoordeling: niet meer.');
+      const proef=mpbProefVol(a.g);
+      if(proef)let_.push('Nog geen beoordeling en al '+MPB_PROEF_MAX+' diensten. Geef eerst een beoordeling.');
       const extra=(let_.length?`<div class="mpb-let">${veiligTekst(let_.join(' '))}</div>`:'')+(a.notitie?`<div class="mpb-meta">&ldquo;${veiligTekst(a.notitie)}&rdquo;</div>`:'');
-      uit+=mpbPersoonRij(a.g,extra,(open>0&&!b?`<button class="mb-mini zwart" onclick="mpbIndelen('${sid}','${veiligJs(a.g)}')">Indelen</button>`:'')
+      uit+=mpbPersoonRij(a.g,extra,(open>0&&!b&&!proef?`<button class="mb-mini zwart" onclick="mpbIndelen('${sid}','${veiligJs(a.g)}')">Indelen</button>`:'')
         +`<button class="mb-mini" onclick="mpbAfwijzen('${veiligJs(a.id)}')">Afwijzen</button>`);
     });
   }
@@ -4330,12 +4336,14 @@ function mpbPaneelHtml(tot){
     kunnen.sort(srt); anderen.sort(srt);
     const rij=x=>{
       const let_=[];
+      const proef=mpbProefVol(x.g);
+      if(proef)let_.push('nog geen beoordeling en al '+MPB_PROEF_MAX+' diensten');
       if(mpbMaxVol(x.g,s))let_.push('zit al aan max '+P.M[x.g].max_dagen+' dagen');
       if(mpbDagenSet(x.g).has(s.datum))let_.push('werkt die dag al een andere dienst');
       const vr=(P.M[x.g]||{}).vroegst; if(vr&&mpbMin(vr)>s.st)let_.push('wil het liefst niet voor '+mbUur(vr)+' beginnen');
       return mpbPersoonRij(x.g,`<div class="mpb-meta" style="color:${x.kan.st==='ja'?'#0F7A52':(x.kan.st?'#B45309':'var(--muted)')};font-weight:600">${veiligTekst(mpbKanTekst(x.kan))}</div>`
         +(let_.length?`<div class="mpb-let">${veiligTekst(let_.join(' · '))}</div>`:''),
-        `<button class="mb-mini${x.kan.st==='ja'?' zwart':''}" onclick="mpbIndelen('${sid}','${veiligJs(x.g)}')">Indelen</button>`);
+        proef?'':`<button class="mb-mini${x.kan.st==='ja'?' zwart':''}" onclick="mpbIndelen('${sid}','${veiligJs(x.g)}')">Indelen</button>`);
     };
     uit+='<div class="mpb-sectie groen">Gaven op dat ze kunnen</div>';
     uit+=kunnen.length?kunnen.map(rij).join(''):'<div class="mpb-leeg">Niemand heeft deze dag als beschikbaar opgegeven.</div>';
@@ -4352,6 +4360,10 @@ function mpbPaneelHtml(tot){
 async function mpbIndelen(sid,g){
   const s=MB_PB.S[sid], m=MB_PB.M[g]; if(!s||!m)return;
   const vn=veiligTekst(String(m.naam).split(' ')[0]);
+  if(mpbProefVol(g)&&!s.inn.includes(g)){
+    alert(m.naam+' heeft nog geen beoordeling en staat al op '+MPB_PROEF_MAX+' diensten. Geef eerst een beoordeling (het dagrapport vraagt daar na de eerste dienst om, of via Mensen).');
+    return;
+  }
   const kan=mpbKan(g,s);
   if(kan.st==='nee'||kan.st==='buiten'||kan.st==='deels'){
     const ok=await vraagBevestiging(kan.st==='deels'?'Past maar deels':'Past niet bij de beschikbaarheid',
@@ -4443,7 +4455,7 @@ function mpbWeekHtml(){
   rijen.forEach(x=>{
     uit+=`<tr${x.tel===0&&x.vroeg>0?' class="wacht"':''}><td class="mpb-wie"><div style="display:flex;align-items:center;gap:9px">${mpbAv(x.m.id)}
       <div style="min-width:0"><div class="mpb-wnaam">${mbNaamLink(x.m.id,x.m.naam,'font-size:13.5px;font-weight:600')}</div>
-      <div class="mpb-meta">${veiligTekst((x.m.oordeel||'geen oordeel')+' · '+(mpbNieuw(x.m)?'nieuw':(x.m.sinds?'sinds '+x.m.sinds:'sinds ?'))+(x.m.max_dagen?' · max '+x.m.max_dagen+' d':''))}</div></div></div></td>`;
+      <div class="mpb-meta">${veiligTekst((x.m.oordeel||mpbProefTekst(x.m))+' · '+(mpbNieuw(x.m)?'nieuw':(x.m.sinds?'sinds '+x.m.sinds:'sinds ?'))+(x.m.max_dagen?' · max '+x.m.max_dagen+' d':''))}</div></div></div></td>`;
     x.cellen.forEach(c=>{ uit+=`<td><div class="mpb-cel">${c}</div></td>`; });
     uit+=`<td class="mpb-tot"><div style="font-size:13px;font-weight:700;color:${x.tel?'var(--text)':'#9A4A12'}">${x.tel?x.tel+(x.tel===1?' dienst':' diensten'):'niets'}</div>
       <div class="mpb-meta">${x.tel?'± '+Math.round(x.min/60)+' uur':(x.vroeg?x.vroeg+' gevraagd':'')}</div></td></tr>`;
@@ -4468,6 +4480,7 @@ function mpbKraamCode(k){
 // dan wie deze week het minst heeft, dan hoe lang iemand bij ons werkt.
 // Nooit twee diensten tegelijk, niet op een "kan niet"-dag, niet boven het
 // maximum aantal dagen, en uit beschikbaarheid hooguit één dienst per dag.
+// Zonder beoordeling hooguit MPB_PROEF_MAX diensten in totaal.
 function mpbVoorstel(){
   const P=MB_PB, vandaag=mbVandaagStr();
   const plan={}; P.shifts.forEach(s=>{ plan[s.id]=s.inn.slice(); });
@@ -4478,12 +4491,13 @@ function mpbVoorstel(){
   const botst=(g,s)=>P.shifts.some(x=>x.id!==s.id&&x.datum===s.datum&&plan[x.id].includes(g)&&x.st<s.et&&s.st<x.et);
   const magDag=(g,s)=>{ const m=P.M[g], d=dagen[g]; return !(m&&m.max_dagen&&d&&!d.has(s.datum)&&d.size>=m.max_dagen); };
   const sorteer=(a,b)=>mpbRang(a)-mpbRang(b)||(week[a]||0)-(week[b]||0)||mbErvVergelijk(a,b);
+  const erbij={}, proef=g=>mpbProefVol(g,erbij[g]);
   const uit=[];
-  const zet=(s,g,bron,ook)=>{ plan[s.id].push(g); tel(g,s.datum); uit.push({s,g,bron,aan:true,nr:week[g],ook:ook||[]}); };
+  const zet=(s,g,bron,ook)=>{ plan[s.id].push(g); tel(g,s.datum); erbij[g]=(erbij[g]||0)+1; uit.push({s,g,bron,aan:true,nr:week[g],ook:ook||[]}); };
   volg.forEach(s=>{
     const vragers=s.aanv.map(a=>a.g).filter(g=>!plan[s.id].includes(g));
     const kand=()=>vragers.filter(g=>!plan[s.id].includes(g)&&P.M[g]&&P.M[g].kan&&P.M[g].oordeel!=='niet meer'
-      &&mpbKan(g,s).st!=='nee'&&!botst(g,s)&&magDag(g,s));
+      &&mpbKan(g,s).st!=='nee'&&!botst(g,s)&&magDag(g,s)&&!proef(g));
     kand().filter(g=>MB_PB_UIT[s.id+'|'+g]).forEach(g=>uit.push({s,g,bron:'aanvraag',aan:false}));
     let open=s.nodig-plan[s.id].length;
     while(open>0){
@@ -4494,7 +4508,7 @@ function mpbVoorstel(){
   volg.forEach(s=>{
     let open=s.nodig-plan[s.id].length; if(open<=0)return;
     const kand=()=>P.mensen.filter(m=>m.kan&&m.oordeel!=='niet meer'&&!plan[s.id].includes(m.id)
-      &&mpbKan(m.id,s).st==='ja'&&!(dagen[m.id]&&dagen[m.id].has(s.datum))&&!botst(m.id,s)&&magDag(m.id,s)
+      &&mpbKan(m.id,s).st==='ja'&&!(dagen[m.id]&&dagen[m.id].has(s.datum))&&!botst(m.id,s)&&magDag(m.id,s)&&!proef(m.id)
       &&!(m.vroegst&&mpbMin(m.vroegst)>s.st)).map(m=>m.id);
     kand().filter(g=>MB_PB_UIT[s.id+'|'+g]).forEach(g=>uit.push({s,g,bron:'besch',aan:false}));
     while(open>0){
@@ -4522,6 +4536,7 @@ function mpbVoorstelHtml(){
     <b>Hoe de app kiest.</b> Eerst krijgt elke open plek iemand die erom vroeg; daarna vult de app wat nog open is met wie voor die dag &ldquo;kan&rdquo; heeft opgegeven (voor de hele dienst).
     Binnen elke groep: hoogste beoordeling eerst, bij gelijke beoordeling wie deze week het minst heeft, dan wie het langst bij je werkt.
     Nooit twee diensten tegelijk, nooit op een dag die iemand als &ldquo;kan niet&rdquo; opgaf, en niet boven het aantal dagen dat iemand maximaal wil.
+    Wie nog geen beoordeling heeft, krijgt in totaal hooguit ${MPB_PROEF_MAX} diensten.
     Vink je iemand uit, dan schuift de volgende door. Er verandert niets tot je op de zwarte knop drukt.</div>`;
   uit+=`<div class="mpb-tegels drie">
     <div class="mb-kaart"><div class="mb-groot" style="color:#0B5E3E">${aan.length}</div><div class="mb-klein">plekken die de app invult <span style="white-space:nowrap">(${nVraag} gevraagd, ${nBesch} uit beschikbaarheid)</span></div></div>
@@ -4541,7 +4556,7 @@ function mpbVoorstelHtml(){
       <span>${nAan} ${nAan===1?'voorstel':'voorstellen'}${op.length?' · '+op.reduce((t,x)=>t+x.open,0)+' blijft open':''}</span></div>`;
     voorst.forEach(x=>{
       const s=x.s, k=P.K[s.kraam]||{}, m=P.M[x.g]||{naam:'?'}, key=s.id+'|'+x.g;
-      const waarom=[m.oordeel||'geen oordeel', mpbNieuw(m)?'nieuw':(m.sinds?'sinds '+m.sinds:'sinds ?')];
+      const waarom=[m.oordeel||'geen oordeel (proef)', mpbNieuw(m)?'nieuw':(m.sinds?'sinds '+m.sinds:'sinds ?')];
       if(x.aan)waarom.push(x.nr===1?'1e dienst deze week':x.nr+'e dienst deze week');
       const bron=x.bron==='aanvraag'?'vroeg erom':'gaf op: '+mpbKanTekst(mpbKan(x.g,s));
       const ook=x.ook&&x.ook.length?'Vroegen ook: '+x.ook.map(mpbNaam).join(', '):'';
@@ -5675,9 +5690,12 @@ async function mbDagrapport(){
   if(!kramen.length){ document.getElementById('mbInhoud').innerHTML='<div class="mb-kaart">Er staan nog geen kramen.</div>'; return; }
   if(!MB_DAG_KRAAM||!kramen.some(k=>k.id===MB_DAG_KRAAM))MB_DAG_KRAAM=kramen[0].id;
   if(!MB_DATUM)MB_DATUM=await mbPeil();
-  const{data,error}=await sb.rpc('mcr_dagrapport',{p_van:MB_DATUM,p_tot:MB_DATUM,p_kraam:MB_DAG_KRAAM});
+  const [{data,error},tb]=await Promise.all([
+    sb.rpc('mcr_dagrapport',{p_van:MB_DATUM,p_tot:MB_DATUM,p_kraam:MB_DAG_KRAAM}),
+    sb.rpc('mcr_dag_te_beoordelen',{p_kraam:MB_DAG_KRAAM,p_datum:MB_DATUM}).then(x=>x,()=>({data:[]}))]);
   if(error)throw error;
   const r=(data&&data[0])||null;
+  MB_DAG_BEOORDEEL=(tb&&!tb.error&&Array.isArray(tb.data))?tb.data:[];
 
   let uit=mbKop('Dagrapport &middot; '+veiligTekst(mbLang(MB_DATUM)),
     'Vijf minuten per avond &mdash; de rest staat er al in',
@@ -5700,6 +5718,20 @@ async function mbDagrapport(){
   const vast=(lab,val)=>`<div style="flex:1 1 130px"><label class="mb-lab">${lab} <span style="color:#0F7A52;font-weight:500">vanzelf</span></label>
     <div class="mb-veld vast">${val}</div></div>`;
 
+  if(MB_DAG_BEOORDEEL.length){
+    const n=MB_DAG_BEOORDEEL.length;
+    uit+=`<div class="mb-kaart" id="mbDagBeoordeel" style="background:#FEF6E7;border-color:#F3D9A4">
+      <div class="mb-kop" style="color:#8A5307">Beoordeling invullen</div>
+      <div style="font-size:13px;line-height:1.55;color:#6B4A12;margin-bottom:10px">${n===1?'Deze persoon werkte':'Deze mensen werkten'} vandaag nog zonder beoordeling.
+        Zonder beoordeling kun je iemand op maximaal 2 diensten zetten. Het dagrapport slaat pas op als ${n===1?'de beoordeling is':'alle beoordelingen zijn'} ingevuld.</div>
+      ${MB_DAG_BEOORDEEL.map((p,i)=>`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid #F3D9A4">
+        <div style="flex:1 1 180px;min-width:0"><div>${mbNaamLink(p.id,p.naam,'font-size:14px;font-weight:600')}</div>
+          <div style="font-size:12px;color:#8A5307">${veiligTekst((p.tijden||'')+' · '+(p.diensten===1?'eerste dienst':p.diensten+' diensten ingepland'))}</div></div>
+        <select class="mb-veld" id="mbDB${i}" style="flex:0 1 220px" onchange="this.style.borderColor=''" aria-label="Beoordeling ${veiligTekst(p.naam)}">
+          <option value="">Kies een beoordeling —</option>
+          ${MB_OORDELEN.map(o=>`<option value="${o}">${o}</option>`).join('')}</select></div>`).join('')}
+    </div>`;
+  }
   uit+='<div class="mb-rij2">';
   uit+=`<div class="mb-kaart" style="flex:1;min-width:300px">
     <div class="mb-kop">Wat jij invult</div>
@@ -5758,12 +5790,25 @@ async function mbDagOpslaan(){
   const v=id=>{const e=document.getElementById(id);return e?e.value:null;};
   const n=id=>{const x=v(id);return x===''||x==null?null:Number(x);};
   const leeg=x=>(x==='Kies —'||x==='Geen'||x==='Nee')?null:x;
+  const keuzes=MB_DAG_BEOORDEEL.map((p,i)=>({p,el:document.getElementById('mbDB'+i)}));
+  const mist=keuzes.filter(k=>!k.el||!k.el.value);
+  if(mist.length){
+    mist.forEach(k=>{ if(k.el)k.el.style.borderColor='#B4472B'; });
+    const kaart=document.getElementById('mbDagBeoordeel'); if(kaart)kaart.scrollIntoView({behavior:'smooth',block:'start'});
+    alert('Vul eerst de beoordeling in van: '+mist.map(k=>k.p.naam).join(', ')+'.');
+    return;
+  }
   try{
+    for(const k of keuzes){
+      const{error:eb}=await sb.rpc('mcr_persoon_opslaan',{p_id:k.p.id,p_uurloon:null,p_beoordeling:k.el.value,p_goedkeuren:null,p_kleding:null});
+      if(eb)throw eb;
+    }
     const{error}=await sb.rpc('mcr_dagrapport_opslaan',{
       p_kraam:MB_DAG_KRAAM,p_datum:MB_DATUM,p_forecast:n('mbDF'),p_contant:n('mbDC'),
       p_weer:leeg(v('mbDW')),p_temp:null,p_neerslag:null,p_wachtrij:leeg(v('mbDQ')),
       p_incident:leeg(v('mbDI')),p_event:v('mbDE'),p_voorraad:leeg(v('mbDV')),p_opmerking:v('mbDO')});
     if(error)throw error;
+    if(keuzes.length){ toast(keuzes.length===1?'Beoordeling en dagrapport opgeslagen':'Beoordelingen en dagrapport opgeslagen'); mbNaar('dagrapport'); return; }
     const ok=document.getElementById('mbDagOk'); if(ok){ok.style.display='';setTimeout(()=>ok.style.display='none',2200);}
   }catch(e){ alert(mbFout(e)); }
 }

@@ -149,6 +149,8 @@ begin
      where x.shift_id in (select id from sh) and x.status in ('open','gevraagd')
   ), m as (
     select g.id, g.naam, g.beoordeling, g.werkt_sinds, g.max_dagen_per_week, g.vroegste_start, g.eigen_opmerking,
+           (select count(*)::int from public.klus_gebruikers k2 join public.klussen l2 on l2.id = k2.klus_id
+             where k2.gebruiker_id = g.id and k2.shift_id is not null and l2.kraam_id is not null) as mcr_totaal,
            (coalesce(g.goedgekeurd,false) and g.rol <> 'beheerder' and not coalesce(g.kraammanager,false)
              and g.gearchiveerd_op is null) as kan
       from public.gebruikers g
@@ -181,7 +183,7 @@ begin
     'mensen', coalesce((select jsonb_agg(jsonb_build_object(
                  'id', m.id, 'naam', m.naam, 'oordeel', m.beoordeling, 'sinds', m.werkt_sinds,
                  'max_dagen', m.max_dagen_per_week, 'vroegst', m.vroegste_start,
-                 'opmerking', m.eigen_opmerking, 'kan', m.kan) order by m.naam) from m), '[]'::jsonb),
+                 'opmerking', m.eigen_opmerking, 'kan', m.kan, 'totaal', m.mcr_totaal) order by m.naam) from m), '[]'::jsonb),
     'besch', coalesce((select jsonb_agg(jsonb_build_object(
                  'g', b.gebruiker_id, 'van', b.datum_start, 'tot', coalesce(b.datum_eind, b.datum_start),
                  'soort', b.soort, 'ts', b.tijd_start, 'te', b.tijd_eind))
