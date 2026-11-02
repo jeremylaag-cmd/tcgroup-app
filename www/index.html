@@ -1322,18 +1322,18 @@ textarea.crm-in{resize:vertical;line-height:1.5}
       <button type="button" id="lnkTerugLogin" onclick="showForgotPw(false)" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;margin-top:.5rem;font-family:var(--font);text-decoration:underline;display:block;width:100%;text-align:center">Terug naar inloggen</button>
     </div>
     <div id="nieuwPwForm" style="display:none">
-      <div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:1rem">
+      <div id="nieuwPwUitleg" style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:1rem">
         Kies een nieuw wachtwoord voor je account. Daarna log je er meteen mee in.
       </div>
       <div class="auth-field">
-        <label class="auth-label">Nieuw wachtwoord</label>
-        <input type="password" id="nieuwPw1" placeholder="Minimaal 6 tekens" autocomplete="new-password">
+        <label class="auth-label" id="lblNieuwPw1">Nieuw wachtwoord</label>
+        <input type="password" id="nieuwPw1" placeholder="Minimaal 12 tekens" autocomplete="new-password">
       </div>
       <div class="auth-field">
-        <label class="auth-label">Nog een keer</label>
+        <label class="auth-label" id="lblNieuwPw2">Nog een keer</label>
         <input type="password" id="nieuwPw2" placeholder="Herhaal je wachtwoord" autocomplete="new-password">
       </div>
-      <button class="auth-btn" onclick="bewaarNieuwWachtwoord()">Wachtwoord opslaan</button>
+      <button class="auth-btn" id="btnNieuwPw" onclick="bewaarNieuwWachtwoord()">Wachtwoord opslaan</button>
     </div>
     <div id="registerForm" style="display:none">
       <div class="auth-field"><label class="auth-label">Volledige naam <span style="color:#DC2626">*</span></label><input type="text" id="regNaam" placeholder="Voornaam Achternaam"></div>
@@ -3471,7 +3471,7 @@ async function sbFetch(input,init){
       let detail='', code='';
       try{ const j=await res.clone().json(); detail=j.message||''; code=j.code||''; }catch(e){}
       console.error('Databaseverzoek mislukt',res.status,url,code,detail);
-      if((code==='P0001'||code==='P0002')&&detail){ toast(detail,'fout'); }  // bewuste melding: laat de echte reden zien
+      if((code==='P0001'||code==='P0002')&&detail){ toast(engelsScherm()&&/^niet ingelogd$/i.test(detail)?'You have been signed out. Please sign in again.':detail,'fout'); }  // bewuste melding: laat de echte reden zien
       else if(res.status===401||res.status===403){
         toast(engelsScherm()
           ?'You do not have access to this, or your session has expired. Please sign in again.'
@@ -7779,6 +7779,8 @@ function toonAfgesloten(naam){
 
 function mcrFout(e){
   const m = (e && (e.message||e.hint||e.details)) ? String(e.message||e.hint||e.details) : 'Something went wrong.';
+  if(/^niet ingelogd$/i.test(m.trim()))return 'You have been signed out. Please sign in again.';
+  if(/failed to fetch|load failed|networkerror/i.test(m))return 'No connection to the server. Check your internet and try again.';
   return m.replace(/^.*?:\s*/,'');
 }
 
@@ -9282,7 +9284,7 @@ async function doRegisterMCR(){
 
   const hr=await laadHuisregels();
   const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{naam}}});
-  if(error) return stop(error.message);
+  if(error) return stop(authFoutTekst(error));
   if(data.user){
     // Geen contractvorm meesturen: die mag alleen een beheerder zetten, en de
     // database vult 'zzp' zelf in zodra de vestiging op Manchester staat.
@@ -9346,6 +9348,44 @@ async function wisselVestiging(code){
     if(el)el.style.opacity='1';
     alert('Wisselen van vestiging is niet gelukt. Probeer het nog een keer.');
   }
+}
+
+// ─── Teksten van het inlogscherm: Engels bij de Manchester-ingang ──
+// Het scherm zelf zet pasIngangToe() om; dit zijn de meldingen die er
+// onderweg bij komen (fout in het rood, bevestiging in het groen).
+let AUTH_EN_GEFORCEERD=false;   // nieuw-wachtwoordscherm van een Manchester-account
+function authEn(){ return AUTH_EN_GEFORCEERD || INGANG==='MCR' || TAAL==='en'; }
+function authTekst(nl,en){ return authEn()?en:nl; }
+// Supabase geeft Engelse vaktaal terug ("Invalid login credentials"). Hier
+// maken we er een gewone zin van, in de taal van het scherm.
+function authFoutTekst(error){
+  const code=String((error&&error.code)||''), m=String((error&&error.message)||error||'');
+  const st=error&&error.status;
+  const is=(codes,re)=>codes.includes(code)||(re&&re.test(m));
+  if(is(['invalid_credentials'],/invalid login credentials/i))
+    return authTekst('Onjuist e-mailadres of wachtwoord.','Wrong email address or password.');
+  if(is(['email_not_confirmed'],/email not confirmed/i))
+    return authTekst('Je e-mailadres is nog niet bevestigd. Kijk in je mail (ook bij spam) voor de bevestigingslink.',
+                     'Your email address has not been confirmed yet. Check your email (and your spam folder) for the confirmation link.');
+  if(st===429||is(['over_request_rate_limit','over_email_send_rate_limit'],/rate limit|security purposes|too many/i))
+    return authTekst('Te veel pogingen achter elkaar. Wacht een minuut en probeer het dan opnieuw.',
+                     'Too many attempts in a row. Please wait a minute and try again.');
+  if(is(['user_already_exists','email_exists'],/already registered|already been registered|already exists/i))
+    return authTekst('Er is al een account met dit e-mailadres. Log in, of tik op "Wachtwoord vergeten?".',
+                     'There is already an account with this email address. Sign in, or tap "Forgotten your password?".');
+  if(is(['same_password'],/should be different from the old/i))
+    return authTekst('Kies een ander wachtwoord dan je oude.','Please choose a different password from your old one.');
+  if(is(['weak_password'],/password should|password is too weak|weak password/i))
+    return authTekst('Dit wachtwoord is te zwak. Gebruik minimaal 12 tekens; drie losse woorden achter elkaar werkt goed.',
+                     'This password is too weak. Use at least 12 characters; three random words in a row works well.');
+  if(is(['email_address_invalid','validation_failed'],/invalid format|valid email|email address .* is invalid/i))
+    return authTekst('Dit e-mailadres klopt niet. Kijk het nog even na.','That email address does not look right. Please check it.');
+  if(is(['user_not_found'],/user not found/i))
+    return authTekst('Er is geen account met dit e-mailadres.','There is no account with this email address.');
+  if(/failed to fetch|network|load failed|fetch/i.test(m)||error&&error.name==='AuthRetryableFetchError')
+    return authTekst('Geen verbinding met de server. Controleer je internet en probeer het opnieuw.',
+                     'No connection to the server. Check your internet and try again.');
+  return authTekst('Er ging iets mis: '+m,'Something went wrong. Please try again. ('+m+')');
 }
 
 function switchAuthTab(tab){
@@ -9448,12 +9488,13 @@ async function doForgotPw(){
   const err=document.getElementById('authErr');
   const msg=document.getElementById('authMsg');
   err.style.display='none';msg.style.display='none';
-  if(!email){err.textContent='Vul je e-mailadres in.';err.style.display='block';return;}
-  const{error}=await sb.auth.resetPasswordForEmail(email,{
-    redirectTo:herstelBestemming()
-  });
-  if(error){err.textContent=error.message;err.style.display='block';return;}
-  msg.textContent='Gelukt! Je krijgt een mail met een link. Open die op dit toestel en kies daarna een nieuw wachtwoord.';
+  if(!email){err.textContent=authTekst('Vul je e-mailadres in.','Please fill in your email address.');err.style.display='block';return;}
+  let error=null;
+  try{ ({error}=await sb.auth.resetPasswordForEmail(email,{ redirectTo:herstelBestemming() })); }
+  catch(e){ error=e; }
+  if(error){err.textContent=authFoutTekst(error);err.style.display='block';return;}
+  msg.textContent=authTekst('Gelukt! Je krijgt een mail met een link. Open die op dit toestel en kies daarna een nieuw wachtwoord.',
+    'Done! We have sent you an email with a link. Open it on this phone and choose a new password. Can\'t find it? Check your spam folder.');
   msg.style.display='block';
 }
 
@@ -9464,11 +9505,37 @@ function toonNieuwWachtwoord(){
     const el=document.getElementById(id);if(el)el.style.display='none';
   });
   const tabs=document.querySelector('.auth-tabs');if(tabs)tabs.style.display='none';
-  const sub=document.getElementById('authSub');if(sub)sub.textContent='Kies een nieuw wachtwoord';
+  const ik=document.getElementById('ingangKeuze');if(ik)ik.style.display='none';
   const nieuw=document.getElementById('nieuwPwForm');if(nieuw)nieuw.style.display='';
   const err=document.getElementById('authErr');if(err)err.style.display='none';
   const msg=document.getElementById('authMsg');if(msg)msg.style.display='none';
+  nieuwPwTeksten();
   if(auth)auth.style.display='flex';
+  // De link uit de mail opent vaak in een browser die de ingang niet kent.
+  // Hoort het account bij Manchester, dan alsnog alles in het Engels.
+  (async()=>{
+    try{
+      const{data:{session}}=await sb.auth.getSession(); if(!session)return;
+      const{data}=await sb.from('gebruikers').select('vestiging,taal').eq('id',session.user.id).maybeSingle();
+      if(data&&(data.vestiging==='MCR'||data.taal==='en')){
+        AUTH_EN_GEFORCEERD=true;
+        if(data.vestiging==='MCR'){ INGANG='MCR'; try{localStorage.setItem('tc_ingang','MCR');}catch(e){} pasIngangToe(); }
+        nieuwPwTeksten();
+      }
+    }catch(e){ console.error('Taal voor nieuw wachtwoord bepalen mislukt:',e); }
+  })();
+}
+function nieuwPwTeksten(){
+  const zet=(id,nl,en,attr)=>{ const el=document.getElementById(id); if(!el)return; const t=authTekst(nl,en);
+    if(attr)el.setAttribute(attr,t); else el.textContent=t; };
+  zet('authSub','Kies een nieuw wachtwoord','Choose a new password');
+  zet('nieuwPwUitleg','Kies een nieuw wachtwoord voor je account. Daarna log je er meteen mee in.',
+      'Choose a new password for your account. You will be signed in with it straight away.');
+  zet('lblNieuwPw1','Nieuw wachtwoord','New password');
+  zet('nieuwPw1','Minimaal 12 tekens','At least 12 characters','placeholder');
+  zet('lblNieuwPw2','Nog een keer','Once more');
+  zet('nieuwPw2','Herhaal je wachtwoord','Repeat your password','placeholder');
+  zet('btnNieuwPw','Wachtwoord opslaan','Save password');
 }
 
 async function bewaarNieuwWachtwoord(){
@@ -9479,22 +9546,25 @@ async function bewaarNieuwWachtwoord(){
   const toonFout=t=>{err.textContent=t;err.style.display='block';};
   err.style.display='none';msg.style.display='none';
 
-  if(pw1.length<12){toonFout('Je wachtwoord moet minimaal 12 tekens lang zijn. Drie losse woorden achter elkaar is makkelijk te onthouden en juist heel sterk.');return;}
-  if(pw1!==pw2){toonFout('De twee wachtwoorden zijn niet gelijk.');return;}
+  if(pw1.length<12){toonFout(authTekst('Je wachtwoord moet minimaal 12 tekens lang zijn. Drie losse woorden achter elkaar is makkelijk te onthouden en juist heel sterk.',
+    'Your password needs at least 12 characters. Three random words in a row is easy to remember and very strong.'));return;}
+  if(pw1!==pw2){toonFout(authTekst('De twee wachtwoorden zijn niet gelijk.','The two passwords are not the same.'));return;}
 
   const{data:{session}}=await sb.auth.getSession();
   if(!session){
-    toonFout('De herstellink is verlopen of al gebruikt. Vraag een nieuwe link aan.');
+    toonFout(authTekst('De herstellink is verlopen of al gebruikt. Vraag een nieuwe link aan.',
+      'This reset link has expired or has already been used. Please ask for a new one.'));
     return;
   }
 
-  const{error}=await sb.auth.updateUser({password:pw1});
-  if(error){toonFout('Opslaan mislukt: '+error.message);return;}
+  let error=null;
+  try{ ({error}=await sb.auth.updateUser({password:pw1})); }catch(e){ error=e; }
+  if(error){toonFout(authFoutTekst(error));return;}
 
   // Adres opschonen zodat een herlaadbeurt niet opnieuw in herstelmodus komt.
   try{history.replaceState(null,'',location.pathname+location.search);}catch(e){}
 
-  msg.textContent='Je wachtwoord is gewijzigd. Je wordt nu ingelogd...';
+  msg.textContent=authTekst('Je wachtwoord is gewijzigd. Je wordt nu ingelogd...','Your password has been changed. Signing you in\u2026');
   msg.style.display='block';
   const{data:{user}}=await sb.auth.getUser();
   if(user)await initApp(user);
@@ -9505,8 +9575,10 @@ async function doLogin(){
   const pw=document.getElementById('loginPw').value;
   const err=document.getElementById('authErr');
   err.style.display='none';
-  const{data,error}=await sb.auth.signInWithPassword({email,password:pw});
-  if(error){err.textContent=error.message==='Invalid login credentials'?'Onjuist e-mailadres of wachtwoord':error.message;err.style.display='block';return;}
+  if(!email||!pw){err.textContent=authTekst('Vul je e-mailadres en wachtwoord in.','Please fill in your email address and password.');err.style.display='block';return;}
+  let data=null, error=null;
+  try{ ({data,error}=await sb.auth.signInWithPassword({email,password:pw})); }catch(e){ error=e; }
+  if(error){err.textContent=authFoutTekst(error);err.style.display='block';return;}
   await initApp(data.user);
 }
 
@@ -9550,7 +9622,7 @@ async function doRegister(){
   if(voorstel&&confirm('Klopt je e-mailadres?\n\n'+email+'\n\nBedoel je '+voorstel+' ?\n\nOK = '+voorstel+' gebruiken\nAnnuleren = laten zoals ik het typte')){
     document.getElementById('regEmail').value=voorstel; return doRegister(); }
   const{data,error}=await sb.auth.signUp({email,password:pw,options:{data:{naam}}});
-  if(error){err.textContent=error.message;err.style.display='block';return;}
+  if(error){err.textContent=authFoutTekst(error);err.style.display='block';return;}
   if(data.user){
     const{data:persData}=await sb.from('personeel').select('id').ilike('naam',naam);
     const personeel_id=persData&&persData.length?persData[0].id:null;
