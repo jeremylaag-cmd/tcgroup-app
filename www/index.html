@@ -3886,7 +3886,7 @@ async function mbOverzicht(){
         <div style="display:flex;align-items:center;gap:8px">
           <div style="flex-grow:1;min-width:0">
             <span style="font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbUur(sh.start_tijd))}&ndash;${veiligTekst(sh.eind_tijd?mbUur(sh.eind_tijd):'sluit')}</span>
-            ${sh.shift_naam&&!String(sh.shift_naam).startsWith(mbUur(sh.start_tijd))?`<span style="font-size:12px;color:var(--muted);margin-left:5px">${veiligTekst(sh.shift_naam)}</span>`:''}
+            ${mcrShiftNaam(sh.shift_naam)?`<span style="font-size:12px;color:var(--muted);margin-left:5px">${veiligTekst(mcrShiftNaam(sh.shift_naam))}</span>`:''}
           </div>
           ${sh.aanmeldingen?mbChip(sh.aanmeldingen+' aanvr.','#2A4EA8','#EEF4FF'):''}
           <span class="mb-chip" style="color:${vol?'#0F7A52':'#B45309'};background:${vol?'#F2FBF6':'#FEF6E7'};font-variant-numeric:tabular-nums">${sh.bezet}/${sh.nodig}</span>
@@ -5126,7 +5126,7 @@ async function mbShiftOpen(id){
         <div class="mb-kop" style="margin:0">${sh.kraam?veiligTekst(sh.kraam):'Op deze dienst'}</div>
         ${sh.datum?`<div style="font-size:14px;font-weight:700;color:var(--text);margin-top:2px">
           ${veiligTekst(mbLang(sh.datum))}${shTijd?' &middot; '+veiligTekst(shTijd):''}
-          ${sh.shift_naam?`<span style="font-weight:500;color:var(--muted)"> &middot; ${veiligTekst(sh.shift_naam)}</span>`:''}
+          ${mcrShiftNaam(sh.shift_naam)?`<span style="font-weight:500;color:var(--muted)"> &middot; ${veiligTekst(mcrShiftNaam(sh.shift_naam))}</span>`:''}
         </div>`:''}
       </div>
       <div style="display:flex;gap:6px;flex-shrink:0">
@@ -7738,6 +7738,11 @@ function mcrDagNr(d){ return new Date(String(d)+'T00:00:00').getDate(); }
 function mcrDagKort(d){ return new Date(String(d)+'T00:00:00').toLocaleDateString('en-GB',{weekday:'short'}); }
 function mcrMaandKort(d){ return new Date(String(d)+'T00:00:00').toLocaleDateString('en-GB',{month:'short'}); }
 function mcrTijd(t){ return t ? String(t).slice(0,5) : ''; }
+// Dienstnamen bevatten vaak zelf een tijd ("16:00–close"). De echte tijden staan er
+// al naast, dus toon alleen wat overblijft (bijv. "Chef"), anders niets.
+function mcrShiftNaam(n){
+  return String(n||'').replace(/\d{1,2}[:.]\d{2}\s*[–-]\s*(close|sluit|\d{1,2}[:.]\d{2})/gi,'').replace(/\s+/g,' ').trim();
+}
 function mcrKlok(ts){
   if(!ts)return '';
   return new Date(ts).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false});
@@ -7918,7 +7923,7 @@ async function mcrShifts(){
             <span style="width:8px;height:8px;border-radius:50%;background:${veiligTekst(r.kleur)};flex-shrink:0"></span>
             <span style="font-size:14.5px;font-weight:600;color:#1A1917">${veiligTekst(r.kraam)}</span>
           </div>
-          <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${veiligTekst(mcrTijd(r.start_tijd))} &ndash; ${veiligTekst(mcrTijd(r.eind_tijd))}${r.shift_naam?' &middot; '+veiligTekst(r.shift_naam):''}</div>
+          <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${veiligTekst(mcrTijd(r.start_tijd))} &ndash; ${veiligTekst(mcrTijd(r.eind_tijd))}${mcrShiftNaam(r.shift_naam)?' &middot; '+veiligTekst(mcrShiftNaam(r.shift_naam)):''}</div>
           ${manRegel(r)}
           ${chip?'<div style="margin-top:5px">'+chip+'</div>':''}
           ${ruilHtml(r)}
