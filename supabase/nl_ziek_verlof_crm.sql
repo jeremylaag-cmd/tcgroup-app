@@ -408,3 +408,228 @@ grant execute on function public.crm_opties_herinneren() to service_role;
 -- Elke ochtend om 7:12 UTC (8:12 of 9:12 Nederlandse tijd) klaarzetten. De
 -- herinneringen-functie verstuurt de wachtrij vanaf 8 uur Engelse tijd.
 select cron.schedule('crm-opties-herinneren', '12 7 * * *', $$select public.crm_opties_herinneren();$$);
+
+-- ════════════════════════════════════════════════════════════════════
+-- 3. VERLOF: VEILIG RESTANT MEENEMEN
+-- ════════════════════════════════════════════════════════════════════
+
+-- Wat "restant meenemen" zelf heeft ingevuld. Wijkt beginsaldo_uren daarvan
+-- af, dan heeft iemand het met de hand aangepast en blijft het staan.
+alter table public.verlof_saldo add column if not exists beginsaldo_auto numeric;
+
+-- Eerst kijken: wie krijgt hoeveel mee, en wie wordt overgeslagen en waarom.
+-- Alleen voor een jaar dat voorbij is, en niet voor jaren van vóór de app.
+-- Zonder in-dienstdatum wordt iemand overgeslagen: de opbouw zou dan als een
+-- heel jaar tellen, ook als hij pas later begon. Na het invullen kun je het
+-- gewoon nog een keer doen (meenemen is te herhalen).
+create or replace function public.verlof_restant_voorbeeld(p_jaar integer)
+ returns table(persoon uuid, naam text, restant numeric, beginsaldo_nu numeric, actie text, toelichting text)
+ language plpgsql
+ stable security definer
+ set search_path to 'public'
+as $function$
+#variable_conflict use_column
+declare v_nu int := extract(year from (now() at time zone 'Europe/Amsterdam'))::int;
+        v_eerste int;
+begin
+  if not public.is_beheerder() then
+    raise exception 'Alleen een beheerder kan het restant meenemen.' using errcode='P0002';
+  end if;
+  if p_jaar is null or p_jaar >= v_nu then
+    raise exception 'Het jaar % is nog niet voorbij. Het restant meenemen kan vanaf 1 januari %.', p_jaar, coalesce(p_jaar,v_nu) + 1
+      using errcode='P0002';
+  end if;
+  select least(coalesce((select min(vs.jaar) from public.verlof_saldo vs), v_nu),
+               coalesce((select min(extract(year from b.datum_start))::int from public.beschikbaarheid b where b.verlofsoort <> 'geen'), v_nu))
+    into v_eerste;
+  if p_jaar < v_eerste then
+    raise exception 'Over % hield de app nog geen verlof bij (het eerste jaar is %).', p_jaar, v_eerste using errcode='P0002';
+  end if;
+
+  return query
+  with r as (
+    select v.gebruiker_id, v.naam as nm, round(v.saldo,2) as rest, g.gearchiveerd_op, g.uit_dienst_op, g.in_dienst_op,
+           vs.id as vs_id, vs.beginsaldo_uren as begin_nu, vs.beginsaldo_auto as begin_auto,
+           (vs.id is not null and coalesce(vs.beginsaldo_uren,0) <> 0
+              and vs.beginsaldo_uren is distinct from vs.beginsaldo_auto) as met_de_hand
+      from public.verlof_cijfers(p_jaar) v
+      join public.gebruikers g on g.id = v.gebruiker_id
+      left join public.verlof_saldo vs on vs.gebruiker_id = v.gebruiker_id and vs.jaar = p_jaar + 1
+     where g.in_dienst_op is null or g.in_dienst_op <= make_date(p_jaar,12,31)
+  )
+  select r.gebruiker_id, r.nm, r.rest, r.begin_nu,
+         case when r.gearchiveerd_op is not null
+                or (r.uit_dienst_op is not null and r.uit_dienst_op <= make_date(p_jaar,12,31))
+                or r.met_de_hand or r.in_dienst_op is null then 'overslaan'
+              else 'meenemen' end,
+         case when r.gearchiveerd_op is not null then 'gearchiveerd'
+              when r.uit_dienst_op is not null and r.uit_dienst_op <= make_date(p_jaar,12,31)
+                then 'uit dienst sinds ' || to_char(r.uit_dienst_op,'DD-MM-YYYY')
+              when r.met_de_hand then 'beginsaldo ' || (p_jaar + 1) || ' is met de hand ingevuld ('
+                     || trim(to_char(r.begin_nu,'FM999990.##')) || ' u) en blijft staan'
+              when r.in_dienst_op is null then 'geen in-dienstdatum: vul die eerst in op het profiel'
+              when r.begin_auto is not null then 'eerder meegenomen ('
+                     || trim(to_char(r.begin_auto,'FM999990.##')) || ' u), wordt bijgewerkt'
+              else null end
+    from r
+   order by 5, 2;
+end $function$;
+alter function public.verlof_restant_voorbeeld(integer) owner to postgres;
+revoke all on function public.verlof_restant_voorbeeld(integer) from public, anon;
+grant execute on function public.verlof_restant_voorbeeld(integer) to authenticated, service_role;
+
+-- Zelfde naam en uitkomst als vroeger (oude app-versies blijven werken), maar
+-- nu veilig: alleen een voorbij jaar, niet vóór de app, en een met de hand
+-- ingevuld beginsaldo wordt niet overschreven. Doet precies wat het voorbeeld
+-- met "meenemen" laat zien.
+create or replace function public.verlof_restant_meenemen(p_jaar integer)
+ returns table(persoon uuid, naam text, restant numeric)
+ language plpgsql
+ security definer
+ set search_path to 'public'
+as $function$
+#variable_conflict use_column
+begin
+  -- verlof_restant_voorbeeld doet alle controles (beheerder, jaar voorbij).
+  insert into public.verlof_saldo (gebruiker_id, jaar, beginsaldo_uren, beginsaldo_auto, notitie, bijgewerkt_op)
+  select x.persoon, p_jaar + 1, x.restant, x.restant, 'Restant ' || p_jaar || ' automatisch meegenomen', now()
+    from public.verlof_restant_voorbeeld(p_jaar) x
+   where x.actie = 'meenemen'
+  on conflict (gebruiker_id, jaar) do update
+    set beginsaldo_uren = excluded.beginsaldo_uren,
+        beginsaldo_auto = excluded.beginsaldo_auto,
+        notitie = case when coalesce(public.verlof_saldo.notitie,'') = ''
+                         or public.verlof_saldo.notitie like 'Restant % automatisch meegenomen'
+                       then excluded.notitie else public.verlof_saldo.notitie end,
+        bijgewerkt_op = now();
+
+  return query
+  select x.persoon, x.naam, x.restant
+    from public.verlof_restant_voorbeeld(p_jaar) x
+   where x.actie = 'meenemen'
+   order by x.naam;
+end $function$;
+alter function public.verlof_restant_meenemen(integer) owner to postgres;
+revoke all on function public.verlof_restant_meenemen(integer) from public, anon;
+grant execute on function public.verlof_restant_meenemen(integer) to authenticated, service_role;
+
+-- ════════════════════════════════════════════════════════════════════
+-- 4. VERLOF PER SOORT: WETTELIJK EN BOVENWETTELIJK, MET VERVALDATUM
+-- ════════════════════════════════════════════════════════════════════
+-- Alleen een OVERZICHT: de bestaande saldo's (mijn_verlof, verlof_cijfers,
+-- export) blijven precies zoals ze zijn. Dit laat zien uit welke "potjes" het
+-- saldo bestaat en wanneer elk potje vervalt.
+--
+--  - Wettelijk = 4 × contracturen per week per jaar (naar rato in dienst).
+--    Vervalt op 1 juli van het jaar erna.
+--  - Bovenwettelijk = wat er in het jaarrecht boven die 4 × zit (instelling
+--    "Jaarrecht in uren" op het profiel). Vervalt na 5 jaar (31 december).
+--  - Opnemen gaat eerst van het potje dat het eerst vervalt.
+--  - Beginsaldo van het eerste jaar in de app: telt als wettelijk van het jaar
+--    ervoor (vervalt 1 juli). Met de hand bijgeboekte uren (correctie +) tellen
+--    als bovenwettelijk van dat jaar; afgeboekte uren (correctie -) als opname.
+--  - Een vervallen potje staat er nog wel in, met vervallen = true. Het
+--    saldo in de rest van de app trekt dat (nog) NIET af: zie het rapport.
+create or replace function public.verlof_potjes(p_gebruiker uuid default null)
+ returns table(opbouwjaar integer, soort text, opgebouwd numeric, opgenomen numeric, rest numeric,
+               vervalt_op date, vervallen boolean)
+ language plpgsql
+ stable security definer
+ set search_path to 'public'
+as $function$
+declare
+  v_uid uuid := coalesce(p_gebruiker, public.huidige_gebruiker());
+  g record; vs record; o record;
+  v_peil date := (now() at time zone 'Europe/Amsterdam')::date;
+  v_nu int := extract(year from (now() at time zone 'Europe/Amsterdam'))::int;
+  v_start int; y int; v_contract numeric; v_recht numeric; v_wett numeric; v_factor numeric;
+  v_js date; v_je date; v_pe date;
+  p_jaar int[] := '{}'; p_soort text[] := '{}'; p_op numeric[] := '{}'; p_af numeric[] := '{}'; p_tot date[] := '{}';
+  i int; n int; v_rest numeric; v_neem numeric; v_best int;
+begin
+  if v_uid is null then return; end if;
+  if v_uid <> public.huidige_gebruiker() and not public.is_beheerder() then return; end if;
+  select x.* into g from public.gebruikers x where x.id = v_uid;
+  if not found or not public.is_vaste_kracht(g.rol) then return; end if;
+
+  v_contract := coalesce(g.contract_uren_per_week,0);
+  v_start := coalesce((select min(s.jaar) from public.verlof_saldo s), v_nu);
+  v_start := greatest(v_start, coalesce(extract(year from g.in_dienst_op)::int, v_start), v_nu - 6);
+
+  for y in v_start .. v_nu loop
+    v_js := make_date(y,1,1); v_je := make_date(y,12,31);
+    v_pe := case when y < v_nu then v_je
+                 else least(v_je, (date_trunc('month', v_peil) + interval '1 month' - interval '1 day')::date) end;
+    v_factor := greatest(0, (least(v_pe, coalesce(g.uit_dienst_op, v_je)) - greatest(v_js, coalesce(g.in_dienst_op, v_js))) + 1)::numeric
+                / ((v_je - v_js) + 1);
+    select s.* into vs from public.verlof_saldo s where s.gebruiker_id = v_uid and s.jaar = y;
+    v_recht := coalesce(vs.jaarrecht_uren, v_contract * 4);
+    v_wett  := least(v_recht, v_contract * 4);
+
+    if y = v_start and coalesce(vs.beginsaldo_uren,0) > 0 then
+      p_jaar := p_jaar || (y - 1); p_soort := p_soort || 'beginsaldo'::text;
+      p_op := p_op || vs.beginsaldo_uren; p_af := p_af || 0::numeric; p_tot := p_tot || make_date(y,7,1);
+    end if;
+    p_jaar := p_jaar || y; p_soort := p_soort || 'wettelijk'::text;
+    p_op := p_op || round(v_wett * v_factor, 2); p_af := p_af || 0::numeric; p_tot := p_tot || make_date(y + 1,7,1);
+    p_jaar := p_jaar || y; p_soort := p_soort || 'bovenwettelijk'::text;
+    p_op := p_op || round(greatest(0, v_recht - v_wett) * v_factor
+                          + coalesce((select sum(m.uren) from public.saldo_mutaties m
+                                       where m.gebruiker_id = v_uid and m.jaar = y and m.soort = 'verlof' and m.uren > 0),0), 2);
+    p_af := p_af || 0::numeric; p_tot := p_tot || make_date(y + 5,12,31);
+  end loop;
+  n := coalesce(array_length(p_jaar,1),0);
+
+  -- Opnames in volgorde van datum: goedgekeurde vakantie, afgeboekte uren en
+  -- een negatief beginsaldo.
+  for o in
+    select d, uren from (
+      select b.datum_start as d, coalesce(b.uren,0) as uren
+        from public.beschikbaarheid b
+       where b.gebruiker_id = v_uid and b.verlofsoort = 'vakantie' and b.status = 'goedgekeurd'
+         and b.datum_start >= make_date(v_start,1,1)
+      union all
+      select greatest(make_date(m.jaar,1,1), least(make_date(m.jaar,12,31), (m.aangemaakt_op at time zone 'Europe/Amsterdam')::date)), -m.uren
+        from public.saldo_mutaties m
+       where m.gebruiker_id = v_uid and m.soort = 'verlof' and m.uren < 0 and m.jaar >= v_start
+      union all
+      select make_date(s.jaar,1,1), -s.beginsaldo_uren
+        from public.verlof_saldo s
+       where s.gebruiker_id = v_uid and s.jaar = v_start and s.beginsaldo_uren < 0
+    ) x where x.uren > 0
+    order by d
+  loop
+    v_rest := o.uren;
+    -- Eerst wat het eerst vervalt, en alleen potjes die er op die dag al zijn
+    -- en nog niet vervallen.
+    for i in select k from generate_subscripts(p_jaar,1) k order by p_tot[k], p_jaar[k], k loop
+      exit when v_rest <= 0;
+      if p_tot[i] > o.d and p_jaar[i] <= extract(year from o.d) and p_op[i] - p_af[i] > 0 then
+        v_neem := least(v_rest, p_op[i] - p_af[i]);
+        p_af[i] := p_af[i] + v_neem; v_rest := v_rest - v_neem;
+      end if;
+    end loop;
+    if v_rest > 0 and n > 0 then
+      -- Meer opgenomen dan er was: het tekort komt op het wettelijke potje van
+      -- dat jaar (of het laatste jaar), dat staat dan in de min.
+      v_best := null;
+      for i in 1 .. n loop
+        if p_soort[i] = 'wettelijk' and p_jaar[i] <= extract(year from o.d) then v_best := i; end if;
+      end loop;
+      if v_best is null then v_best := 1; end if;
+      p_af[v_best] := p_af[v_best] + v_rest;
+    end if;
+  end loop;
+
+  for i in 1 .. n loop
+    if p_op[i] <> 0 or p_af[i] <> 0 then
+      opbouwjaar := p_jaar[i]; soort := p_soort[i]; opgebouwd := round(p_op[i],2); opgenomen := round(p_af[i],2);
+      rest := round(p_op[i] - p_af[i],2); vervalt_op := p_tot[i];
+      vervallen := p_tot[i] <= v_peil and p_op[i] - p_af[i] > 0;
+      return next;
+    end if;
+  end loop;
+end $function$;
+alter function public.verlof_potjes(uuid) owner to postgres;
+revoke all on function public.verlof_potjes(uuid) from public, anon;
+grant execute on function public.verlof_potjes(uuid) to authenticated, service_role;

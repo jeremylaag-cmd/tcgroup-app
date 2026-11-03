@@ -18492,7 +18492,10 @@ async function laadMijnVerlof(){
   const el=document.getElementById('mijnVerlof');
   if(!kaart||!el)return;
   try{
-    const{data,error}=await sb.rpc('mijn_verlof',{});
+    const[{data,error},potjes]=await Promise.all([
+      sb.rpc('mijn_verlof',{}),
+      sb.rpc('verlof_potjes',{}).then(r=>r,()=>({data:null})),
+    ]);
     const v=data&&data[0];
     if(error||!v){kaart.style.display='none';return;}
     kaart.style.display='';
@@ -18516,8 +18519,40 @@ async function laadMijnVerlof(){
           <div style="font-size:11.5px;color:var(--muted);margin-top:2px">tot en met deze maand</div>
         </div>
       </div>
-      ${Number(v.ziek_meldingen)>0?`<div style="font-size:11.5px;color:var(--muted);margin-top:9px">${v.ziek_meldingen} ${Number(v.ziek_meldingen)===1?'ziekmelding':'ziekmeldingen'} dit jaar &middot; ${uur(v.ziek_uren)}</div>`:''}`;
+      ${Number(v.ziek_meldingen)>0?`<div style="font-size:11.5px;color:var(--muted);margin-top:9px">${v.ziek_meldingen} ${Number(v.ziek_meldingen)===1?'ziekmelding':'ziekmeldingen'} dit jaar &middot; ${uur(v.ziek_uren)}</div>`:''}
+      ${verlofPotjesHtml((potjes&&!potjes.error&&potjes.data)||[],Number(v.uren_per_dag)||8,true)}`;
   }catch(e){kaart.style.display='none';}
+}
+
+// ── VERLOF PER SOORT (WETTELIJK / BOVENWETTELIJK) ──────────────────────────
+// Uit welke "potjes" bestaat het saldo en wanneer vervallen ze? Wettelijk
+// verlof (4 × je contracturen per week) vervalt op 1 juli van het jaar erna,
+// bovenwettelijk na 5 jaar. Opnemen gaat eerst van wat het eerst vervalt.
+// De database rekent (verlof_potjes); dit tekent alleen.
+const VERLOF_POTJE_NAAM={wettelijk:'Wettelijk',bovenwettelijk:'Bovenwettelijk',beginsaldo:'Meegenomen'};
+function verlofPotjesHtml(rijen,perDag,voorMij){
+  if(!rijen||!rijen.length)return '';
+  const u=n=>Number(n||0).toLocaleString('nl-NL',{maximumFractionDigits:1});
+  const dat=d=>parseDate(d).toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'});
+  const vandaag=fmt(new Date());
+  const zesMnd=fmt(new Date(Date.now()+183*864e5));
+  const open=rijen.filter(r=>!r.vervallen&&Number(r.rest)!==0).sort((a,b)=>String(a.vervalt_op).localeCompare(String(b.vervalt_op)));
+  const weg=rijen.filter(r=>r.vervallen);
+  const binnenkort=open.filter(r=>r.soort!=='bovenwettelijk'&&Number(r.rest)>0&&r.vervalt_op>=vandaag&&r.vervalt_op<=zesMnd);
+  let h='<div style="margin-top:12px;border-top:1px solid var(--border);padding-top:10px">';
+  h+='<div style="font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin-bottom:6px">Per soort</div>';
+  binnenkort.forEach(r=>{
+    h+=`<div style="background:#FEF6E7;color:#92400E;border-radius:9px;padding:8px 10px;font-size:12.5px;margin-bottom:6px;line-height:1.45"><b>${u(r.rest)} uur wettelijk verlof vervalt op ${dat(r.vervalt_op)}.</b> ${voorMij?'Plan het op tijd in, anders ben je het kwijt.':'Zorg dat het op tijd wordt ingepland.'}</div>`;
+  });
+  h+=open.length?open.map(r=>`<div style="display:flex;justify-content:space-between;gap:8px;font-size:12.5px;padding:4px 0">
+      <span>${VERLOF_POTJE_NAAM[r.soort]||veiligTekst(r.soort)} ${r.soort==='beginsaldo'?'van vóór '+(Number(r.opbouwjaar)+1):r.opbouwjaar}</span>
+      <span style="white-space:nowrap"><b style="color:${Number(r.rest)<0?'#B91C1C':'inherit'}">${u(r.rest)} u</b>${perDag?` <span style="color:var(--muted)">(${u(Number(r.rest)/perDag)} d)</span>`:''} <span style="color:var(--muted)">&middot; vervalt ${dat(r.vervalt_op)}</span></span>
+    </div>`).join(''):'<div style="font-size:12.5px;color:var(--muted)">Alles is opgenomen.</div>';
+  weg.forEach(r=>{
+    h+=`<div style="font-size:11.5px;color:var(--muted);padding:3px 0">${u(r.rest)} u ${(VERLOF_POTJE_NAAM[r.soort]||r.soort).toLowerCase()} ${r.opbouwjaar} is vervallen op ${dat(r.vervalt_op)}.</div>`;
+  });
+  h+='</div>';
+  return h;
 }
 
 // Ziek melden. De server zet zelf een melding klaar voor de planners (met de
@@ -18537,12 +18572,52 @@ async function meldZiek(knop){
   }finally{ ZIEK_BEZIG=false; if(knop)knop.disabled=false; }
 }
 
+// Restant meenemen naar het volgende jaar. Veilig: je kiest het jaar, ziet
+// eerst wie hoeveel meekrijgt, het kan alleen voor een jaar dat voorbij is, en
+// een beginsaldo dat met de hand is ingevuld blijft staan (dat bewaakt de
+// database: verlof_restant_voorbeeld / verlof_restant_meenemen).
+let RM_BEZIG=false;
 async function restantMeenemen(){
-  const jaar=new Date().getFullYear()-1;
-  if(!confirm(`Het restant van ${jaar} als beginsaldo voor ${jaar+1} wegschrijven? Een eerder meegenomen restant wordt overschreven.`))return;
-  const{data,error}=await sb.rpc('verlof_restant_meenemen',{p_jaar:jaar});
-  if(error){toast('Mislukt: '+error.message,'fout');return;}
-  toast(`Restant van ${jaar} meegenomen voor ${(data||[]).length} mensen`);
+  if(RM_BEZIG)return;
+  const nu=new Date().getFullYear();
+  const jaren=[]; for(let j=nu-1;j>=Math.max(2026,nu-3);j--)jaren.push(j);
+  if(!jaren.length){
+    await vraagBevestiging('Restant meenemen',
+      `<div style="color:var(--muted)">Er is nog geen jaar afgesloten. Het restant van ${nu} kun je vanaf 1 januari ${nu+1} meenemen.</div>`,'Begrepen');
+    return;
+  }
+  let jaar=jaren[0];
+  if(jaren.length>1){
+    const ok=await vraagBevestiging('Restant meenemen',
+      `<div style="margin-bottom:8px">Van welk jaar wil je het restant meenemen?</div>
+       <select id="rmJaar" style="font-size:14px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;width:100%;font-family:var(--font)">
+         ${jaren.map(j=>`<option value="${j}">${j} &rarr; beginsaldo ${j+1}</option>`).join('')}</select>`,'Voorbeeld bekijken');
+    if(!ok)return;
+    const sel=document.getElementById('rmJaar'); jaar=Number(sel&&sel.value)||jaren[0];
+  }
+  RM_BEZIG=true;
+  try{
+    const{data,error}=await sb.rpc('verlof_restant_voorbeeld',{p_jaar:jaar});
+    if(error){toast(error.message,'fout');return;}
+    const rijen=data||[];
+    const mee=rijen.filter(r=>r.actie==='meenemen'), niet=rijen.filter(r=>r.actie!=='meenemen');
+    const u=n=>uur1(n)+' u';
+    const tabel=lijst=>`<table style="width:100%;border-collapse:collapse;font-size:12.5px">${lijst.map(r=>`<tr style="border-top:1px solid var(--border)">
+        <td style="padding:5px 4px">${veiligTekst(r.naam||'')}${r.toelichting?`<div style="font-size:11px;color:var(--muted)">${veiligTekst(r.toelichting)}</div>`:''}</td>
+        <td style="padding:5px 4px;text-align:right;white-space:nowrap;font-weight:600;color:${Number(r.restant)<0?'#B91C1C':'inherit'}">${u(r.restant)}</td></tr>`).join('')}</table>`;
+    let html=`<div style="color:var(--muted);margin-bottom:8px">Het saldo van eind ${jaar} wordt het beginsaldo van ${jaar+1}.</div>`;
+    if(mee.length)html+=`<div style="font-weight:600;margin:6px 0 2px">Wordt meegenomen</div>${tabel(mee)}`;
+    if(niet.length)html+=`<div style="font-weight:600;margin:12px 0 2px">Wordt overgeslagen</div>${tabel(niet)}`;
+    html=`<div style="max-height:55vh;overflow:auto">${html}</div>`;
+    if(!mee.length){ await vraagBevestiging(`Restant ${jaar}`,html+'<div style="margin-top:8px">Er is niemand om mee te nemen.</div>','Begrepen'); return; }
+    const ok=await vraagBevestiging(`Restant ${jaar} meenemen naar ${jaar+1}`,html,`Meenemen voor ${mee.length} ${mee.length===1?'persoon':'mensen'}`);
+    if(!ok)return;
+    const r=await sb.rpc('verlof_restant_meenemen',{p_jaar:jaar});
+    if(r.error){toast('Mislukt: '+r.error.message,'fout');return;}
+    const n=(r.data||[]).length;
+    toast(`Restant van ${jaar} meegenomen voor ${n} ${n===1?'persoon':'mensen'}`);
+    if(typeof laadVerlofCijfers==='function')laadVerlofCijfers();
+  }finally{ RM_BEZIG=false; }
 }
 
 // De kalender bovenaan en het maandoverzicht hieronder lopen samen op: blader
@@ -19428,11 +19503,13 @@ async function pdRenderVerlof(){
   vak.innerHTML='<div class="spin">Laden...</div>';
   // Eigen ophaalslag met een eigen jaartal, zodat het terugbladeren hier de
   // cijfers op de beschikbaarheidspagina niet omgooit.
-  const[{data:cijfers},{data:pmAlles},{data:mut},{data:saldoRij}]=await Promise.all([
+  const ditJaar=pdVerlofJaar===new Date().getFullYear();
+  const[{data:cijfers},{data:pmAlles},{data:mut},{data:saldoRij},potjes]=await Promise.all([
     sb.rpc('verlof_cijfers',{p_jaar:pdVerlofJaar}),
     sb.rpc('plusmin_cijfers',{p_jaar:pdVerlofJaar}),
     sb.from('saldo_mutaties').select('*').eq('gebruiker_id',u.id).eq('jaar',pdVerlofJaar).order('aangemaakt_op'),
     sb.from('verlof_saldo').select('*').eq('gebruiker_id',u.id).eq('jaar',pdVerlofJaar).maybeSingle(),
+    ditJaar?sb.rpc('verlof_potjes',{p_gebruiker:u.id}).then(r=>r,()=>({data:null})):Promise.resolve({data:null}),
   ]);
   const c=(cijfers||[]).find(x=>x.gebruiker_id===u.id)||null;
 
@@ -19520,11 +19597,15 @@ async function pdRenderVerlof(){
       ${kaart('Ziek',uur1(Number(c.ziek_uren)/perDag)+' d',c.ziek_meldingen+' ziekmelding'+(c.ziek_meldingen===1?'':'en'))}
     </div>
 
+    ${ditJaar?verlofPotjesHtml((potjes&&!potjes.error&&potjes.data)||[],perDag,false):''}
+
     ${Number(c.nog_in_te_delen)>0?`<div class="warn-box show" style="margin-bottom:1rem">Er ${Number(c.nog_in_te_delen)===1?'staat 1 regel':'staan '+c.nog_in_te_delen+' regels'} nog op "nog in te delen". Kies hieronder de soort, anders telt hij nergens in mee.</div>`:''}
 
     <div class="st" style="margin:1.25rem 0 .5rem">Instellingen</div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:.625rem">
       Jaarrecht leeg laten betekent automatisch: contracturen × 4 (bij 40 uur dus 160 uur).
+      Dat deel is wettelijk verlof (vervalt 1 juli van het jaar erna); alles wat je daarboven invult telt als
+      bovenwettelijk (vervalt na 5 jaar)${Number(c.contract_uren)>0&&Number(c.jaarrecht)>Number(c.contract_uren)*4?' — nu '+uur1(Number(c.jaarrecht)-Number(c.contract_uren)*4)+' uur per jaar':''}.
       Opbouw t/m deze maand: ${Math.round(Number(c.opbouw_factor)*100)}% van het jaar.
     </div>
     <div class="two">
