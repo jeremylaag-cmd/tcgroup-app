@@ -521,8 +521,10 @@ begin
              w.aangemaakt_op < (v_nu::date::timestamp at time zone 'Europe/London')
           or not exists (select 1 from public.klus_gebruikers kg where kg.shift_id = w.shift_id and kg.gebruiker_id = w.gebruiker_id)))
       or not exists (select 1 from public.gebruikers g where g.id = w.gebruiker_id and g.push_token is not null and g.gearchiveerd_op is null)
+      or (w.soort = 'nl_crm_optie' and not exists (select 1 from public.klussen k where k.id = w.klus_id and k.is_optie))
       or w.aangemaakt_op < now() - interval '3 days');
-  if v_uur < 8 then return; end if;
+  -- Ziekmeldingen (NL) mogen al vanaf 06:00 Engelse tijd (07:00 in NL).
+  if v_uur < 6 then return; end if;
   return query
   with w as (
     select x.*,
@@ -533,6 +535,7 @@ begin
        -- niet_in/nog_in hoeven niet te wachten: ze zijn al op tijd gemaakt.
        and (x.aangemaakt_op < now() - interval '2 minutes' or x.soort in ('mcr_niet_in','mcr_nog_in'))
        and (v_uur < 22 or x.soort in ('mcr_dag_open','mcr_dag_open_b','mcr_dag_dicht','mcr_nog_in'))
+       and (v_uur >= 8 or x.soort = 'nl_ziek')
   ), g as (
     select w.gebruiker_id, w.soort, array_agg(w.id order by w.id) as ids, count(*)::int as n,
            string_agg(w.regel, E'\n' order by w.id) as regels, bool_and(w.via_ruil) as via_ruil,
@@ -555,6 +558,8 @@ begin
            when 'mcr_niet_in' then case when g.n = 1 then split_part(g.regels, ' ', 1) || ' isn''t clocked in yet'
                                         else g.n || ' people aren''t clocked in yet' end
            when 'mcr_nog_in' then 'You''re still clocked in'
+           when 'nl_ziek' then case when g.n = 1 then 'Ziekmelding' else g.n || ' ziekmeldingen' end
+           when 'nl_crm_optie' then case when g.n = 1 then 'Optie loopt af' else g.n || ' opties lopen af' end
            else 'TC Group' end,
          case g.soort
            when 'mcr_eraf' then 'You''re off the rota for: ' || replace(g.regels, E'\n', '; ')
@@ -576,6 +581,8 @@ begin
               when g.soort in ('mcr_dag_open_b','mcr_dag_dicht') then 'mcr-afsluiting'
               when g.soort = 'mcr_niet_in' then 'mcr-today'
               when g.soort = 'mcr_nog_in' then 'mcr-clock'
+              when g.soort = 'nl_ziek' then 'nl-ziek'
+              when g.soort = 'nl_crm_optie' then 'nl-crm'
               else 'mcr-shifts' end
     from g join public.gebruikers u on u.id = g.gebruiker_id
    where u.push_token is not null;
