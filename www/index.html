@@ -8201,9 +8201,16 @@ async function mcrShiftDetail(id){
 }
 // Zet de shift in de agenda van je telefoon: de link geeft een agenda-bestand
 // (iPhone: "Toevoegen aan agenda"; Android: openen met de agenda-app).
-function mcrShiftAgenda(id){
+// Eerst kijken of het agendabestand er is; zo krijgt niemand een foutpagina
+// als de functie (nog) niet bereikbaar is.
+async function mcrShiftAgenda(id){
   if(!CURRENT_USER||!CURRENT_USER.id)return;
-  mcrOpenLink(SB_URL.replace(/\/$/,'')+'/functions/v1/mcr-agenda?s='+encodeURIComponent(id)+'&u='+encodeURIComponent(CURRENT_USER.id));
+  const url=SB_URL.replace(/\/$/,'')+'/functions/v1/mcr-agenda?s='+encodeURIComponent(id)+'&u='+encodeURIComponent(CURRENT_USER.id);
+  try{
+    const r=await fetch(url,{cache:'no-store'});
+    if(!r.ok||!(r.headers.get('content-type')||'').includes('text/calendar')){ toast('Adding to your calendar isn\'t available yet. Please try again later.','fout'); return; }
+  }catch(e){ toast('No connection. Please try again.','fout'); return; }
+  mcrOpenLink(url);
 }
 function mcrKlokTijd(t){ return t?new Date(t).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):''; }
 async function mcrShiftNietKunnen(id){
@@ -8212,16 +8219,31 @@ async function mcrShiftNietKunnen(id){
   if(document.getElementById('mcrRuil-'+id)){ mcrRuilOpen(id); const el=document.getElementById('mcrRuil-'+id); if(el)el.scrollIntoView({block:'center'}); }
 }
 
-// Shift ruilen: vraag Bram om je shift open te zetten.
-function mcrRuilOpen(shift){
+// Shift ruilen: eerst de manager van die kraam bellen (Bram, 3 nov), daarna
+// vraag je Bram om de shift open te zetten voor iemand anders.
+async function mcrRuilOpen(shift){
   const el=document.getElementById('mcrRuil-'+shift); if(!el)return;
-  el.innerHTML=`<div style="background:#F7F6F2;border:1px solid #E5E3DC;border-radius:11px;padding:11px 12px;margin-top:6px">
-    <div style="font-size:13px;font-weight:600;color:#1A1917">Ask Bram to open this shift for someone else</div>
-    <div style="font-size:12px;color:#6B6A66;margin-top:3px;line-height:1.45">You stay on the rota until Bram finds someone. If it's today or very soon, please call or text Bram as well.</div>
+  el.innerHTML='<div style="font-size:12.5px;color:#6B6A66;margin-top:6px">Loading&hellip;</div>';
+  let d=null;
+  try{ const r=await sb.rpc('mcr_shift_info',{p_shift:shift}); if(!r.error)d=r.data; }catch(e){}
+  const mgr=((d&&d.managers)||[]);
+  const inst=(d&&d.instellingen)||{};
+  const bel=mgr.length
+    ? mgr.map(x=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px">
+        <span style="font-size:13.5px"><b>${veiligTekst(x.naam)}</b> <span style="color:#8A5307">&middot; ${x.soort==='weekend'?'weekend manager':'stall manager'}</span></span>
+        ${x.telefoon?`<a href="tel:${veiligTekst(String(x.telefoon).replace(/[^\d+]/g,''))}" class="mcr-knop" style="width:auto;display:inline-block;padding:8px 14px;font-size:13px;text-decoration:none">Call</a>`:''}</div>`).join('')
+    : `<div style="font-size:13px;margin-top:6px">The stall manager isn't known yet. Call Bram${inst.noodnummer_1?`: ${mcrTelLink(inst.noodnummer_1)}`:''}.</div>`;
+  el.innerHTML=`<div style="background:#FEF6E7;border:1px solid #F3D9A4;border-radius:11px;padding:11px 12px;margin-top:6px">
+    <div style="font-size:14px;font-weight:700;color:#8A5307">Call your stall manager first</div>
+    <div style="font-size:12.5px;color:#8A5307;margin-top:3px;line-height:1.45">Can't make this shift? Call the stall manager now, so the stall isn't left short.</div>
+    ${bel}</div>
+    <div style="background:#F7F6F2;border:1px solid #E5E3DC;border-radius:11px;padding:11px 12px;margin-top:8px">
+    <div style="font-size:13px;font-weight:600;color:#1A1917">Then let Bram know</div>
+    <div style="font-size:12px;color:#6B6A66;margin-top:3px;line-height:1.45">Bram can open your shift for someone else. You stay on the rota until someone takes it over.</div>
     <textarea id="mcrRuilReden-${veiligTekst(shift)}" rows="2" maxlength="200" placeholder="Reason (optional)"
       style="width:100%;margin-top:8px;font-family:var(--font);font-size:14px;padding:8px 10px;border:1px solid #D9D7D0;border-radius:9px;box-sizing:border-box"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="mcr-knop" style="padding:10px 0;font-size:14px" onclick="mcrRuilVraag('${veiligJs(shift)}')">Ask Bram</button>
+      <button class="mcr-knop" style="padding:10px 0;font-size:14px" onclick="mcrRuilVraag('${veiligJs(shift)}')">I called · tell Bram</button>
       <button class="mcr-knop licht" style="padding:10px 0;font-size:14px" onclick="mcrGa('shifts')">Never mind</button></div></div>`;
 }
 async function mcrRuilVraag(shift){
