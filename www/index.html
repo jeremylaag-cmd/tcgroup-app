@@ -6283,7 +6283,7 @@ async function mbLeesBestand(file){
   if(h<0)throw new Error('Dit lijkt geen myPOS-export: de kolom TID ontbreekt.');
   const k=mbKolommen(rijen[h]);
   if(k.tid<0||k.datum<0)throw new Error('De kolommen TID of Datum ontbreken.');
-  const uit=[]; let over=0, geweigerd=0, tid='', naam='', omzet=0;
+  const uit=[]; let over=0, geweigerd=0, tid='', naam='', omzet=0, terug=0, terugBedrag=0;
   for(let i=h+1;i<rijen.length;i++){
     const r=rijen[i];
     const t=String(r[k.tid]||'').trim();
@@ -6292,14 +6292,17 @@ async function mbLeesBestand(file){
     const type=String(r[k.type]||'').trim().toLowerCase();
     const status=String(r[k.status]||'').trim().toLowerCase();
     if(status && !/goedgekeurd|approved/.test(status)){ geweigerd++; continue; }
-    if(type && !/betaling|payment|sale/.test(type)){ over++; continue; }
-    const bedrag=mbGetal(k.transactie>=0?r[k.transactie]:0);
+    // Terugbetaling eerst herkennen: "Terugbetaling" bevat ook "betaling".
+    const isTerug=!!type&&/terug|refund|retour|reversal|storno|void|credit/.test(type);
+    if(type && !isTerug && !/betaling|payment|sale|purchase|aankoop/.test(type)){ over++; continue; }
+    let bedrag=mbGetal(k.transactie>=0?r[k.transactie]:0);
+    if(isTerug){ bedrag=-Math.abs(bedrag); terug++; terugBedrag+=bedrag; }
     tid=t; naam=String(k.naam>=0?r[k.naam]:'').trim(); omzet+=bedrag;
     uit.push({ref:String(r[k.ref]||'').trim()||(t+'-'+dt.dag+'-'+i), tid:t, dag:dt.dag, uur:dt.uur,
       bedrag, kosten:mbGetal(k.afschrift>=0?r[k.afschrift+2]:0), fooi:mbGetal(k.fooi>=0?r[k.fooi]:0),
       merk:String(k.verwerker>=0?r[k.verwerker]:'').trim()});
   }
-  return {rijen:uit, overgeslagen:over, geweigerd, tid, naam, omzet, bestand:file.name};
+  return {rijen:uit, overgeslagen:over, geweigerd, tid, naam, omzet, terug, terugBedrag, bestand:file.name};
 }
 async function mbInlezen(){
   const [kramen,terminals,mp,mt]=await Promise.all([mbKramenLijst(), sb.rpc('terminals_lijst'),
@@ -6349,7 +6352,7 @@ async function mbInlezen(){
       van dat nummer vanzelf op hun plaats.</div></div>
     <div class="mb-kaart"><div class="mb-kop">Wat de app overslaat</div>
     <div style="font-size:12.5px;color:var(--muted);line-height:1.6">
-      Alleen <b style="color:var(--text)">Betaling</b> met status <b style="color:var(--text)">Goedgekeurd</b> telt mee. Terugbetalingen gaan eraf,
+      Alleen <b style="color:var(--text)">Betaling</b> met status <b style="color:var(--text)">Goedgekeurd</b> telt mee. Terugbetalingen worden herkend en van de omzet afgetrokken (ze tellen niet als bon),
       geweigerde transacties tellen niet. Dezelfde transactiereferentie twee keer inlezen kan niet &mdash; je omzet verdubbelt niet.
       Het bestand wordt in je browser gelezen; kaartnummers gaan nooit naar de server.</div></div>
     <div class="mb-kaart"><div class="mb-kop">Forecast inlezen</div>
@@ -6660,8 +6663,9 @@ async function mbImportStart(bestanden){
     t+=`<tr><td style="font-size:12.5px">${veiligTekst(b.bestand)}</td>
       <td>${veiligTekst(b.naam||'')}<div style="font-size:11px;color:var(--muted)">TID ${veiligTekst(b.tid)}</div></td>
       <td>${kr?veiligTekst(kr):'&mdash;'}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(b.omzet))}</td>
-      <td style="text-align:right">${b.rijen.length}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(b.omzet))}
+        ${b.terug?`<div style="font-size:11px;color:#B4472B">${b.terug} terugbetaald (${veiligTekst(mbPond(b.terugBedrag))})</div>`:''}</td>
+      <td style="text-align:right">${b.rijen.length-(b.terug||0)}</td>
       <td>${kr?mbChip('herkend','#0F7A52','#F2FBF6'):mbChip('onbekend','#B45309','#FEF6E7')}</td></tr>`;
   });
   t+='</tbody></table>';
