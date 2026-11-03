@@ -8174,12 +8174,14 @@ async function mcrShiftDetail(id){
       <br><button class="mcr-linkje" style="margin-top:4px;color:#2A4EA8" onclick="mcrOpenLink('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent('${veiligJs(d.adres||d.kraam+', Manchester')}'))">Open in Maps</button>`)}
     ${rij(I.pers,mgr.length?mgr.map(x=>`<b>${veiligTekst(x.naam)}</b> <span style="color:#6B6A66">&middot; ${x.soort==='weekend'?'weekend manager':'stall manager'}</span>${x.telefoon?'<br>'+mcrTelLink(x.telefoon):''}`).join('<div style="height:6px"></div>')
       :'<span style="color:#6B6A66">The stall manager for this day isn\'t known yet.</span>')}
-    ${rij(I.groep,(d.collegas||[]).length?`<span style="color:#6B6A66">Also working that day</span><br>${(d.collegas||[]).map(c=>`${veiligTekst(c.naam)} <span style="color:#6B6A66">${veiligTekst(mcrTijd(c.start))}–${c.eind?veiligTekst(mcrTijd(c.eind)):'close'}</span>`).join('<br>')}`
-      :'<span style="color:#6B6A66">Nobody else is on the rota at this stall that day yet.</span>')}
   </div>`;
   // Voor je dienst
-  const kleding=(kl.polo||kl.schort)?`You have ${[kl.polo?kl.polo+' long sleeve polo'+(kl.polo>1?'s':''):'',kl.schort?kl.schort+' apron'+(kl.schort>1?'s':''):''].filter(Boolean).join(' and ')}. Bring ${(kl.polo||0)+(kl.schort||0)>1?'them':'it'}, clean.`
-    :`You don't have work clothing yet. Ask the stall manager when you arrive (deposit £25 per piece)${kl.maat?'. Your size: '+veiligTekst(kl.maat):''}.`;
+  // Iedereen krijgt een long sleeve polo én een schort (£25 borg per stuk).
+  const maat=kl.maat?` Your size: ${veiligTekst(kl.maat)}.`:'';
+  const kleding=(kl.polo&&kl.schort)?'Wear your long sleeve polo and apron, clean.'
+    :kl.polo?`Wear your long sleeve polo. Ask the stall manager for your apron (£25 deposit).`
+    :kl.schort?`Wear your apron. Ask the stall manager for your long sleeve polo (£25 deposit).${maat}`
+    :`You don't have your work clothing yet. Ask the stall manager when you arrive: you get a long sleeve polo and an apron (£25 deposit each).${maat}`;
   uit+=`<div class="mcr-kaart" style="padding:4px 15px">
     <div class="mcr-kop" style="margin-top:10px">Before your shift</div>
     ${rij(I.klok,`Be at the stall at <b>${veiligTekst(mcrMinMin(start,10))}</b>, 10 minutes before you start.`)}
@@ -8193,8 +8195,15 @@ async function mcrShiftDetail(id){
       <br><button class="mcr-linkje" style="margin-top:4px" onclick="mcrShiftNietKunnen('${veiligJs(d.shift_id)}')">Can't make it?</button>`):''}
     ${rij(I.nood,`In case of emergency: Bram ${mcrTelLink(inst.noodnummer_1||'')}${inst.noodnummer_2?`<br>Extreme emergency: Patrick ${mcrTelLink(inst.noodnummer_2)}`:''}`)}
   </div>
+  ${komend?`<button class="mcr-knop" style="margin-bottom:9px" onclick="mcrShiftAgenda('${veiligJs(d.shift_id)}')">Add to my calendar</button>`:''}
   <button class="mcr-knop licht" onclick="toonHuisregels(true)">Read the house rules</button>`;
   m.innerHTML=uit;
+}
+// Zet de shift in de agenda van je telefoon: de link geeft een agenda-bestand
+// (iPhone: "Toevoegen aan agenda"; Android: openen met de agenda-app).
+function mcrShiftAgenda(id){
+  if(!CURRENT_USER||!CURRENT_USER.id)return;
+  mcrOpenLink(SB_URL.replace(/\/$/,'')+'/functions/v1/mcr-agenda?s='+encodeURIComponent(id)+'&u='+encodeURIComponent(CURRENT_USER.id));
 }
 function mcrKlokTijd(t){ return t?new Date(t).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):''; }
 async function mcrShiftNietKunnen(id){
@@ -9879,18 +9888,23 @@ async function toonHuisregels(alleenLezen,nieuweVersie){
   ov.style.display='flex';
   const hr=await laadHuisregels();
   if(hr){ if(tt)tt.textContent=nieuweVersie?'The house rules have been updated':(hr.titel||'House rules');
-    const nieuw=nieuweVersie&&HR_NIEUW[hr.versie];
-    if(tk)tk.innerHTML=(nieuweVersie?'<div style="margin:0 0 .8rem;padding:10px 12px;background:#FEF6E7;border-radius:8px;color:#8A5307">Please read the house rules again and tap <b>I agree</b> at the bottom. You need to agree before you can carry on.'
-        +(nieuw?'<div style="font-weight:700;margin-top:8px">What\'s new</div><ul style="margin:.2rem 0 0 1.1rem;padding:0">'+nieuw.map(x=>'<li>'+veiligTekst(x)+'</li>').join('')+'</ul>':'')+'</div>':'')
-      +huisregelsNaarHtml(hr.tekst); }
+    if(tk)tk.innerHTML=(nieuweVersie?'<div style="margin:0 0 .8rem;padding:10px 12px;background:#FEF6E7;border-radius:8px;color:#8A5307">Please read all the house rules again. Scroll to the end and tap <b>I agree</b>. You need to agree before you can carry on.</div>':'')
+      +huisregelsNaarHtml(hr.tekst);
+    if(nieuweVersie)hrLeesTotEinde(); }
   else if(tk){ tk.textContent='The house rules could not be loaded. Check your connection and try again.'; }
 }
 function sluitHuisregels(){ const ov=document.getElementById('huisregelsOverlay'); if(ov)ov.style.display='none';
-  const sx=document.getElementById('huisregelsSluit'); if(sx)sx.style.display=''; }
-// Wat er per versie nieuw is (staat bovenaan als iemand opnieuw akkoord moet geven).
-const HR_NIEUW={'2026.3':['All drinks need to be paid for: £0.50 for every drink.',
-  'No free pancakes for friends, family or other market traders. Only the stall manager can do this.',
-  'Work clothing deposit: £25 per piece (long sleeve polo or apron).']};
+  const sx=document.getElementById('huisregelsSluit'); if(sx)sx.style.display='';
+  const kn=document.getElementById('huisregelsKnop'); if(kn){ kn.disabled=false; kn.style.opacity=''; } }
+// Nieuwe versie: "I agree" pas als je helemaal naar beneden hebt gescrold
+// (Bram: sommigen lezen ze amper). Past alles op het scherm, dan meteen.
+function hrLeesTotEinde(){
+  const tk=document.getElementById('huisregelsTekst'), kn=document.getElementById('huisregelsKnop');
+  if(!tk||!kn)return;
+  const klaar=()=>tk.scrollTop+tk.clientHeight>=tk.scrollHeight-24;
+  const zet=()=>{ const ok=klaar(); kn.disabled=!ok; kn.style.opacity=ok?'':'.45'; kn.textContent=ok?'I agree':'Scroll down to read everything'; if(ok)tk.removeEventListener('scroll',zet); };
+  tk.scrollTop=0; tk.addEventListener('scroll',zet); setTimeout(zet,50);
+}
 function akkoordHuisregels(){
   const v=document.getElementById('mcrAkkoord'); if(v)v.checked=true;
   sluitHuisregels();
@@ -22720,6 +22734,13 @@ async function initPushNotifications(){
           if(d.pagina==='mcr-close'){
             const app=document.getElementById('mcrApp');
             if(app&&app.style.display==='flex'&&typeof mcrGa==='function')mcrGa('close');
+            return;
+          }
+          if(typeof d.pagina==='string'&&d.pagina.startsWith('mcr-shift:')){
+            const sid=d.pagina.slice(10);
+            if(/^[0-9a-f-]{36}$/i.test(sid)&&typeof MCR_SHIFT_OPEN!=='undefined')MCR_SHIFT_OPEN=sid;
+            const app=document.getElementById('mcrApp');
+            if(app&&app.style.display==='flex'&&typeof mcrGa==='function')mcrGa('shifts');
             return;
           }
           if(d.pagina==='mcr-shifts'||d.pagina==='mcr-open'){
