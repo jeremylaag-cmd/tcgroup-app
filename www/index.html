@@ -3737,17 +3737,32 @@ function mbPondKort(n){ return '£ '+Math.round(Number(n)||0).toLocaleString('nl
 function mbNum(n,d){ return (Number(n)||0).toLocaleString('nl-NL',{minimumFractionDigits:d==null?1:d,maximumFractionDigits:d==null?1:d}); }
 function mbProcent(n,d){ return mbNum(n,d==null?1:d)+'%'; }
 function mbUur(t){ return t?String(t).slice(0,5):''; }
-function mbKlokT(ts){ return ts?new Date(ts).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit',hour12:false}):''; }
+// Alle tijden in Brits tijd, ook als Brams telefoon op Nederlandse tijd staat.
+const MB_TZ='Europe/London';
+function mbKlokT(ts){ return ts?new Date(ts).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:MB_TZ}):''; }
+// Minuten sinds middernacht, Britse tijd (voor "nog niet binnen" en "aan het werk").
+function mbNuMin(){ const p=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:MB_TZ}).format(new Date()).split(':'); return (+p[0]%24)*60+(+p[1]); }
+// Bedrag uit een invoerveld: "12,50", "12.50", "1.234,50" of "£ 12". NaN als het niet lukt.
+function mbBedragLees(v){ const t=String(v==null?'':v).replace(/[£€\s]/g,'');
+  if(t==='')return null; if(/^-?\d+\.\d{1,2}$/.test(t))return Number(t); return finGetal(t); }
 function mbFout(e){ const m=(e&&(e.message||e.details))?String(e.message||e.details):'Er ging iets mis.'; return m.replace(/^.*?:\s*/,''); }
-function mbVandaagStr(){ return fmt(new Date()); }
+function mbVandaagStr(){ return new Date().toLocaleDateString('en-CA',{timeZone:MB_TZ}); }
 // De markt duurt maar zeven weken. Staat de kalender daarbuiten, dan zou
 // "vandaag" een lege dag zijn; de database geeft dan de eerste marktdag terug.
-let MB_PEIL=null;
+// Na middernacht (Britse tijd) wordt de peildatum opnieuw opgehaald, en springt
+// een scherm dat "vandaag" liet zien mee naar de nieuwe dag (MB_DATUM_AUTO).
+let MB_PEIL=null, MB_PEIL_DAG=null, MB_DATUM_AUTO=null;
 async function mbPeil(){
-  if(!MB_PEIL){ try{ const{data}=await sb.rpc('mcr_peildatum'); MB_PEIL=data||mbVandaagStr(); }
-                catch(e){ MB_PEIL=mbVandaagStr(); } }
+  if(!MB_PEIL||MB_PEIL_DAG!==mbVandaagStr()){ MB_PEIL_DAG=mbVandaagStr();
+    try{ const{data}=await sb.rpc('mcr_peildatum'); MB_PEIL=data||mbVandaagStr(); }
+    catch(e){ MB_PEIL=mbVandaagStr(); } }
   return MB_PEIL;
 }
+async function mbDatumVandaag(){
+  if(!MB_DATUM||(MB_DATUM_AUTO&&MB_DATUM_AUTO!==mbVandaagStr())){ MB_DATUM=await mbPeil(); MB_DATUM_AUTO=mbVandaagStr(); }
+  return MB_DATUM;
+}
+function mbZetDatum(d){ MB_DATUM=d; MB_DATUM_AUTO=null; }
 function mbInit(n){ return String(n||'').split(' ').filter(Boolean).map(x=>x[0]).slice(0,2).join('').toUpperCase(); }
 function mbChip(t,kl,bg){ return `<span class="mb-chip" style="color:${kl};background:${bg}">${veiligTekst(t)}</span>`; }
 function mbStip(kleur){ return `<span style="width:9px;height:9px;border-radius:50%;background:${veiligTekst(kleur)};display:inline-block;flex-shrink:0"></span>`; }
@@ -3818,7 +3833,7 @@ function mbMeer(){
 
 // ── OVERZICHT ─────────────────────────────────────────────────────
 async function mbOverzicht(){
-  if(!MB_DATUM)MB_DATUM=await mbPeil();
+  await mbDatumVandaag();
   const [ovz, wacht, balk, , agd, dag, man, dr] = await Promise.all([
     sb.rpc('mcr_overzicht',{p_datum:MB_DATUM}),
     sb.rpc('mcr_wacht_op_jou'),
@@ -3853,7 +3868,7 @@ async function mbOverzicht(){
     `${MB_DATUM===mbVandaagStr()?'Vandaag &middot; ':''}${veiligTekst(mbLang(MB_DATUM))}`,
     `${w.dag_nummer>0?`Dag ${w.dag_nummer} van ${w.dagen_totaal} &middot; `:''}markt open in Britse tijd`,
     `<button class="mb-mini" onclick="mbDag(-1)">&lsaquo;</button>
-     <input type="date" class="mb-getal" style="width:150px" value="${veiligTekst(MB_DATUM)}" onchange="MB_DATUM=this.value;mbNaar('overzicht')">
+     <input type="date" class="mb-getal" style="width:150px" value="${veiligTekst(MB_DATUM)}" onchange="mbZetDatum(this.value);mbNaar('overzicht')">
      <button class="mb-mini" onclick="mbDag(1)">&rsaquo;</button>
      <button class="mb-mini" onclick="mbNaar('shifts')">Shifts plannen</button>
      <button class="mb-mini zwart" onclick="mbNaar('uren')">Uren accorderen</button>`);
@@ -4062,7 +4077,7 @@ async function mbAfsHeropen(kraam){
 
 function mbDag(stap){
   const d=new Date((MB_DATUM||mbVandaagStr())+'T00:00:00');
-  d.setDate(d.getDate()+stap); MB_DATUM=fmt(d); mbNaar('overzicht');
+  d.setDate(d.getDate()+stap); mbZetDatum(fmt(d)); mbNaar('overzicht');
 }
 
 // ── AGENDA — influencers, leveringen, bezoeken ────────────────────
@@ -5171,7 +5186,7 @@ function mbDagHtml(datum, rijen){
         </div>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="mb-mini" onclick="MB_DATUM='${veiligJs(datum)}';mbNaar('dagrapport')">Dagrapport</button>
+        <button class="mb-mini" onclick="mbZetDatum('${veiligJs(datum)}');mbNaar('dagrapport')">Dagrapport</button>
         <button class="mb-mini" onclick="mbDagDicht()">Sluiten</button>
       </div>
     </div>`;
@@ -5537,57 +5552,187 @@ async function mbUrenGa(k){
   }catch(e){ console.error(e); if(el)el.innerHTML=`<div class="mb-kaart" style="color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
 }
 
+// ── Te accorderen ─────────────────────────────────────────────────
+// Per dag en kraam gegroepeerd. Akkoord haalt alleen die ene rij weg (geen
+// herladen, je blijft waar je was). Wie nu nog werkt staat er als "aan het
+// werk"; pas als de dag voorbij is en er geen eindtijd is, moet jij iets doen.
+// Alle tijden zijn Britse tijd; de server rekent ze om.
+let MB_UREN_RIJEN=[];
+function mbTel(t,stijl){ const n=String(t||'').replace(/[^0-9+]/g,''); return n?`<a href="tel:${veiligTekst(n)}" style="${stijl||'color:#2A4EA8;text-decoration:none;font-weight:600'}">${veiligTekst(t)}</a>`:''; }
+function mbUurWerkt(r){ return !r.uitgeklokt_op && r.datum===mbVandaagStr(); }
+function mbUrenKopZet(){
+  const kop=document.getElementById('mbUrenKop'); if(!kop)return;
+  const rij=MB_UREN_RIJEN, n=rij.filter(r=>r.uitgeklokt_op||r._t).length, werk=rij.filter(mbUurWerkt).length;
+  const verg=rij.filter(r=>!r.uitgeklokt_op&&!r._t&&!mbUurWerkt(r)).length;
+  kop.innerHTML=mbKop('Uren accorderen',
+    `${n} ${n===1?'registratie wacht':'registraties wachten'}${verg?` &middot; <b style="color:#B45309">${verg} zonder eindtijd</b>`:''}${werk?` &middot; ${werk} nu aan het werk`:''}`
+    +' &middot; tijden in Britse tijd &middot; stuk voor stuk, er is bewust geen knop die alles tegelijk goedkeurt');
+}
 async function mbUrenAkkoord(){
-  const{data,error}=await sb.rpc('mcr_uren_open',{p_van:null,p_tot:null});
-  if(error)throw error;
-  const rijen=data||[];
-  const kop=document.getElementById('mbUrenKop');
-  if(kop)kop.innerHTML=mbKop('Uren accorderen',
-    `${rijen.filter(r=>r.uitgeklokt_op).length} registraties wachten &middot; stuk voor stuk, er is bewust geen knop die alles tegelijk goedkeurt`);
-  if(!rijen.length){ mbZet('<div class="mb-kaart">Er wacht niets op akkoord.</div>'); return; }
-  let uit='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2">'
-    +'<thead><tr><th>Wie</th><th>Datum</th><th>Kraam</th><th>Geklokt</th><th>Pauze</th><th>Uren</th><th>Bedrag</th><th></th></tr></thead><tbody>';
-  rijen.forEach(r=>{
-    const id=veiligTekst(r.uren_id);
-    const open=!r.uitgeklokt_op;
-    let let_op='';
-    if(open)let_op='niet uitgeklokt &mdash; vul de eindtijd in';
-    else if(r.te_laat>10)let_op=r.te_laat+' minuten later begonnen dan ingeroosterd';
-    uit+=`<tr>
-      <td><div style="display:flex;align-items:center;gap:9px">
-        <div class="mb-av">${veiligTekst(mbInit(r.naam))}</div>
-        <div><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
-        ${let_op?`<div style="font-size:11.5px;color:#B45309">${veiligTekst(let_op)}</div>`:''}
-        ${r.notitie_pers?`<div style="font-size:11.5px;color:var(--muted)">&ldquo;${veiligTekst(r.notitie_pers)}&rdquo;</div>`:''}
-        ${r.auto_uitgeklokt?`<div style="font-size:11.5px;color:#B4472B;max-width:280px;white-space:normal">Automatisch uitgeklokt na 24 uur &mdash; eindtijd is een schatting, controleer voor je akkoord geeft.</div>`
-          :r.notitie_beh?`<div style="font-size:11.5px;color:var(--muted);max-width:280px;white-space:normal">${veiligTekst(r.notitie_beh)}</div>`:''}</div>
-      </div></td>
-      <td style="white-space:nowrap">${veiligTekst(mbKort(r.datum))}</td>
-      <td><div style="display:flex;align-items:center;gap:7px">${mbStip(r.kleur)}${veiligTekst(r.kraam)}</div></td>
-      <td style="white-space:nowrap;font-variant-numeric:tabular-nums">
-        <input type="time" class="mb-getal" style="width:86px" id="mbUI${id}" value="${veiligTekst(mbKlokT(r.ingeklokt_op))}" title="Begintijd"> &ndash;
-        <input type="time" class="mb-getal" style="width:86px" id="mbUT${id}" value="${open?'':veiligTekst(mbKlokT(r.uitgeklokt_op))}" title="Eindtijd">
-        ${r.uit_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.uit_op))}">eindtijd door ${veiligTekst(r.uit_door)}</div>`:''}</td>
-      <td><input type="number" min="0" max="180" class="mb-getal" style="width:58px" id="mbUP${id}" value="${r.pauze}">
-        ${r.pauze_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.pauze_op))}">door ${veiligTekst(r.pauze_door)}</div>`:''}</td>
-      <td style="font-variant-numeric:tabular-nums;font-weight:600">${open?'&mdash;':veiligTekst(mbNum(r.uren,2))}</td>
-      <td style="font-variant-numeric:tabular-nums">${open?'&mdash;':veiligTekst(mbPond(r.bedrag))}</td>
-      <td style="white-space:nowrap">
-        <button class="mb-mini" title="Bijstellen" onclick="mbUurBijstellen('${veiligJs(r.uren_id)}','${veiligJs(r.datum)}',${open?'true':'false'})">Bijstellen</button>
-        <button class="mb-mini" onclick="mbUurAkkoord('${veiligJs(r.uren_id)}',false)">Vraag</button>
-        ${open?'':`<button class="mb-mini zwart" onclick="mbUurAkkoord('${veiligJs(r.uren_id)}',true)">Akkoord</button>`}
-      </td></tr>`;
-  });
-  uit+='</tbody></table></div>';
+  const [o,v]=await Promise.all([sb.rpc('mcr_uren_open',{p_van:null,p_tot:null}),
+    sb.rpc('mcr_uren_vraag').then(x=>x,()=>({data:[]}))]);
+  if(o.error)throw o.error;
+  MB_UREN_RIJEN=(o.data||[]).slice().sort((a,b)=>String(a.datum).localeCompare(String(b.datum))
+    ||String(a.kraam||'').localeCompare(String(b.kraam||''))||String(a.naam||'').localeCompare(String(b.naam||'')));
+  mbUrenKopZet();
+  let uit=`<div id="mbUrenLijst">${mbUrenTabelHtml()}</div>`;
+  uit+=`<div id="mbVraagBlok">${mbVraagBlokHtml((v&&!v.error&&v.data)||[])}</div>`;
   uit+=`<div class="mb-kaart" style="background:var(--bg)"><div style="font-size:12.5px;color:var(--muted);line-height:1.6">
-    Zodra jij akkoord geeft, kan die persoon de uren op een factuur zetten. Met <b style="color:var(--text)">Vraag</b> zet je de registratie terug
-    en krijgt die persoon een melding met jouw reden &mdash; er verandert niets aan de tijden zonder dat jij het doet.</div></div>`;
+    Zodra jij akkoord geeft, kan die persoon de uren op een factuur zetten. Pas je in een rij de tijden aan, dan slaat
+    <b style="color:var(--text)">Akkoord</b> eerst die tijden op. Met <b style="color:var(--text)">Vraag</b> zet je de registratie apart
+    (bij &ldquo;Uitgezocht&rdquo;) en ziet die persoon jouw vraag in de app &mdash; er verandert niets aan de tijden zonder dat jij het doet.</div></div>`;
   mbZet(uit);
 }
-function mbKlokDatum(t){ return t?new Date(t).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''; }
+function mbUrenTabelHtml(){
+  const rijen=MB_UREN_RIJEN;
+  if(!rijen.length)return '<div class="mb-kaart">Er wacht niets op akkoord.</div>';
+  const groepen=[]; const idx={};
+  rijen.forEach(r=>{ const k=r.datum+'|'+(r.kraam||''); if(!(k in idx)){ idx[k]=groepen.length; groepen.push({k,r,rijen:[]}); } groepen[idx[k]].rijen.push(r); });
+  let uit='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2" id="mbUrenTabel">'
+    +'<thead><tr><th>Wie</th><th>Geklokt (Britse tijd)</th><th>Pauze</th><th>Uren</th><th>Bedrag</th><th></th></tr></thead>';
+  groepen.forEach(g=>{
+    uit+=`<tbody data-groep="${veiligTekst(g.k)}"><tr class="mb-groeprij"><td colspan="6" style="background:var(--bg);padding:8px 12px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700">${mbStip(g.r.kleur)}${veiligTekst(mbLang(g.r.datum))} &middot; ${veiligTekst(g.r.kraam)}
+      <span class="mb-groepteller" style="font-weight:500;color:var(--muted)">${g.rijen.length}</span></div></td></tr>`;
+    g.rijen.forEach(r=>{ uit+=mbUurRijHtml(r); });
+    uit+='</tbody>';
+  });
+  return uit+'</table></div>';
+}
+function mbUurRijHtml(r){
+  const id=veiligTekst(r.uren_id), jid=veiligJs(r.uren_id);
+  const werkt=mbUurWerkt(r), open=!r.uitgeklokt_op&&!r._t;
+  const b=r._b||mbKlokT(r.ingeklokt_op), t=r._t||(r.uitgeklokt_op?mbKlokT(r.uitgeklokt_op):'');
+  let let_op='';
+  if(open&&!werkt)let_op='niet uitgeklokt &mdash; vul de eindtijd in';
+  else if(r.te_laat>10)let_op=r.te_laat+' minuten later begonnen dan ingeroosterd';
+  const naam=`<div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(r.naam))}</div>
+      <div><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
+      ${let_op?`<div style="font-size:11.5px;color:#B45309">${let_op}</div>`:''}
+      ${r.notitie_pers?`<div style="font-size:11.5px;color:var(--muted)">&ldquo;${veiligTekst(r.notitie_pers)}&rdquo;</div>`:''}
+      ${r.auto_uitgeklokt?`<div style="font-size:11.5px;color:#B4472B;max-width:280px;white-space:normal">Automatisch uitgeklokt na 24 uur &mdash; eindtijd is een schatting, controleer voor je akkoord geeft.</div>`
+        :r.notitie_beh?`<div style="font-size:11.5px;color:var(--muted);max-width:280px;white-space:normal">${veiligTekst(r.notitie_beh)}</div>`:''}</div></div>`;
+  if(werkt){
+    return `<tr id="mbUR${id}"><td>${naam}</td>
+      <td colspan="4"><span class="mb-chip" style="color:#0F7A52;background:#F2FBF6">aan het werk sinds ${veiligTekst(b)}</span>
+        ${r.ingeroosterd?`<span style="font-size:11.5px;color:var(--muted);margin-left:6px">ingeroosterd ${veiligTekst(mbUur(r.ingeroosterd))}</span>`:''}</td>
+      <td style="font-size:11.5px;color:var(--muted);white-space:nowrap">na uitklokken te accorderen</td></tr>`;
+  }
+  return `<tr id="mbUR${id}">
+    <td>${naam}</td>
+    <td style="white-space:nowrap;font-variant-numeric:tabular-nums">
+      <input type="time" class="mb-getal" style="width:86px" id="mbUI${id}" data-oud="${veiligTekst(b)}" value="${veiligTekst(b)}" title="Begintijd (Britse tijd)" oninput="mbUurGewijzigd('${jid}')"> &ndash;
+      <input type="time" class="mb-getal" style="width:86px" id="mbUT${id}" data-oud="${veiligTekst(t)}" value="${veiligTekst(t)}" title="Eindtijd (Britse tijd)" oninput="mbUurGewijzigd('${jid}')">
+      ${r.uit_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.uit_op))}">eindtijd door ${veiligTekst(r.uit_door)}</div>`:''}</td>
+    <td><input type="number" min="0" max="180" class="mb-getal" style="width:58px" id="mbUP${id}" data-oud="${veiligTekst(r.pauze)}" value="${veiligTekst(r.pauze)}" oninput="mbUurGewijzigd('${jid}')">
+      ${r.pauze_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.pauze_op))}">door ${veiligTekst(r.pauze_door)}</div>`:''}</td>
+    <td style="font-variant-numeric:tabular-nums;font-weight:600">${open?'&mdash;':veiligTekst(mbNum(r.uren,2))}</td>
+    <td style="font-variant-numeric:tabular-nums">${open?'&mdash;':veiligTekst(mbPond(r.bedrag))}</td>
+    <td style="white-space:nowrap">
+      <button class="mb-mini" onclick="mbUurBijstellen('${jid}')">Bijstellen</button>
+      ${open?'':`<button class="mb-mini" onclick="mbUurAkkoord('${jid}',false)">Vraag</button>`}
+      <button class="mb-mini zwart" id="mbUA${id}" onclick="mbUurAkkoord('${jid}',true)">${open?'Eindtijd + akkoord':'Akkoord'}</button>
+      <div id="mbUM${id}" style="font-size:11px;color:#B45309;margin-top:3px;display:none;white-space:normal;max-width:200px">Tijden aangepast: Akkoord slaat ze eerst op.</div>
+    </td></tr>`;
+}
+function mbUurInvoer(id){
+  const g=x=>document.getElementById(x+id);
+  const bi=g('mbUI'), ti=g('mbUT'), pi=g('mbUP');
+  const b=bi?bi.value:'', t=ti?ti.value:'', pa=pi?(parseInt(pi.value,10)||0):0;
+  const gewijzigd=!!(bi&&ti&&pi)&&(b!==bi.dataset.oud||t!==ti.dataset.oud||String(pa)!==String(parseInt(pi.dataset.oud,10)||0));
+  return {b,t,pa,gewijzigd};
+}
+function mbUurGewijzigd(id){
+  const inv=mbUurInvoer(id), tr=document.getElementById('mbUR'+id), m=document.getElementById('mbUM'+id);
+  if(tr)tr.style.background=inv.gewijzigd?'#FFFBEB':'';
+  if(m)m.style.display=inv.gewijzigd?'':'none';
+}
+function mbUurKnoppen(id,aan){ const tr=document.getElementById('mbUR'+id); if(tr)tr.querySelectorAll('button,input').forEach(b=>b.disabled=!aan); }
+function mbUurRijWeg(id){
+  MB_UREN_RIJEN=MB_UREN_RIJEN.filter(r=>r.uren_id!==id);
+  const tr=document.getElementById('mbUR'+id);
+  if(tr){ const tb=tr.parentNode; tr.remove();
+    const over=tb.querySelectorAll('tr[id^="mbUR"]').length;
+    if(!over)tb.remove(); else { const t=tb.querySelector('.mb-groepteller'); if(t)t.textContent=over; } }
+  if(!MB_UREN_RIJEN.length){ const l=document.getElementById('mbUrenLijst'); if(l)l.innerHTML=mbUrenTabelHtml(); }
+  mbUrenKopZet();
+}
+// Tijden (en pauze) opslaan in Britse tijd; met akkoord=true meteen goedkeuren.
+async function mbUurTijden(id,akkoord){
+  const r=MB_UREN_RIJEN.find(x=>x.uren_id===id); if(!r)return;
+  const inv=mbUurInvoer(id);
+  if(!inv.b||!inv.t){ alert(akkoord&&!inv.t?'Vul eerst de eindtijd in.':'Vul een begin- en eindtijd in.'); return; }
+  if(inv.b===inv.t){ alert('Begin- en eindtijd zijn hetzelfde ('+inv.b+'). Pas eerst een van de twee aan.'); return; }
+  let volgende=false;
+  if(inv.t<inv.b){
+    const ok=await vraagBevestiging('Eindtijd ligt vóór de begintijd',
+      `${veiligTekst(inv.b)} tot ${veiligTekst(inv.t)}: is dit een nachtdienst die de volgende dag eindigt?`,'Ja, volgende dag');
+    if(!ok)return; volgende=true;
+  }
+  mbUurKnoppen(id,false);
+  const{error}=await sb.rpc('mcr_uur_tijden_londen',{p_uren:id,p_in:inv.b,p_uit:inv.t,p_pauze:inv.pa,p_volgende_dag:volgende,p_akkoord:!!akkoord});
+  if(error){ mbUurKnoppen(id,true); alert(mbFout(error)); return; }
+  if(akkoord){ toast(inv.gewijzigd?'Tijden opgeslagen en akkoord':'Akkoord'); mbUurRijWeg(id); return; }
+  // Alleen deze rij bijwerken.
+  const [hb,mb]=inv.b.split(':').map(Number), [ht,mt]=inv.t.split(':').map(Number);
+  const min=Math.max(0,(ht*60+mt+(volgende?1440:0))-(hb*60+mb)-inv.pa);
+  Object.assign(r,{_b:inv.b,_t:inv.t,pauze:inv.pa,uren:Math.round(min/60*100)/100,
+    bedrag:Math.round(min/60*(Number(r.tarief)||0)*100)/100,status:r.status==='lopend'?'wacht':r.status});
+  const tr=document.getElementById('mbUR'+id); if(tr)tr.outerHTML=mbUurRijHtml(r);
+  mbUrenKopZet(); toast('Tijden aangepast');
+}
+async function mbUurBijstellen(id){ return mbUurTijden(id,false); }
+async function mbUurAkkoord(id,ja){
+  const r=MB_UREN_RIJEN.find(x=>x.uren_id===id);
+  const inv=mbUurInvoer(id);
+  if(ja){
+    if(inv.gewijzigd||(r&&!r.uitgeklokt_op&&!r._t))return mbUurTijden(id,true);
+    mbUurKnoppen(id,false);
+    const{error}=await sb.rpc('mcr_uur_akkoord',{p_uren:id,p_akkoord:true,p_notitie:null});
+    if(error){ mbUurKnoppen(id,true); alert(mbFout(error)); return; }
+    toast('Akkoord'); mbUurRijWeg(id); return;
+  }
+  if(inv.gewijzigd){ alert('Je hebt in deze rij tijden aangepast. Sla die eerst op met Bijstellen (of zet ze terug); daarna kun je een vraag stellen.'); return; }
+  const reden=prompt('Wat wil je vragen of waarom klopt dit niet? Die persoon ziet dit in de app.'); if(reden===null)return;
+  mbUurKnoppen(id,false);
+  const{error}=await sb.rpc('mcr_uur_akkoord',{p_uren:id,p_akkoord:false,p_notitie:reden});
+  if(error){ mbUurKnoppen(id,true); alert(mbFout(error)); return; }
+  toast('Vraag gesteld · staat nu bij Uitgezocht'); mbUurRijWeg(id); mbVraagHerlaad();
+}
+// ── Uitgezocht / wacht op antwoord ────────────────────────────────
+// Registraties waar Bram een vraag over stelde ('afgewezen' in de database).
+// In de betaalronde tellen ze als open; terugzetten maakt ze weer te accorderen.
+function mbVraagBlokHtml(rijen){
+  if(!rijen.length)return '';
+  let uit=`<div class="mb-kaart" style="border:1.5px solid #F3D9A4"><div class="mb-kop" style="color:#8A5307">Uitgezocht &middot; wacht op antwoord (${rijen.length})</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:6px">Hier stelde jij een vraag over. Ze tellen in de betaalronde als <b>open</b>
+      en komen pas op een factuur als je ze weer accordeert.</div>`;
+  rijen.forEach(r=>{
+    uit+=`<div class="mb-persoon" style="flex-wrap:wrap" id="mbVR${veiligTekst(r.uren_id)}">
+      ${mbStip(r.kleur)}
+      <div style="flex:1 1 200px;min-width:0"><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)} ${r.telefoon?'<span style="font-weight:400;font-size:12px">&middot; '+mbTel(r.telefoon)+'</span>':''}</div>
+        <div style="font-size:11.5px;color:var(--muted)">${veiligTekst(mbLang(r.datum))} &middot; ${veiligTekst(r.kraam)} &middot;
+          ${veiligTekst(mbKlokT(r.ingeklokt_op))}&ndash;${veiligTekst(mbKlokT(r.uitgeklokt_op))}, pauze ${r.pauze} min &middot; ${veiligTekst(mbNum(r.uren,2))} u</div>
+        <div style="font-size:12.5px;margin-top:3px"><span style="color:var(--muted)">Jouw vraag:</span> ${r.vraag?veiligTekst(r.vraag):'<i style="color:var(--muted)">geen tekst</i>'}</div>
+        ${r.notitie_pers?`<div style="font-size:12.5px"><span style="color:var(--muted)">Notitie van ${veiligTekst(String(r.naam).split(' ')[0])}:</span> ${veiligTekst(r.notitie_pers)}</div>`:''}</div>
+      <button class="mb-mini zwart" onclick="mbUurTerug('${veiligJs(r.uren_id)}',this)">Terug naar te accorderen</button></div>`;
+  });
+  return uit+'</div>';
+}
+async function mbVraagHerlaad(){
+  const el=document.getElementById('mbVraagBlok'); if(!el)return;
+  const{data,error}=await sb.rpc('mcr_uren_vraag'); if(!error)el.innerHTML=mbVraagBlokHtml(data||[]);
+}
+async function mbUurTerug(id,knop){
+  if(knop)knop.disabled=true;
+  const{error}=await sb.rpc('mcr_uur_terug',{p_uren:id});
+  if(error){ if(knop)knop.disabled=false; alert(mbFout(error)); return; }
+  toast('Staat weer bij Te accorderen'); mbUrenGa('akkoord');
+}
+function mbKlokDatum(t){ return t?new Date(t).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:MB_TZ}):''; }
 let MB_GK_VAN=null, MB_GK_TOT=null;
 async function mbGoedgekeurd(){
-  if(!MB_GK_VAN){ const d=new Date(); d.setDate(d.getDate()-30); MB_GK_VAN=fmt(d); MB_GK_TOT=fmt(new Date()); }
+  if(!MB_GK_VAN){ const d=new Date(mbVandaagStr()+'T00:00:00'); MB_GK_TOT=fmt(d); d.setDate(d.getDate()-30); MB_GK_VAN=fmt(d); }
   const{data,error}=await sb.rpc('uren_goedgekeurd',{p_van:MB_GK_VAN,p_tot:MB_GK_TOT,p_gebruiker:null});
   if(error)throw error;
   const rijen=data||[];
@@ -5653,53 +5798,29 @@ async function mbWijzigingen(){
   uit+='</tbody></table></div>';
   mbZet(uit);
 }
-async function mbUurAkkoord(id,ja){
-  let reden=null;
-  if(!ja){ reden=prompt('Wat wil je vragen of waarom klopt dit niet? Die persoon ziet dit in de app.'); if(reden===null)return; }
-  try{ const{error}=await sb.rpc('mcr_uur_akkoord',{p_uren:id,p_akkoord:ja,p_notitie:reden}); if(error)throw error; mbUrenGa('akkoord'); }
-  catch(e){ alert(mbFout(e)); }
-}
-// Begin- én eindtijd (en pauze) aanpassen. Ligt de eindtijd vóór de begintijd,
-// dan is het een nachtdienst en hoort de eindtijd bij de volgende dag.
-async function mbUurBijstellen(id,datum,open){
-  const b=(document.getElementById('mbUI'+id)||{}).value, t=(document.getElementById('mbUT'+id)||{}).value;
-  if(!b||!t){ alert('Vul een begin- en eindtijd in.'); return; }
-  if(b===t){ alert('Begin- en eindtijd zijn hetzelfde ('+b+'). Pas eerst een van de twee aan.'); return; }
-  const pa=parseInt((document.getElementById('mbUP'+id)||{}).value,10)||0;
-  try{
-    const inD=new Date(datum+'T'+b+':00'), uitD=new Date(datum+'T'+t+':00');
-    if(uitD<=inD){
-      const ok=await vraagBevestiging('Eindtijd ligt vóór de begintijd',
-        `${veiligTekst(b)} tot ${veiligTekst(t)}: is dit een nachtdienst die de volgende dag eindigt?`,'Ja, volgende dag');
-      if(!ok)return;
-      uitD.setDate(uitD.getDate()+1);
-    }
-    const{error}=await sb.rpc('mcr_uur_tijden',{p_uren:id,p_in:inD.toISOString(),p_uit:uitD.toISOString(),p_pauze:pa});
-    if(error)throw error; toast('Tijden aangepast'); mbUrenGa('akkoord');
-  }catch(e){ if(!(e&&/^P000[12]$/.test(e.code||'')))alert(mbFout(e)); }
-}
-
 async function mbAandacht(){
   const{data,error}=await sb.rpc('mcr_aandacht');
   if(error)throw error;
   const open=(data||[]).filter(r=>r.soort==='open');
   const laat=(data||[]).filter(r=>r.soort==='telaat');
   const kop=document.getElementById('mbUrenKop');
-  if(kop)kop.innerHTML=mbKop('Aandacht nodig','Open gebleven diensten en wie later begon dan ingeroosterd');
+  if(kop)kop.innerHTML=mbKop('Aandacht nodig','Open gebleven diensten en wie later begon dan ingeroosterd &middot; tijden in Britse tijd');
   let uit=`<div class="mb-kaart"><div style="font-size:15px;font-weight:700">Open gebleven diensten</div>
-    <div style="font-size:12.5px;color:var(--muted);margin:3px 0 2px">Ingeklokt maar niet uitgeklokt. De app verzint nooit zelf een eindtijd &mdash; hij doet een voorstel, jij zet hem vast.</div>`;
+    <div style="font-size:12.5px;color:var(--muted);margin:3px 0 2px">Ingeklokt maar niet uitgeklokt. De app verzint nooit zelf een eindtijd &mdash; hij doet een voorstel, jij zet hem vast.
+      Pauze: staat er al een pauze, dan blijft die staan; anders gaat de pauze uit je instellingen eraf als de dienst lang genoeg was.</div>`;
   if(!open.length)uit+='<div style="font-size:13px;color:var(--muted);padding-top:10px">Niets open.</div>';
   open.forEach(r=>{
-    const id=veiligTekst(r.uren_id);
-    uit+=`<div class="mb-persoon">
+    const id=veiligTekst(r.uren_id), inT=mbKlokT(r.ingeklokt_op);
+    uit+=`<div class="mb-persoon" id="mbAR${id}" style="flex-wrap:wrap">
       ${mbStip(r.kleur)}
       <div style="flex:1 1 150px"><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
         <div style="font-size:11.5px;color:var(--muted)">${veiligTekst(r.kraam)} &middot; ${veiligTekst(mbDatum(r.datum))}</div></div>
-      <div style="font-size:12.5px;font-variant-numeric:tabular-nums">${veiligTekst(mbKlokT(r.ingeklokt_op))} &rarr; <b style="color:#B45309">&mdash;</b></div>
-      <input type="time" class="mb-getal" style="width:88px" id="mbAT${id}" value="${veiligTekst(mbKlokT(r.voorstel)||'21:00')}">
-      <button class="mb-mini zwart" onclick="mbAandachtVast('${veiligJs(r.uren_id)}','${veiligJs(r.datum)}')">Vastzetten</button></div>`;
+      <div style="font-size:12.5px;font-variant-numeric:tabular-nums">${veiligTekst(inT)} &rarr; <b style="color:#B45309">&mdash;</b></div>
+      <input type="time" class="mb-getal" style="width:88px" id="mbAT${id}" data-in="${veiligTekst(inT)}" value="${veiligTekst(mbKlokT(r.voorstel)||'21:00')}" title="Eindtijd (Britse tijd)">
+      <button class="mb-mini zwart" onclick="mbAandachtVast('${veiligJs(r.uren_id)}',this)">Vastzetten</button></div>`;
   });
-  uit+=`<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px">Elke regel heeft zijn eigen knop; er komt geen knop die alles in een keer afhandelt.</div></div>`;
+  uit+=`<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px">Elke regel heeft zijn eigen knop; er komt geen knop die alles in een keer afhandelt.
+    Na vastzetten staat de registratie bij Te accorderen.</div></div>`;
   uit+=`<div class="mb-kaart"><div style="font-size:15px;font-weight:700">Later begonnen dan ingeroosterd</div>
     <div style="font-size:12.5px;color:var(--muted);margin:3px 0 2px">Hier hoef je niets te doen: de uren lopen vanaf het inklokmoment, dus dit is al verrekend.</div>`;
   if(!laat.length)uit+='<div style="font-size:13px;color:var(--muted);padding-top:10px">Iedereen was op tijd.</div>';
@@ -5712,14 +5833,22 @@ async function mbAandacht(){
   uit+='</div>';
   mbZet(uit);
 }
-async function mbAandachtVast(id,datum){
-  const t=document.getElementById('mbAT'+id).value;
+async function mbAandachtVast(id,knop){
+  const inp=document.getElementById('mbAT'+id); const t=inp?inp.value:'';
   if(!t){ alert('Vul een eindtijd in.'); return; }
-  try{
-    const iso=new Date(datum+'T'+t+':00').toISOString();
-    const{error}=await sb.rpc('mcr_uur_bijstellen',{p_uren:id,p_uit:iso,p_pauze:30});
-    if(error)throw error; mbUrenGa('aandacht');
-  }catch(e){ alert(mbFout(e)); }
+  let volgende=false;
+  const begin=(inp&&inp.dataset.in)||'';
+  if(begin&&t<=begin){
+    const ok=await vraagBevestiging('Eindtijd ligt vóór de begintijd',
+      `Ingeklokt om ${veiligTekst(begin)}, eindtijd ${veiligTekst(t)}: eindigde deze dienst de volgende dag?`,'Ja, volgende dag');
+    if(!ok)return; volgende=true;
+  }
+  if(knop)knop.disabled=true;
+  const{data,error}=await sb.rpc('mcr_uur_vastzetten',{p_uren:id,p_uit:t,p_volgende_dag:volgende});
+  if(error){ if(knop)knop.disabled=false; alert(mbFout(error)); return; }
+  const p=Number(data)||0;
+  toast(`Vastgezet tot ${t}${p?' · pauze '+p+' min':' · geen pauze'} · staat nu bij Te accorderen`);
+  const rij=document.getElementById('mbAR'+id); if(rij)rij.remove();
 }
 
 let MB_RONDE=null;
@@ -5799,7 +5928,7 @@ async function mbDagrapport(){
   const kramen=await mbKramenLijst();
   if(!kramen.length){ document.getElementById('mbInhoud').innerHTML='<div class="mb-kaart">Er staan nog geen kramen.</div>'; return; }
   if(!MB_DAG_KRAAM||!kramen.some(k=>k.id===MB_DAG_KRAAM))MB_DAG_KRAAM=kramen[0].id;
-  if(!MB_DATUM)MB_DATUM=await mbPeil();
+  await mbDatumVandaag();
   const [{data,error},tb]=await Promise.all([
     sb.rpc('mcr_dagrapport',{p_van:MB_DATUM,p_tot:MB_DATUM,p_kraam:MB_DAG_KRAAM}),
     sb.rpc('mcr_dag_te_beoordelen',{p_kraam:MB_DAG_KRAAM,p_datum:MB_DATUM}).then(x=>x,()=>({data:[]}))]);
@@ -5810,7 +5939,7 @@ async function mbDagrapport(){
   let uit=mbKop('Dagrapport &middot; '+veiligTekst(mbLang(MB_DATUM)),
     'Vijf minuten per avond &mdash; de rest staat er al in',
     `<button class="mb-mini" onclick="mbDagR(-1)">&lsaquo;</button>
-     <input type="date" class="mb-getal" style="width:150px" value="${veiligTekst(MB_DATUM)}" onchange="MB_DATUM=this.value;mbNaar('dagrapport')">
+     <input type="date" class="mb-getal" style="width:150px" value="${veiligTekst(MB_DATUM)}" onchange="mbZetDatum(this.value);mbNaar('dagrapport')">
      <button class="mb-mini" onclick="mbDagR(1)">&rsaquo;</button>`);
   uit+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
   kramen.forEach(k=>uit+=`<button class="mb-mini${k.id===MB_DAG_KRAAM?' zwart':''}" onclick="MB_DAG_KRAAM='${veiligJs(k.id)}';mbNaar('dagrapport')">${veiligTekst(k.naam)}</button>`);
@@ -5894,7 +6023,7 @@ async function mbDagrapport(){
 }
 function mbDagR(stap){
   const d=new Date((MB_DATUM||mbVandaagStr())+'T00:00:00'); d.setDate(d.getDate()+stap);
-  MB_DATUM=fmt(d); mbNaar('dagrapport');
+  mbZetDatum(fmt(d)); mbNaar('dagrapport');
 }
 async function mbDagOpslaan(){
   const v=id=>{const e=document.getElementById(id);return e?e.value:null;};
@@ -6176,8 +6305,8 @@ async function mbTerminal(tid,kraam){
 // Het geheim gaat alleen de database in; de app krijgt het nooit terug.
 let MB_MYPOS=null, MB_MYPOS_OPEN=null, MB_MYPOS_TID=[], MB_MYPOS_NEG=false;
 function mbMyposTijd(t){ if(!t)return ''; const d=new Date(t);
-  const vandaag=d.toDateString()===new Date().toDateString();
-  return vandaag?'vandaag '+mbKlokT(t):d.toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }
+  const vandaag=d.toLocaleDateString('en-CA',{timeZone:MB_TZ})===mbVandaagStr();
+  return vandaag?'vandaag '+mbKlokT(t):mbKlokDatum(t); }
 function mbMyposHtml(){
   const l=MB_MYPOS||[];
   let h=`<div class="mb-kaart"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
