@@ -11030,9 +11030,10 @@ function liveSignaal(rij){
   // Een wijziging in de andere vestiging (bv. Manchester-crew die beschikbaarheid
   // invult) laat de Nederlandse planning met rust, en andersom.
   if(!liveVestigingOk(rij))return;
-  // Crew: alleen tabellen die een crew-scherm raken.
-  if(rij&&rij.tabel&&typeof mcrZichtbaar==='function'&&mcrZichtbaar()&&!MCR_MGR
-     &&!Object.keys(MCR_CREW_TABELLEN).some(t=>mcrCrewRaakt(t,new Set([rij.tabel]))))return;
+  // Crew: alleen tabellen die het scherm dat nu open staat raken (een ander
+  // tabblad wordt bij openen toch opnieuw geladen).
+  if(typeof mcrZichtbaar==='function'&&mcrZichtbaar()&&!MCR_MGR
+     &&!mcrCrewRaakt(MCR_TAB,new Set([(rij&&rij.tabel)||'*'])))return;
   if(rij&&rij.tabel)LIVE_TABELLEN.add(rij.tabel);
   clearTimeout(LIVE_TIMER);
   LIVE_TIMER=setTimeout(liveHerlaad,1500);
