@@ -7954,14 +7954,46 @@ async function mcrStart(){
   if(av)av.textContent=(CURRENT_NAAM||'').split(' ').filter(Boolean).map(x=>x[0]).slice(0,2).join('').toUpperCase();
   MCR_MGR=false; MGR_KRAAM=null; MGR_WEEK=null; MGR_UWEEK=null; MGR_DAG=null;
   if(!MCR_WACHT){
-    try{ const{data}=await sb.rpc('mgr_ik'); const ik=(data&&data[0])||{};
-         MCR_MGR=(ik.manager===true); MGR_KRAAM=MCR_MGR?{id:ik.kraam_id||null,naam:ik.kraam||null}:null; }
-    catch(e){ MCR_MGR=false; }
+    // Bij slecht bereik viel een manager hier terug op de crew-app (tot een
+    // herstart). Nu: een paar keer proberen, anders het laatst bekende antwoord,
+    // en zonder dat een scherm "No connection – retry".
+    const ik=await mgrIkOphalen();
+    if(ik===null){ mcrGeenVerbinding(); return; }
+    MCR_MGR=(ik.manager===true); MGR_KRAAM=MCR_MGR?{id:ik.kraam_id||null,naam:ik.kraam||null}:null;
   }
   mcrNav();
   if(!MCR_WACHT&&!MCR_MGR)nfcKan();   // vast opvragen; het inklokscherm heeft het antwoord nodig
   await mcrGa(MCR_WACHT?'me':(MCR_MGR?'rota':'shifts'));
   mcrHuisregelsCheck();
+}
+// Ben ik kraammanager? Geeft {manager,kraam_id,kraam} of null (geen verbinding
+// en nog nooit eerder gelukt op dit toestel).
+async function mgrIkOphalen(){
+  const sleutel='mgr_ik_'+((CURRENT_USER&&CURRENT_USER.id)||'');
+  const wacht=ms=>new Promise(r=>setTimeout(r,ms));
+  for(const pauze of [0,1200,3000]){
+    if(pauze)await wacht(pauze);
+    try{
+      const{data,error}=await sb.rpc('mgr_ik');
+      if(!error){
+        const ik=(data&&data[0])||{};
+        try{ localStorage.setItem(sleutel,JSON.stringify({manager:ik.manager===true,kraam_id:ik.kraam_id||null,kraam:ik.kraam||null})); }catch(e){}
+        return ik;
+      }
+    }catch(e){}
+  }
+  try{ const oud=JSON.parse(localStorage.getItem(sleutel)||'null'); if(oud&&typeof oud==='object')return oud; }catch(e){}
+  return null;
+}
+function mcrGeenVerbinding(){
+  const nav=document.getElementById('mcrNav'); if(nav)nav.innerHTML='';
+  const t=document.getElementById('mcrTitel'); if(t)t.textContent='No connection';
+  const s=document.getElementById('mcrSub'); if(s)s.textContent='';
+  const m=document.getElementById('mcrMain');
+  if(m)m.innerHTML=`<div class="mcr-kaart" style="text-align:center;padding:26px 16px">
+      <div style="font-size:16px;font-weight:700">No connection</div>
+      <div style="font-size:13px;color:#6B6A66;margin-top:6px;line-height:1.5">We couldn't reach the server. Check your internet and try again.</div>
+      <button class="mcr-knop" id="mcrOpnieuw" style="margin-top:14px" onclick="this.disabled=true;this.textContent='Trying…';mcrStart()">Retry</button></div>`;
 }
 
 // Nieuwe versie van de huisregels? Dan eenmalig laten lezen en akkoord vragen.
@@ -8994,11 +9026,16 @@ async function mcrRota(){
   }
   const van=fmt(MGR_WEEK);
   const tot=new Date(MGR_WEEK); tot.setDate(tot.getDate()+6);
-  const [{data,error},ag,afs]=await Promise.all([sb.rpc('mgr_rooster',{p_van:van}),
-    sb.rpc('mgr_agenda',{p_van:van,p_tot:fmt(tot)}).then(x=>x,()=>({data:[]})),
-    sb.rpc('mgr_afsluit_overzicht').then(x=>x,()=>({data:[]}))]);
-  if(error)throw error;
   const vandaagL=mgrVandaag();
+  const metVandaag=vandaagL>=van&&vandaagL<=fmt(tot);
+  const [{data,error},ag,afs,nu]=await Promise.all([sb.rpc('mgr_rooster',{p_van:van}),
+    sb.rpc('mgr_agenda',{p_van:van,p_tot:fmt(tot)}).then(x=>x,()=>({data:[]})),
+    sb.rpc('mgr_afsluit_overzicht').then(x=>x,()=>({data:[]})),
+    metVandaag?sb.rpc('mgr_vandaag').then(x=>x,()=>({data:null})):Promise.resolve({data:null})]);
+  if(error)throw error;
+  if(MCR_TAB!=='rota'||MGR_DAG)return;   // intussen ergens anders heen getikt
+  if(nu&&!nu.error&&nu.data){ MGR_NU=nu.data; MGR_NU_VERSCHIL=new Date(nu.data.nu).getTime()-Date.now(); }
+  else if(!metVandaag)MGR_NU=null;
   const teSluiten=((afs&&!afs.error&&afs.data)||[]).filter(o=>o.mijn_taak&&!o.afgesloten_op&&o.mensen>0);
   const AGD={}; ((ag&&!ag.error&&ag.data)||[]).forEach(r=>{ (AGD[r.datum]=AGD[r.datum]||[]).push(r); });
   document.getElementById('mcrSub').textContent=
@@ -9018,6 +9055,8 @@ async function mcrRota(){
       <div style="font-size:14px;font-weight:700;color:${nu?'#8A5307':'#B4472B'}">${nu?'Close '+veiligTekst(o.kraam)+' today':veiligTekst(o.kraam)+' &middot; '+veiligTekst(mgrDagNaam(o.datum))+' is not closed'}</div>
       <div style="font-size:12.5px;color:${nu?'#8A5307':'#B4472B'};margin-top:3px">${nu?'After closing: hours, ratings, cleaning, gas and stock.':'Go through Close day for this day.'} &rsaquo;</div></button>`+uit;
   });
+  const vandaagBlok=metVandaag?mgrVandaagHtml():'';
+  uit=`<div id="mgrVandaag">${vandaagBlok}</div>`+uit;
   for(let i=0;i<7;i++){
     const d=new Date(MGR_WEEK); d.setDate(d.getDate()+i); const ds=fmt(d);
     const kramen=dagen[ds]||{};
@@ -9048,8 +9087,117 @@ async function mcrRota(){
     uit+='</div></div>';
   }
   document.getElementById('mcrMain').innerHTML=uit;
+  // Today ververst zichzelf stil (geen "Loading", scrollpositie blijft).
+  MGR_VANDAAG_TOON=!!vandaagBlok;
+  if(MGR_VANDAAG_TOON&&!MCR_TIMER)MCR_TIMER=setInterval(mgrRotaStil,30000);
 }
 function mgrWeek(n){ MGR_WEEK.setDate(MGR_WEEK.getDate()+n); MGR_WEEK=new Date(MGR_WEEK); mcrGa('rota'); }
+
+// ─── Today: bovenaan Rota ─────────────────────────────────────────
+// Per kraam van vandaag (alleen de eigen kramen): de inklokcode, wie er nu
+// hoort te zijn, wie ingeklokt is, wie nog niet (rood vanaf 1 minuut na de
+// start, met bellen en "Clock in now") en wie al klaar is. Ververst zichzelf
+// elke 30 seconden stil; met een open veld of venster wacht hij.
+let MGR_NU=null, MGR_NU_VERSCHIL=0, MGR_VANDAAG_TOON=false, MGR_STIL_BEZIG=false;
+function mgrNuMs(){ return Date.now()+MGR_NU_VERSCHIL; }
+function mgrCode(c){ c=String(c||''); return c.length===6?c.slice(0,3)+' '+c.slice(3):c; }
+function mgrCodeBlok(code,klein){
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;background:#1A1917;color:#fff;border-radius:12px;padding:${klein?'9px 13px':'12px 15px'};margin-top:10px">
+      <div style="font-size:11.5px;opacity:.75;text-transform:uppercase;letter-spacing:.05em;line-height:1.3">Clock-in code<br>today</div>
+      <div style="font-size:${klein?'24px':'32px'};font-weight:700;letter-spacing:.14em;font-variant-numeric:tabular-nums;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap">${veiligTekst(mgrCode(code))}</div></div>
+    <div style="font-size:12px;color:#6B6A66;margin:5px 2px 2px;line-height:1.45">Changes every day. Show it to crew who can't tap the tag.</div>`;
+}
+function mgrVandaagHtml(){
+  const V=MGR_NU; if(!V||!(V.kramen||[]).length)return '';
+  const nu=mgrNuMs(), ms=t=>t?new Date(t).getTime():null;
+  let uit=`<div style="font-size:12px;font-weight:700;color:#6B6A66;text-transform:uppercase;letter-spacing:.04em;margin:2px 2px 7px">Today &middot; ${veiligTekst(mgrDagNaam(V.datum,true))}</div>`;
+  V.kramen.forEach(k=>{
+    const G={mist:[],in:[],later:[],klaar:[]};
+    (k.mensen||[]).forEach(p=>{
+      const st=ms(p.start_ts);
+      if(p.uit||['niet_gekomen','afgemeld','naar_huis'].includes(p.controle)&&!p.in)G.klaar.push(p);
+      else if(p.in)G.in.push(p);
+      else if(st!==null&&nu>=st+60000)G.mist.push(p);
+      else G.later.push(p);
+    });
+    const tijd=p=>p.start?`${veiligTekst(mcrTijd(p.start))}–${p.tot_sluit||!p.eind?'close':veiligTekst(mcrTijd(p.eind))}`:'not on the rota';
+    const kraam=veiligJs(k.kraam_id);
+    const rij=(p,status,kleur,knoppen)=>`<div style="padding:9px 0;border-top:1px solid #EFEDE7">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+          <span style="font-size:14px;font-weight:600;min-width:0">${veiligTekst(p.naam)}</span>
+          <span style="font-size:12px;color:#6B6A66;white-space:nowrap;font-variant-numeric:tabular-nums">${tijd(p)}</span></div>
+        <div style="font-size:12.5px;color:${kleur};margin-top:2px">${status}</div>
+        ${knoppen?`<div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${knoppen}</div>`:''}</div>`;
+    const bel=p=>{ const s=String(p.telefoon||'').replace(/[^\d+]/g,'');
+      return s?`<a href="tel:${veiligTekst(s)}" class="mcr-knop licht" style="width:auto;display:inline-block;padding:8px 12px;font-size:13px;text-decoration:none">Call</a>`:''; };
+    const klokKnop=(p,zwart)=>`<button class="mcr-knop${zwart?'':' licht'}" id="mgrNuK${veiligTekst(p.id)}" style="width:auto;display:inline-block;padding:8px 12px;font-size:13px"
+        onclick="mgrNuInklokken('${kraam}','${veiligJs(p.id)}')">Clock in now</button>`;
+    const kop=(t,kleur)=>`<div style="font-size:11.5px;font-weight:700;color:${kleur};text-transform:uppercase;letter-spacing:.04em;margin:12px 0 0">${t}</div>`;
+    const tel=[G.in.length?G.in.length+' in':'',G.mist.length?`<span style="color:#B4472B">${G.mist.length} not in yet</span>`:'',
+               G.later.length?G.later.length+' later':'',G.klaar.length?G.klaar.length+' done':''].filter(Boolean).join(' &middot; ');
+    uit+=`<div class="mcr-kaart" style="border-color:#1A1917">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="width:9px;height:9px;border-radius:50%;background:${veiligTekst(k.kleur)};flex-shrink:0"></span>
+        <span style="font-size:15px;font-weight:700">${veiligTekst(k.kraam)}</span>
+        <span style="font-size:12px;color:#6B6A66">open ${veiligTekst(mcrTijd(k.open_van))}–${veiligTekst(mcrTijd(k.open_tot))}${k.afgesloten?' &middot; closed ✓':''}</span></div>
+      <div style="font-size:12.5px;color:#6B6A66;margin-top:3px">${tel||'Nobody on the rota today.'}</div>
+      ${mgrCodeBlok(k.code)}`;
+    if(G.mist.length){
+      uit+=kop('Not clocked in','#B4472B');
+      G.mist.forEach(p=>{
+        const st=ms(p.start_ts), et=ms(p.eind_ts), min=Math.max(1,Math.floor((nu-st)/60000));
+        const voorbij=et!==null&&nu>=et;
+        uit+=rij(p,voorbij?'Shift is over and never clocked in. Check under Close day.'
+            :`Not in yet &middot; ${min<60?min+' min':Math.floor(min/60)+' h '+(min%60)+' min'} since the start`,'#B4472B',
+          bel(p)+(voorbij||k.afgesloten?'':klokKnop(p,true)));
+      });
+    }
+    if(G.in.length){
+      uit+=kop('Clocked in','#0F7A52');
+      G.in.forEach(p=>{ uit+=rij(p,`<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#0F7A52;margin-right:5px"></span>In since ${veiligTekst(mgrKlok(p.in))}${p.in_door?' &middot; clocked in by '+veiligTekst(p.in_door):''}`,'#0F7A52',''); });
+    }
+    if(G.later.length){
+      uit+=kop('Later today','#6B6A66');
+      G.later.forEach(p=>{
+        const st=ms(p.start_ts), mag=st!==null&&nu>=st-30*60000&&!k.afgesloten;
+        uit+=rij(p,p.start?`Starts ${veiligTekst(mcrTijd(p.start))}`:'','#6B6A66',mag?klokKnop(p,false):'');
+      });
+    }
+    if(G.klaar.length){
+      uit+=kop('Done','#6B6A66');
+      G.klaar.forEach(p=>{ uit+=rij(p,p.uit?`Finished ${veiligTekst(mgrKlok(p.uit))}`:veiligTekst(MGR_UITKOMST[p.controle]||''),'#8A8984',''); });
+    }
+    uit+='</div>';
+  });
+  return uit;
+}
+async function mgrRotaStil(forceer){
+  if(MCR_TAB!=='rota'||MGR_DAG||MGR_STIL_BEZIG)return;
+  const app=document.getElementById('mcrApp'); if(!app||app.style.display==='none')return;
+  if(forceer!==true){
+    if(document.hidden||document.querySelector('.modal-overlay.open'))return;
+    const a=document.activeElement; if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;
+  }
+  MGR_STIL_BEZIG=true;
+  const m=document.getElementById('mcrMain'), top=m?m.scrollTop:0;
+  try{ await mcrRota(); if(m&&MCR_TAB==='rota')m.scrollTop=top; }
+  catch(e){ console.warn('Today verversen mislukt:',e); }
+  finally{ MGR_STIL_BEZIG=false; }
+}
+async function mgrNuInklokken(kraam,gid){
+  const k=((MGR_NU&&MGR_NU.kramen)||[]).find(x=>x.kraam_id===kraam);
+  const p=k&&(k.mensen||[]).find(x=>x.id===gid);
+  const naam=(p&&p.naam)||'this person';
+  const tijd=new Date().toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+  if(!confirm(`Clock in ${naam} now (${tijd})?\n\nOnly do this when ${naam.split(' ')[0]} is at the stall and ready to work.`))return;
+  const kn=document.getElementById('mgrNuK'+gid);
+  if(kn){kn.disabled=true;kn.textContent='Clocking in…';}
+  let error=null;
+  try{ ({error}=await sb.rpc('mgr_inklokken',{p_kraam:kraam,p_gebruiker:gid})); }catch(e){ error=e; }
+  if(error){ if(kn){kn.disabled=false;kn.textContent='Clock in now';} alert(mcrFout(error)); return; }
+  toast(naam.split(' ')[0]+' is clocked in');
+  await mgrRotaStil(true);
+}
 
 // ─── Calendar: de agenda voor kraammanagers (Engels) ─────────────
 // Een manager ziet alles van alle kramen: influencers, leveringen, bezoeken.
@@ -9148,7 +9296,8 @@ async function mgrAgOpslaan(){
     p_titel:v('mgAgTi'),p_contact:v('mgAgC')||null,p_notitie:v('mgAgN')||null});
   if(kn){kn.disabled=false;kn.textContent='Save';}
   if(error)return fout(mcrFout(error));
-  MGR_AG_OPEN=null; toast('Added to the calendar'); mcrGa('agenda');
+  const nieuw=MGR_AG_OPEN==='nieuw';
+  MGR_AG_OPEN=null; toast(nieuw?'Added to the calendar':'Changes saved'); mcrGa('agenda');
 }
 async function mgrAgWeg(id){
   const r=MGR_AG_RIJEN.find(x=>x.id===id); if(!r)return;
@@ -9332,8 +9481,8 @@ async function mgrBeoordeel(id){
 // eventueel aanpassen), schoonmaaklijst, gas dicht, voorraad. Vier stappen.
 // De manager controleert; Bram geeft daarna nog steeds akkoord op de uren.
 // 1 minuut na de start van de dienst inklokken is al te laat.
-let MGR_CL={kraam:null,datum:null,stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{}};
-let MGR_CL_OPTIES=[], MGR_CL_D=null;
+let MGR_CL={kraam:null,datum:null,stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{},toevoeg:{}};
+let MGR_CL_OPTIES=[], MGR_CL_D=null, MGR_CL_CODES=[];
 const MGR_VOORRAAD=['Batter mix','Sugar','Butter','Nutella','Lotus','White chocolate','Pistachio','Bueno','Whipped cream',
   'Maple syrup','Caramel','Fruit','Sugar waffles','Trays','Forks','Napkins','Gloves','Gas bottle'];
 const MGR_UITKOMST={ok:'Checked',te_laat:'Late',niet_te_laat:'Not late',niet_gekomen:'No-show',afgemeld:'Cancelled in advance',naar_huis:'Sent home'};
@@ -9344,20 +9493,26 @@ function mgrKn(label,onclick,zwart,extra){
   return `<button class="mcr-knop${zwart?'':' licht'}" style="width:auto;display:inline-block;padding:8px 12px;font-size:13px;${extra||''}" onclick="${onclick}">${label}</button>`; }
 function mgrClBezig(){
   if(typeof MCR_TAB==='undefined')return false;
-  if(MCR_TAB==='close')return MGR_CL.stap>1||Object.values(MGR_CL.open).some(Boolean)||Object.values(MGR_CL.beoOpen).some(Boolean);
+  if(MCR_TAB==='close')return MGR_CL.stap>1||Object.values(MGR_CL.open).some(Boolean)||Object.values(MGR_CL.beoOpen).some(Boolean)
+                            ||Object.values(MGR_CL.toevoeg||{}).some(Boolean);
   if(MCR_TAB==='team')return !!MGR_TEAM_OPEN;
+  // Rota met het blok Today ververst zichzelf al stil (mgrRotaStil, elke 30 s);
+  // het gewone live-herladen zou het scherm laten knipperen en bovenaan zetten.
+  if(MCR_TAB==='rota')return !MGR_DAG&&MGR_VANDAAG_TOON;
   return false;
 }
-function mgrClReset(){ Object.assign(MGR_CL,{stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{}}); }
+function mgrClReset(){ Object.assign(MGR_CL,{stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{},toevoeg:{}}); }
 function mgrClKies(kraam,datum){
   if(MGR_CL.kraam!==kraam||MGR_CL.datum!==datum)mgrClReset();
   MGR_CL.kraam=kraam; MGR_CL.datum=datum; mcrGa('close');
 }
 
 async function mcrSluitDag(){
-  const{data:ov,error:e1}=await sb.rpc('mgr_afsluit_overzicht');
+  const [{data:ov,error:e1},dc]=await Promise.all([sb.rpc('mgr_afsluit_overzicht'),
+    sb.rpc('mgr_dagcodes').then(x=>x,()=>({data:null}))]);
   if(e1)throw e1;
   MGR_CL_OPTIES=ov||[];
+  if(dc&&!dc.error)MGR_CL_CODES=dc.data||[];
   const vandaag=mgrVandaag();
   if(!MGR_CL_OPTIES.some(o=>o.kraam_id===MGR_CL.kraam&&o.datum===MGR_CL.datum)){
     const k=MGR_CL_OPTIES.find(o=>o.mijn_taak&&!o.afgesloten_op&&o.datum===vandaag)
@@ -9414,7 +9569,8 @@ function mgrClPersoon(p){
   let uit=`<div style="padding:10px 0;border-top:1px solid #EFEDE7">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
       <span style="font-size:14px;font-weight:600">${veiligTekst(p.naam)}</span>${chip}</div>
-    <div style="font-size:12.5px;color:#6B6A66;margin-top:2px;font-variant-numeric:tabular-nums">${tijd}${klok?' &middot; '+klok:''}</div>`;
+    <div style="font-size:12.5px;color:#6B6A66;margin-top:2px;font-variant-numeric:tabular-nums">${tijd}${klok?' &middot; '+klok:''}</div>
+    ${p.in_door?`<div style="font-size:11.5px;color:#8A8984;margin-top:1px">Entered by ${veiligTekst(p.in_door)}, not clocked in by themselves</div>`:''}`;
   const editor=()=>`<div style="display:flex;gap:6px;margin-top:8px;align-items:flex-end;flex-wrap:wrap">
       <div><label class="mcr-label">Finished at</label>
         <input class="mcr-veld" type="time" id="mgrClT${id}" value="${p.uit?veiligTekst(mgrKlok(p.uit)):''}" style="width:118px;padding:8px 10px;font-size:14px"></div>
@@ -9438,7 +9594,9 @@ function mgrClPersoon(p){
   }else{
     uit+=`<div style="font-size:12.5px;color:#B4472B;margin-top:5px">Never clocked in.</div>
       <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${mgrKn('No-show',`mgrClZet('${veiligJs(p.id)}','niet_gekomen')`)}
-        ${mgrKn('Cancelled in advance',`mgrClZet('${veiligJs(p.id)}','afgemeld')`)}${mgrKn('Sent home / not needed',`mgrClZet('${veiligJs(p.id)}','naar_huis')`)}</div>`;
+        ${mgrKn('Cancelled in advance',`mgrClZet('${veiligJs(p.id)}','afgemeld')`)}${mgrKn('Sent home / not needed',`mgrClZet('${veiligJs(p.id)}','naar_huis')`)}
+        ${p.start&&!MGR_CL.toevoeg[p.id]?mgrKn('Worked &ndash; add hours',`MGR_CL.toevoeg['${veiligJs(p.id)}']=true;mgrClTeken()`,true):''}</div>`;
+    if(MGR_CL.toevoeg[p.id])uit+=mgrClToevoegVeld(p);
   }
   if(p.uren_id&&!(p.polo||p.schort))uit+=`<button class="mcr-linkje" style="display:block;margin-top:7px;color:#2A4EA8" onclick="mgrTeamNaar('${veiligJs(p.id)}')">No uniform registered yet &middot; hand out &rsaquo;</button>`;
   uit+=`<div id="mgrClU${id}" style="font-size:12px;margin-top:4px"></div></div>`;
@@ -9470,6 +9628,8 @@ function mgrClTeken(){
   uit+=mgrClStappen();
   const fout=MGR_CL.fout?`<div style="color:#B4472B;font-size:12.5px;margin:6px 2px 0">${veiligTekst(MGR_CL.fout)}</div>`:'';
   if(MGR_CL.stap===1){
+    const code=D.datum===mgrVandaag()&&(MGR_CL_CODES||[]).find(c=>c.kraam_id===D.kraam_id);
+    if(code)uit+=`<div class="mcr-kaart" style="padding:4px 15px 12px">${mgrCodeBlok(code.code,true)}</div>`;
     const n=mensen.filter(p=>p.controle).length;
     uit+=`<div class="mcr-kaart" style="padding:2px 15px 4px"><div class="mcr-kop" style="margin-top:12px">Who worked today &middot; ${n} of ${mensen.length} checked</div>
       ${mensen.map(mgrClPersoon).join('')}</div>
@@ -9559,6 +9719,45 @@ async function mgrClUur(gid){
     await mgrClHerlaad();
   }catch(e){ if(u)u.innerHTML=`<span style="color:#B4472B">${veiligTekst(mcrFout(e))}</span>`; }
 }
+// "Worked – add hours": iemand werkte wel maar klokte niet (telefoon leeg,
+// vergeten). De manager vult begin, eind, pauze en reden in; Bram ziet het
+// als "toegevoegd door kraammanager …" en geeft nog steeds zelf akkoord.
+function mgrClToevoegVeld(p){
+  const id=veiligTekst(p.id), D=MGR_CL_D||{};
+  const eind=p.eind?mcrTijd(p.eind):(D.sluit?mcrTijd(D.sluit):'');
+  return `<div style="background:#FAF9F6;border-radius:11px;padding:10px 12px;margin-top:9px">
+      <div style="font-size:13px;font-weight:600">Add the hours ${veiligTekst(String(p.naam||'').split(' ')[0])} worked</div>
+      <div style="display:flex;gap:6px;margin-top:6px;align-items:flex-end;flex-wrap:wrap">
+        <div><label class="mcr-label">Started</label>
+          <input class="mcr-veld" type="time" id="mgrClAV${id}" value="${veiligTekst(mcrTijd(p.start))}" style="width:128px;padding:8px 10px;font-size:14px"></div>
+        <div><label class="mcr-label">Finished</label>
+          <input class="mcr-veld" type="time" id="mgrClAT${id}" value="${veiligTekst(eind)}" style="width:128px;padding:8px 10px;font-size:14px"></div>
+        <div><label class="mcr-label">Break (min)</label>
+          <input class="mcr-veld" type="number" min="0" max="240" step="5" inputmode="numeric" id="mgrClAP${id}" value="0" style="width:72px;padding:8px 10px;font-size:14px"></div></div>
+      <label class="mcr-label" style="margin-top:8px">Why didn't they clock in? (Bram sees this)</label>
+      <input class="mcr-veld" id="mgrClAR${id}" maxlength="200" placeholder="e.g. phone was dead" style="padding:9px 10px;font-size:13px">
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="mcr-knop" id="mgrClAK${id}" style="width:auto;padding:8px 14px;font-size:13px" onclick="mgrClToevoegen('${veiligJs(p.id)}')">Save hours</button>
+        ${mgrKn('Cancel',`MGR_CL.toevoeg['${veiligJs(p.id)}']=false;mgrClTeken()`)}</div></div>`;
+}
+async function mgrClToevoegen(gid){
+  const v=k=>((document.getElementById(k+gid)||{}).value||'').trim();
+  const u=document.getElementById('mgrClU'+gid), kn=document.getElementById('mgrClAK'+gid);
+  const fout=t=>{ if(u)u.innerHTML=`<span style="color:#B4472B">${veiligTekst(t)}</span>`; };
+  const van=v('mgrClAV'), tot=v('mgrClAT'), pz=parseInt(v('mgrClAP')||'0',10), reden=v('mgrClAR');
+  if(!van||!tot)return fout('Fill in when they started and finished.');
+  if(isNaN(pz)||pz<0)return fout('Enter the break in minutes.');
+  if(reden.length<2){ const r=document.getElementById('mgrClAR'+gid); if(r)r.style.borderColor='#B4472B'; return fout('Say why they did not clock in.'); }
+  if(kn){kn.disabled=true;kn.textContent='Saving…';}
+  try{
+    const{error}=await sb.rpc('mgr_uren_toevoegen',{p_kraam:MGR_CL.kraam,p_datum:MGR_CL.datum,p_gebruiker:gid,
+      p_van:van.slice(0,5),p_tot:tot.slice(0,5),p_pauze:pz,p_reden:reden});
+    if(error)throw error;
+    MGR_CL.toevoeg[gid]=false; MGR_CL.wijzig[gid]=false; MGR_CL.fout='';
+    toast('Hours added. Bram still approves them.');
+    await mgrClHerlaad();
+  }catch(e){ if(kn){kn.disabled=false;kn.textContent='Save hours';} fout(mcrFout(e)); }
+}
 async function mgrClBeoWijzig(gid){
   const s=document.getElementById('mgrClW'+gid), r=document.getElementById('mgrClWR'+gid), u=document.getElementById('mgrClWU'+gid);
   const reden=(r&&r.value.trim())||'';
@@ -9615,26 +9814,29 @@ async function mgrClVerder(){
 }
 
 // ─── Team: beoordelingen en kleding ────────────────────────────────
-// Kleding is borg: £25 per long sleeve polo en £25 per schort (instelbaar
-// bij Bram). Op 0 zetten zodra het terug is.
-let MGR_TEAM=[], MGR_TEAM_OPEN=null, MGR_TEAM_ZOEK='', MGR_TEAM_TERUG=false, MGR_TEAM_KL={};
+// Kleding is borg: per long sleeve polo en per schort (borg_polo/borg_schort
+// bij Bram, standaard £25). Op 0 zetten zodra het terug is.
+let MGR_TEAM=[], MGR_TEAM_OPEN=null, MGR_TEAM_ZOEK='', MGR_TEAM_TERUG=false, MGR_TEAM_KL={}, MGR_BORG={polo:25,schort:25};
+function mgrPond(n){ n=Number(n)||0; return '£'+(Number.isInteger(n)?n:n.toFixed(2)); }
 function mgrTeamNaar(id){ MGR_TEAM_OPEN=id; MGR_TEAM_TERUG=true; MGR_TEAM_ZOEK=''; mcrGa('team'); }
 async function mcrTeam(){
-  const{data,error}=await sb.rpc('mgr_team');
+  const [{data,error},bg]=await Promise.all([sb.rpc('mgr_team'),sb.rpc('mgr_borg').then(x=>x,()=>({data:null}))]);
   if(error)throw error;
   MGR_TEAM=data||[];
+  const b=bg&&!bg.error&&bg.data&&bg.data[0];
+  if(b)MGR_BORG={polo:Number(b.polo)||0,schort:Number(b.schort)||0};
   let uit='';
   if(MGR_TEAM_TERUG)uit+=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="MGR_TEAM_TERUG=false;MGR_TEAM_OPEN=null;mcrGa('close')">&lsaquo; Back to Close day</button>`;
   uit+=`<input class="mcr-veld" placeholder="Search a name" value="${veiligTekst(MGR_TEAM_ZOEK)}" oninput="MGR_TEAM_ZOEK=this.value;mgrTeamLijst()" style="margin-bottom:12px">
     <div id="mgrTeamLijst"></div>
-    <div style="font-size:12px;color:#6B6A66;line-height:1.5;margin:4px 3px 14px">Uniform is a deposit: £25 per polo and £25 per apron. Set it to 0 when it comes back. Bram sees who handed out what, and when.</div>`;
+    <div style="font-size:12px;color:#6B6A66;line-height:1.5;margin:4px 3px 14px">Uniform is a deposit: ${mgrPond(MGR_BORG.polo)} per polo and ${mgrPond(MGR_BORG.schort)} per apron. Set it to 0 when it comes back. Bram sees who handed out what, and when.</div>`;
   document.getElementById('mcrMain').innerHTML=uit;
   mgrTeamLijst();
   if(MGR_TEAM_OPEN){ const el=document.getElementById('mgrTm'+MGR_TEAM_OPEN); if(el)el.scrollIntoView({block:'center'}); }
 }
 function mgrKledingTekst(m){
   const a=[]; if(m.polo)a.push(`Polo &times;${m.polo}${m.maat?' ('+veiligTekst(m.maat)+')':''}`); if(m.schort)a.push(`Apron &times;${m.schort}`);
-  return a.length?a.join(' &middot; ')+` &middot; deposit £${Number(m.borg||0).toFixed(0)}`:'No uniform';
+  return a.length?a.join(' &middot; ')+` &middot; deposit ${mgrPond(m.borg)}`:'No uniform';
 }
 function mgrTeamLijst(){
   const el=document.getElementById('mgrTeamLijst'); if(!el)return;
@@ -9667,7 +9869,7 @@ function mgrTeamLijst(){
               <b style="width:16px;text-align:center;font-size:15px">${kl[k]}</b>
               ${mgrKn('+',`mgrTeamKl('${veiligJs(m.id)}','${k}',1)`,false,'min-width:38px')}</span></div>`).join('')}
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:8px">
-          <span style="font-size:12.5px;color:#6B6A66">Deposit £${(kl.polo+kl.schort)*25}</span>
+          <span style="font-size:12.5px;color:#6B6A66">Deposit ${mgrPond(kl.polo*MGR_BORG.polo+kl.schort*MGR_BORG.schort)}</span>
           ${mgrKn('Save uniform',`mgrTeamKleding('${veiligJs(m.id)}')`,true)}</div>
         ${m.kleding_door?`<div style="font-size:11.5px;color:#8A8984;margin-top:4px">Last changed by ${veiligTekst(m.kleding_door)}, ${veiligTekst(mgrWanneer(m.kleding_op))}</div>`:''}
         <div id="mgrTmU${id}" style="font-size:12px;margin-top:4px"></div></div>`:''}
@@ -22753,6 +22955,16 @@ async function initPushNotifications(){
           if(d.pagina==='mcr-beheer'){ if(typeof mbNaar==='function')mbNaar('shifts'); return; }
           if(d.pagina==='mcr-agenda'){ if(typeof mbNaar==='function')mbNaar('agenda'); return; }
           if(d.pagina==='mcr-afsluiting'){ if(typeof mbNaar==='function'){ MB_DATUM=null; mbNaar('overzicht'); } return; }
+          if(d.pagina==='mcr-today'){
+            const app=document.getElementById('mcrApp');
+            if(app&&app.style.display==='flex'&&typeof mcrGa==='function'){ MGR_DAG=null; mcrGa('rota'); }
+            return;
+          }
+          if(d.pagina==='mcr-clock'){
+            const app=document.getElementById('mcrApp');
+            if(app&&app.style.display==='flex'&&typeof mcrGa==='function')mcrGa('clock');
+            return;
+          }
           if(d.pagina==='mcr-close'){
             const app=document.getElementById('mcrApp');
             if(app&&app.style.display==='flex'&&typeof mcrGa==='function')mcrGa('close');
