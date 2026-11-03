@@ -3745,7 +3745,10 @@ function mbNuMin(){ const p=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minu
 // Bedrag uit een invoerveld: "12,50", "12.50", "1.234,50" of "£ 12". NaN als het niet lukt.
 function mbBedragLees(v){ const t=String(v==null?'':v).replace(/[£€\s]/g,'');
   if(t==='')return null; if(/^-?\d+\.\d{1,2}$/.test(t))return Number(t); return finGetal(t); }
-function mbFout(e){ const m=(e&&(e.message||e.details))?String(e.message||e.details):'Er ging iets mis.'; return m.replace(/^.*?:\s*/,''); }
+// Alleen technische voorvoegsels weghalen ("Error:", "TypeError:", "P0002:"), niet
+// alles tot de eerste dubbele punt: "begint om 10:00." moet heel blijven.
+function mbFout(e){ const m=(e&&(e.message||e.details))?String(e.message||e.details):'Er ging iets mis.';
+  return m.replace(/^\s*(?:(?:[A-Za-z]*(?:Error|Exception)|P\d{4}|[0-9A-Z]{5}|ERROR)\s*:\s*)+/,''); }
 function mbVandaagStr(){ return new Date().toLocaleDateString('en-CA',{timeZone:MB_TZ}); }
 // De markt duurt maar zeven weken. Staat de kalender daarbuiten, dan zou
 // "vandaag" een lege dag zijn; de database geeft dan de eerste marktdag terug.
@@ -5652,7 +5655,8 @@ function mbUurRijHtml(r){
       <div><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
       ${let_op?`<div style="font-size:11.5px;color:#B45309">${let_op}</div>`:''}
       ${r.notitie_pers?`<div style="font-size:11.5px;color:var(--muted)">&ldquo;${veiligTekst(r.notitie_pers)}&rdquo;</div>`:''}
-      ${r.auto_uitgeklokt?`<div style="font-size:11.5px;color:#B4472B;max-width:280px;white-space:normal">Automatisch uitgeklokt na 24 uur &mdash; eindtijd is een schatting, controleer voor je akkoord geeft.</div>`
+      ${r.auto_uitgeklokt?`<div style="font-size:12px;color:#B4472B;max-width:300px;white-space:normal;margin-top:2px">${mbChip('nakijken','#fff','#B4472B')}
+          <b>${r.notitie_beh?veiligTekst(r.notitie_beh):'Automatisch uitgeklokt &mdash; de eindtijd is een schatting.'}</b> Controleer de eindtijd voor je akkoord geeft.</div>`
         :r.notitie_beh?`<div style="font-size:11.5px;color:var(--muted);max-width:280px;white-space:normal">${veiligTekst(r.notitie_beh)}</div>`:''}</div></div>`;
   if(werkt){
     return `<tr id="mbUR${id}"><td>${naam}</td>
@@ -5899,22 +5903,26 @@ async function mbAandachtVast(id,knop){
   const rij=document.getElementById('mbAR'+id); if(rij)rij.remove();
 }
 
-let MB_RONDE=null;
+let MB_RONDE=null, MB_RONDE_RIJEN=[], MB_RONDE_INFO=null;
 async function mbRondes(){
-  const{data,error}=await sb.rpc('mcr_rondes');
+  const [res,vast]=await Promise.all([sb.rpc('mcr_rondes'), sb.rpc('mcr_rondes_vast').then(x=>x,()=>({data:[]}))]);
+  const{data,error}=res;
   if(error)throw error;
   const rondes=data||[];
+  const VAST={}; ((vast&&!vast.error&&vast.data)||[]).forEach(v=>{ VAST[v.ronde_id]=v; });
   const kop=document.getElementById('mbUrenKop');
-  if(kop)kop.innerHTML=mbKop('Betaalrondes','Acht rondes &middot; zij maken zelf een PDF en mailen die naar je; hier vink je af wat binnen is');
+  if(kop)kop.innerHTML=mbKop('Betaalrondes','Alleen Manchester-uren &middot; zij maken zelf een PDF en mailen die naar je; hier vink je af wat binnen is, zie je wat je overmaakt en zet je de ronde vast');
   if(!MB_RONDE||!rondes.some(r=>r.ronde_id===MB_RONDE)){
-    const o=rondes.find(r=>r.afgelopen&&r.facturen<r.mensen)||rondes.find(r=>r.afgelopen)||rondes[0];
+    const o=rondes.find(r=>r.afgelopen&&!VAST[r.ronde_id]&&r.mensen>0)||rondes.find(r=>r.afgelopen&&r.facturen<r.mensen)||rondes.find(r=>r.afgelopen)||rondes[0];
     MB_RONDE=o?o.ronde_id:null;
   }
-  let uit='<div class="mb-rij2"><div style="flex:1 1 340px;min-width:300px">';
+  let uit='<div class="mb-rij2"><div style="flex:1 1 280px;max-width:360px;min-width:260px">';
   rondes.forEach(r=>{
-    const aan=(r.ronde_id===MB_RONDE);
-    const st = !r.afgelopen ? mbChip('komt nog','#6B6A66','#F3F2EE')
-             : (r.facturen>=r.mensen&&r.mensen>0 ? mbChip('compleet','#0F7A52','#F2FBF6') : mbChip('open','#B45309','#FEF6E7'));
+    const aan=(r.ronde_id===MB_RONDE), v=VAST[r.ronde_id];
+    const st = v ? mbChip('vastgezet','#0F7A52','#F2FBF6')
+             : !r.afgelopen ? mbChip('komt nog','#6B6A66','#F3F2EE')
+             : (Number(r.wachtende_uren)>0 ? mbChip('uren open','#B4472B','#FBEDE9')
+             : (r.facturen>=r.mensen&&r.mensen>0 ? mbChip('compleet','#0F7A52','#F2FBF6') : mbChip('open','#B45309','#FEF6E7')));
     uit+=`<button class="mb-kaart mb-rondeknop${aan?' aan':''}" onclick="MB_RONDE='${veiligJs(r.ronde_id)}';mbUrenGa('rondes')">
       <div style="display:flex;align-items:center;gap:11px;width:100%">
         <div class="mb-nr">${r.nummer}</div>
@@ -5923,52 +5931,169 @@ async function mbRondes(){
           <div style="font-size:11.5px;color:var(--muted);margin-top:1px">uitbetalen ${veiligTekst(mbDatum(r.betaaldatum))}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(r.bedrag))}</div>
-          <div style="font-size:11px;color:var(--muted)">${r.facturen} van ${r.mensen} facturen</div></div>
+          <div style="font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(v?v.netto:r.bedrag))}</div>
+          <div style="font-size:11px;color:var(--muted)">${v?'netto':`${r.facturen} van ${r.mensen} facturen`}</div></div>
         ${st}</div>
+      ${Number(r.wachtende_uren)>0?`<div style="font-size:11.5px;color:#B4472B;margin-top:6px;text-align:left">${veiligTekst(mbNum(r.wachtende_uren,2))} uur nog niet geaccordeerd of uitgezocht</div>`:''}
       ${r.notitie?`<div style="font-size:11.5px;color:#B45309;margin-top:7px;line-height:1.5;text-align:left">${veiligTekst(r.notitie)}</div>`:''}
     </button>`;
   });
-  uit+='</div><div style="flex:1 1 420px;min-width:320px" id="mbRondeDetail"></div></div>';
+  uit+='</div><div style="flex:3 1 480px;min-width:0" id="mbRondeDetail"></div></div>';
   mbZet(uit);
+  MB_RONDE_INFO=rondes.find(r=>r.ronde_id===MB_RONDE)||null;
   if(MB_RONDE)mbRondeDetail(MB_RONDE);
+}
+// Wat er na inhouding per uur overblijft, tegen het minimumloon bij die leeftijd.
+function mbRondeMinWaarschuwing(r){
+  const inh=Number(r.boetes||0)+Number(r.borg_in||0), u=Number(r.uren||0);
+  if(!inh||!u)return null;
+  const b=mbMinLoon(r.leeftijd); if(!b)return null;
+  const per=(Number(r.bruto||0)-inh)/u;
+  return per<b.min-0.0001?{per,min:b.min,band:b.band}:null;
 }
 async function mbRondeDetail(id){
   const el=document.getElementById('mbRondeDetail'); if(!el)return;
   el.innerHTML='<div class="mb-kaart" style="color:var(--muted)">Bezig&hellip;</div>';
   try{
-    const{data,error}=await sb.rpc('mcr_ronde_mensen',{p_ronde:id});
+    const{data,error}=await sb.rpc('mcr_ronde_uitbetaling',{p_ronde:id});
     if(error)throw error;
-    const m=data||[];
-    if(!m.length){ el.innerHTML='<div class="mb-kaart">In deze periode heeft nog niemand gewerkt.</div>'; return; }
-    let t='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr><th>Naam</th>'
-      +'<th style="text-align:right">Uren</th><th style="text-align:right">Bedrag</th><th style="text-align:right">Factuur</th></tr></thead><tbody>';
+    const m=MB_RONDE_RIJEN=(data||[]);
+    const R=MB_RONDE_INFO||{};
+    if(!m.length){ el.innerHTML='<div class="mb-kaart">In deze periode heeft nog niemand in Manchester gewerkt.</div>'; return; }
+    const som=k=>m.reduce((a,r)=>a+Number(r[k]||0),0);
+    const vast=m.some(r=>r.vastgezet_op), open=m.reduce((a,r)=>a+Number(r.open_n||0),0);
+    const minW=m.filter(mbRondeMinWaarschuwing), geenBank=m.filter(r=>Number(r.netto)>0&&!(r.sort_code&&r.bank_account));
+    let t=`<div class="mb-kaart">
+      <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1 1 220px"><div style="font-size:15px;font-weight:700">Ronde ${veiligTekst(R.nummer||'')} &middot; uitbetaling</div>
+          <div style="font-size:12px;color:var(--muted)">${veiligTekst(mbKort(R.periode_van))} &ndash; ${veiligTekst(mbKort(R.periode_tot))} &middot; overmaken ${veiligTekst(mbDatum(R.betaaldatum))}
+          ${vast?` &middot; <b style="color:#0F7A52">vastgezet ${veiligTekst(mbKlokDatum(m.find(r=>r.vastgezet_op).vastgezet_op))}</b>`:''}</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="mb-mini" onclick="mbRondeCsv('overzicht')">Download (Excel)</button>
+          <button class="mb-mini" onclick="mbRondeCsv('bank')">Bankbestand</button>
+          ${vast?`<button class="mb-mini" onclick="mbRondeVastzetten(false,this)">Vastzetten ongedaan</button>`
+                :`<button class="mb-mini zwart" onclick="mbRondeVastzetten(true,this)"${!R.afgelopen||open?' disabled title="Kan pas als de ronde voorbij is en alle uren zijn afgehandeld"':''}>Ronde vastzetten</button>`}
+        </div></div>
+      <div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:12px">
+        <div><div class="mb-groot">${veiligTekst(mbPondKort(som('bruto')))}</div><div class="mb-klein">bruto</div></div>
+        <div><div class="mb-groot" style="color:${som('boetes')+som('borg_in')?'#B4472B':'inherit'}">&minus;${veiligTekst(mbPondKort(som('boetes')+som('borg_in')))}</div><div class="mb-klein">boetes en borg</div></div>
+        ${som('borg_terug')?`<div><div class="mb-groot" style="color:#0F7A52">+${veiligTekst(mbPondKort(som('borg_terug')))}</div><div class="mb-klein">borg terug</div></div>`:''}
+        <div><div class="mb-groot">${veiligTekst(mbPond(som('netto')))}</div><div class="mb-klein">over te maken</div></div>
+      </div>`;
+    const meld=[];
+    if(!R.afgelopen)meld.push('Deze ronde loopt nog: de bedragen kunnen nog veranderen.');
+    if(open)meld.push(`<b>${open} ${open===1?'registratie staat':'registraties staan'} nog open</b> (te accorderen of bij Uitgezocht). Die tellen hier nog niet mee; vastzetten kan pas als ze zijn afgehandeld.`);
+    if(geenBank.length)meld.push(`Geen sort code of rekeningnummer: ${geenBank.map(r=>veiligTekst(r.naam)).join(', ')}.`);
+    if(minW.length)meld.push(`<b>Let op het minimumloon.</b> Bij ${minW.map(r=>{const w=mbRondeMinWaarschuwing(r);return `${veiligTekst(r.naam)} (na inhouding &pound; ${mbPondTxt(w.per)}/u, minimaal &pound; ${mbPondTxt(w.min)})`;}).join(', ')} komt het uurloon in deze ronde onder het minimum.
+      In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. Overweeg de borg over meer rondes te spreiden.`);
+    if(meld.length)t+=`<div style="font-size:12.5px;line-height:1.6;margin-top:12px;padding:9px 11px;border-radius:10px;background:#FEF6E7;color:#5B3A07">${meld.join('<br>')}</div>`;
+    t+=`<div style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:10px">Bruto = goedgekeurde uren &times; tarief. Boetes en kledingborg worden ingehouden zolang er genoeg is; netto komt nooit onder &pound; 0
+      (wat overblijft schuift door naar de volgende ronde). Levert iemand kleding in, dan komt de borg terug. Pas na <b>Ronde vastzetten</b> ligt vast wat is ingehouden &mdash; zo wordt niets twee keer ingehouden.</div></div>`;
+    t+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr><th>Naam</th>'
+      +'<th style="text-align:right">Uren</th><th style="text-align:right">Tarief</th><th style="text-align:right">Bruto</th>'
+      +'<th style="text-align:right">Boete</th><th style="text-align:right">Borg</th><th style="text-align:right">Netto</th>'
+      +'<th>Bank &amp; UTR</th><th style="text-align:right">Factuur</th></tr></thead><tbody>';
     m.forEach(r=>{
       let st;
       if(r.betaald_op)        st=mbChip('betaald','#0F7A52','#F2FBF6');
       else if(r.ontvangen_op) st=mbChip('ontvangen','#2A4EA8','#EEF4FF');
       else if(r.factuur_id)   st=mbChip('gedownload','#6B6A66','#F3F2EE');
-      else if(!r.iban)        st=mbChip('geen IBAN','#B4472B','#FBEDE9');
-      else if(Number(r.wachtend)>0) st=mbChip(mbNum(r.wachtend,2)+' u wacht','#B4472B','#FBEDE9');
+      else if(Number(r.open_n)>0) st=mbChip(r.open_n+' open','#B4472B','#FBEDE9');
       else                    st=mbChip('nog niets binnen','#B45309','#FEF6E7');
-      t+=`<tr><td><div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(r.naam))}</div>
-          <div><div style="font-size:13.5px">${veiligTekst(r.naam)}</div>
-          ${r.factuur_nummer?`<div style="font-size:11px;color:var(--muted)">${veiligTekst(r.factuur_nummer)}</div>`:''}</div></div></td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbNum(r.uren,2))}</td>
-        <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(r.bedrag))}</td>
+      const w=mbRondeMinWaarschuwing(r);
+      const fAfw=r.factuur_bedrag!=null&&Math.abs(Number(r.factuur_bedrag)-Number(r.bruto))>0.01;
+      const borg=Number(r.borg_in)?`<span style="color:#B4472B">&minus;${veiligTekst(mbPond(r.borg_in))}</span>`
+        :Number(r.borg_terug)?`<span style="color:#0F7A52">+${veiligTekst(mbPond(r.borg_terug))}</span>`:'<span style="color:var(--muted)">&mdash;</span>';
+      t+=`<tr${w?' style="background:#FBEDE9"':''}><td><div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(r.naam))}</div>
+          <div style="min-width:140px"><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
+          ${Number(r.borg_nu)?`<div style="font-size:11px;color:var(--muted)">kleding: borg ${veiligTekst(mbPond(r.borg_nu))}${Number(r.borg_al)?', al ingehouden '+veiligTekst(mbPond(r.borg_al)):''}</div>`:''}
+          ${Number(r.boetes_open)>Number(r.boetes)?`<div style="font-size:11px;color:#B45309">nog ${veiligTekst(mbPond(Number(r.boetes_open)-Number(r.boetes)))} boete open</div>`:''}
+          ${w?`<div style="font-size:11px;color:#B4472B;font-weight:600">onder minimumloon na inhouding</div>`:''}</div></div></td>
+        <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${veiligTekst(mbNum(r.uren,2))}</td>
+        <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${r.tarief!=null?veiligTekst(mbPond(r.tarief)):'&mdash;'}</td>
+        <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(r.bruto))}</td>
+        <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${Number(r.boetes)?`<span style="color:#B4472B">&minus;${veiligTekst(mbPond(r.boetes))}</span>`:'<span style="color:var(--muted)">&mdash;</span>'}</td>
+        <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${borg}</td>
+        <td style="text-align:right;white-space:nowrap;font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(r.netto))}</td>
+        <td style="font-size:12px;white-space:nowrap">${r.sort_code||r.bank_account?`${veiligTekst(r.sort_code||'?')} &middot; ${veiligTekst(r.bank_account||'?')}`:'<span style="color:#B4472B">geen bank</span>'}
+          <div style="font-size:11px;color:var(--muted)">UTR ${r.utr?veiligTekst(r.utr):'&mdash;'}</div></td>
         <td style="text-align:right;white-space:nowrap">${st}
+          ${r.factuur_nummer?`<div style="font-size:11px;color:${fAfw?'#B45309':'var(--muted)'};margin-top:3px">${veiligTekst(r.factuur_nummer)}${fAfw?' &middot; factuur '+veiligTekst(mbPond(r.factuur_bedrag)):''}</div>`:''}
           ${r.factuur_id?`<div style="margin-top:5px;display:flex;gap:5px;justify-content:flex-end">
-            <button class="mb-mini" onclick="mbStempel('${veiligJs(r.factuur_id)}','ontvangen')">${r.ontvangen_op?'niet ontv.':'ontvangen'}</button>
-            <button class="mb-mini" onclick="mbStempel('${veiligJs(r.factuur_id)}','betaald')">${r.betaald_op?'niet betaald':'betaald'}</button></div>`:''}
+            <button class="mb-mini" onclick="mbStempel('${veiligJs(r.factuur_id)}','ontvangen',this)">${r.ontvangen_op?'niet ontv.':'ontvangen'}</button>
+            <button class="mb-mini" onclick="mbStempel('${veiligJs(r.factuur_id)}','betaald',this)">${r.betaald_op?'niet betaald':'betaald'}</button></div>`:''}
         </td></tr>`;
     });
+    t+=`<tr style="border-top:2px solid var(--border)"><td><b>Totaal</b></td><td style="text-align:right">${veiligTekst(mbNum(som('uren'),2))}</td><td></td>
+      <td style="text-align:right;white-space:nowrap">${veiligTekst(mbPond(som('bruto')))}</td><td style="text-align:right;white-space:nowrap">${som('boetes')?'&minus;'+veiligTekst(mbPond(som('boetes'))):''}</td>
+      <td style="text-align:right;white-space:nowrap">${som('borg_in')||som('borg_terug')?(som('borg_terug')-som('borg_in')<0?'&minus;':'+')+veiligTekst(mbPond(Math.abs(som('borg_terug')-som('borg_in')))):''}</td>
+      <td style="text-align:right;white-space:nowrap;font-weight:700">${veiligTekst(mbPond(som('netto')))}</td><td colspan="2"></td></tr>`;
     t+='</tbody></table></div>';
     el.innerHTML=t;
   }catch(e){ el.innerHTML=`<div class="mb-kaart" style="color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
 }
-async function mbStempel(id,wat){
+async function mbStempel(id,wat,knop){
+  if(knop)knop.disabled=true;
   try{ const{error}=await sb.rpc('mcr_factuur_stempel',{p_factuur:id,p_wat:wat}); if(error)throw error; mbRondeDetail(MB_RONDE); }
-  catch(e){ alert(mbFout(e)); }
+  catch(e){ if(knop)knop.disabled=false; alert(mbFout(e)); }
+}
+async function mbRondeVastzetten(aan,knop){
+  const R=MB_RONDE_INFO||{}, m=MB_RONDE_RIJEN||[];
+  const netto=m.reduce((a,r)=>a+Number(r.netto||0),0), inh=m.reduce((a,r)=>a+Number(r.boetes||0)+Number(r.borg_in||0),0);
+  const ok=aan
+    ? await vraagBevestiging('Ronde '+(R.nummer||'')+' vastzetten?',
+        `Hiermee leg je vast wat je overmaakt: <b>${veiligTekst(mbPond(netto))}</b> aan ${m.filter(r=>Number(r.netto)>0).length} mensen, met <b>${veiligTekst(mbPond(inh))}</b> aan boetes en borg ingehouden.
+         Volgende rondes rekenen hiermee verder, zodat niets twee keer wordt ingehouden.`,'Vastzetten')
+    : await vraagBevestiging('Vastzetten ongedaan maken?','De bedragen worden weer opnieuw berekend. Doe dit alleen als je nog niet hebt overgemaakt.','Ongedaan maken');
+  if(!ok)return;
+  if(knop)knop.disabled=true;
+  const{error}=await sb.rpc('mcr_ronde_vastzetten',{p_ronde:MB_RONDE,p_aan:!!aan});
+  if(error){ if(knop)knop.disabled=false; alert(mbFout(error)); return; }
+  toast(aan?'Ronde vastgezet':'Vastzetten ongedaan gemaakt'); mbUrenGa('rondes');
+}
+// Bestand bewaren: in de app via het deelmenu, in de browser als download.
+async function mbBestandDelen(tekst,naam,mime){
+  const C=window.Capacitor;
+  if(C&&C.Plugins&&C.Plugins.Filesystem&&C.Plugins.Share){
+    try{
+      const b64=btoa(unescape(encodeURIComponent(tekst)));
+      const res=await C.Plugins.Filesystem.writeFile({path:naam,data:b64,directory:'CACHE'});
+      await C.Plugins.Share.share({title:naam,files:[res.uri]}); return;
+    }catch(e){ console.error('Delen mislukt:',e); }
+  }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([tekst],{type:mime}));
+  a.download=naam; document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+}
+// overzicht: puntkomma's en komma-decimalen, zodat Nederlandse Excel het goed opent.
+// bank: eenvoudig Brits formaat (naam, sort code, rekeningnummer, bedrag met punt,
+// referentie max 18 tekens). Controleer vóór de eerste keer of je bank dit
+// formaat zo accepteert; anders de kolommen in de bankportal koppelen.
+function mbRondeCsv(soort){
+  const R=MB_RONDE_INFO||{}, m=MB_RONDE_RIJEN||[];
+  if(!m.length){ alert('Er staat niemand in deze ronde.'); return; }
+  const ref=('TCG R'+(R.nummer||'')+' '+String(R.periode_tot||'').slice(5)).slice(0,18);
+  if(soort==='bank'){
+    const q=v=>{ const s=String(v==null?'':v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+    const rijen=[['Name','Sort code','Account number','Amount','Reference']];
+    const zonder=[];
+    m.filter(r=>Number(r.netto)>0).forEach(r=>{
+      const sc=String(r.sort_code||'').replace(/\D/g,''), ac=String(r.bank_account||'').replace(/\D/g,'');
+      if(sc.length!==6||ac.length<6){ zonder.push(r.naam); return; }
+      rijen.push([String(r.naam||'').slice(0,18),sc,ac.padStart(8,'0'),Number(r.netto).toFixed(2),ref]);
+    });
+    mbBestandDelen(rijen.map(r=>r.map(q).join(',')).join('\r\n')+'\r\n','Manchester ronde '+(R.nummer||'')+' bank.csv','text/csv;charset=utf-8');
+    if(zonder.length)alert('Niet in het bankbestand (sort code of rekeningnummer ontbreekt of klopt niet): '+zonder.join(', '));
+    return;
+  }
+  const g=n=>(Number(n)||0).toFixed(2).replace('.',',');
+  const q=v=>{ const s=String(v==null?'':v); return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const kop=['Naam','Uren','Tarief','Bruto','Boetes ingehouden','Borg ingehouden','Borg terug','Netto','Sort code','Rekeningnummer','UTR','Factuurnummer','Factuurbedrag','Factuurstatus','Open registraties','Onder minimumloon na inhouding'];
+  const rijen=m.map(r=>[r.naam,g(r.uren),g(r.tarief),g(r.bruto),g(r.boetes),g(r.borg_in),g(r.borg_terug),g(r.netto),
+    r.sort_code||'',r.bank_account||'',r.utr||'',r.factuur_nummer||'',r.factuur_bedrag!=null?g(r.factuur_bedrag):'',
+    r.betaald_op?'betaald':r.ontvangen_op?'ontvangen':r.factuur_id?'gedownload':'geen factuur',r.open_n||0,mbRondeMinWaarschuwing(r)?'ja':'']);
+  const tekst='﻿'+[kop,...rijen].map(r=>r.map(q).join(';')).join('\r\n')+'\r\n';
+  mbBestandDelen(tekst,'Manchester ronde '+(R.nummer||'')+' uitbetaling.csv','text/csv;charset=utf-8');
 }
 
 // ── DAGRAPPORT — één dag, kraam als tabblad ───────────────────────
