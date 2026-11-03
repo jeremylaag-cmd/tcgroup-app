@@ -7912,6 +7912,7 @@ async function mbVoorvalOpslaan(id){
       p_notitie:v('mbVvNot')||null, p_boete:boete, p_shift:null});
     if(error)throw error;
     toast(boete?'Vastgelegd · boete '+mbPond(boete):'Vastgelegd');
+    if(knop)knop.disabled=false;
     MB_PERSOON=null; await mbPersoonOpen(id);
   }catch(e){ if(knop)knop.disabled=false; zeg(mbFout(e)); }
 }
