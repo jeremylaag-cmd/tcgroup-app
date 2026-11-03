@@ -1405,7 +1405,7 @@ textarea.crm-in{resize:vertical;line-height:1.5}
   <div style="background:var(--card,#fff);border-radius:14px;max-width:560px;width:100%;max-height:86vh;display:flex;flex-direction:column;overflow:hidden">
     <div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px">
       <div style="font-size:15px;font-weight:700" id="huisregelsTitel">House rules</div>
-      <button type="button" onclick="sluitHuisregels()" style="background:none;border:none;font-size:22px;line-height:1;color:var(--muted);cursor:pointer">&times;</button>
+      <button type="button" id="huisregelsSluit" onclick="sluitHuisregels()" style="background:none;border:none;font-size:22px;line-height:1;color:var(--muted);cursor:pointer">&times;</button>
     </div>
     <div id="huisregelsTekst" style="padding:16px 18px;overflow:auto;font-size:13.5px;line-height:1.6;color:var(--text)"></div>
     <div style="padding:12px 18px;border-top:1px solid var(--border)">
@@ -3725,7 +3725,7 @@ let MB_DAG_KRAAM=null, MB_KRAMEN=null, MB_INST_DATA=null, MB_DAG_BEOORDEEL=[];
 const MB_WEEKDAGEN=['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
 const MB_TABS=[['overzicht','Overzicht'],['shifts','Shifts'],['agenda','Agenda'],['uren','Uren'],['dagrapport','Dagrapport'],
                ['inlezen','Inlezen'],['cijfers','Cijfers'],['kosten','Kosten'],['bezetting','Bezetting'],
-               ['mensen','Mensen'],['instellingen','Instellingen']];
+               ['mensen','Mensen'],['huisregels','Huisregels'],['instellingen','Instellingen']];
 
 // ── kleine hulpjes ────────────────────────────────────────────────
 function mbDatum(d){ return d?new Date(String(d)+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}):''; }
@@ -3778,7 +3778,7 @@ function mbNaar(tab, knop){
   window.scrollTo(0,0);
   const f={overzicht:mbOverzicht,shifts:mbShiftsPlannen,agenda:mbAgenda,uren:mbUren,dagrapport:mbDagrapport,
            inlezen:mbInlezen,cijfers:mbCijfers,kosten:mbKosten,bezetting:mbBezetting,mensen:mbMensen,
-           instellingen:mbInstellingen}[tab];
+           huisregels:mbHuisregels,instellingen:mbInstellingen}[tab];
   if(f)f().catch(e=>{console.error(e);el.innerHTML=
     `<div class="mb-kaart">Dit scherm kon niet geladen worden.<br><span style="color:var(--muted);font-size:12.5px">${veiligTekst(mbFout(e))}</span></div>`;});
 }
@@ -3957,6 +3957,38 @@ async function mbOverzicht(){
     </div></div>`;
   document.getElementById('mbInhoud').innerHTML=uit;
 }
+// ── Huisregels (Bram) ─────────────────────────────────────────────
+// Bram: "ik zelf kan ze volgens mij niet snel erbij pakken". De actieve versie,
+// wie er akkoord op gaf en wie nog niet, en de tekst zoals het personeel hem ziet.
+async function mbHuisregels(){
+  const{data,error}=await sb.rpc('mcr_huisregels_overzicht');
+  if(error)throw error;
+  const h=data||{}, mensen=(h.mensen||[]).filter(m=>m.goedgekeurd);
+  const wel=mensen.filter(m=>m.akkoord_op), niet=mensen.filter(m=>!m.akkoord_op);
+  const wacht=(h.mensen||[]).filter(m=>!m.goedgekeurd);
+  let uit=mbKop('Huisregels',`Versie ${veiligTekst(h.versie||'?')}${h.sinds?' &middot; actief sinds '+veiligTekst(mbDatum(String(h.sinds).slice(0,10))):''}`,
+    `<button class="mb-mini" onclick="HUISREGELS=null;toonHuisregels(true)">Bekijk zoals het personeel</button>`);
+  uit+=`<div class="mb-rij2">
+    <div class="mb-kaart" style="flex:1;min-width:280px">
+      <div class="mb-kop">Akkoord op deze versie</div>
+      <div style="display:flex;gap:26px;margin:6px 0 10px">
+        <div><div class="mb-groot" style="color:#0F7A52">${wel.length}</div><div class="mb-klein">akkoord</div></div>
+        <div><div class="mb-groot" style="color:${niet.length?'#B45309':'var(--muted)'}">${niet.length}</div><div class="mb-klein">nog niet</div></div>
+        ${wacht.length?`<div><div class="mb-groot" style="color:var(--muted)">${wacht.length}</div><div class="mb-klein">nog niet vrijgegeven</div></div>`:''}</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.6">Bij een nieuwe versie krijgt iedereen hem te zien zodra hij de app opent, en kan pas verder na <i>I agree</i>.</div>
+      ${niet.length?`<div class="mb-kop" style="margin-top:14px">Nog niet akkoord</div>
+        <div style="font-size:13px;line-height:1.9">${niet.map(m=>`${mbNaamLink(m.id,m.naam)}${m.kraammanager?' <span style="color:var(--muted)">(kraammanager)</span>':''}${m.eerder?` <span style="color:var(--muted);font-size:12px">&middot; wel ${veiligTekst(m.eerder)}</span>`:''}`).join('<br>')}</div>`:''}
+      ${wel.length?`<div class="mb-kop" style="margin-top:14px">Akkoord</div>
+        <div style="font-size:13px;line-height:1.9">${wel.map(m=>`${mbNaamLink(m.id,m.naam)} <span style="color:var(--muted);font-size:12px">&middot; ${veiligTekst(mbDatum(String(m.akkoord_op).slice(0,10)))}</span>`).join('<br>')}</div>`:''}
+      ${(h.versies||[]).length>1?`<div style="font-size:12px;color:var(--muted);margin-top:14px">Eerdere versies: ${(h.versies||[]).filter(x=>!x.actief).map(x=>veiligTekst(x.versie)).join(', ')}</div>`:''}
+    </div>
+    <div class="mb-kaart" style="flex:1.4;min-width:300px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">${veiligTekst(h.titel||'House rules')}</div>
+      <div style="font-size:13.5px;line-height:1.6">${huisregelsNaarHtml(h.tekst||'')}</div>
+    </div></div>`;
+  document.getElementById('mbInhoud').innerHTML=uit;
+}
+
 // ── Dagafsluiting door de kraammanagers (Overzicht) ───────────────
 // Per kraam: afgesloten door wie en wanneer, schoonmaaklijst, gas, voorraad,
 // beoordelingen en kleding die de manager die dag invulde, en per persoon de
@@ -7598,7 +7630,8 @@ async function mbKramen(){
         <div style="flex:1 1 100px"><label class="mb-lab">Open tot</label><input type="time" class="mb-veld" id="mbC${id}" value="${veiligTekst(mbUur(r.open_tot))}"></div>
         <div style="align-self:flex-end"><button class="mb-mini zwart" onclick="mbKraamOpslaan('${veiligJs(r.id)}')">Opslaan</button></div>
       </div>
-      <div style="font-size:12px;color:var(--muted);margin-top:7px">${veiligTekst(r.adres||'')}</div></div>`;
+      <div style="margin-top:8px"><label class="mb-lab">Adres of plek (ziet het personeel bij hun shift, met een kaartlink)</label>
+        <input class="mb-veld" id="mbA${id}" maxlength="120" value="${veiligTekst(r.adres||'')}" placeholder="bv. Exchange Square, Manchester M4 3TR"></div></div>`;
   });
   uit+=`<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
     Shifts worden alleen aangemaakt binnen het seizoen van die kraam. Een dag die anders is &mdash; eerste kerstdag dicht, na de kerst korter open &mdash; zet je hieronder.</div></div>`;
@@ -7720,7 +7753,7 @@ async function mbGelijktrekkenDoen(kraam,datum){
 async function mbKraamOpslaan(id){
   const v=x=>{const e=document.getElementById(x+id);return e?e.value:null;};
   try{
-    const{error}=await sb.rpc('mcr_kraam_opslaan',{p_id:id,p_naam:null,p_adres:null,
+    const{error}=await sb.rpc('mcr_kraam_opslaan',{p_id:id,p_naam:null,p_adres:v('mbA'),
       p_start:v('mbS'),p_eind:v('mbE'),p_open_van:v('mbO'),p_open_tot:v('mbC')});
     if(error)throw error; MB_KRAMEN=null; mbInstGa('kramen');
   }catch(e){ alert(mbFout(e)); }
@@ -7972,6 +8005,7 @@ async function mcrGa(tab){
   // Er is maar één scherm zolang het account niet is vrijgegeven. Tikt iemand
   // toch ergens anders op, dan komt hij gewoon weer bij zijn eigen gegevens uit.
   if(MCR_WACHT && tab!=='me')tab='me';
+  if(tab!=='shifts')MCR_SHIFT_OPEN=null;
   if(['rota','stall','agenda','close','team'].includes(tab) && !MCR_MGR)tab='shifts';
   if(tab!=='team'){ MGR_TEAM_OPEN=null; if(tab!=='close')MGR_TEAM_TERUG=false; }
   if(tab!=='agenda')MGR_AG_OPEN=null;
@@ -8007,6 +8041,7 @@ async function mcrGa(tab){
 
 // ─── Mijn diensten ─────────────────────────────────────────────────
 async function mcrShifts(){
+  if(MCR_SHIFT_OPEN)return mcrShiftDetail(MCR_SHIFT_OPEN);
   const vandaag=new Date().toISOString().slice(0,10);
   const [sh,mg,rl,al]=await Promise.all([sb.rpc('mcr_mijn_shifts',{p_van:vandaag,p_tot:null}), sb.rpc('mcr_mijn_managers',{p_van:vandaag,p_tot:null}),
     sb.rpc('mcr_mijn_ruilen').then(x=>x,()=>({data:[]})), sb.rpc('mcr_alleen_beschikbaarheid').then(x=>x,()=>({data:false}))]);
@@ -8048,10 +8083,11 @@ async function mcrShifts(){
                  : (r.ingeklokt_op ? mcrChip('Clocked in','#0F7A52','#ECFDF3') : '');
       uit+=`<div class="mcr-rij">
         <div class="mcr-dag"><i>${veiligTekst(mcrDagKort(r.datum))}</i><b>${mcrDagNr(r.datum)}</b><u>${veiligTekst(mcrMaandKort(r.datum))}</u></div>
-        <div style="flex-grow:1;min-width:0">
+        <div style="flex-grow:1;min-width:0;cursor:pointer" onclick="mcrShiftKlik(event,'${veiligJs(r.shift_id)}')">
           <div style="display:flex;align-items:center;gap:7px">
             <span style="width:8px;height:8px;border-radius:50%;background:${veiligTekst(r.kleur)};flex-shrink:0"></span>
             <span style="font-size:14.5px;font-weight:600;color:#1A1917">${veiligTekst(r.kraam)}</span>
+            <span style="margin-left:auto;font-size:12px;color:#2A4EA8;white-space:nowrap">Details &rsaquo;</span>
           </div>
           <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${veiligTekst(mcrTijd(r.start_tijd))} &ndash; ${veiligTekst(mcrTijd(r.eind_tijd))}${mcrShiftNaam(r.shift_naam)?' &middot; '+veiligTekst(mcrShiftNaam(r.shift_naam)):''}</div>
           ${manRegel(r)}
@@ -8064,7 +8100,107 @@ async function mcrShifts(){
   uit+=alleen?`<button class="mcr-knop" onclick="mcrGa('avail')">My availability</button>`
     :`<button class="mcr-knop" onclick="mcrGa('open')">Find more shifts</button>
         <button class="mcr-knop licht" style="margin-top:9px" onclick="mcrGa('avail')">My availability</button>`;
+  uit+=`<div style="text-align:center;margin:14px 0 4px"><button class="mcr-linkje" onclick="toonHuisregels(true)">Read the house rules</button></div>`;
   m.innerHTML=uit;
+}
+
+// ─── Eén shift openen: alles wat je moet weten ─────────────────────
+// Bram (3 nov): "zorg dat de shift drukbaar is en ze de volgende dingen zien:
+// wie de manager is van de stand, tijden van hun shift, locatie, Dutch mini
+// pancake stall". Plus: collega's die dag (alleen voornaam), wat je meeneemt
+// en aantrekt, inklokken, pauze, afzeggen, noodnummers en de huisregels.
+let MCR_SHIFT_OPEN=null;
+function mcrShiftKlik(ev,id){
+  if(ev&&ev.target&&ev.target.closest&&ev.target.closest('a,button,textarea,input,select'))return;
+  MCR_SHIFT_OPEN=id; mcrShiftDetail(id);
+}
+function mcrOpenLink(url){
+  const Browser=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Browser;
+  if(Browser)Browser.open({url}); else window.open(url,'_blank');
+}
+function mcrTelLink(t,stijl){
+  const n=String(t||'').replace(/[^\d+]/g,''); if(!n)return '';
+  return `<a href="tel:${veiligTekst(n)}" style="${stijl||'color:#2A4EA8;text-decoration:none;font-weight:600'}">${veiligTekst(t)}</a>`;
+}
+function mcrMinMin(t,min){ // "10:00" min 10 → "09:50"
+  const [h,m]=String(t||'00:00').slice(0,5).split(':').map(Number); let x=h*60+m-min; if(x<0)x+=1440;
+  return String(Math.floor(x/60)).padStart(2,'0')+':'+String(x%60).padStart(2,'0');
+}
+async function mcrShiftDetail(id){
+  const m=document.getElementById('mcrMain');
+  m.scrollTop=0;
+  m.innerHTML='<div class="mcr-leeg">Loading&hellip;</div>';
+  let d;
+  try{ const r=await sb.rpc('mcr_shift_info',{p_shift:id}); if(r.error)throw r.error; d=r.data||{}; }
+  catch(e){ MCR_SHIFT_OPEN=null; m.innerHTML=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="MCR_SHIFT_OPEN=null;mcrGa('shifts')">&lsaquo; Back to my shifts</button>`+mcrLeeg(mcrFout(e)); return; }
+  const inst=d.instellingen||{};
+  const datum=new Date(String(d.datum)+'T00:00:00');
+  document.getElementById('mcrTitel').textContent='Your shift';
+  document.getElementById('mcrSub').textContent=datum.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
+  const start=mcrTijd(d.start), eind=mcrTijd(d.eind);
+  const naam=mcrShiftNaam(d.shift_naam);
+  const nu=Date.now(), startMs=new Date(String(d.datum)+'T'+(start||'00:00')+':00').getTime();
+  const komend=startMs>nu && !(d.klok&&d.klok.in);
+  const vroeg=parseInt(inst.inklok_venster_min,10)||30;
+  const pzU=Number(String(inst.pauze_drempel_uren||'').replace(',','.'))||6, pzM=parseInt(inst.pauze_minuten,10)||30;
+  const afzeg=parseInt(inst.afzegtermijn_uren,10)||72;
+  const kl=d.kleding||{};
+  const rij=(ico,inhoud)=>`<div style="display:flex;gap:11px;padding:10px 0;border-top:1px solid #EFEDE7;align-items:flex-start">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B6A66" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:1px">${ico}</svg>
+    <div style="flex:1;min-width:0;font-size:13.5px;line-height:1.5">${inhoud}</div></div>`;
+  const I={klok:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',pin:'<path d="M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>',
+    pers:'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',groep:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 4.8"/>',
+    shirt:'<path d="M8 3l4 2 4-2 5 4-3 3-2-1v12H8V9l-2 1-3-3z"/>',tag:'<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 12h6M12 9v6"/>',
+    koffie:'<path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H17M8 3v3M12 3v3"/>',
+    nood:'<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>'};
+  let uit=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="MCR_SHIFT_OPEN=null;mcrGa('shifts')">&lsaquo; Back to my shifts</button>`;
+  // Kop
+  uit+=`<div class="mcr-kaart">
+    <div style="font-size:11px;font-weight:700;color:#B4472B;text-transform:uppercase;letter-spacing:.06em">Dutch Mini Pancakes</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+      <span style="width:10px;height:10px;border-radius:50%;background:${veiligTekst(d.kleur)}"></span>
+      <span style="font-size:19px;font-weight:700">${veiligTekst(d.kraam)}</span></div>
+    <div style="font-size:14px;color:#1A1917;margin-top:6px">${veiligTekst(datum.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}</div>
+    <div style="font-size:24px;font-weight:700;margin-top:2px;font-variant-numeric:tabular-nums">${veiligTekst(start)} &ndash; ${d.tot_sluit?'close':veiligTekst(eind)}</div>
+    ${d.tot_sluit?`<div style="font-size:12.5px;color:#6B6A66">The stall closes at ${veiligTekst(mcrTijd(d.open_tot))}; after that you help clean up${eind?' (until about '+veiligTekst(eind)+')':''}.</div>`:''}
+    ${naam?`<div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${veiligTekst(naam)}</div>`:''}
+    ${d.klok&&d.klok.in?`<div style="margin-top:8px">${mcrChip(d.klok.uit?'Clocked '+mcrKlokTijd(d.klok.in)+'–'+mcrKlokTijd(d.klok.uit):'Clocked in at '+mcrKlokTijd(d.klok.in),'#0F7A52','#ECFDF3')}</div>`:''}
+    ${d.dicht?`<div style="margin-top:8px">${mcrChip('The stall is closed this day','#B4472B','#FBEDE9')}</div>`:''}
+  </div>`;
+  // Waar en wie
+  const mgr=(d.managers||[]);
+  uit+=`<div class="mcr-kaart" style="padding:4px 15px">
+    ${rij(I.pin,`<b>${veiligTekst(d.adres||d.kraam+', Manchester')}</b><br><span style="color:#6B6A66">Manchester Christmas Markets &middot; open ${veiligTekst(mcrTijd(d.open_van))}&ndash;${veiligTekst(mcrTijd(d.open_tot))}</span>
+      <br><button class="mcr-linkje" style="margin-top:4px;color:#2A4EA8" onclick="mcrOpenLink('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent('${veiligJs(d.adres||d.kraam+', Manchester')}'))">Open in Maps</button>`)}
+    ${rij(I.pers,mgr.length?mgr.map(x=>`<b>${veiligTekst(x.naam)}</b> <span style="color:#6B6A66">&middot; ${x.soort==='weekend'?'weekend manager':'stall manager'}</span>${x.telefoon?'<br>'+mcrTelLink(x.telefoon):''}`).join('<div style="height:6px"></div>')
+      :'<span style="color:#6B6A66">The stall manager for this day isn\'t known yet.</span>')}
+    ${rij(I.groep,(d.collegas||[]).length?`<span style="color:#6B6A66">Also working that day</span><br>${(d.collegas||[]).map(c=>`${veiligTekst(c.naam)} <span style="color:#6B6A66">${veiligTekst(mcrTijd(c.start))}–${c.eind?veiligTekst(mcrTijd(c.eind)):'close'}</span>`).join('<br>')}`
+      :'<span style="color:#6B6A66">Nobody else is on the rota at this stall that day yet.</span>')}
+  </div>`;
+  // Voor je dienst
+  const kleding=(kl.polo||kl.schort)?`You have ${[kl.polo?kl.polo+' long sleeve polo'+(kl.polo>1?'s':''):'',kl.schort?kl.schort+' apron'+(kl.schort>1?'s':''):''].filter(Boolean).join(' and ')}. Bring ${(kl.polo||0)+(kl.schort||0)>1?'them':'it'}, clean.`
+    :`You don't have work clothing yet. Ask the stall manager when you arrive (deposit £25 per piece)${kl.maat?'. Your size: '+veiligTekst(kl.maat):''}.`;
+  uit+=`<div class="mcr-kaart" style="padding:4px 15px">
+    <div class="mcr-kop" style="margin-top:10px">Before your shift</div>
+    ${rij(I.klok,`Be at the stall at <b>${veiligTekst(mcrMinMin(start,10))}</b>, 10 minutes before you start.`)}
+    ${rij(I.shirt,kleding+' Hair in a ponytail or braid, no jewellery on hands or neck.')}
+    ${rij(I.tag,`Clock in by tapping the tag at the stall (or type the code). You can clock in from ${vroeg} minutes before your start. No clocked hours means no pay.`)}
+    ${rij(I.koffie,`Working more than ${String(pzU).replace('.',',')} hours? Then ${pzM} minutes of break come off your hours. Drinks are £0.50 each.`)}
+  </div>`;
+  // Kan niet / nood
+  uit+=`<div class="mcr-kaart" style="padding:4px 15px">
+    ${komend?rij(I.klok,`Can't make it? Let us know at least ${afzeg} hours before. Later than that, you arrange a replacement yourself.
+      <br><button class="mcr-linkje" style="margin-top:4px" onclick="mcrShiftNietKunnen('${veiligJs(d.shift_id)}')">Can't make it?</button>`):''}
+    ${rij(I.nood,`In case of emergency: Bram ${mcrTelLink(inst.noodnummer_1||'')}${inst.noodnummer_2?`<br>Extreme emergency: Patrick ${mcrTelLink(inst.noodnummer_2)}`:''}`)}
+  </div>
+  <button class="mcr-knop licht" onclick="toonHuisregels(true)">Read the house rules</button>`;
+  m.innerHTML=uit;
+}
+function mcrKlokTijd(t){ return t?new Date(t).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):''; }
+async function mcrShiftNietKunnen(id){
+  MCR_SHIFT_OPEN=null;
+  await mcrGa('shifts');
+  if(document.getElementById('mcrRuil-'+id)){ mcrRuilOpen(id); const el=document.getElementById('mcrRuil-'+id); if(el)el.scrollIntoView({block:'center'}); }
 }
 
 // Shift ruilen: vraag Bram om je shift open te zetten.
@@ -9737,14 +9873,24 @@ async function toonHuisregels(alleenLezen,nieuweVersie){
     kn.textContent = nieuweVersie ? 'I agree' : (alleenLezen ? 'Close' : 'Agree and continue');
     kn.setAttribute('onclick', nieuweVersie ? 'mcrHuisregelsAkkoord()' : (alleenLezen ? 'sluitHuisregels()' : 'akkoordHuisregels()'));
   }
+  // Nieuwe versie: niet wegklikken; eerst akkoord geven.
+  const sx=document.getElementById('huisregelsSluit'); if(sx)sx.style.display=nieuweVersie?'none':'';
   if(tk)tk.textContent='Loading\u2026';
   ov.style.display='flex';
   const hr=await laadHuisregels();
   if(hr){ if(tt)tt.textContent=nieuweVersie?'The house rules have been updated':(hr.titel||'House rules');
-    if(tk)tk.innerHTML=(nieuweVersie?'<p style="margin:0 0 .6rem;padding:9px 11px;background:#FEF6E7;border-radius:8px;color:#8A5307">Please read the new version and tap <b>I agree</b> at the bottom.</p>':'')+huisregelsNaarHtml(hr.tekst); }
+    const nieuw=nieuweVersie&&HR_NIEUW[hr.versie];
+    if(tk)tk.innerHTML=(nieuweVersie?'<div style="margin:0 0 .8rem;padding:10px 12px;background:#FEF6E7;border-radius:8px;color:#8A5307">Please read the house rules again and tap <b>I agree</b> at the bottom. You need to agree before you can carry on.'
+        +(nieuw?'<div style="font-weight:700;margin-top:8px">What\'s new</div><ul style="margin:.2rem 0 0 1.1rem;padding:0">'+nieuw.map(x=>'<li>'+veiligTekst(x)+'</li>').join('')+'</ul>':'')+'</div>':'')
+      +huisregelsNaarHtml(hr.tekst); }
   else if(tk){ tk.textContent='The house rules could not be loaded. Check your connection and try again.'; }
 }
-function sluitHuisregels(){ const ov=document.getElementById('huisregelsOverlay'); if(ov)ov.style.display='none'; }
+function sluitHuisregels(){ const ov=document.getElementById('huisregelsOverlay'); if(ov)ov.style.display='none';
+  const sx=document.getElementById('huisregelsSluit'); if(sx)sx.style.display=''; }
+// Wat er per versie nieuw is (staat bovenaan als iemand opnieuw akkoord moet geven).
+const HR_NIEUW={'2026.3':['All drinks need to be paid for: £0.50 for every drink.',
+  'No free pancakes for friends, family or other market traders. Only the stall manager can do this.',
+  'Work clothing deposit: £25 per piece (long sleeve polo or apron).']};
 function akkoordHuisregels(){
   const v=document.getElementById('mcrAkkoord'); if(v)v.checked=true;
   sluitHuisregels();
