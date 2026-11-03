@@ -3688,17 +3688,27 @@ function nfcLees(bericht, seconden){
 }
 
 // ─── Inklokken met een tag (personeel, Engels) ────────────────────
+// Twee keer tikken (of de tag twee keer lezen) mag niet twee keer inklokken:
+// zolang het verzoek loopt doet een nieuwe tik niets (MCR_KLOK_BEZIG).
 async function mcrTagInklokken(){
+  if(typeof MCR_KLOK_BEZIG!=='undefined'&&MCR_KLOK_BEZIG)return;
   const st=document.getElementById('mcrNfcUit');
   const zet=(t,kl)=>{ if(st){st.style.color=kl||'#6B6A66'; st.textContent=t;} };
   zet('Hold your phone against the sticker…');
-  try{
-    const code=await nfcLees('Hold your phone against the sticker in the stall');
-    zet('Clocking you in…');
-    const{error}=await sb.rpc('tag_inklokken',{p_code:code});
-    if(error)throw error;
-    await mcrGa('clock');
-  }catch(e){ zet(mcrFout(e),'#B4472B'); }
+  let code;
+  try{ code=await nfcLees('Hold your phone against the sticker in the stall'); }
+  catch(e){ zet(mcrFout(e),'#B4472B'); return; }
+  if(MCR_KLOK_BEZIG)return;
+  MCR_KLOK_BEZIG=true;
+  zet('Clocking you in…');
+  let fout=null;
+  try{ const{error}=await sb.rpc('tag_inklokken',{p_code:code}); if(error)throw error; }
+  catch(e){ fout=e; }
+  MCR_KLOK_BEZIG=false;
+  if(!fout){ toast('You\'re clocked in.'); await mcrGa('clock'); return; }
+  const t=mcrFout(fout);
+  if(/already clocked in/i.test(t)){ toast(t); await mcrGa('clock'); return; }
+  zet(t,'#B4472B');
 }
 
 // ─── Een tag koppelen met NFC (beheer, Nederlands) ────────────────
@@ -7935,11 +7945,18 @@ function toonAfgesloten(naam){
   const w=document.getElementById('wachtWrap'); if(w)w.style.display='flex';
 }
 
+// Een foutmelding voor crew en managers in gewone taal. Alleen technische
+// voorvoegsels gaan eraf ("Error: ", "PostgrestError: " …); een dubbele punt
+// midden in de zin blijft staan ("Your shift starts at 10:00." werd vroeger "00.").
 function mcrFout(e){
-  const m = (e && (e.message||e.hint||e.details)) ? String(e.message||e.hint||e.details) : 'Something went wrong.';
-  if(/^niet ingelogd$/i.test(m.trim()))return 'You have been signed out. Please sign in again.';
-  if(/failed to fetch|load failed|networkerror/i.test(m))return 'No connection to the server. Check your internet and try again.';
-  return m.replace(/^.*?:\s*/,'');
+  let m = (e && (e.message||e.hint||e.details)) ? String(e.message||e.hint||e.details)
+        : (typeof e==='string' && e ? e : 'Something went wrong.');
+  m=m.trim();
+  if(/^niet ingelogd$/i.test(m))return 'You have been signed out. Please sign in again.';
+  if(/failed to fetch|load failed|networkerror|network request failed|fetch failed|timed? ?out/i.test(m))return 'No connection to the server. Check your internet and try again.';
+  if(/lopende_per_gebruiker|already clocked in/i.test(m))return 'You\'re already clocked in.';
+  m=m.replace(/^(?:(?:ERROR|Error|[A-Za-z]*Error|[A-Za-z]*Exception)\s*:\s*)+/,'').replace(/^P\d{4}\s*:\s*/,'');
+  return m||'Something went wrong.';
 }
 
 async function mcrStart(){
@@ -7960,8 +7977,68 @@ async function mcrStart(){
   }
   mcrNav();
   if(!MCR_WACHT&&!MCR_MGR)nfcKan();   // vast opvragen; het inklokscherm heeft het antwoord nodig
+  if(!MCR_WACHT)mcrNoodBewaren();      // noodnummers alvast op de telefoon, voor als er geen bereik is
+  mcrTerugLuisteren();
   await mcrGa(MCR_WACHT?'me':(MCR_MGR?'rota':'shifts'));
   mcrHuisregelsCheck();
+}
+
+async function mcrNoodBewaren(){
+  try{
+    const i=await mcrInstellingen();
+    if(i&&(i.noodnummer_1||i.noodnummer_2)){ const x=mcrCacheAlles(); if(x){ x.nood={n1:i.noodnummer_1||'',n2:i.noodnummer_2||''}; mcrCacheBewaar(x); } }
+  }catch(e){}
+}
+
+// ─── Live bijwerken voor crew ──────────────────────────────────────
+// Welke tabellen een crew-scherm raken. Een signaal over iets anders (bv. de
+// beschikbaarheid van collega's) laat het scherm met rust. Managers verversen
+// bij elk Manchester-signaal, zoals voorheen.
+const MCR_CREW_TABELLEN={
+  shifts:['klus_gebruikers','klus_shifts','klussen','kramen','kraam_uitzonderingen','klus_aanmeldingen','urenregistraties'],
+  open:['klus_gebruikers','klus_shifts','klussen','klus_aanmeldingen','kraam_uitzonderingen'],
+  hours:['urenregistraties','betaalrondes'],
+  invoice:['urenregistraties','betaalrondes'],
+};
+function mcrZichtbaar(){ const a=document.getElementById('mcrApp'); return !!(a&&a.style.display!=='none'); }
+function mcrCrewRaakt(tab,tabellen){
+  const lijst=MCR_CREW_TABELLEN[tab]; if(!lijst)return false;   // me, avail, clock: niet live
+  if(!tabellen||!tabellen.size||tabellen.has('*'))return true;
+  for(const t of tabellen){ if(lijst.includes(t)||(tab==='shifts'&&String(t).indexOf('mcr_')===0))return true; }
+  return false;
+}
+// Staat er iets open dat een verversing zou weggooien? Een "Can't make it"-
+// paneel, de factuur, of een veld waarin iets getypt is dat nog niet is
+// opgeslagen.
+function mcrCrewBezig(){
+  const m=document.getElementById('mcrMain'); if(!m)return false;
+  if(MCR_KLOK_BEZIG)return true;
+  if(m.querySelector('[id^="mcrRuilReden-"],[data-mcr-blijf]'))return true;
+  if(MCR_MGR)return false;   // manager-schermen hebben hun eigen bewaking (mgrClBezig e.d.)
+  if(MCR_TAB==='me')return true;   // eigen gegevens: nooit onder iemands handen vervangen
+  for(const e of m.querySelectorAll('input,textarea,select')){
+    if(e.type==='checkbox'||e.type==='radio'){ if(e.checked!==e.defaultChecked)return true; }
+    else if(e.tagName==='SELECT'){ for(const o of e.options){ if(o.selected!==o.defaultSelected)return true; } }
+    else if(e.type!=='button'&&e.type!=='hidden'&&e.value!==e.defaultValue)return true;
+  }
+  return false;
+}
+// Terug in de app (telefoon uit de zak): het klokscherm opnieuw ophalen,
+// zodat een uitklok door de manager of de server meteen te zien is.
+let MCR_TERUG_AAN=false;
+function mcrTerugLuisteren(){
+  if(MCR_TERUG_AAN)return; MCR_TERUG_AAN=true;
+  document.addEventListener('visibilitychange',()=>{ if(!document.hidden)mcrTerugInApp(); });
+  try{ const A=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.App; if(A&&A.addListener)A.addListener('resume',()=>mcrTerugInApp()); }catch(e){}
+}
+let MCR_TERUG_LAATST=0;
+function mcrTerugInApp(){
+  if(!mcrZichtbaar()||MCR_TAB!=='clock'||MCR_MGR||MCR_WACHT)return;
+  if(Date.now()-MCR_TERUG_LAATST<3000)return; MCR_TERUG_LAATST=Date.now();   // visibilitychange + resume tegelijk
+  const a=document.activeElement; if(a&&/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName))return;
+  if(document.getElementById('mcrKlokNotitie'))return;   // midden in het uitklokken
+  if(mcrCrewBezig())return;
+  mcrGa('clock',{stil:true});
 }
 
 // Nieuwe versie van de huisregels? Dan eenmalig laten lezen en akkoord vragen.
@@ -8001,7 +8078,23 @@ function mcrNav(){
   }).join('');
 }
 
-async function mcrGa(tab){
+// opt.stil: verversen op de achtergrond (live bijwerken, terug in de app).
+// Dan geen "Loading…", de scrollpositie blijft staan, en lukt het niet, dan
+// blijft het oude scherm gewoon staan.
+let MCR_STIL=false;
+async function mcrGa(tab,opt){
+  const stil=!!(opt&&opt.stil);
+  if(stil){
+    const m=document.getElementById('mcrMain'); const y=m?m.scrollTop:0;
+    MCR_STIL=true;
+    try{ await mcrGaNu(tab,true); }
+    finally{ MCR_STIL=false; }
+    if(m&&MCR_TAB===tab)m.scrollTop=y;
+    return;
+  }
+  return mcrGaNu(tab,false);
+}
+async function mcrGaNu(tab,stil){
   // Er is maar één scherm zolang het account niet is vrijgegeven. Tikt iemand
   // toch ergens anders op, dan komt hij gewoon weer bij zijn eigen gegevens uit.
   if(MCR_WACHT && tab!=='me')tab='me';
@@ -8018,8 +8111,10 @@ async function mcrGa(tab){
   document.getElementById('mcrTitel').textContent=t[0];
   document.getElementById('mcrSub').textContent=t[1];
   const m=document.getElementById('mcrMain');
-  m.scrollTop=0;
-  m.innerHTML='<div class="mcr-leeg">Loading&hellip;</div>';
+  if(!stil){
+    m.scrollTop=0;
+    m.innerHTML='<div class="mcr-leeg">Loading&hellip;</div>';
+  }
   try{
     if(tab==='shifts')  return await mcrShifts();
     if(tab==='open')    return await mcrOpenShifts();
@@ -8035,19 +8130,117 @@ async function mcrGa(tab){
     if(tab==='team')    return await mcrTeam();
   }catch(e){
     console.error(e);
+    if(stil)return;   // op de achtergrond: oud scherm laten staan
     m.innerHTML=mcrLeeg('Could not load this screen. Check your connection and try again.');
   }
+}
+
+// ─── Offline: de laatst geladen shifts bewaren ─────────────────────
+// Op de markt is het bereik slecht. De laatste versie van My shifts, de
+// details per shift (adres, tijden, manager + telefoon) en de noodnummers
+// staan daarom ook op de telefoon (localStorage, per gebruiker). Bij
+// uitloggen gaat alles weg (mcrCacheWis).
+function mcrCacheSleutel(){ return (CURRENT_USER&&CURRENT_USER.id)?'mcr_cache_'+CURRENT_USER.id:null; }
+function mcrCacheAlles(){
+  const k=mcrCacheSleutel(); if(!k)return null;
+  try{ const x=JSON.parse(localStorage.getItem(k)||'null'); return (x&&typeof x==='object')?x:{}; }catch(e){ return {}; }
+}
+function mcrCacheBewaar(x){
+  const k=mcrCacheSleutel(); if(!k)return;
+  try{ localStorage.setItem(k,JSON.stringify(x)); }catch(e){}
+}
+function mcrCacheZet(soort,id,v){
+  const x=mcrCacheAlles(); if(!x)return;
+  const nu=Date.now();
+  if(soort==='info'){
+    x.info=x.info||{}; x.info[id]={t:nu,v};
+    // Oude shifts eruit, en nooit meer dan 30 bewaren.
+    const gisteren=new Date(nu-36*3600e3).toISOString().slice(0,10);
+    Object.keys(x.info).forEach(k=>{ const d=x.info[k]&&x.info[k].v&&x.info[k].v.d; if(!d||String(d.datum||'')<gisteren)delete x.info[k]; });
+    const ks=Object.keys(x.info).sort((a,b)=>x.info[b].t-x.info[a].t); ks.slice(30).forEach(k=>delete x.info[k]);
+  }else x[soort]={t:nu,v};
+  mcrCacheBewaar(x);
+}
+function mcrCacheLees(soort,id){
+  const x=mcrCacheAlles(); if(!x)return null;
+  const r=soort==='info'?(x.info&&x.info[id]):x[soort];
+  return (r&&r.v)?r:null;
+}
+function mcrCacheWis(){
+  try{ Object.keys(localStorage).filter(k=>k.indexOf('mcr_cache_')===0).forEach(k=>localStorage.removeItem(k)); }catch(e){}
+}
+function mcrCacheInfo(id,d,ruil){
+  mcrCacheZet('info',id,{d,ruil:ruil||null});
+  const i=(d&&d.instellingen)||{};
+  if(i.noodnummer_1||i.noodnummer_2){ const x=mcrCacheAlles(); if(x){ x.nood={n1:i.noodnummer_1||'',n2:i.noodnummer_2||''}; mcrCacheBewaar(x); } }
+}
+// Noodnummers: uit de shift zelf, anders de bewaarde kopie.
+function mcrNoodnummers(inst){
+  const i=inst||{};
+  if(i.noodnummer_1||i.noodnummer_2)return {n1:i.noodnummer_1||'',n2:i.noodnummer_2||''};
+  const x=mcrCacheAlles(); return (x&&x.nood)||{n1:'',n2:''};
+}
+// Haal de details van de eerstvolgende shifts alvast op, zodat ze ook zonder
+// bereik te openen zijn. Hooguit drie, en niet vaker dan eens per zes uur.
+let MCR_VOORUIT_BEZIG=false;
+async function mcrInfoVooruit(rijen){
+  if(MCR_VOORUIT_BEZIG)return; MCR_VOORUIT_BEZIG=true;
+  try{
+    const x=mcrCacheAlles()||{}; const info=x.info||{};
+    const lijst=(rijen||[]).filter(r=>r.shift_id).slice(0,3)
+      .filter(r=>!(info[r.shift_id]&&Date.now()-info[r.shift_id].t<6*3600e3));
+    for(const r of lijst){
+      const res=await sb.rpc('mcr_shift_info',{p_shift:r.shift_id});
+      if(res&&!res.error&&res.data)mcrCacheInfo(r.shift_id,res.data,null);
+      else break;
+    }
+  }catch(e){}
+  finally{ MCR_VOORUIT_BEZIG=false; }
+}
+function mcrIsOffline(e){
+  if(typeof navigator!=='undefined'&&navigator.onLine===false)return true;
+  const m=String((e&&(e.message||e.details))||e||'');
+  return /failed to fetch|load failed|networkerror|network request failed|fetch failed|timed? ?out|no connection/i.test(m);
+}
+function mcrOfflineBalk(t){
+  const d=new Date(t);
+  const wanneer=(mcrLondenDag(t)===mcrLondenDag(Date.now())?'':d.toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})+' ')+mcrKlok(t);
+  return `<div style="display:flex;align-items:center;gap:8px;background:#FEF6E7;border:1px solid #F3D9A4;color:#8A5307;border-radius:10px;padding:8px 12px;font-size:12.5px;margin-bottom:12px">
+    <span style="width:7px;height:7px;border-radius:50%;background:#B45309;flex-shrink:0"></span>
+    <span><b>Offline</b> &ndash; last updated ${veiligTekst(wanneer)}</span></div>`;
+}
+// De stand van een ruil voor één shift (lijst én shiftdetail).
+function mcrRuilStatus(x){
+  if(x&&x.status==='gevraagd')return `<div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        ${mcrChip('Swap asked · waiting for Bram','#B45309','#FEF6E7')}
+        <button class="mcr-linkje" onclick="mcrRuilIntrekken('${veiligJs(x.id)}')">Cancel</button></div>`;
+  if(x&&x.status==='open')return `<div style="margin-top:6px">
+        ${mcrChip('Open for swap','#2A4EA8','#EEF4FF')}
+        <div style="font-size:12px;color:#6B6A66;margin-top:4px;line-height:1.45">You stay on the rota until someone takes over. We'll let you know.
+          <button class="mcr-linkje" onclick="mcrRuilIntrekken('${veiligJs(x.id)}')">I can work after all</button></div></div>`;
+  return '';
 }
 
 // ─── Mijn diensten ─────────────────────────────────────────────────
 async function mcrShifts(){
   if(MCR_SHIFT_OPEN)return mcrShiftDetail(MCR_SHIFT_OPEN);
   const vandaag=new Date().toISOString().slice(0,10);
-  const [sh,mg,rl,al]=await Promise.all([sb.rpc('mcr_mijn_shifts',{p_van:vandaag,p_tot:null}), sb.rpc('mcr_mijn_managers',{p_van:vandaag,p_tot:null}),
-    sb.rpc('mcr_mijn_ruilen').then(x=>x,()=>({data:[]})), sb.rpc('mcr_alleen_beschikbaarheid').then(x=>x,()=>({data:false}))]);
+  let sh,mg,rl,al,offline=null;
+  try{
+    [sh,mg,rl,al]=await Promise.all([sb.rpc('mcr_mijn_shifts',{p_van:vandaag,p_tot:null}), sb.rpc('mcr_mijn_managers',{p_van:vandaag,p_tot:null}),
+      sb.rpc('mcr_mijn_ruilen').then(x=>x,()=>({data:[]})), sb.rpc('mcr_alleen_beschikbaarheid').then(x=>x,()=>({data:false}))]);
+    if(sh.error)throw sh.error;
+    mcrCacheZet('shifts',null,{sh:sh.data||[],mg:mg&&!mg.error?(mg.data||[]):null,rl:rl&&!rl.error?(rl.data||[]):null,al:!!(al&&!al.error&&al.data===true)});
+    mcrInfoVooruit(sh.data||[]);
+  }catch(e){
+    // Geen verbinding? Dan de laatst bewaarde lijst, met een balkje erboven.
+    const c=mcrIsOffline(e)?mcrCacheLees('shifts'):null;
+    if(!c)throw e;
+    offline=c.t;
+    sh={data:(c.v.sh||[]).filter(r=>String(r.datum)>=vandaag)}; mg={data:c.v.mg||[]}; rl={data:c.v.rl||[]}; al={data:c.v.al===true};
+  }
   const alleen=!!(al&&!al.error&&al.data===true);
-  const{data,error}=sh;
-  if(error)throw error;
+  const{data}=sh;
   const RUIL={}; ((rl&&!rl.error&&rl.data)||[]).forEach(x=>{ if(!RUIL[x.shift_id])RUIL[x.shift_id]=x; });
   const nuMs=Date.now();
   const ruilHtml=r=>{
@@ -8055,13 +8248,7 @@ async function mcrShifts(){
     const start=new Date(String(r.datum)+'T'+String(r.start_tijd||'00:00').slice(0,5)+':00');
     if(start.getTime()<=nuMs)return '';
     const x=RUIL[r.shift_id], sid=veiligJs(r.shift_id);
-    if(x&&x.status==='gevraagd')return `<div style="margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-        ${mcrChip('Swap asked · waiting for Bram','#B45309','#FEF6E7')}
-        <button class="mcr-linkje" onclick="mcrRuilIntrekken('${veiligJs(x.id)}')">Cancel</button></div>`;
-    if(x&&x.status==='open')return `<div style="margin-top:6px">
-        ${mcrChip('Open for swap','#2A4EA8','#EEF4FF')}
-        <div style="font-size:12px;color:#6B6A66;margin-top:4px;line-height:1.45">You stay on the rota until someone takes over. We'll let you know.
-          <button class="mcr-linkje" onclick="mcrRuilIntrekken('${veiligJs(x.id)}')">I can work after all</button></div></div>`;
+    if(x&&(x.status==='gevraagd'||x.status==='open'))return mcrRuilStatus(x);
     return `${x&&x.status==='afgewezen'?`<div style="margin-top:6px">${mcrChip('Swap not approved','#B4472B','#FBEDE9')}</div>`:''}
       <div id="mcrRuil-${veiligTekst(r.shift_id)}" style="margin-top:4px">
         <button class="mcr-linkje" onclick="mcrRuilOpen('${sid}')">Can't make it?</button></div>`;
@@ -8073,11 +8260,11 @@ async function mcrShifts(){
     return `<div style="font-size:12px;color:#6D28D9;margin-top:3px;line-height:1.5">${
       m.length?'Manager: '+m.map(p).join(', '):''}${m.length&&w.length?'<br>':''}${w.length?'Weekend manager: '+w.map(p).join(', '):''}</div>`; };
   const m=document.getElementById('mcrMain');
-  let uit='';
+  let uit=offline?mcrOfflineBalk(offline):'';
   if(!data||!data.length){
-    uit=mcrLeeg(alleen?'No shifts yet. Fill in your availability below; Bram puts the rota together from that and you get a message for every shift.':'No shifts yet. Tap "Find more shifts" below to put your name down.');
+    uit+=mcrLeeg(alleen?'No shifts yet. Fill in your availability below; Bram puts the rota together from that and you get a message for every shift.':'No shifts yet. Tap "Find more shifts" below to put your name down.');
   }else{
-    uit='<div class="mcr-kaart" style="padding:2px 15px">';
+    uit+='<div class="mcr-kaart" style="padding:2px 15px">';
     data.forEach(r=>{
       const chip = r.uitgeklokt_op ? mcrStatusChip(r.status)
                  : (r.ingeklokt_op ? mcrChip('Clocked in','#0F7A52','#ECFDF3') : '');
@@ -8128,11 +8315,30 @@ function mcrMinMin(t,min){ // "10:00" min 10 → "09:50"
 }
 async function mcrShiftDetail(id){
   const m=document.getElementById('mcrMain');
-  m.scrollTop=0;
-  m.innerHTML='<div class="mcr-leeg">Loading&hellip;</div>';
-  let d;
-  try{ const r=await sb.rpc('mcr_shift_info',{p_shift:id}); if(r.error)throw r.error; d=r.data||{}; }
-  catch(e){ MCR_SHIFT_OPEN=null; m.innerHTML=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="MCR_SHIFT_OPEN=null;mcrGa('shifts')">&lsaquo; Back to my shifts</button>`+mcrLeeg(mcrFout(e)); return; }
+  const stil=MCR_STIL;
+  if(!stil){
+    m.scrollTop=0;
+    m.innerHTML='<div class="mcr-leeg">Loading&hellip;</div>';
+  }
+  let d, offline=null, ruil=null;
+  try{
+    const [r,rl]=await Promise.all([sb.rpc('mcr_shift_info',{p_shift:id}),
+      sb.rpc('mcr_mijn_ruilen').then(x=>x,()=>({data:[]}))]);
+    if(r.error)throw r.error;
+    d=r.data||{};
+    ruil=((rl&&!rl.error&&rl.data)||[]).find(x=>x.shift_id===id)||null;
+    mcrCacheInfo(id,d,ruil);
+  }
+  catch(e){
+    // Geen verbinding? Dan de laatst bewaarde versie van deze shift.
+    const c=mcrIsOffline(e)?mcrCacheLees('info',id):null;
+    if(c){ d=c.v.d||{}; ruil=c.v.ruil||null; offline=c.t; }
+    else{
+      if(stil)return;
+      MCR_SHIFT_OPEN=null; m.innerHTML=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="MCR_SHIFT_OPEN=null;mcrGa('shifts')">&lsaquo; Back to my shifts</button>`+mcrLeeg(mcrFout(e)); return;
+    }
+  }
+  if(MCR_SHIFT_OPEN!==id&&stil)return;   // intussen weggeklikt
   const inst=d.instellingen||{};
   const datum=new Date(String(d.datum)+'T00:00:00');
   document.getElementById('mcrTitel').textContent='Your shift';
@@ -8154,6 +8360,7 @@ async function mcrShiftDetail(id){
     koffie:'<path d="M4 9h13v5a5 5 0 0 1-5 5H9a5 5 0 0 1-5-5z"/><path d="M17 11h1.5a2.5 2.5 0 0 1 0 5H17M8 3v3M12 3v3"/>',
     nood:'<path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17v.5"/>'};
   let uit=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="MCR_SHIFT_OPEN=null;mcrGa('shifts')">&lsaquo; Back to my shifts</button>`;
+  if(offline)uit+=mcrOfflineBalk(offline);
   // Kop
   uit+=`<div class="mcr-kaart">
     <div style="font-size:11px;font-weight:700;color:#B4472B;text-transform:uppercase;letter-spacing:.06em">Dutch Mini Pancakes</div>
@@ -8190,10 +8397,14 @@ async function mcrShiftDetail(id){
     ${rij(I.koffie,`Working more than ${String(pzU).replace('.',',')} hours? Then ${pzM} minutes of break come off your hours. Drinks are £0.50 each.`)}
   </div>`;
   // Kan niet / nood
+  // Loopt er al een ruil voor deze shift, dan de stand van zaken in plaats van de knop.
+  const ruilStand=komend&&ruil&&['gevraagd','open'].includes(ruil.status)?mcrRuilStatus(ruil):'';
+  const nood=mcrNoodnummers(inst);
   uit+=`<div class="mcr-kaart" style="padding:4px 15px">
-    ${komend?rij(I.klok,`Can't make it? Let us know at least ${afzeg} hours before. Later than that, you arrange a replacement yourself.
+    ${komend?rij(I.klok,ruilStand?ruilStand:`Can't make it? Let us know at least ${afzeg} hours before. Later than that, you arrange a replacement yourself.
+      ${ruil&&ruil.status==='afgewezen'?`<div style="margin-top:6px">${mcrChip('Swap not approved','#B4472B','#FBEDE9')}</div>`:''}
       <br><button class="mcr-linkje" style="margin-top:4px" onclick="mcrShiftNietKunnen('${veiligJs(d.shift_id)}')">Can't make it?</button>`):''}
-    ${rij(I.nood,`In case of emergency: Bram ${mcrTelLink(inst.noodnummer_1||'')}${inst.noodnummer_2?`<br>Extreme emergency: Patrick ${mcrTelLink(inst.noodnummer_2)}`:''}`)}
+    ${rij(I.nood,`In case of emergency: Bram ${mcrTelLink(nood.n1||'')}${nood.n2?`<br>Extreme emergency: Patrick ${mcrTelLink(nood.n2)}`:''}`)}
   </div>
   ${komend?`<button class="mcr-knop" style="margin-bottom:9px" onclick="mcrShiftAgenda('${veiligJs(d.shift_id)}')">Add to my calendar</button>`:''}
   <button class="mcr-knop licht" onclick="toonHuisregels(true)">Read the house rules</button>`;
@@ -8224,16 +8435,26 @@ async function mcrShiftNietKunnen(id){
 async function mcrRuilOpen(shift){
   const el=document.getElementById('mcrRuil-'+shift); if(!el)return;
   el.innerHTML='<div style="font-size:12.5px;color:#6B6A66;margin-top:6px">Loading&hellip;</div>';
-  let d=null;
-  try{ const r=await sb.rpc('mcr_shift_info',{p_shift:shift}); if(!r.error)d=r.data; }catch(e){}
+  let d=null, geenBereik=false, fout=null;
+  try{ const r=await sb.rpc('mcr_shift_info',{p_shift:shift}); if(!r.error){ d=r.data; mcrCacheInfo(shift,d||{},null); } else fout=r.error; }
+  catch(e){ fout=e; }
+  // Geen bereik? Dan de bewaarde gegevens van deze shift en de noodnummers.
+  if(!d&&fout&&mcrIsOffline(fout)){
+    geenBereik=true;
+    const c=mcrCacheLees('info',shift); if(c&&c.v&&c.v.d)d=c.v.d;
+  }
   const mgr=((d&&d.managers)||[]);
-  const inst=(d&&d.instellingen)||{};
+  const nood=mcrNoodnummers((d&&d.instellingen)||{});
+  const bram=nood.n1?`: ${mcrTelLink(nood.n1)}`:'';
   const bel=mgr.length
     ? mgr.map(x=>`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px">
         <span style="font-size:13.5px"><b>${veiligTekst(x.naam)}</b> <span style="color:#8A5307">&middot; ${x.soort==='weekend'?'weekend manager':'stall manager'}</span></span>
         ${x.telefoon?`<a href="tel:${veiligTekst(String(x.telefoon).replace(/[^\d+]/g,''))}" class="mcr-knop" style="width:auto;display:inline-block;padding:8px 14px;font-size:13px;text-decoration:none">Call</a>`:''}</div>`).join('')
-    : `<div style="font-size:13px;margin-top:6px">The stall manager isn't known yet. Call Bram${inst.noodnummer_1?`: ${mcrTelLink(inst.noodnummer_1)}`:''}.</div>`;
+    : geenBereik
+      ? `<div style="font-size:13px;margin-top:6px">Call Bram${bram}.</div>`
+      : `<div style="font-size:13px;margin-top:6px">The stall manager isn't known yet. Call Bram${bram}.</div>`;
   el.innerHTML=`<div style="background:#FEF6E7;border:1px solid #F3D9A4;border-radius:11px;padding:11px 12px;margin-top:6px">
+    ${geenBereik?`<div style="font-size:12.5px;font-weight:700;color:#B4472B;margin-bottom:6px">No connection${mgr.length?' &ndash; these are the numbers we saved':''}</div>`:''}
     <div style="font-size:14px;font-weight:700;color:#8A5307">Call your stall manager first</div>
     <div style="font-size:12.5px;color:#8A5307;margin-top:3px;line-height:1.45">Can't make this shift? Call the stall manager now, so the stall isn't left short.</div>
     ${bel}</div>
@@ -8243,14 +8464,21 @@ async function mcrRuilOpen(shift){
     <textarea id="mcrRuilReden-${veiligTekst(shift)}" rows="2" maxlength="200" placeholder="Reason (optional)"
       style="width:100%;margin-top:8px;font-family:var(--font);font-size:14px;padding:8px 10px;border:1px solid #D9D7D0;border-radius:9px;box-sizing:border-box"></textarea>
     <div style="display:flex;gap:8px;margin-top:8px">
-      <button class="mcr-knop" style="padding:10px 0;font-size:14px" onclick="mcrRuilVraag('${veiligJs(shift)}')">I called · tell Bram</button>
+      <button class="mcr-knop" id="mcrRuilKnop-${veiligTekst(shift)}" style="padding:10px 0;font-size:14px" onclick="mcrRuilVraag('${veiligJs(shift)}')">I called · tell Bram</button>
       <button class="mcr-knop licht" style="padding:10px 0;font-size:14px" onclick="mcrGa('shifts')">Never mind</button></div></div>`;
 }
 async function mcrRuilVraag(shift){
+  const kn=document.getElementById('mcrRuilKnop-'+shift);
+  if(kn&&kn.disabled)return;
   const t=(document.getElementById('mcrRuilReden-'+shift)||{}).value||'';
+  if(kn){ kn.disabled=true; kn.style.opacity='.6'; kn.textContent='Sending…'; }
   try{ const{error}=await sb.rpc('mcr_ruil_vragen',{p_shift:shift,p_reden:t||null}); if(error)throw error;
        toast('Sent to Bram. You\'ll get a message when he decides.'); }
-  catch(e){ alert(mcrFout(e)); }
+  catch(e){
+    // Mislukt (bv. geen bereik): paneel en getypte reden laten staan.
+    if(kn){ kn.disabled=false; kn.style.opacity=''; kn.textContent='I called · tell Bram'; }
+    alert(mcrFout(e)); return;
+  }
   await mcrGa('shifts');
 }
 async function mcrRuilIntrekken(id){
@@ -8510,11 +8738,33 @@ async function mcrVoorkeuren(){
 }
 
 // ─── In- en uitklokken ─────────────────────────────────────────────
+// mcr_klok_status geeft ook het einde van de dienst en of iemand vergeten is
+// uit te klokken. Bestaat die nog niet (database nog niet bijgewerkt), dan
+// het oude mcr_status.
 async function mcrKlok0(){
-  const{data,error}=await sb.rpc('mcr_status');
-  if(error)throw error;
-  MCR_STATUS=(data&&data[0])||{};
+  let r=await sb.rpc('mcr_klok_status');
+  if(r.error&&/mcr_klok_status|PGRST202|could not find the function/i.test(String(r.error.message||'')+String(r.error.code||''))){
+    const o=await sb.rpc('mcr_status'); if(o.error)throw o.error;
+    MCR_STATUS=(o.data&&o.data[0])||{}; mcrKlokTeken(); return;
+  }
+  if(r.error)throw r.error;
+  MCR_STATUS=(r.data&&typeof r.data==='object'&&!Array.isArray(r.data))?r.data:((r.data&&r.data[0])||{});
   mcrKlokTeken();
+}
+// De Londense kalenderdag van een tijdstip ("2026-11-09"), los van de telefoon.
+function mcrLondenDag(ts){ try{ return new Date(ts).toLocaleDateString('en-CA',{timeZone:'Europe/London'}); }catch(e){ return new Date(ts).toISOString().slice(0,10); } }
+// "10:00" als het vandaag was, anders "Monday 10:00".
+function mcrSinds(ts,lang){
+  if(!ts)return '';
+  if(mcrLondenDag(ts)===mcrLondenDag(Date.now()))return mcrKlok(ts);
+  return new Date(ts).toLocaleDateString('en-GB',{weekday:lang?'long':'short'})+' '+mcrKlok(ts);
+}
+// Tegen dubbel tikken: zolang een klokverzoek loopt, doet een tweede tik niets.
+let MCR_KLOK_BEZIG=false;
+function mcrKlokKnop(id,bezig,tekst){
+  const k=document.getElementById(id); if(!k)return;
+  if(bezig){ if(!k.dataset.tekst)k.dataset.tekst=k.textContent; k.disabled=true; k.style.opacity='.6'; k.textContent=tekst; }
+  else{ k.disabled=false; k.style.opacity=''; if(k.dataset.tekst)k.textContent=k.dataset.tekst; }
 }
 // Ingeklokt: alleen de teller en de knop. De vragen over pauze en een notitie
 // komen pas in beeld als iemand op Clock out drukt (mcrUitklokVraag).
@@ -8522,6 +8772,7 @@ let MCR_PAUZE_KEUZE=null;
 async function mcrUitklokVraag(){
   const st=MCR_STATUS||{};
   const m=document.getElementById('mcrMain'); if(!m||!st.uren_id)return;
+  if(st.vergeten)return mcrKlokTeken();   // vergeten uit te klokken: eigen scherm
   if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
   // De standaardpauze komt uit de afspraak van de vestiging (bv. 30 min boven
   // 6 uur), berekend op de gewerkte tijd. De medewerker mag hem aanpassen.
@@ -8537,7 +8788,7 @@ async function mcrUitklokVraag(){
     <div style="text-align:center">
       <div style="font-size:13px;color:#6B6A66">Clocking out of</div>
       <div style="font-size:22px;font-weight:700;color:#1A1917;margin-top:2px">${veiligTekst(st.kraam||'')}</div>
-      <div style="font-size:13px;color:#6B6A66;margin-top:4px">${Math.floor(min/60)}h ${String(min%60).padStart(2,'0')}m since ${veiligTekst(mcrKlok(st.ingeklokt_op))}</div>
+      <div style="font-size:13px;color:#6B6A66;margin-top:4px">${Math.floor(min/60)}h ${String(min%60).padStart(2,'0')}m since ${veiligTekst(mcrSinds(st.ingeklokt_op))}</div>
     </div>
     <div class="mcr-kaart" style="margin-top:20px">
       <label class="mcr-label">Break</label>
@@ -8565,20 +8816,21 @@ async function mcrUitklokVraag(){
       <input class="mcr-veld" id="mcrUitCode" maxlength="8" autocapitalize="characters" autocomplete="off"
              style="text-align:center;font-size:22px;letter-spacing:.3em;font-weight:700;padding:13px"
              placeholder="ABC123" onkeydown="if(event.key==='Enter')mcrUitklokken(this.value)">
-      <button class="mcr-knop" style="margin-top:10px" onclick="mcrUitklokken(document.getElementById('mcrUitCode').value)">Clock out</button>
+      <button class="mcr-knop" id="mcrUitKnop" style="margin-top:10px" onclick="mcrUitklokken(document.getElementById('mcrUitCode').value)">Clock out</button>
     </div>
     <button class="mcr-knop" style="margin-top:8px;background:transparent;color:#6B6A66;border:1px solid #EFEDE7" onclick="mcrKlokTeken()">Back</button>`;
 }
 // Uitklokken met de tag: alleen bij de kraam, net als het inklokken.
 async function mcrTagUitklokken(){
+  if(MCR_KLOK_BEZIG)return;
   const st=document.getElementById('mcrNfcUit');
   const zet=(t,kl)=>{ if(st){st.style.color=kl||'#6B6A66'; st.textContent=t;} };
   zet('Hold your phone against the sticker…');
-  try{
-    const code=await nfcLees('Hold your phone against the sticker in the stall');
-    zet('Clocking you out…');
-    await mcrUitklokken(code);
-  }catch(e){ zet(mcrFout(e),'#B4472B'); }
+  let code;
+  try{ code=await nfcLees('Hold your phone against the sticker in the stall'); }
+  catch(e){ zet(mcrFout(e),'#B4472B'); return; }
+  zet('Clocking you out…');
+  await mcrUitklokken(code, zet);
 }
 function mcrPauzeKies(p){
   MCR_PAUZE_KEUZE=p;
@@ -8587,6 +8839,31 @@ function mcrPauzeKies(p){
 function mcrKlokTeken(){
   const st=MCR_STATUS||{};
   const m=document.getElementById('mcrMain');
+  if(st.uren_id&&st.vergeten){
+    // Vergeten uit te klokken (de dienst is al ruim voorbij). Geen teller van
+    // 25 uur, maar een duidelijke uitleg en één knop.
+    if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
+    const eind=st.eind_schatting?mcrKlok(st.eind_schatting):'';
+    const eindDag=st.eind_schatting&&mcrLondenDag(st.eind_schatting)!==mcrLondenDag(st.ingeklokt_op)?' ('+new Date(st.eind_schatting).toLocaleDateString('en-GB',{weekday:'short'})+')':'';
+    document.getElementById('mcrSub').textContent=st.kraam||'';
+    m.innerHTML=`
+      <div style="text-align:center">
+        <div class="mcr-chip" style="background:#FEF6E7;color:#8A5307;border:1px solid #F3D9A4;padding:8px 15px;font-size:13px;display:inline-flex;align-items:center;gap:8px;margin-bottom:16px">
+          <span style="width:8px;height:8px;border-radius:50%;background:#B45309"></span>Still clocked in
+        </div>
+        <div style="font-size:20px;font-weight:700;color:#1A1917;line-height:1.35">You're still clocked in from ${veiligTekst(mcrSinds(st.ingeklokt_op,true))}</div>
+        <div style="font-size:13.5px;color:#6B6A66;margin-top:6px;line-height:1.5">at ${veiligTekst(st.kraam||'the stall')}${st.dienst_eind?'. Your shift ended at '+veiligTekst(eind)+veiligTekst(eindDag)+'.':'.'}</div>
+      </div>
+      <div class="mcr-kaart" style="margin-top:18px">
+        <div style="font-size:13.5px;color:#1A1917;line-height:1.55">Forgot to clock out? Clock out now and your hours stop at
+          <b>${st.dienst_eind?'the end of your shift ('+veiligTekst(eind)+')':veiligTekst(eind)}</b>. Your stall manager and Bram see a note with it.</div>
+        <button class="mcr-knop" id="mcrVergetenKnop" style="margin-top:12px" onclick="mcrVergetenUitklokken()">Clock out at ${veiligTekst(eind)}</button>
+        <div id="mcrVergetenUit" style="font-size:12.5px;color:#B4472B;margin-top:8px;min-height:2px"></div>
+        <div style="font-size:12.5px;color:#6B6A66;line-height:1.55;margin-top:6px">Finished at a different time? Ask your stall manager to set your finish time.</div>
+      </div>
+      ${st.vandaag?`<div style="font-size:12.5px;color:#6B6A66;text-align:center;line-height:1.5;margin-top:4px">After that you can clock in for today's shift.</div>`:''}`;
+    return;
+  }
   if(st.uren_id){
     const min=Math.max(0,Math.round((Date.now()-new Date(st.ingeklokt_op).getTime())/60000));
     document.getElementById('mcrSub').textContent=st.kraam||'';
@@ -8604,7 +8881,7 @@ function mcrKlokTeken(){
           <span style="width:8px;height:8px;border-radius:50%;background:#0F7A52"></span>Clocked in at ${veiligTekst(st.kraam||'')}
         </div>
         <div id="mcrTeller" style="font-size:54px;font-weight:700;color:#1A1917;letter-spacing:-1.5px">${Math.floor(min/60)}:${String(min%60).padStart(2,'0')}</div>
-        <div style="font-size:13px;color:#6B6A66;margin-top:2px">since ${veiligTekst(mcrKlok(st.ingeklokt_op))}</div>
+        <div style="font-size:13px;color:#6B6A66;margin-top:2px">since ${veiligTekst(mcrSinds(st.ingeklokt_op,true))}</div>
         <div class="mcr-cirkel uit" style="margin-top:26px" onclick="mcrUitklokVraag()">
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
           <span style="font-size:15px;font-weight:600">Clock out</span>
@@ -8643,7 +8920,7 @@ function mcrKlokTeken(){
       <input class="mcr-veld" id="mcrCode" maxlength="8" autocapitalize="characters" autocomplete="off"
              style="text-align:center;font-size:26px;letter-spacing:.32em;font-weight:700;padding:16px 13px"
              placeholder="ABC123" onkeydown="if(event.key==='Enter')mcrInklokken()">
-      <button class="mcr-knop" style="margin-top:12px" onclick="mcrInklokken()">Clock in</button>`:''}
+      <button class="mcr-knop" id="mcrInKnop" style="margin-top:12px" onclick="mcrInklokken()">Clock in</button>`:''}
       <div class="mcr-kaart" style="margin-top:22px;text-align:left">
         <div style="font-size:12.5px;color:#6B6A66;line-height:1.6">
           No card to hand, or the code will not work? Ask the stand manager to clock you in.
@@ -8653,44 +8930,102 @@ function mcrKlokTeken(){
     </div>`;
 }
 async function mcrInklokken(){
+  if(MCR_KLOK_BEZIG)return;
   const el=document.getElementById('mcrCode'); if(!el)return;
   const code=(el.value||'').trim();
   if(code.length<4){ alert('Please type the six character code from the stall.'); return; }
+  MCR_KLOK_BEZIG=true; mcrKlokKnop('mcrInKnop',true,'Clocking in…'); el.readOnly=true;
+  let fout=null;
   try{
-    const{data,error}=await sb.rpc('code_inklokken',{p_code:code});
+    const{error}=await sb.rpc('code_inklokken',{p_code:code});
     if(error)throw error;
-    await mcrGa('clock');
-  }catch(e){ alert(mcrFout(e)); }
+  }catch(e){ fout=e; }
+  MCR_KLOK_BEZIG=false;
+  if(!fout){ toast('You\'re clocked in.'); await mcrGa('clock'); return; }
+  const t=mcrFout(fout);
+  mcrKlokKnop('mcrInKnop',false); el.readOnly=false;
+  alert(t);
+  // Al ingeklokt (bv. dubbel getikt of op een andere telefoon)? Laat dan de teller zien.
+  if(/already clocked in/i.test(t))await mcrGa('clock');
 }
-async function mcrUitklokken(code){
-  const geen=document.getElementById('mcrGeenPauze');
-  const not=document.getElementById('mcrKlokNotitie');
-  const c=String(code||'').trim();
-  if(!c){ alert('To clock out, tap the tag or type the code from the card in the stall.'); return; }
-  try{
-    const{data,error}=await sb.rpc('mcr_uitklokken',{
-      p_geen_pauze: !!(geen&&geen.checked),
-      p_notitie: (not&&not.value)||null,
-      p_pauze: MCR_PAUZE_KEUZE==null?null:Number(MCR_PAUZE_KEUZE),
-      p_code: c});
-    if(error)throw error;
-    const r=(data&&data[0])||{};
-    if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
-    document.getElementById('mcrMain').innerHTML=`
+// Het groene scherm na het uitklokken. Kwam de eindtijd op het einde van de
+// dienst (te laat uitgeklokt), dan staat dat er eerlijk bij.
+function mcrKlaarScherm(r,begrensd,eind){
+  if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
+  const m=document.getElementById('mcrMain'); if(!m)return;
+  m.innerHTML=`
       <div style="text-align:center;padding-top:10px">
         <div style="width:46px;height:46px;border-radius:50%;background:#ECFDF3;display:flex;align-items:center;justify-content:center;margin:0 auto 12px">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#0F7A52" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
         </div>
         <div style="font-size:34px;font-weight:700;color:#1A1917;letter-spacing:-.9px">${veiligTekst(Number(r.uren||0).toFixed(2))} hours</div>
-        <div style="font-size:13px;color:#6B6A66;margin-top:3px">${veiligTekst(r.kraam||'')}${r.pauze?' &middot; '+r.pauze+' min break off':' &middot; no break'}</div>
+        <div style="font-size:13px;color:#6B6A66;margin-top:3px">${veiligTekst(r.kraam||'')}${r.pauze?' &middot; '+veiligTekst(r.pauze)+' min break off':' &middot; no break'}</div>
       </div>
-      <div class="mcr-kaart" style="margin-top:20px;background:#FEF6E7;border-color:#F3D9A4">
+      ${begrensd?`<div class="mcr-kaart" style="margin-top:20px;background:#EEF4FF;border-color:#C7D7FE">
+        <div style="font-size:12.5px;color:#1E3A8A;line-height:1.6"><b>Your finish time was set to ${eind?veiligTekst(eind)+', ':''}the end of your shift</b>, because you clocked out long after it. Finished at a different time? Ask your stall manager to set your finish time.</div>
+      </div>`:''}
+      <div class="mcr-kaart" style="margin-top:${begrensd?'10':'20'}px;background:#FEF6E7;border-color:#F3D9A4">
         <div style="font-size:12.5px;color:#8A5307;line-height:1.6">These hours go to Bram for approval. Once approved they land on your invoice.</div>
       </div>
       <button class="mcr-knop" style="margin-top:12px" onclick="mcrGa('hours')">See my hours</button>`;
-  }catch(e){ alert(mcrFout(e)); }
 }
-
+// zet: optioneel, toont de melding onder de tag-knop in plaats van een venster.
+async function mcrUitklokken(code,zet){
+  if(MCR_KLOK_BEZIG)return;
+  const geen=document.getElementById('mcrGeenPauze');
+  const not=document.getElementById('mcrKlokNotitie');
+  const c=String(code||'').trim();
+  if(!c){ alert('To clock out, tap the tag or type the code from the card in the stall.'); return; }
+  const st=MCR_STATUS||{};
+  MCR_KLOK_BEZIG=true; mcrKlokKnop('mcrUitKnop',true,'Clocking out…');
+  const veld=document.getElementById('mcrUitCode'); if(veld)veld.readOnly=true;
+  let fout=null, data=null;
+  try{
+    const res=await sb.rpc('mcr_uitklokken',{
+      p_geen_pauze: !!(geen&&geen.checked),
+      p_notitie: (not&&not.value)||null,
+      p_pauze: MCR_PAUZE_KEUZE==null?null:Number(MCR_PAUZE_KEUZE),
+      p_code: c});
+    if(res.error)throw res.error;
+    data=res.data;
+  }catch(e){ fout=e; }
+  MCR_KLOK_BEZIG=false;
+  if(!fout){
+    const r=(data&&data[0])||{};
+    // Klopt de lengte niet met "nu min inklokken", dan heeft de server de
+    // eindtijd op het einde van de dienst gezet.
+    const verstreken=st.ingeklokt_op?Math.round((Date.now()-new Date(st.ingeklokt_op).getTime())/60000):0;
+    const begrensd=!!st.vergeten||(verstreken>0&&verstreken-(Number(r.minuten)||0)-(Number(r.pauze)||0)>90);
+    mcrKlaarScherm(r,begrensd,st.eind_schatting?mcrKlok(st.eind_schatting):'');
+    MCR_STATUS={};
+    return;
+  }
+  const t=mcrFout(fout);
+  mcrKlokKnop('mcrUitKnop',false); if(veld)veld.readOnly=false;
+  if(/not clocked in/i.test(t)){ toast('You\'re already clocked out.'); await mcrGa('clock'); return; }
+  if(zet)zet(t,'#B4472B'); else alert(t);
+}
+// Vergeten uit te klokken: afsluiten zonder code; de server zet de eindtijd op
+// het einde van de dienst (mcr_vergeten_uitklokken).
+async function mcrVergetenUitklokken(){
+  if(MCR_KLOK_BEZIG)return;
+  const st=MCR_STATUS||{};
+  const uit=document.getElementById('mcrVergetenUit'); if(uit)uit.textContent='';
+  MCR_KLOK_BEZIG=true; mcrKlokKnop('mcrVergetenKnop',true,'Clocking out…');
+  let fout=null, d=null;
+  try{ const res=await sb.rpc('mcr_vergeten_uitklokken'); if(res.error)throw res.error; d=res.data||{}; }
+  catch(e){ fout=e; }
+  MCR_KLOK_BEZIG=false;
+  if(!fout){
+    mcrKlaarScherm(d,true,d.uitgeklokt_op?mcrKlok(d.uitgeklokt_op):(st.eind_schatting?mcrKlok(st.eind_schatting):''));
+    MCR_STATUS={};
+    return;
+  }
+  const t=mcrFout(fout);
+  mcrKlokKnop('mcrVergetenKnop',false);
+  if(/not clocked in/i.test(t)){ toast('You\'re already clocked out.'); await mcrGa('clock'); return; }
+  if(uit)uit.textContent=t; else alert(t);
+}
 
 // ─── Mijn uren ─────────────────────────────────────────────────────
 async function mcrUren(){
@@ -8949,7 +9284,7 @@ function mcrFactuurTonen(f, inst, mij){
       <div style="font-size:11px;color:#8A8984">${veiligTekst(mcrGeld(r.bedrag))}</div></div></div>`;
   });
   m.innerHTML=`
-    <button class="mcr-knop licht" style="margin-bottom:12px" onclick="mcrGa('invoice')">&lsaquo; Back</button>
+    <button class="mcr-knop licht" style="margin-bottom:12px" onclick="mcrGa('invoice')" data-mcr-blijf="factuur">&lsaquo; Back</button>
     <div class="mcr-kaart" style="padding:2px 15px">${rijen}</div>
     <div class="mcr-kaart" style="display:flex;align-items:baseline;justify-content:space-between">
       <span style="font-size:12.5px;color:#6B6A66">${veiligTekst(Number(f.uren||0).toFixed(2))} hours &times; ${veiligTekst(mcrGeld(f.tarief))}</span>
@@ -9734,7 +10069,7 @@ async function mcrProfiel(){
         <div style="flex:1">${veld('mcrPPost','Postcode',g.postcode,'text','M1 7HE')}</div>
         <div style="flex:1">${veld('mcrPPlaats','Town',g.plaats,'text','Manchester')}</div>
       </div>
-      ${veld('mcrPMaat','T-shirt size',g.shirtmaat,'text','M')}
+      ${veld('mcrPMaat','Polo size',g.shirtmaat,'text','M','Your long sleeve work polo: S, M, L, XL …')}
     </div>
 
     <div class="mcr-kaart">
@@ -9751,7 +10086,7 @@ async function mcrProfiel(){
       ${veld('mcrPNoodTel','Number',g.noodcontact_tel,'tel','')}
     </div>
 
-    <button class="mcr-knop" onclick="mcrProfielOpslaan()">Save</button>
+    <button class="mcr-knop" id="mcrProfKnop" onclick="mcrProfielOpslaan()">Save</button>
     <div id="mcrProfOk" style="display:none;font-size:12.5px;color:#0F7A52;text-align:center;margin-top:9px">Saved.</div>
 
     <div class="mcr-kaart" style="margin-top:14px">
@@ -9772,6 +10107,8 @@ async function mcrProfiel(){
 }
 async function mcrProfielOpslaan(){
   const v=id=>{const e=document.getElementById(id);return e?e.value:null;};
+  const kn=document.getElementById('mcrProfKnop'); if(kn&&kn.disabled)return;
+  if(kn){ kn.disabled=true; kn.style.opacity='.6'; kn.textContent='Saving\u2026'; }
   try{
     const{error}=await sb.rpc('mcr_profiel_opslaan',{
       p_telefoon:v('mcrPTel'), p_straat:v('mcrPStraat'), p_postcode:v('mcrPPost'),
@@ -9780,7 +10117,10 @@ async function mcrProfielOpslaan(){
       p_nood_naam:v('mcrPNoodNaam'), p_nood_tel:v('mcrPNoodTel'), p_shirtmaat:v('mcrPMaat')});
     if(error)throw error;
     const ok=document.getElementById('mcrProfOk'); if(ok){ok.style.display='';setTimeout(()=>ok.style.display='none',2500);}
+    // Opgeslagen = niet meer "half ingevuld" voor het live bijwerken.
+    document.querySelectorAll('#mcrMain input,#mcrMain textarea').forEach(e=>{ e.defaultValue=e.value; });
   }catch(e){ alert(mcrFout(e)); }
+  finally{ if(kn){ kn.disabled=false; kn.style.opacity=''; kn.textContent='Save'; } }
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -10365,6 +10705,7 @@ async function doLogout(){
   liveStop();
   const mw=document.getElementById('mcrApp'); if(mw)mw.style.display='none';
   if(MCR_TIMER){clearInterval(MCR_TIMER);MCR_TIMER=null;}
+  if(typeof mcrCacheWis==='function')mcrCacheWis();   // bewaarde shifts/noodnummers van deze telefoon weg
   await sb.auth.signOut();
   CURRENT_USER=null;CURRENT_ROL=null;
   document.getElementById('appWrap').style.display='none';
@@ -10624,7 +10965,20 @@ function liveMagNu(){
   // Crew: niet midden in het inklokken of een open beschikbaarheidsvel.
   if(typeof MCR_DAGVEL!=='undefined'&&MCR_DAGVEL)return false;
   if(typeof MCR_TAB!=='undefined'&&MCR_TAB==='clock'&&document.getElementById('mcrApp')&&document.getElementById('mcrApp').style.display!=='none')return false;
+  // Crew: niet als er een paneel, de factuur of niet-opgeslagen invoer openstaat.
+  if(typeof mcrZichtbaar==='function'&&mcrZichtbaar()&&mcrCrewBezig())return false;
   return true;
+}
+
+// Hoort een signaal bij de vestiging waar deze app naar kijkt? Signalen zonder
+// vestiging (oude, of van de server zelf) gelden voor iedereen. Bram met "beide"
+// ('*') ziet alles.
+function liveVestigingOk(rij){
+  const v=rij&&rij.vestiging; if(!v)return true;
+  if(typeof mcrZichtbaar==='function'&&mcrZichtbaar())return v==='MCR';
+  const act=(typeof ACTIEVE_VESTIGING!=='undefined'&&ACTIEVE_VESTIGING)||(typeof MIJN_VESTIGING!=='undefined'&&MIJN_VESTIGING)||'NL';
+  if(act==='*')return true;
+  return v===act;
 }
 
 async function liveHerlaad(){
@@ -10639,7 +10993,11 @@ async function liveHerlaad(){
   try{
     const crew=document.getElementById('mcrApp')&&document.getElementById('mcrApp').style.display!=='none';
     if(crew){
-      if(typeof mcrGa==='function'&&MCR_TAB)await mcrGa(MCR_TAB);
+      const geraakt=new Set(LIVE_TABELLEN); LIVE_TABELLEN=new Set();
+      // Crew alleen als het huidige scherm geraakt is; altijd stil (geen
+      // "Loading…", scrollpositie blijft).
+      if(!MCR_MGR&&!mcrCrewRaakt(MCR_TAB,geraakt))return;
+      if(typeof mcrGa==='function'&&MCR_TAB)await mcrGa(MCR_TAB,{stil:true});
       return;
     }
     const actief=document.querySelector('.page.active');
@@ -10669,6 +11027,12 @@ function liveSignaal(rij){
   if(rij&&rij.id&&Number(rij.id)>LIVE_LAATSTE_ID)LIVE_LAATSTE_ID=Number(rij.id);
   // Je eigen wijziging heb je al op je scherm; die hoeft niet nog een keer.
   if(rij&&rij.door&&CURRENT_USER&&rij.door===CURRENT_USER.id)return;
+  // Een wijziging in de andere vestiging (bv. Manchester-crew die beschikbaarheid
+  // invult) laat de Nederlandse planning met rust, en andersom.
+  if(!liveVestigingOk(rij))return;
+  // Crew: alleen tabellen die een crew-scherm raken.
+  if(rij&&rij.tabel&&typeof mcrZichtbaar==='function'&&mcrZichtbaar()&&!MCR_MGR
+     &&!Object.keys(MCR_CREW_TABELLEN).some(t=>mcrCrewRaakt(t,new Set([rij.tabel]))))return;
   if(rij&&rij.tabel)LIVE_TABELLEN.add(rij.tabel);
   clearTimeout(LIVE_TIMER);
   LIVE_TIMER=setTimeout(liveHerlaad,1500);
@@ -10678,14 +11042,21 @@ async function livePeil(){
   // Vangnet voor als de live-verbinding er niet is: is er een nieuwer
   // signaal dan het laatste dat we zagen, dan bijwerken.
   if(!CURRENT_USER||document.hidden)return;
+  // De laatste 25 signalen: daarmee weten we welke tabellen en welke vestiging
+  // geraakt zijn. select('*') werkt ook zolang de kolom vestiging nog niet bestaat.
   try{
-    const{data}=await sb.from('wijziging_signalen').select('id,door,tabel').order('id',{ascending:false}).limit(1);
+    const{data}=await sb.from('wijziging_signalen').select('*').order('id',{ascending:false}).limit(25);
     const r=data&&data[0]; if(!r)return;
     if(Number(r.id)>LIVE_LAATSTE_ID){
       const eerste=LIVE_LAATSTE_ID===0;
+      const nieuw=data.filter(x=>Number(x.id)>LIVE_LAATSTE_ID);
       LIVE_LAATSTE_ID=Number(r.id);
-      if(!eerste)LIVE_TABELLEN.add('*');   // via de peiling weten we niet precies wat: dan alles
-      if(!eerste&&!(r.door&&CURRENT_USER&&r.door===CURRENT_USER.id)){clearTimeout(LIVE_TIMER);LIVE_TIMER=setTimeout(liveHerlaad,500);}
+      if(eerste)return;
+      const raak=nieuw.filter(x=>!(x.door&&CURRENT_USER&&x.door===CURRENT_USER.id)&&liveVestigingOk(x));
+      if(!raak.length)return;
+      if(nieuw.length>=data.length)LIVE_TABELLEN.add('*');   // meer gemist dan we zien: dan alles
+      else raak.forEach(x=>LIVE_TABELLEN.add(x.tabel||'*'));
+      clearTimeout(LIVE_TIMER);LIVE_TIMER=setTimeout(liveHerlaad,500);
     }
   }catch(e){}
 }
