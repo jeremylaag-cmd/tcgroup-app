@@ -3829,6 +3829,12 @@ async function mbOverzicht(){
     sb.rpc('mcr_managers_week',{p_van:mbMaandag(MB_DATUM)}).then(x=>x,()=>({data:[]})),
     sb.rpc('mcr_dagrapport',{p_van:MB_DATUM,p_tot:MB_DATUM,p_kraam:null}).then(x=>x,()=>({data:[]})),
   ]);
+  // Dagafsluiting door de kraammanagers (los, zodat Overzicht blijft werken als dit faalt).
+  const [afs, boeteR] = await Promise.all([
+    sb.rpc('mcr_afsluitingen',{p_datum:MB_DATUM}).then(x=>x,()=>({data:[]})),
+    sb.from('vestiging_instellingen').select('waarde').eq('vestiging','MCR').eq('sleutel','te_laat_boete').maybeSingle().then(x=>x,()=>({data:null}))]);
+  MB_AFS=(afs&&!afs.error&&Array.isArray(afs.data))?afs.data:[];
+  MB_AFS_BOETE=Number(String((boeteR&&boeteR.data&&boeteR.data.waarde)||'').replace(',','.'))||50;
   // Pinomzet per kraam die dag (uit myPOS, via ophalen of inlezen).
   const PIN={}; ((dr&&!dr.error&&dr.data)||[]).forEach(r=>{ PIN[r.kraam_id]=r; });
   // Wie er per shift staat (uit mcr_dag) en wie die dag manager is.
@@ -3908,6 +3914,7 @@ async function mbOverzicht(){
   });
   if(!lijst.length)uit+='<div class="mb-kaart">Er staan nog geen kramen.</div>';
   uit+='</div>';
+  uit+=mbAfsluitHtml();
   uit+=mbAgendaVandaagHtml(agd&&!agd.error?agd.data:[]);
 
   const regel=(n,t,kleur,tab)=>`<button class="mb-link" onclick="mbNaar('${tab}')">
@@ -3950,6 +3957,77 @@ async function mbOverzicht(){
     </div></div>`;
   document.getElementById('mbInhoud').innerHTML=uit;
 }
+// ── Dagafsluiting door de kraammanagers (Overzicht) ───────────────
+// Per kraam: afgesloten door wie en wanneer, schoonmaaklijst, gas, voorraad,
+// beoordelingen en kleding die de manager die dag invulde, en per persoon de
+// controle van de uren (te laat / niet gekomen). Bram geeft met één knop
+// akkoord op de gecontroleerde uren; boete op een no-show zet hij zelf.
+let MB_AFS=[], MB_AFS_BOETE=50;
+const MB_UITKOMST={ok:'gecontroleerd',te_laat:'te laat',niet_te_laat:'niet te laat',niet_gekomen:'niet gekomen',afgemeld:'afgemeld',naar_huis:'naar huis gestuurd'};
+const MB_OORDEEL_NL={topper:'Topper',goed:'Goed',prima:'Prima','minder dan verwacht':'Minder dan verwacht','niet meer':'Niet meer'};
+function mbAfsluitHtml(){
+  const rijen=(MB_AFS||[]).filter(k=>k.mensen>0||k.afgesloten);
+  if(!rijen.length)return '';
+  const verleden=MB_DATUM<=mbVandaagStr();
+  let uit=`<div class="mb-kaart"><div class="mb-kop">Dagafsluiting door de kraammanagers</div><div class="mb-rij3" style="margin-top:8px">`;
+  rijen.forEach(k=>{
+    const a=k.afgesloten;
+    uit+=`<div style="flex:1;min-width:230px;border:1px solid var(--border);border-radius:12px;padding:11px 13px">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${mbStip(k.kleur)}<span style="font-size:14px;font-weight:700">${veiligTekst(k.kraam)}</span>
+        <span style="margin-left:auto">${a?mbChip('afgesloten '+mbKlokT(a.op),'#0F7A52','#F2FBF6'):mbChip(verleden?'nog niet afgesloten':'nog niet','#B45309','#FEF6E7')}</span></div>`;
+    if(!a){
+      uit+=`<div style="font-size:12.5px;color:var(--muted);margin-top:6px">${k.afsluiters?'Sluit af: '+veiligTekst(k.afsluiters):'Geen kraammanager voor deze kraam deze week.'}${k.heropend?' &middot; heropend door '+veiligTekst(k.heropend.door||'?'):''}</div>`;
+    }else{
+      const rg=(l,t)=>`<div style="font-size:12.5px;line-height:1.5;padding:5px 0;border-top:1px solid var(--border)"><span style="color:var(--muted)">${l}</span> ${t}</div>`;
+      uit+=`<div style="font-size:12px;color:var(--muted);margin:3px 0 6px">door ${veiligTekst(a.door||'?')}</div>`;
+      uit+=rg('Checklist',`schoonmaaklijst ${a.schoonmaak?'<b style="color:#0F7A52">ingevuld</b>':'<b style="color:#B4472B">niet gedaan</b>'} &middot; gas dicht`);
+      uit+=rg('Voorraad',a.voorraad_nodig?'<b>'+veiligTekst([...(a.voorraad||[]),a.voorraad_tekst||''].filter(Boolean).join(', '))+'</b>':'niets nodig');
+      const beo=a.beoordelingen||[];
+      if(beo.length)uit+=rg('Beoordeling',beo.map(b=>`${mbNaamLink(null,b.naam)} ${b.van?veiligTekst(MB_OORDEEL_NL[b.van]||b.van)+' &rarr; ':''}<b>${veiligTekst(MB_OORDEEL_NL[b.naar]||b.naar||'geen')}</b>${b.van?'':' <span style="color:var(--muted)">(nieuw)</span>'}${b.reden?` <span style="color:var(--muted)">&ldquo;${veiligTekst(b.reden)}&rdquo;</span>`:''}`).join('<br>'));
+      const kl=a.kleding||[];
+      if(kl.length)uit+=rg('Kleding',kl.map(x=>`${veiligTekst(x.naam)}: polo ${x.polo_van}&rarr;<b>${x.polo}</b>, schort ${x.schort_van}&rarr;<b>${x.schort}</b>`).join('<br>'));
+    }
+    const ctl=k.controles||[];
+    if(ctl.length){
+      uit+=`<div style="font-size:12.5px;line-height:1.5;padding:5px 0;border-top:1px solid var(--border)"><span style="color:var(--muted)">Uren</span>`;
+      ctl.forEach(c=>{
+        const rood=c.uitkomst==='niet_gekomen'||c.uitkomst==='te_laat'||c.uitkomst==='afgemeld';
+        uit+=`<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:2px">
+          <span>${veiligTekst(c.naam)}</span>
+          <span style="color:${rood?'#B45309':'var(--muted)'}">${veiligTekst(MB_UITKOMST[c.uitkomst]||c.uitkomst)}${c.uitkomst==='te_laat'?' ('+c.minuten+' min)':''}</span>
+          ${c.uren_status==='goedgekeurd'?'<span style="color:#0F7A52">&check; akkoord</span>':''}
+          ${c.voorval_id&&c.uitkomst==='niet_gekomen'?(Number(c.boete)>0?`<span style="color:#B4472B">boete ${veiligTekst(mbPond(c.boete))}</span>`
+            :`<button class="mb-mini" style="padding:2px 8px;font-size:11.5px" onclick="mbAfsBoete('${veiligJs(c.voorval_id)}')">Boete ${veiligTekst(mbPondKort(MB_AFS_BOETE))}</button>`):''}</div>`;
+      });
+      uit+='</div>';
+    }
+    if(a){
+      uit+=`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+        ${k.te_akkoord>0?`<button class="mb-mini zwart" onclick="mbAfsAkkoord('${veiligJs(k.kraam_id)}')">Uren akkoord geven (${k.te_akkoord})</button>`:''}
+        <button class="mb-mini" onclick="mbAfsHeropen('${veiligJs(k.kraam_id)}')">Heropenen</button></div>`;
+    }
+    uit+='</div>';
+  });
+  uit+=`</div></div>`;
+  return uit;
+}
+async function mbAfsAkkoord(kraam){
+  try{ const{data,error}=await sb.rpc('mcr_afsluiting_akkoord',{p_kraam:kraam,p_datum:MB_DATUM}); if(error)throw error;
+       toast(`Akkoord op ${data||0} ${data===1?'urenregistratie':'urenregistraties'}`); mbNaar('overzicht');
+  }catch(e){ toast(mbFout(e),'fout'); }
+}
+async function mbAfsBoete(vid){
+  try{ const{error}=await sb.rpc('mcr_voorval_boete',{p_id:vid,p_boete:MB_AFS_BOETE}); if(error)throw error;
+       toast('Boete vastgelegd'); mbNaar('overzicht');
+  }catch(e){ toast(mbFout(e),'fout'); }
+}
+async function mbAfsHeropen(kraam){
+  if(!confirm('Deze dag weer openzetten? De kraammanager kan dan opnieuw controleren en afsluiten.'))return;
+  try{ const{error}=await sb.rpc('mcr_afsluiting_heropenen',{p_kraam:kraam,p_datum:MB_DATUM}); if(error)throw error;
+       toast('Dag staat weer open'); mbNaar('overzicht');
+  }catch(e){ toast(mbFout(e),'fout'); }
+}
+
 function mbDag(stap){
   const d=new Date((MB_DATUM||mbVandaagStr())+'T00:00:00');
   d.setDate(d.getDate()+stap); MB_DATUM=fmt(d); mbNaar('overzicht');
@@ -7267,10 +7345,13 @@ async function mbPersoonOpen(id){
   const el=document.getElementById('mbPersoonPaneel'); if(!el)return;
   el.innerHTML='<div class="mb-kaart" style="margin-top:14px;color:var(--muted)">Bezig&hellip;</div>';
   try{
-    const [mensen, voorvallen] = await Promise.all([
-      sb.rpc('mcr_mensen'), sb.rpc('mcr_voorvallen_van',{p_gebruiker:id}), mbKramenLijst()]);
+    const [mensen, voorvallen, , kleding] = await Promise.all([
+      sb.rpc('mcr_mensen'), sb.rpc('mcr_voorvallen_van',{p_gebruiker:id}), mbKramenLijst(),
+      sb.rpc('mcr_kleding_lijst').then(x=>x,()=>({data:null}))]);
     if(mensen.error)throw mensen.error;
     const m=(mensen.data||[]).find(x=>x.id===id);
+    const kl=(kleding&&!kleding.error&&kleding.data||[]).find(x=>x.id===id);
+    if(m&&kl){ m.polo=kl.polo; m.schort=kl.schort; m.maat=kl.maat; m.kleding_door=kl.door; m.kleding_gewijzigd=kl.op; m.kl_nieuw=true; }
     if(!m){ el.innerHTML='<div class="mb-kaart" style="margin-top:14px">Die persoon staat er niet meer.</div>'; return; }
     const oud=(MB_MENSEN_LIJST||[]).find(x=>x.id===id); m.alleen=!!(oud&&oud.alleen);
     el.innerHTML=mbPersoonHtml(m, voorvallen.data||[]);
@@ -7327,15 +7408,20 @@ function mbPersoonHtml(m, vv){
       <div style="flex:1;min-width:280px;border:1px solid var(--border);border-radius:12px;padding:12px 14px">
         <div class="mb-kop">Kleding en borg</div>
         <div class="mb-veldrij">
-          <div style="flex:1 1 130px"><label class="mb-lab">Stuks van ons</label>
-            <input class="mb-veld" type="number" min="0" max="10" id="mbKl${id}" value="${m.kleding_uit||0}"></div>
-          <div style="flex:1 1 130px"><label class="mb-lab">Borg</label>
+          ${m.kl_nieuw?`<div style="flex:1 1 100px"><label class="mb-lab">Long sleeve polo${m.maat?' ('+veiligTekst(m.maat)+')':''}</label>
+            <input class="mb-veld" type="number" min="0" max="5" id="mbKlP${id}" value="${m.polo||0}"></div>
+          <div style="flex:1 1 100px"><label class="mb-lab">Schort</label>
+            <input class="mb-veld" type="number" min="0" max="5" id="mbKlS${id}" value="${m.schort||0}"></div>`
+          :`<div style="flex:1 1 130px"><label class="mb-lab">Stuks van ons</label>
+            <input class="mb-veld" type="number" min="0" max="10" id="mbKl${id}" value="${m.kleding_uit||0}"></div>`}
+          <div style="flex:1 1 100px"><label class="mb-lab">Borg</label>
             <div class="mb-veld vast">${veiligTekst(mbPond(m.borg||0))}</div></div>
           <div style="align-self:flex-end"><button class="mb-mini zwart" onclick="mbKledingOpslaan('${veiligJs(m.id)}')">Opslaan</button></div>
         </div>
         <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px">
           ${m.kleding_op?`Meegegeven op ${veiligTekst(mbDatum(String(m.kleding_op).slice(0,10)))}. `:''}
-          Het eerste stuk kost de borg uit je instellingen, elk volgend stuk het bedrag daaronder.
+          ${m.kleding_door?`Laatst gewijzigd door ${veiligTekst(m.kleding_door)}${m.kleding_gewijzigd?', '+veiligTekst(mbDatum(String(m.kleding_gewijzigd).slice(0,10))):''}. `:''}
+          ${m.kl_nieuw?'Borg per stuk: zie Instellingen (standaard £ 25 per polo en £ 25 per schort).':'Het eerste stuk kost de borg uit je instellingen, elk volgend stuk het bedrag daaronder.'}
           Zet het op 0 zodra je de kleding terug hebt.</div>
         <div id="mbKlUit${id}" style="font-size:12.5px;margin-top:6px"></div>
       </div>
@@ -7426,10 +7512,12 @@ async function mbAlleenZetten(id){
 }
 async function mbKledingOpslaan(id){
   const uit=document.getElementById('mbKlUit'+id);
+  const pe=document.getElementById('mbKlP'+id), se=document.getElementById('mbKlS'+id);
   const n=parseInt((document.getElementById('mbKl'+id)||{}).value,10);
   try{
-    const{error}=await sb.rpc('mcr_persoon_opslaan',
-      {p_id:id,p_uurloon:null,p_beoordeling:null,p_goedkeuren:false,p_kleding:isNaN(n)?0:n});
+    const{error}=pe&&se
+      ? await sb.rpc('mcr_kleding_zetten',{p_id:id,p_polo:parseInt(pe.value,10)||0,p_schort:parseInt(se.value,10)||0})
+      : await sb.rpc('mcr_persoon_opslaan',{p_id:id,p_uurloon:null,p_beoordeling:null,p_goedkeuren:false,p_kleding:isNaN(n)?0:n});
     if(error)throw error;
     MB_PERSOON=null; await mbPersoonOpen(id);
   }catch(e){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
@@ -7644,7 +7732,7 @@ const MB_SLEUTELS=[
   ['prijs_portie','Prijs portie (£)'],['prijs_topping','Prijs topping (£)'],
   ['inklok_venster_min','Inklokken mag x minuten voor de start'],
   ['afzegtermijn_uren','Afzegtermijn (uren)'],['te_laat_boete','Boete niet opdagen (£)'],
-  ['borg_kleding','Borg kleding (£)'],['borg_kleding_extra','Tweede kledingstuk (£)'],
+  ['borg_polo','Borg per long sleeve polo (£)'],['borg_schort','Borg per schort (£)'],
   ['noodnummer_1','Noodnummer 1'],['noodnummer_2','Noodnummer 2'],
   ['aanmelden_tot','Personeel vraagt zelf om diensten t/m (leeg = altijd)'],
 ];
@@ -7757,9 +7845,12 @@ const MCR_ICO = {
   rota:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 10h18M9 4v17M15 4v17"/>',
   stall:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   agenda:'<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4M16 2v4M3 10h18"/><path d="M8 14h3v3H8z"/>',
+  close:'<path d="M9 11l3 3 8-8"/><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h9"/>',
+  team:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14.2a5 5 0 0 1 5.5 4.8"/>',
 };
 const MCR_TITELS = {shifts:['My shifts',''],clock:['Clock in',''],hours:['My hours',''],
-                    invoice:['Invoice',''],me:['My details',''],rota:['Rota',''],stall:['Hours',''],agenda:['Calendar','']};
+                    invoice:['Invoice',''],me:['My details',''],rota:['Rota',''],stall:['Hours',''],agenda:['Calendar',''],
+                    close:['Close the day',''],team:['Team','Ratings and uniform']};
 // Nog niet goedgekeurd? Dan is er één tabblad: je eigen gegevens.
 let MCR_WACHT=false;
 
@@ -7867,7 +7958,7 @@ async function mcrHuisregelsAkkoord(){
 function mcrNav(){
   const nav=document.getElementById('mcrNav'); if(!nav)return;
   const items=MCR_WACHT?[['me','My details']]
-    :MCR_MGR?[['rota','Rota'],['agenda','Calendar'],['stall','Hours'],['me','Me']]
+    :MCR_MGR?[['rota','Rota'],['agenda','Calendar'],['close','Close day'],['team','Team'],['me','Me']]
     :[['shifts','Shifts'],['clock','Clock in'],['hours','Hours'],['invoice','Invoice'],['me','Me']];
   nav.innerHTML=items.map(([k,l])=>{
     const aan=(MCR_TAB===k);
@@ -7881,7 +7972,8 @@ async function mcrGa(tab){
   // Er is maar één scherm zolang het account niet is vrijgegeven. Tikt iemand
   // toch ergens anders op, dan komt hij gewoon weer bij zijn eigen gegevens uit.
   if(MCR_WACHT && tab!=='me')tab='me';
-  if((tab==='rota'||tab==='stall'||tab==='agenda') && !MCR_MGR)tab='shifts';
+  if(['rota','stall','agenda','close','team'].includes(tab) && !MCR_MGR)tab='shifts';
+  if(tab!=='team'){ MGR_TEAM_OPEN=null; if(tab!=='close')MGR_TEAM_TERUG=false; }
   if(tab!=='agenda')MGR_AG_OPEN=null;
   // Een manager werkt niet zelf: geen inklokken, eigen uren of facturen.
   if(MCR_MGR && ['shifts','open','avail','clock','hours','invoice'].includes(tab))tab='rota';
@@ -7905,6 +7997,8 @@ async function mcrGa(tab){
     if(tab==='rota')    return await mcrRota();
     if(tab==='stall')   return await mcrStallUren();
     if(tab==='agenda')  return await mcrAgenda();
+    if(tab==='close')   return await mcrSluitDag();
+    if(tab==='team')    return await mcrTeam();
   }catch(e){
     console.error(e);
     m.innerHTML=mcrLeeg('Could not load this screen. Check your connection and try again.');
@@ -8733,9 +8827,12 @@ async function mcrRota(){
   }
   const van=fmt(MGR_WEEK);
   const tot=new Date(MGR_WEEK); tot.setDate(tot.getDate()+6);
-  const [{data,error},ag]=await Promise.all([sb.rpc('mgr_rooster',{p_van:van}),
-    sb.rpc('mgr_agenda',{p_van:van,p_tot:fmt(tot)}).then(x=>x,()=>({data:[]}))]);
+  const [{data,error},ag,afs]=await Promise.all([sb.rpc('mgr_rooster',{p_van:van}),
+    sb.rpc('mgr_agenda',{p_van:van,p_tot:fmt(tot)}).then(x=>x,()=>({data:[]})),
+    sb.rpc('mgr_afsluit_overzicht').then(x=>x,()=>({data:[]}))]);
   if(error)throw error;
+  const vandaagL=mgrVandaag();
+  const teSluiten=((afs&&!afs.error&&afs.data)||[]).filter(o=>o.mijn_taak&&!o.afgesloten_op&&o.mensen>0);
   const AGD={}; ((ag&&!ag.error&&ag.data)||[]).forEach(r=>{ (AGD[r.datum]=AGD[r.datum]||[]).push(r); });
   document.getElementById('mcrSub').textContent=
     MGR_WEEK.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+tot.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
@@ -8746,7 +8843,14 @@ async function mcrRota(){
   let uit=`<div style="display:flex;gap:8px;margin-bottom:12px">
     <button class="mcr-knop licht" style="flex:1" onclick="mgrWeek(-7)">&lsaquo; Previous</button>
     <button class="mcr-knop licht" style="flex:1" onclick="mgrWeek(7)">Next &rsaquo;</button></div>
-    <button class="mcr-knop licht" style="margin-bottom:12px" onclick="mcrRotaMensen()">Rate people</button>`;
+`;
+  teSluiten.sort((a,b)=>a.datum<b.datum?-1:1).forEach(o=>{
+    const nu=o.datum===vandaagL;
+    uit=`<button onclick="mgrClKies('${veiligJs(o.kraam_id)}','${veiligJs(o.datum)}')" class="mcr-kaart" style="display:block;width:100%;text-align:left;font-family:var(--font);cursor:pointer;
+      background:${nu?'#FEF6E7':'#FBEDE9'};border-color:${nu?'#F3D9A4':'#F0C2B5'}">
+      <div style="font-size:14px;font-weight:700;color:${nu?'#8A5307':'#B4472B'}">${nu?'Close '+veiligTekst(o.kraam)+' today':veiligTekst(o.kraam)+' &middot; '+veiligTekst(mgrDagNaam(o.datum))+' is not closed'}</div>
+      <div style="font-size:12.5px;color:${nu?'#8A5307':'#B4472B'};margin-top:3px">${nu?'After closing: hours, ratings, cleaning, gas and stock.':'Go through Close day for this day.'} &rsaquo;</div></button>`+uit;
+  });
   for(let i=0;i<7;i++){
     const d=new Date(MGR_WEEK); d.setDate(d.getDate()+i); const ds=fmt(d);
     const kramen=dagen[ds]||{};
@@ -8937,7 +9041,7 @@ async function mcrRotaDag(ds){
     });
     uit+='</div>';
   });
-  uit+=`<div class="mcr-kaart"><div style="font-size:12.5px;color:#6B6A66;line-height:1.6">Finish times and breaks are changed under <b>Hours</b>.</div></div>`;
+  uit+=`<div class="mcr-kaart"><div style="font-size:12.5px;color:#6B6A66;line-height:1.6">Finish times, breaks, late and no-shows are checked under <b>Close day</b>.</div></div>`;
   document.getElementById('mcrMain').innerHTML=uit;
 }
 
@@ -8959,7 +9063,8 @@ async function mcrStallUren(){
   document.getElementById('mcrSub').textContent=
     MGR_UWEEK.toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+tot.toLocaleDateString('en-GB',{day:'numeric',month:'short'});
   const rijen=data||[];
-  let uit=`<div style="display:flex;gap:8px;margin-bottom:12px">
+  let uit=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="mcrGa('close')">&lsaquo; Back to Close day</button>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
     <button class="mcr-knop licht" style="flex:1" onclick="mgrUWeek(-7)">&lsaquo; Previous</button>
     <button class="mcr-knop licht" style="flex:1" onclick="mgrUWeek(7)">Next &rsaquo;</button></div>`;
   if(!rijen.length)uit+=mcrLeeg('Nobody clocked in at your stall this week.');
@@ -9051,6 +9156,383 @@ async function mgrBeoordeel(id){
     if(error)throw error;
     if(u)u.innerHTML='<span style="color:#0F7A52">Saved.</span>';
     setTimeout(()=>mcrRotaMensen(),600);
+  }catch(e){ if(u)u.innerHTML=`<span style="color:#B4472B">${veiligTekst(mcrFout(e))}</span>`; }
+}
+
+// ─── Close day: de dagafsluiting door de kraammanager ──────────────
+// Bram (3 nov): elke dag afsluiten met een checklist: uren accorderen (pauzes,
+// te laat, niet gekomen), beoordeling invullen bij wie er nog geen heeft (en
+// eventueel aanpassen), schoonmaaklijst, gas dicht, voorraad. Vier stappen.
+// De manager controleert; Bram geeft daarna nog steeds akkoord op de uren.
+// 1 minuut na de start van de dienst inklokken is al te laat.
+let MGR_CL={kraam:null,datum:null,stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{}};
+let MGR_CL_OPTIES=[], MGR_CL_D=null;
+const MGR_VOORRAAD=['Batter mix','Sugar','Butter','Nutella','Lotus','White chocolate','Pistachio','Bueno','Whipped cream',
+  'Maple syrup','Caramel','Fruit','Sugar waffles','Trays','Forks','Napkins','Gloves','Gas bottle'];
+const MGR_UITKOMST={ok:'Checked',te_laat:'Late',niet_te_laat:'Not late',niet_gekomen:'No-show',afgemeld:'Cancelled in advance',naar_huis:'Sent home'};
+function mgrVandaag(){ return new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'}); }
+function mgrDagNaam(ds,lang){ const d=new Date(ds+'T00:00:00');
+  return d.toLocaleDateString('en-GB',lang?{weekday:'long',day:'numeric',month:'long'}:{weekday:'short',day:'numeric',month:'short'}); }
+function mgrKn(label,onclick,zwart,extra){
+  return `<button class="mcr-knop${zwart?'':' licht'}" style="width:auto;display:inline-block;padding:8px 12px;font-size:13px;${extra||''}" onclick="${onclick}">${label}</button>`; }
+function mgrClBezig(){
+  if(typeof MCR_TAB==='undefined')return false;
+  if(MCR_TAB==='close')return MGR_CL.stap>1||Object.values(MGR_CL.open).some(Boolean)||Object.values(MGR_CL.beoOpen).some(Boolean);
+  if(MCR_TAB==='team')return !!MGR_TEAM_OPEN;
+  return false;
+}
+function mgrClReset(){ Object.assign(MGR_CL,{stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{}}); }
+function mgrClKies(kraam,datum){
+  if(MGR_CL.kraam!==kraam||MGR_CL.datum!==datum)mgrClReset();
+  MGR_CL.kraam=kraam; MGR_CL.datum=datum; mcrGa('close');
+}
+
+async function mcrSluitDag(){
+  const{data:ov,error:e1}=await sb.rpc('mgr_afsluit_overzicht');
+  if(e1)throw e1;
+  MGR_CL_OPTIES=ov||[];
+  const vandaag=mgrVandaag();
+  if(!MGR_CL_OPTIES.some(o=>o.kraam_id===MGR_CL.kraam&&o.datum===MGR_CL.datum)){
+    const k=MGR_CL_OPTIES.find(o=>o.mijn_taak&&!o.afgesloten_op&&o.datum===vandaag)
+         || MGR_CL_OPTIES.find(o=>o.mijn_taak&&!o.afgesloten_op&&o.mensen>0)
+         || MGR_CL_OPTIES.find(o=>o.datum===vandaag&&!o.afgesloten_op)
+         || MGR_CL_OPTIES.find(o=>o.datum===vandaag) || MGR_CL_OPTIES[0];
+    mgrClReset();
+    MGR_CL.kraam=k?k.kraam_id:null; MGR_CL.datum=k?k.datum:null;
+  }
+  if(!MGR_CL.kraam){
+    document.getElementById('mcrSub').textContent='';
+    document.getElementById('mcrMain').innerHTML=mcrLeeg('Nothing to close: no stall had people on the rota in the last week.')
+      +`<div style="text-align:center">${mgrKn('All hours this week ›',"mcrGa('stall')")}</div>`;
+    return;
+  }
+  const{data,error}=await sb.rpc('mgr_afsluiting',{p_kraam:MGR_CL.kraam,p_datum:MGR_CL.datum});
+  if(error)throw error;
+  MGR_CL_D=data||{};
+  mgrClTeken();
+}
+
+function mgrClKeuzes(){
+  const vandaag=mgrVandaag();
+  const opties=MGR_CL_OPTIES.filter(o=>o.datum===vandaag||(!o.afgesloten_op&&o.mijn_taak&&o.mensen>0)
+    ||(o.kraam_id===MGR_CL.kraam&&o.datum===MGR_CL.datum));
+  if(opties.length<2)return '';
+  return `<div style="display:flex;gap:6px;overflow-x:auto;margin:0 -2px 12px;padding:0 2px 2px">${opties.map(o=>{
+    const aan=o.kraam_id===MGR_CL.kraam&&o.datum===MGR_CL.datum;
+    const dicht=!!o.afgesloten_op, laat=!dicht&&o.datum<vandaag&&o.mensen>0;
+    return `<button onclick="mgrClKies('${veiligJs(o.kraam_id)}','${veiligJs(o.datum)}')" style="flex-shrink:0;font-family:var(--font);font-size:12.5px;padding:7px 11px;border-radius:20px;cursor:pointer;
+      border:1px solid ${aan?'#1A1917':'#D9D7D0'};background:${aan?'#1A1917':'#fff'};color:${aan?'#fff':'#1A1917'}">
+      <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${veiligTekst(o.kleur)};margin-right:5px"></span>${veiligTekst(o.kraam)}
+      &middot; ${o.datum===vandaag?'today':veiligTekst(mgrDagNaam(o.datum))}${dicht?' ✓':laat?' <span style="color:'+(aan?'#FBC4B3':'#B4472B')+'">open</span>':''}</button>`;
+  }).join('')}</div>`;
+}
+
+function mgrClStappen(){
+  const st=['Hours','People','Stall','Done'];
+  return `<div style="display:flex;gap:5px;margin-bottom:12px">${st.map((s,i)=>{
+    const n=i+1, ga=n<MGR_CL.stap;
+    return `<button ${ga?`onclick="MGR_CL.stap=${n};MGR_CL.fout='';mgrClTeken()"`:''} style="flex:1;border:0;background:none;padding:0;font-family:var(--font);cursor:${ga?'pointer':'default'}">
+      <div style="height:4px;border-radius:2px;background:${n<=MGR_CL.stap?'#1A1917':'#D9D7D0'}"></div>
+      <div style="font-size:11.5px;margin-top:4px;color:${n===MGR_CL.stap?'#1A1917':'#94938E'};font-weight:${n===MGR_CL.stap?600:400}">${s}</div></button>`;
+  }).join('')}</div>`;
+}
+
+function mgrClPersoon(p){
+  const id=veiligTekst(p.id);
+  const klaar=p.controle&&!MGR_CL.wijzig[p.id];
+  const tijd=p.start?`Rota ${veiligTekst(mcrTijd(p.start))}${p.eind?'–'+veiligTekst(mcrTijd(p.eind)):'–close'}`:'Not on the rota';
+  const klok=p.in?`${veiligTekst(mgrKlok(p.in))} &rarr; ${p.uit?veiligTekst(mgrKlok(p.uit)):'&hellip;'}${p.uit?` &middot; ${p.pauze||0} min break`:''}`:'';
+  const chip=klaar?`<span class="mcr-chip" style="background:${p.controle==='ok'||p.controle==='niet_te_laat'?'#E9F7F0':'#FEF6E7'};color:${p.controle==='ok'||p.controle==='niet_te_laat'?'#0F7A52':'#B45309'}">${veiligTekst(MGR_UITKOMST[p.controle]+(p.controle==='te_laat'?' '+p.controle_min+' min':''))}</span>`
+    :'<span class="mcr-chip" style="background:#FEF6E7;color:#B45309">to check</span>';
+  let uit=`<div style="padding:10px 0;border-top:1px solid #EFEDE7">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+      <span style="font-size:14px;font-weight:600">${veiligTekst(p.naam)}</span>${chip}</div>
+    <div style="font-size:12.5px;color:#6B6A66;margin-top:2px;font-variant-numeric:tabular-nums">${tijd}${klok?' &middot; '+klok:''}</div>`;
+  const editor=()=>`<div style="display:flex;gap:6px;margin-top:8px;align-items:flex-end;flex-wrap:wrap">
+      <div><label class="mcr-label">Finished at</label>
+        <input class="mcr-veld" type="time" id="mgrClT${id}" value="${p.uit?veiligTekst(mgrKlok(p.uit)):''}" style="width:118px;padding:8px 10px;font-size:14px"></div>
+      <div><label class="mcr-label">Break (min)</label>
+        <input class="mcr-veld" type="number" min="0" max="240" step="5" inputmode="numeric" id="mgrClP${id}" value="${p.pauze||0}" style="width:72px;padding:8px 10px;font-size:14px"></div>
+      ${mgrKn('Save',`mgrClUur('${veiligJs(p.id)}')`,true)}</div>`;
+  if(MGR_CL_D.afgesloten){ return uit+'</div>'; }
+  if(p.uren_id&&!p.uit){
+    uit+=`<div style="font-size:12.5px;color:#B45309;margin-top:5px">Still clocked in. Fill in when they finished.</div>`+editor();
+  }else if(klaar){
+    uit+=`<button class="mcr-linkje" style="margin-top:5px" onclick="MGR_CL.wijzig['${veiligJs(p.id)}']=true;mgrClTeken()">change</button>`;
+  }else if(p.uren_id){
+    if(p.te_laat>0){
+      uit+=`<div style="font-size:12.5px;color:#B45309;margin-top:5px">Clocked in ${p.te_laat} min after the shift started.</div>
+        <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${mgrKn(`Mark as late`,`mgrClZet('${veiligJs(p.id)}','te_laat')`)}${mgrKn('Not late',`mgrClZet('${veiligJs(p.id)}','niet_te_laat')`)}</div>`;
+    }else{
+      uit+=`<div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${mgrKn('Looks right',`mgrClZet('${veiligJs(p.id)}','ok')`,true)}
+        ${MGR_CL.open[p.id]?'':mgrKn('Change break or time',`MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()`)}</div>`;
+    }
+    if(MGR_CL.open[p.id])uit+=editor();
+  }else{
+    uit+=`<div style="font-size:12.5px;color:#B4472B;margin-top:5px">Never clocked in.</div>
+      <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${mgrKn('No-show',`mgrClZet('${veiligJs(p.id)}','niet_gekomen')`)}
+        ${mgrKn('Cancelled in advance',`mgrClZet('${veiligJs(p.id)}','afgemeld')`)}${mgrKn('Sent home / not needed',`mgrClZet('${veiligJs(p.id)}','naar_huis')`)}</div>`;
+  }
+  if(p.uren_id&&!(p.polo||p.schort))uit+=`<button class="mcr-linkje" style="display:block;margin-top:7px;color:#2A4EA8" onclick="mgrTeamNaar('${veiligJs(p.id)}')">No uniform registered yet &middot; hand out &rsaquo;</button>`;
+  uit+=`<div id="mgrClU${id}" style="font-size:12px;margin-top:4px"></div></div>`;
+  return uit;
+}
+
+function mgrClTeken(){
+  const D=MGR_CL_D||{}, mensen=D.mensen||[];
+  document.getElementById('mcrTitel').textContent='Close the day';
+  document.getElementById('mcrSub').textContent=(D.kraam||'')+' · '+(D.datum?mgrDagNaam(D.datum):'');
+  let uit=mgrClKeuzes();
+  if(D.afgesloten){
+    const a=D.afgesloten;
+    uit+=`<div class="mcr-kaart" style="text-align:center;padding:20px 15px">
+      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#0F7A52" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M8 12l3 3 5-6"/></svg>
+      <div style="font-size:16px;font-weight:700;margin-top:6px">${veiligTekst(D.kraam)} is closed</div>
+      <div style="font-size:12.5px;color:#6B6A66;margin-top:3px">${veiligTekst(mgrDagNaam(D.datum,true))} &middot; ${veiligTekst(mgrKlok(a.op))} by ${veiligTekst(a.door||'?')}</div></div>
+      <div class="mcr-kaart"><div class="mcr-kop">Checklist</div>
+      <div style="font-size:13px;line-height:1.8">Cleaning list: ${a.schoonmaak?'done':'<span style="color:#B45309">not done</span>'}<br>Gas: off<br>
+        Stock: ${a.voorraad_nodig?veiligTekst([...(a.voorraad||[]),a.voorraad_tekst||''].filter(Boolean).join(', ')):'nothing needed'}</div></div>
+      <div class="mcr-kaart" style="padding:2px 15px"><div class="mcr-kop" style="margin-top:12px">Hours</div>${mensen.map(mgrClPersoon).join('')}</div>
+      <div style="font-size:12.5px;color:#6B6A66;text-align:center;margin:4px 0 14px">Need to change something? Ask Bram to reopen the day.</div>`;
+    document.getElementById('mcrMain').innerHTML=uit; return;
+  }
+  if(D.toekomst||!mensen.length){
+    uit+=mcrLeeg(D.toekomst?'You can close this day once it has started.':'Nobody worked at this stall that day.');
+    document.getElementById('mcrMain').innerHTML=uit; return;
+  }
+  uit+=mgrClStappen();
+  const fout=MGR_CL.fout?`<div style="color:#B4472B;font-size:12.5px;margin:6px 2px 0">${veiligTekst(MGR_CL.fout)}</div>`:'';
+  if(MGR_CL.stap===1){
+    const n=mensen.filter(p=>p.controle).length;
+    uit+=`<div class="mcr-kaart" style="padding:2px 15px 4px"><div class="mcr-kop" style="margin-top:12px">Who worked today &middot; ${n} of ${mensen.length} checked</div>
+      ${mensen.map(mgrClPersoon).join('')}</div>
+      <div style="font-size:12px;color:#6B6A66;line-height:1.5;margin:-2px 3px 12px">Clocking in 1 minute after the shift starts counts as late. Bram still approves and pays the hours; your check shows up next to them.</div>`;
+  }
+  if(MGR_CL.stap===2){
+    const nodig=mensen.filter(p=>!p.beoordeling);
+    const wel=mensen.filter(p=>p.beoordeling);
+    uit+=`<div class="mcr-kaart" style="padding:2px 15px 10px"><div class="mcr-kop" style="margin-top:12px">No rating yet &middot; required</div>
+      ${nodig.length?nodig.map(p=>{const id=veiligTekst(p.id); const b=MGR_CL.beo[p.id]||{};
+        return `<div style="padding:9px 0;border-top:1px solid #EFEDE7">
+          <div style="font-size:14px;font-weight:600">${veiligTekst(p.naam)} <span style="font-size:12px;color:#6B6A66;font-weight:400">&middot; ${p.diensten<=1?'first shift':p.diensten+' shifts'}</span></div>
+          <select class="mcr-veld" id="mgrClB${id}" onchange="(MGR_CL.beo['${veiligJs(p.id)}']=MGR_CL.beo['${veiligJs(p.id)}']||{}).v=this.value" style="margin-top:6px;padding:9px 10px;font-size:14px${MGR_CL.fout&&!b.v?';border-color:#B4472B':''}">
+            <option value="">— choose a rating —</option>${MGR_OORDELEN.map(([v,l])=>`<option value="${v}"${b.v===v?' selected':''}>${l}</option>`).join('')}</select>
+          <input class="mcr-veld" id="mgrClBR${id}" maxlength="80" placeholder="Anything Bram should know? (optional)" value="${veiligTekst(b.r||'')}"
+            oninput="(MGR_CL.beo['${veiligJs(p.id)}']=MGR_CL.beo['${veiligJs(p.id)}']||{}).r=this.value" style="margin-top:6px;padding:9px 10px;font-size:13px"></div>`;}).join('')
+        :'<div style="font-size:12.5px;color:#6B6A66;padding:4px 0 2px">Everyone who worked today already has a rating.</div>'}</div>
+      <div class="mcr-kaart" style="padding:2px 15px 10px"><div class="mcr-kop" style="margin-top:12px">Change a rating &middot; optional</div>
+      ${wel.map(p=>{const id=veiligTekst(p.id); const open=MGR_CL.beoOpen[p.id];
+        return `<div style="padding:9px 0;border-top:1px solid #EFEDE7">
+          <div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:14px;font-weight:600">${veiligTekst(p.naam)}
+            <span class="mcr-chip" style="background:#F3F2EE;color:#6B6A66">${veiligTekst(mgrOordeel(p.beoordeling))}</span></span>
+            <button class="mcr-linkje" onclick="MGR_CL.beoOpen['${veiligJs(p.id)}']=!MGR_CL.beoOpen['${veiligJs(p.id)}'];mgrClTeken()">${open?'close':'change'}</button></div>
+          ${open?`<div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap;align-items:center">
+            <select class="mcr-veld" id="mgrClW${id}" style="flex:1 1 140px;padding:8px 10px;font-size:14px">${MGR_OORDELEN.map(([v,l])=>`<option value="${v}"${p.beoordeling===v?' selected':''}>${l}</option>`).join('')}</select>
+            <input class="mcr-veld" id="mgrClWR${id}" maxlength="80" placeholder="Why? (required)" style="flex:1 1 140px;padding:8px 10px;font-size:13px">
+            ${mgrKn('Save',`mgrClBeoWijzig('${veiligJs(p.id)}')`,true)}</div><div id="mgrClWU${id}" style="font-size:12px;margin-top:4px"></div>`:''}</div>`;}).join('')}</div>`;
+  }
+  if(MGR_CL.stap===3){
+    const jn=(k,l)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-top:1px solid #EFEDE7">
+      <span style="font-size:14px">${l}</span><span style="display:flex;gap:6px">
+      ${mgrKn('Yes',`MGR_CL.${k}=true;MGR_CL.fout='';mgrClTeken()`,MGR_CL[k]===true,'min-width:54px')}
+      ${mgrKn('No',`MGR_CL.${k}=false;MGR_CL.fout='';mgrClTeken()`,MGR_CL[k]===false,'min-width:54px')}</span></div>`;
+    uit+=`<div class="mcr-kaart" style="padding:2px 15px 12px"><div class="mcr-kop" style="margin-top:12px">Stall</div>
+      ${jn('schoon','Cleaning list filled in')}
+      ${MGR_CL.schoon===false?'<div style="font-size:12.5px;color:#B45309;margin:-4px 0 6px">You can still close, but Bram will see the cleaning list wasn\'t done.</div>':''}
+      ${jn('gas','Gas turned off')}
+      ${MGR_CL.gas===false?'<div style="font-size:12.5px;color:#B4472B;margin:-4px 0 6px">Turn the gas off before you close the day.</div>':''}
+      ${jn('voorraad','Stock needed?')}
+      ${MGR_CL.voorraad?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${MGR_VOORRAAD.map(s=>{const aan=!!MGR_CL.items[s];
+        return `<button onclick="MGR_CL.items['${veiligJs(s)}']=!MGR_CL.items['${veiligJs(s)}'];mgrClTeken()" style="font-family:var(--font);font-size:12.5px;padding:6px 10px;border-radius:18px;cursor:pointer;border:1px solid ${aan?'#1A1917':'#D9D7D0'};background:${aan?'#1A1917':'#fff'};color:${aan?'#fff':'#1A1917'}">${veiligTekst(s)}</button>`;}).join('')}</div>
+        <input class="mcr-veld" maxlength="300" placeholder="How much, or anything else" value="${veiligTekst(MGR_CL.tekst)}" oninput="MGR_CL.tekst=this.value" style="margin-top:8px;padding:10px 12px;font-size:14px">`:''}</div>`;
+  }
+  if(MGR_CL.stap===4){
+    const items=Object.keys(MGR_CL.items).filter(k=>MGR_CL.items[k]);
+    uit+=`<div class="mcr-kaart"><div class="mcr-kop">Check and close</div>
+      <div style="font-size:13px;line-height:1.55">
+        <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Hours</b><br>${mensen.map(p=>`${veiligTekst(p.naam.split(' ')[0])} <span style="color:#6B6A66">${veiligTekst(MGR_UITKOMST[p.controle]+(p.controle==='te_laat'?' '+p.controle_min+' min':''))}</span>`).join(' &middot; ')}</div>
+        <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Ratings</b><br>${mensen.map(p=>`${veiligTekst(p.naam.split(' ')[0])} <span style="color:#6B6A66">${veiligTekst(mgrOordeel(p.beoordeling))}</span>`).join(' &middot; ')}</div>
+        <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Stall</b><br>Cleaning list ${MGR_CL.schoon?'done':'<span style="color:#B45309">not done</span>'} &middot; Gas off</div>
+        <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Stock</b><br>${MGR_CL.voorraad?veiligTekst([...items,MGR_CL.tekst.trim()].filter(Boolean).join(', ')):'Nothing needed'}</div>
+      </div></div>`;
+  }
+  uit+=fout+`<div style="display:flex;gap:8px;margin:10px 0 6px">${MGR_CL.stap>1?`<button class="mcr-knop licht" style="flex:1" onclick="MGR_CL.stap--;MGR_CL.fout='';mgrClTeken()">Back</button>`:''}
+    <button class="mcr-knop" style="flex:2" id="mgrClVerder" onclick="mgrClVerder()">${MGR_CL.stap===4?'Close the day':'Next'}</button></div>
+    <div style="text-align:center;margin:10px 0 4px"><button class="mcr-linkje" onclick="mcrGa('stall')">All hours this week</button></div>`;
+  document.getElementById('mcrMain').innerHTML=uit;
+}
+
+async function mgrClHerlaad(){
+  const{data,error}=await sb.rpc('mgr_afsluiting',{p_kraam:MGR_CL.kraam,p_datum:MGR_CL.datum});
+  if(error)throw error;
+  MGR_CL_D=data||{}; mgrClTeken();
+}
+async function mgrClZet(gid,uitkomst){
+  const u=document.getElementById('mgrClU'+gid);
+  try{
+    const{error}=await sb.rpc('mgr_controle_zetten',{p_kraam:MGR_CL.kraam,p_datum:MGR_CL.datum,p_gebruiker:gid,p_uitkomst:uitkomst});
+    if(error)throw error;
+    MGR_CL.wijzig[gid]=false; MGR_CL.open[gid]=false; MGR_CL.fout='';
+    await mgrClHerlaad();
+  }catch(e){ if(u)u.innerHTML=`<span style="color:#B4472B">${veiligTekst(mcrFout(e))}</span>`; }
+}
+async function mgrClUur(gid){
+  const p=((MGR_CL_D&&MGR_CL_D.mensen)||[]).find(x=>x.id===gid); if(!p)return;
+  const t=document.getElementById('mgrClT'+gid), pz=document.getElementById('mgrClP'+gid), u=document.getElementById('mgrClU'+gid);
+  const min=parseInt(pz&&pz.value,10);
+  if(!t||!t.value){ if(u)u.innerHTML='<span style="color:#B4472B">Fill in the time they finished.</span>'; return; }
+  if(isNaN(min)||min<0){ if(u)u.innerHTML='<span style="color:#B4472B">Enter the break in minutes.</span>'; return; }
+  // Na middernacht uitgeklokt (vóór de begintijd): dan is het de dag erna.
+  let d=new Date(MGR_CL.datum+'T'+t.value+':00');
+  if(p.in&&d<=new Date(p.in))d=new Date(d.getTime()+86400000);
+  try{
+    const{error}=await sb.rpc('mgr_uur_zetten',{p_uren:p.uren_id,p_uit:d.toISOString(),p_pauze:min,p_reden:'close day'});
+    if(error)throw error;
+    MGR_CL.open[gid]=false;
+    await mgrClHerlaad();
+  }catch(e){ if(u)u.innerHTML=`<span style="color:#B4472B">${veiligTekst(mcrFout(e))}</span>`; }
+}
+async function mgrClBeoWijzig(gid){
+  const s=document.getElementById('mgrClW'+gid), r=document.getElementById('mgrClWR'+gid), u=document.getElementById('mgrClWU'+gid);
+  const reden=(r&&r.value.trim())||'';
+  if(!reden){ if(u)u.innerHTML='<span style="color:#B4472B">Say why you change the rating.</span>'; if(r)r.style.borderColor='#B4472B'; return; }
+  try{
+    const{error}=await sb.rpc('mgr_beoordeling_zetten',{p_id:gid,p_beoordeling:s.value,p_reden:reden});
+    if(error)throw error;
+    MGR_CL.beoOpen[gid]=false; toast('Rating saved');
+    await mgrClHerlaad();
+  }catch(e){ if(u)u.innerHTML=`<span style="color:#B4472B">${veiligTekst(mcrFout(e))}</span>`; }
+}
+async function mgrClVerder(){
+  const D=MGR_CL_D||{}, mensen=D.mensen||[];
+  const kn=document.getElementById('mgrClVerder');
+  MGR_CL.fout='';
+  if(MGR_CL.stap===1){
+    const open=mensen.filter(p=>!p.controle||MGR_CL.wijzig[p.id]);
+    if(open.length){ MGR_CL.fout='Check everyone first: '+open.map(p=>p.naam.split(' ')[0]).join(', ')+'.'; return mgrClTeken(); }
+    MGR_CL.stap=2; return mgrClTeken();
+  }
+  if(MGR_CL.stap===2){
+    const nodig=mensen.filter(p=>!p.beoordeling);
+    const leeg=nodig.filter(p=>!(MGR_CL.beo[p.id]||{}).v);
+    if(leeg.length){ MGR_CL.fout='Choose a rating for '+leeg.map(p=>p.naam.split(' ')[0]).join(', ')+'.'; return mgrClTeken(); }
+    if(kn){kn.disabled=true;kn.textContent='Saving…';}
+    try{
+      for(const p of nodig){
+        const b=MGR_CL.beo[p.id];
+        const{error}=await sb.rpc('mgr_beoordeling_zetten',{p_id:p.id,p_beoordeling:b.v,p_reden:(b.r||'').trim()||null});
+        if(error)throw error;
+      }
+      MGR_CL.beo={}; MGR_CL.stap=3;
+      await mgrClHerlaad();
+    }catch(e){ MGR_CL.fout=mcrFout(e); mgrClTeken(); }
+    return;
+  }
+  if(MGR_CL.stap===3){
+    if(MGR_CL.schoon===null||MGR_CL.gas===null||MGR_CL.voorraad===null){ MGR_CL.fout='Answer all three.'; return mgrClTeken(); }
+    if(MGR_CL.gas===false){ MGR_CL.fout='Turn the gas off before you close the day.'; return mgrClTeken(); }
+    if(MGR_CL.voorraad&&!Object.values(MGR_CL.items).some(Boolean)&&!MGR_CL.tekst.trim()){ MGR_CL.fout='Tell Bram which stock you need.'; return mgrClTeken(); }
+    MGR_CL.stap=4; return mgrClTeken();
+  }
+  if(MGR_CL.stap===4){
+    if(kn){kn.disabled=true;kn.textContent='Closing…';}
+    try{
+      const items=Object.keys(MGR_CL.items).filter(k=>MGR_CL.items[k]);
+      const{error}=await sb.rpc('mgr_dag_afsluiten',{p_kraam:MGR_CL.kraam,p_datum:MGR_CL.datum,p_schoonmaak:MGR_CL.schoon,
+        p_gas:MGR_CL.gas,p_voorraad:MGR_CL.voorraad,p_items:MGR_CL.voorraad?items:[],p_tekst:MGR_CL.voorraad?MGR_CL.tekst:null});
+      if(error)throw error;
+      mgrClReset(); toast('Day closed. Bram has been notified.');
+      await mcrSluitDag();
+    }catch(e){ MGR_CL.fout=mcrFout(e); mgrClTeken(); }
+  }
+}
+
+// ─── Team: beoordelingen en kleding ────────────────────────────────
+// Kleding is borg: £25 per long sleeve polo en £25 per schort (instelbaar
+// bij Bram). Op 0 zetten zodra het terug is.
+let MGR_TEAM=[], MGR_TEAM_OPEN=null, MGR_TEAM_ZOEK='', MGR_TEAM_TERUG=false, MGR_TEAM_KL={};
+function mgrTeamNaar(id){ MGR_TEAM_OPEN=id; MGR_TEAM_TERUG=true; MGR_TEAM_ZOEK=''; mcrGa('team'); }
+async function mcrTeam(){
+  const{data,error}=await sb.rpc('mgr_team');
+  if(error)throw error;
+  MGR_TEAM=data||[];
+  let uit='';
+  if(MGR_TEAM_TERUG)uit+=`<button class="mcr-knop licht" style="margin-bottom:12px" onclick="MGR_TEAM_TERUG=false;MGR_TEAM_OPEN=null;mcrGa('close')">&lsaquo; Back to Close day</button>`;
+  uit+=`<input class="mcr-veld" placeholder="Search a name" value="${veiligTekst(MGR_TEAM_ZOEK)}" oninput="MGR_TEAM_ZOEK=this.value;mgrTeamLijst()" style="margin-bottom:12px">
+    <div id="mgrTeamLijst"></div>
+    <div style="font-size:12px;color:#6B6A66;line-height:1.5;margin:4px 3px 14px">Uniform is a deposit: £25 per polo and £25 per apron. Set it to 0 when it comes back. Bram sees who handed out what, and when.</div>`;
+  document.getElementById('mcrMain').innerHTML=uit;
+  mgrTeamLijst();
+  if(MGR_TEAM_OPEN){ const el=document.getElementById('mgrTm'+MGR_TEAM_OPEN); if(el)el.scrollIntoView({block:'center'}); }
+}
+function mgrKledingTekst(m){
+  const a=[]; if(m.polo)a.push(`Polo &times;${m.polo}${m.maat?' ('+veiligTekst(m.maat)+')':''}`); if(m.schort)a.push(`Apron &times;${m.schort}`);
+  return a.length?a.join(' &middot; ')+` &middot; deposit £${Number(m.borg||0).toFixed(0)}`:'No uniform';
+}
+function mgrTeamLijst(){
+  const el=document.getElementById('mgrTeamLijst'); if(!el)return;
+  const z=MGR_TEAM_ZOEK.trim().toLowerCase();
+  const lijst=MGR_TEAM.filter(m=>!z||String(m.naam||'').toLowerCase().includes(z));
+  if(!lijst.length){ el.innerHTML=mcrLeeg(z?'Nobody with that name.':'Nobody in the team yet.'); return; }
+  el.innerHTML=`<div class="mcr-kaart" style="padding:2px 15px">${lijst.map(m=>{
+    const id=veiligTekst(m.id), open=MGR_TEAM_OPEN===m.id;
+    const kl=MGR_TEAM_KL[m.id]||{polo:m.polo||0,schort:m.schort||0};
+    return `<div id="mgrTm${id}" style="padding:11px 0;border-bottom:1px solid #EFEDE7">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:center">
+        <span style="font-size:14px;font-weight:600">${veiligTekst(m.naam)}
+          ${m.beoordeling?`<span class="mcr-chip" style="background:#F3F2EE;color:#6B6A66">${veiligTekst(mgrOordeel(m.beoordeling))}</span>`:'<span class="mcr-chip" style="background:#FEF6E7;color:#B45309">no rating</span>'}</span>
+        <button class="mcr-linkje" onclick="mgrTeamOpen('${veiligJs(m.id)}')">${open?'close':'edit'}</button></div>
+      <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${mgrKledingTekst(m)} &middot; ${m.shifts||0} shift${m.shifts===1?'':'s'}</div>
+      ${open?`<div style="background:#FAF9F6;border-radius:11px;padding:10px 12px;margin-top:9px">
+        <div class="mcr-label">Rating</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <select class="mcr-veld" id="mgrTmB${id}" style="flex:1 1 140px;padding:8px 10px;font-size:14px">
+            <option value="">— no rating —</option>${MGR_OORDELEN.map(([v,l])=>`<option value="${v}"${m.beoordeling===v?' selected':''}>${l}</option>`).join('')}</select>
+          <input class="mcr-veld" id="mgrTmBR${id}" maxlength="80" placeholder="Why?${m.beoordeling?' (required)':' (optional)'}" style="flex:1 1 130px;padding:8px 10px;font-size:13px">
+          ${mgrKn('Save',`mgrTeamBeo('${veiligJs(m.id)}')`,true)}</div>
+        ${m.beoordeling_door?`<div style="font-size:11.5px;color:#8A8984;margin-top:4px">Rated by ${veiligTekst(m.beoordeling_door)}, ${veiligTekst(mgrWanneer(m.beoordeling_op))}</div>`:''}
+        <div class="mcr-label" style="margin-top:12px">Uniform</div>
+        ${[['polo','Long sleeve polo',m.maat?'size '+m.maat:'size not filled in'],['schort','Apron','']].map(([k,l,s])=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0">
+            <span style="font-size:14px">${l} ${s?`<span style="font-size:12px;color:#6B6A66">${veiligTekst(s)}</span>`:''}</span>
+            <span style="display:flex;align-items:center;gap:8px">
+              ${mgrKn('&minus;',`mgrTeamKl('${veiligJs(m.id)}','${k}',-1)`,false,'min-width:38px')}
+              <b style="width:16px;text-align:center;font-size:15px">${kl[k]}</b>
+              ${mgrKn('+',`mgrTeamKl('${veiligJs(m.id)}','${k}',1)`,false,'min-width:38px')}</span></div>`).join('')}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;gap:8px">
+          <span style="font-size:12.5px;color:#6B6A66">Deposit £${(kl.polo+kl.schort)*25}</span>
+          ${mgrKn('Save uniform',`mgrTeamKleding('${veiligJs(m.id)}')`,true)}</div>
+        ${m.kleding_door?`<div style="font-size:11.5px;color:#8A8984;margin-top:4px">Last changed by ${veiligTekst(m.kleding_door)}, ${veiligTekst(mgrWanneer(m.kleding_op))}</div>`:''}
+        <div id="mgrTmU${id}" style="font-size:12px;margin-top:4px"></div></div>`:''}
+    </div>`;
+  }).join('')}</div>`;
+}
+function mgrTeamOpen(id){ MGR_TEAM_OPEN=MGR_TEAM_OPEN===id?null:id; delete MGR_TEAM_KL[id]; mgrTeamLijst(); }
+function mgrTeamKl(id,k,d){
+  const m=MGR_TEAM.find(x=>x.id===id); if(!m)return;
+  const kl=MGR_TEAM_KL[id]=MGR_TEAM_KL[id]||{polo:m.polo||0,schort:m.schort||0};
+  kl[k]=Math.max(0,Math.min(5,kl[k]+d)); mgrTeamLijst();
+}
+async function mgrTeamKleding(id){
+  const m=MGR_TEAM.find(x=>x.id===id); const kl=MGR_TEAM_KL[id]||{polo:m.polo||0,schort:m.schort||0};
+  const u=document.getElementById('mgrTmU'+id);
+  try{
+    const{error}=await sb.rpc('mgr_kleding_zetten',{p_id:id,p_polo:kl.polo,p_schort:kl.schort});
+    if(error)throw error;
+    delete MGR_TEAM_KL[id]; toast('Uniform saved');
+    const{data}=await sb.rpc('mgr_team'); MGR_TEAM=data||MGR_TEAM; mgrTeamLijst();
+  }catch(e){ if(u)u.innerHTML=`<span style="color:#B4472B">${veiligTekst(mcrFout(e))}</span>`; }
+}
+async function mgrTeamBeo(id){
+  const m=MGR_TEAM.find(x=>x.id===id);
+  const s=document.getElementById('mgrTmB'+id), r=document.getElementById('mgrTmBR'+id), u=document.getElementById('mgrTmU'+id);
+  const reden=(r&&r.value.trim())||'';
+  if(m&&m.beoordeling&&(s.value||'')!==m.beoordeling&&!reden){ if(u)u.innerHTML='<span style="color:#B4472B">Say why you change the rating.</span>'; return; }
+  try{
+    const{error}=await sb.rpc('mgr_beoordeling_zetten',{p_id:id,p_beoordeling:(s&&s.value)||null,p_reden:reden||null});
+    if(error)throw error;
+    toast('Rating saved');
+    const{data}=await sb.rpc('mgr_team'); MGR_TEAM=data||MGR_TEAM; mgrTeamLijst();
   }catch(e){ if(u)u.innerHTML=`<span style="color:#B4472B">${veiligTekst(mcrFout(e))}</span>`; }
 }
 
@@ -9956,6 +10438,7 @@ function liveMagNu(){
   if(typeof MB_AG_OPEN!=='undefined'&&MB_AG_OPEN)return false;
   if(typeof MB_MYPOS_OPEN!=='undefined'&&MB_MYPOS_OPEN)return false;
   if(typeof MGR_AG_OPEN!=='undefined'&&MGR_AG_OPEN)return false;
+  if(typeof mgrClBezig==='function'&&mgrClBezig())return false;
   // Crew: niet midden in het inklokken of een open beschikbaarheidsvel.
   if(typeof MCR_DAGVEL!=='undefined'&&MCR_DAGVEL)return false;
   if(typeof MCR_TAB!=='undefined'&&MCR_TAB==='clock'&&document.getElementById('mcrApp')&&document.getElementById('mcrApp').style.display!=='none')return false;
@@ -22087,6 +22570,12 @@ async function initPushNotifications(){
           if(OK_DEEPLINK){ okDeeplinkOpen(); return; }
           if(d.pagina==='mcr-beheer'){ if(typeof mbNaar==='function')mbNaar('shifts'); return; }
           if(d.pagina==='mcr-agenda'){ if(typeof mbNaar==='function')mbNaar('agenda'); return; }
+          if(d.pagina==='mcr-afsluiting'){ if(typeof mbNaar==='function'){ MB_DATUM=null; mbNaar('overzicht'); } return; }
+          if(d.pagina==='mcr-close'){
+            const app=document.getElementById('mcrApp');
+            if(app&&app.style.display==='flex'&&typeof mcrGa==='function')mcrGa('close');
+            return;
+          }
           if(d.pagina==='mcr-shifts'||d.pagina==='mcr-open'){
             const app=document.getElementById('mcrApp');
             if(app&&app.style.display==='flex'&&typeof mcrGa==='function')mcrGa(d.pagina==='mcr-open'?'open':'shifts');
