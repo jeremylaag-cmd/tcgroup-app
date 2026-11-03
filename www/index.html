@@ -23010,6 +23010,10 @@ window.addEventListener('load', ()=>{
     });
   }
 });
+// Laatste regel van het hoofdscript: staat hier een fout boven, dan wordt dit
+// nooit bereikt en meldt de live-update de nieuwe versie niet als goed (de
+// telefoon zet dan zelf de vorige versie terug). Zie LIVE UPDATES onderaan.
+window.__TC_HOOFD_OK=true;
 </script>
 <script>
 // ══════════════════════════════════════════════════════════════════
@@ -23791,12 +23795,15 @@ async function crmVerwijderSjabloon(id){
   CRM.sjabloonBewerk=null; await crmLaden(); crmTeken();
 }
 
+window.__TC_CRM_OK=true;
 </script>
 
 <!-- ══════════════════════════════════════════════════════════════════
      LIVE UPDATES — haalt nieuwe versies op zonder App Store
      Publiceren doe je door naar GitHub te pushen. De GitHub Action
-     bouwt dan automatisch een nieuwe bundel en zet die online.
+     controleert de code, bouwt een bundel en zet hem eerst klaar voor de
+     testers (Bram en Patrick). Met één klik in GitHub (Actions → Publiceer
+     app-update → Run workflow → "naar iedereen") krijgt iedereen hem.
      ══════════════════════════════════════════════════════════════════ -->
 <script>
 /* LET OP: niet handmatig aanpassen. De GitHub Action vervangt deze regel
@@ -23805,11 +23812,37 @@ const APP_VERSION = '0.0.0-dev';
 
 const UPDATE_MANIFEST = 'https://jeremylaag-cmd.github.io/tcgroup-app/version.json';
 
+// Versienummers als 1.0.57 vergelijken, getal voor getal. '0.0.0-dev' telt
+// als 0.0.0. Geeft 1 als a hoger is, -1 als lager, 0 als gelijk.
+function versieVergelijk(a, b){
+  const d = v => String(v||'0').split('-')[0].split('.').map(x => parseInt(x,10) || 0);
+  const x = d(a), y = d(b);
+  for(let i = 0; i < Math.max(x.length, y.length); i++){
+    const p = x[i] || 0, q = y[i] || 0;
+    if(p !== q) return p > q ? 1 : -1;
+  }
+  return 0;
+}
+
+// Welke versie hoort bij dit toestel? Iedereen krijgt de gewone versie;
+// wie in de lijst testers staat krijgt de testversie als die nieuwer is.
+function updateKeuze(info, ikId){
+  if(!info || !info.version || !info.url) return null;
+  let doel = {version: info.version, url: info.url, checksum: info.checksum, min_native: info.min_native, test: false};
+  const t = info.test;
+  if(t && t.version && t.url && ikId && Array.isArray(info.testers) && info.testers.includes(ikId)
+     && versieVergelijk(t.version, doel.version) > 0){
+    doel = {version: t.version, url: t.url, checksum: t.checksum, min_native: t.min_native, test: true};
+  }
+  return doel;
+}
+
 (function(){
   // Versienummer tonen op het profielscherm
+  let versieExtra = '';
   function toonVersie(){
     const el = document.getElementById('appVersie');
-    if(el) el.textContent = 'Versie ' + APP_VERSION;
+    if(el) el.textContent = 'Versie ' + APP_VERSION + versieExtra;
   }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', toonVersie);
@@ -23824,10 +23857,52 @@ const UPDATE_MANIFEST = 'https://jeremylaag-cmd.github.io/tcgroup-app/version.js
   // Draait in een gewone browser of op een build zonder de plugin: niets doen.
   if(!U) return;
 
-  // Bevestig dat deze bundel goed opstart. Zonder deze melding draait iOS
-  // automatisch terug naar de vorige werkende versie. Dit is het vangnet
-  // dat voorkomt dat een kapotte update de app onbruikbaar maakt.
-  U.notifyAppReady().catch(e => console.warn('notifyAppReady mislukt:', e));
+  // ── Vangnet: alleen "deze versie werkt" melden als hij echt goed opstart ──
+  // Zonder notifyAppReady zet de updater na ongeveer 10 seconden zelf de
+  // vorige werkende versie terug. Vroeger stond die melding hier los, waardoor
+  // hij ook kwam als de rest van de app een fout had. Nu pas als:
+  //  - het hoofdscript en het CRM-script helemaal gelezen zijn (de laatste
+  //    regel van elk zet een vlag; bij een tikfout wordt die nooit bereikt),
+  //  - er tijdens het opstarten geen programmeerfout is opgetreden, en
+  //  - het inlogscherm of de app zelf in beeld staat.
+  // Komt de app door traag internet niet binnen 5 seconden in beeld maar is er
+  // ook niets misgegaan, dan melden we hem toch als goed: traag is niet kapot.
+  let klaarGemeld = false, startFout = null;
+  window.addEventListener('error', e => {
+    if(!klaarGemeld) startFout = (e && e.message) || 'fout';
+  });
+  window.addEventListener('unhandledrejection', e => {
+    const r = e && e.reason;
+    if(klaarGemeld || !r) return;
+    // Alleen echte programmeerfouten tellen; geen internet is geen reden om
+    // een goede versie terug te draaien.
+    if(/^(TypeError|ReferenceError|SyntaxError|RangeError)$/.test(r.name || '')
+       && !/fetch|network|load failed|timeout|internet/i.test(r.message || '')) startFout = r.message;
+  });
+  const heeftSessie = (() => {
+    try{ return Object.keys(localStorage).some(k => /^sb-.*-auth-token$/.test(k)); }catch(e){ return false; }
+  })();
+  const zichtbaar = id => { const el = document.getElementById(id); return !!el && getComputedStyle(el).display !== 'none'; };
+  let tikken = 0;
+  const wacht = setInterval(() => {
+    tikken++;
+    if(startFout){
+      clearInterval(wacht);
+      console.warn('Opstarten mislukt, deze versie wordt niet goedgekeurd:', startFout);
+      return;
+    }
+    if(window.__TC_HOOFD_OK !== true || window.__TC_CRM_OK !== true){
+      if(tikken > 20) clearInterval(wacht);   // na 10 s opgeven: de updater rolt terug
+      return;
+    }
+    const inBeeld = zichtbaar('appWrap') || zichtbaar('mcrApp') || zichtbaar('wachtWrap')
+                 || (!heeftSessie && zichtbaar('authWrap'));
+    if((inBeeld && tikken >= 2) || tikken >= 10){
+      clearInterval(wacht);
+      klaarGemeld = true;
+      U.notifyAppReady().catch(e => console.warn('notifyAppReady mislukt:', e));
+    }
+  }, 500);
 
   let bezig = false;
 
@@ -23841,6 +23916,30 @@ const UPDATE_MANIFEST = 'https://jeremylaag-cmd.github.io/tcgroup-app/version.js
     return true;
   }
 
+  // Wie ben ik? Nodig voor het testkanaal. Na het inloggen staat het in
+  // CURRENT_USER; daarvoor halen we het uit de bewaarde sessie.
+  function mijnId(){
+    try{ if(typeof CURRENT_USER !== 'undefined' && CURRENT_USER && CURRENT_USER.id) return CURRENT_USER.id; }catch(e){}
+    try{
+      const k = Object.keys(localStorage).find(x => /^sb-.*-auth-token$/.test(x));
+      const j = k && JSON.parse(localStorage.getItem(k));
+      return (j && j.user && j.user.id) || null;
+    }catch(e){ return null; }
+  }
+
+  // Welk bouwnummer heeft de app uit de App Store / Play Store? Een update kan
+  // in version.json zeggen dat hij minimaal bouwnummer X nodig heeft (bv. als
+  // er een nieuwe plugin in zit). Oudere apps slaan hem dan over.
+  async function nativeBouw(){
+    try{
+      const A = window.Capacitor.Plugins.App;
+      if(!A || !A.getInfo) return null;
+      const i = await A.getInfo();
+      const n = parseInt(i && i.build, 10);
+      return isNaN(n) ? null : n;
+    }catch(e){ return null; }
+  }
+
   async function checkUpdate(){
     if(bezig) return;
     bezig = true;
@@ -23849,19 +23948,33 @@ const UPDATE_MANIFEST = 'https://jeremylaag-cmd.github.io/tcgroup-app/version.js
       if(!res.ok) return;
 
       const info = await res.json();
-      if(!info || !info.version || !info.url) return;
+      const doel = updateKeuze(info, mijnId());
+      if(!doel) return;
 
-      // Al de nieuwste versie? Dan niets doen.
-      if(info.version === APP_VERSION) return;
+      if(info.test && info.test.version === APP_VERSION && info.version !== APP_VERSION){
+        versieExtra = ' (testversie)'; toonVersie();
+      }
+
+      // Alleen een HOGERE versie installeren, nooit terug naar een oudere.
+      if(versieVergelijk(doel.version, APP_VERSION) <= 0) return;
       const huidig = await U.current();
-      if(huidig && huidig.bundle && huidig.bundle.version === info.version) return;
+      if(huidig && huidig.bundle && versieVergelijk(doel.version, huidig.bundle.version) <= 0) return;
 
-      console.log('Nieuwe versie gevonden:', info.version, '(nu:', APP_VERSION + ')');
+      const minNative = parseInt(doel.min_native, 10);
+      if(!isNaN(minNative)){
+        const bouw = await nativeBouw();
+        if(bouw !== null && bouw < minNative){
+          console.log('Versie', doel.version, 'heeft een nieuwere app uit de winkel nodig (bouw', minNative + ').');
+          return;
+        }
+      }
+
+      console.log('Nieuwe versie gevonden:', doel.version, doel.test ? '(test)' : '', '(nu:', APP_VERSION + ')');
       // De checksum uit version.json meegeven. Klopt het gedownloade bestand
       // daar niet mee, dan weigert de updater hem — zo kan een halve of
       // gewijzigde bundel nooit actief worden.
-      const opdracht = {url: info.url, version: info.version};
-      if(info.checksum) opdracht.checksum = info.checksum;
+      const opdracht = {url: doel.url, version: doel.version};
+      if(doel.checksum) opdracht.checksum = doel.checksum;
       const bundel = await U.download(opdracht);
 
       // Wachten tot je niets kwijt kunt raken. We kijken elke 5 seconden.
@@ -23884,6 +23997,8 @@ const UPDATE_MANIFEST = 'https://jeremylaag-cmd.github.io/tcgroup-app/version.js
   }
 
   checkUpdate();
+  // Na het inloggen weten we pas of je tester bent: dan nog een keer kijken.
+  setTimeout(checkUpdate, 20000);
 
   // Ook checken wanneer de app vanuit de achtergrond terugkomt
   if(window.Capacitor.Plugins.App){
