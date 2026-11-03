@@ -140,6 +140,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mpb-balk span{display:block;height:100%}
 .mpb-dag-r1{font-size:11.5px;color:#55534E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .mpb-dag-r2{font-size:11.5px;color:#2A4EA8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.mpb-dag-r3{font-size:11px;color:#55534E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-variant-numeric:tabular-nums}
+.mpb-dag-r3.rood{color:#B4472B;font-weight:700}
 .mpb-twee{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
 .mpb-links{flex:999 1 560px;min-width:0}
 .mpb-rechts{flex:1 1 320px;min-width:0;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto}
@@ -4268,10 +4270,30 @@ function mpbKortTijd(s){ const k=t=>mbUur(t).replace(/:00$/,''); return k(s.star
 async function mbShiftsPlannen(){
   if(!MB_WEEK)MB_WEEK=mbMaandag(MB_DATUM||await mbPeil());
   if(MB_PB_TAB==='diensten')return mbShiftsDiensten();
-  const [pb]=await Promise.all([sb.rpc('mcr_planbord',{p_van:MB_WEEK}), mbRuilLaden(), mbErvaringLaden()]);
+  const [pb]=await Promise.all([sb.rpc('mcr_planbord',{p_van:MB_WEEK}), mbRuilLaden(), mbErvaringLaden(), mpbLoonLaden(MB_WEEK)]);
   if(pb.error)throw pb.error;
   MB_PB=pb.data; mpbIndex();
   mpbTeken();
+}
+// Geplande loonkosten: tarieven, pauzeregel en forecast komen van de server
+// (mcr_plan_loon); het bedrag rekent het planbord zelf uit, zodat het meteen
+// klopt na indelen of eraf halen.
+let MB_PB_LOON=null;
+async function mpbLoonLaden(van){
+  if(MB_PB_LOON&&MB_PB_LOON.van===van)return;
+  const tot=(()=>{ const d=new Date(van+'T00:00:00'); d.setDate(d.getDate()+6); return fmt(d); })();
+  const{data,error}=await sb.rpc('mcr_plan_loon',{p_van:van,p_tot:tot}).then(x=>x,()=>({data:null,error:true}));
+  MB_PB_LOON=(!error&&data)?Object.assign({van},data):{van,tarieven:{},dagen:[]};
+}
+function mpbLoon(d,kraam){
+  const L=MB_PB_LOON||{}, T=L.tarieven||{}, drempel=Number(L.pauze_drempel_uren)||6, pmin=Number(L.pauze_minuten)||30;
+  let loon=0, uren=0, fc=0;
+  MB_PB.shifts.forEach(s=>{ if(s.datum!==d||s.dicht||(kraam&&s.kraam!==kraam))return;
+    let min=Math.max(0,s.et-s.st); if(min>=drempel*60)min-=pmin;
+    s.inn.forEach(g=>{ uren+=min/60; loon+=min/60*(Number(T[g])||0); }); });
+  (L.dagen||[]).forEach(x=>{ if(x.datum===d&&(!kraam||x.kraam===kraam))fc+=Number(x.forecast)||0; });
+  const pct=fc>0?loon/fc*100:null;
+  return {loon,uren,fc,pct,rood:pct!=null&&pct>(Number(L.loon_pct_drempel)||30)};
 }
 async function mpbHerlaad(){
   const{data,error}=await sb.rpc('mcr_planbord',{p_van:MB_WEEK});
@@ -4393,7 +4415,8 @@ function mpbDagbordHtml(){
       <span class="mpb-dag-nr">${dt.getDate()}</span>
       <span class="mpb-balk"><span style="width:${pct}%;background:${kl}"></span></span>
       <span class="mpb-dag-r1">${t.nodig?(t.nodig-t.bezet?(t.nodig-t.bezet)+' open':'vol'):'geen diensten'}</span>
-      <span class="mpb-dag-r2">${t.vr?t.vr+(t.vr===1?' aanvraag':' aanvragen'):'&nbsp;'}</span></button>`;
+      <span class="mpb-dag-r2">${t.vr?t.vr+(t.vr===1?' aanvraag':' aanvragen'):'&nbsp;'}</span>
+      ${(()=>{ const l=mpbLoon(d); return l.loon>0?`<span class="mpb-dag-r3${l.rood?' rood':''}" title="Gepland loon${l.fc?' tegen forecast '+mbPondKort(l.fc):''}">${veiligTekst(mbPondKort(l.loon))}${l.pct!=null?' · '+Math.round(l.pct)+'%':''}</span>`:''; })()}</button>`;
   });
   uit+='</div><div class="mpb-twee"><div class="mpb-links">';
   const tot={open:0,vr:0,gat:[]};
@@ -4403,7 +4426,9 @@ function mpbDagbordHtml(){
     let nodig=0,bezet=0,vr=0;
     sh.forEach(s=>{ nodig+=s.nodig; bezet+=Math.min(s.inn.length,s.nodig); vr+=s.aanv.filter(a=>!s.inn.includes(a.g)).length; });
     uit+=`<section class="mb-kaart mpb-kraam"><div class="mpb-kraamkop">${mbStip(k.kleur)}<h2>${veiligTekst(k.naam)}</h2>
-      <span class="mpb-samen">${dg.dicht?'dicht':(sh.length?bezet+' van '+nodig+' plekken gevuld'+(vr?' · '+vr+(vr===1?' aanvraag':' aanvragen'):''):'')}</span>
+      <span class="mpb-samen">${dg.dicht?'dicht':(sh.length?bezet+' van '+nodig+' plekken gevuld'+(vr?' · '+vr+(vr===1?' aanvraag':' aanvragen'):''):'')}
+        ${(()=>{ if(dg.dicht)return ''; const l=mpbLoon(dag,k.id); if(!l.loon&&!l.fc)return '';
+          return ` · <span style="${l.rood?'color:#B4472B;font-weight:700':''}">gepland ${veiligTekst(mbPondKort(l.loon))}${l.fc?' · forecast '+veiligTekst(mbPondKort(l.fc)):''}${l.pct!=null?' · loon '+Math.round(l.pct)+'%':''}</span>`; })()}</span>
       <button class="mb-mini" style="margin-left:auto" onclick="mpbNieuweDienst('${veiligJs(k.id)}','${dag}')">+ dienst</button></div>`;
     if(dg.dicht){ uit+='<div class="mpb-leeg">Deze kraam is dicht op deze dag.</div></section>'; return; }
     if(!sh.length){ uit+='<div class="mpb-leeg">Geen diensten op deze dag.</div></section>'; return; }
