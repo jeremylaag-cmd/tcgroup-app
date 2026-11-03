@@ -3844,6 +3844,17 @@ async function mbOverzicht(){
     sb.rpc('mcr_managers_week',{p_van:mbMaandag(MB_DATUM)}).then(x=>x,()=>({data:[]})),
     sb.rpc('mcr_dagrapport',{p_van:MB_DATUM,p_tot:MB_DATUM,p_kraam:null}).then(x=>x,()=>({data:[]})),
   ]);
+  // Geplande loonkosten vandaag en het resultaat van gisteren (per kraam).
+  const gisteren=(()=>{ const d=new Date(MB_DATUM+'T00:00:00'); d.setDate(d.getDate()-1); return fmt(d); })();
+  const pl=await sb.rpc('mcr_plan_loon',{p_van:gisteren,p_tot:MB_DATUM}).then(x=>x,()=>({data:null}));
+  const PLAN={}; const PL=(pl&&!pl.error&&pl.data)||{};
+  (PL.dagen||[]).forEach(d=>{ PLAN[d.kraam+'|'+d.datum]=d; });
+  const DREMPEL=Number(PL.loon_pct_drempel)||30;
+  // Nog niet binnen: vandaag (Britse tijd), meer dan 10 minuten na de start en niet ingeklokt.
+  const isVandaag=MB_DATUM===mbVandaagStr(), nuMin=mbNuMin();
+  const nietBinnen=(m,sh)=>{ if(!isVandaag||m.ingeklokt_op||!sh.start_tijd)return false;
+    const st=mpbMin(sh.start_tijd); return nuMin>st+10; };
+  const LAAT=[];
   // Dagafsluiting door de kraammanagers (los, zodat Overzicht blijft werken als dit faalt).
   const [afs, boeteR] = await Promise.all([
     sb.rpc('mcr_afsluitingen',{p_datum:MB_DATUM}).then(x=>x,()=>({data:[]})),
@@ -3891,6 +3902,17 @@ async function mbOverzicht(){
         <span style="color:var(--muted)">pin &middot; ${Number(pin.transacties)||0} bonnen${pct!==null?` &middot; ${pct}% van forecast`:''}</span></div>`;
     }
     if(!k.dicht){
+      const p=PLAN[k.kraam_id+'|'+MB_DATUM], g=PLAN[k.kraam_id+'|'+gisteren];
+      if(p&&Number(p.gepland_loon)>0){
+        const fc=Number(p.forecast)||0, pct=fc>0?Number(p.gepland_loon)/fc*100:null, rood=pct!=null&&pct>DREMPEL;
+        uit+=`<div style="font-size:12px;line-height:1.5;margin:-2px 0 6px;color:${rood?'#B4472B':'var(--muted)'}">
+          Gepland <b style="color:${rood?'#B4472B':'var(--text)'}">${veiligTekst(mbPondKort(p.gepland_loon))}</b> loon (${veiligTekst(mbNum(p.gepland_uren,1))} u)
+          &middot; ${fc?'forecast '+veiligTekst(mbPondKort(fc)):'geen forecast'}${pct!=null?` &middot; <b>loon ${veiligTekst(mbProcent(pct,0))}</b>${rood?' (boven '+DREMPEL+'%)':''}`:''}</div>`;
+      }
+      if(g&&(g.omzet!=null||g.loon_echt!=null)){
+        const o=Number(g.omzet)||0, l=Number(g.loon_echt)||0, pct=o>0?l/o*100:null, rood=pct!=null&&pct>DREMPEL;
+        uit+=`<div style="font-size:12px;line-height:1.5;margin:-2px 0 6px;color:var(--muted)">Gisteren: omzet ${veiligTekst(mbPondKort(o))} &middot; loon ${veiligTekst(mbPondKort(l))}${pct!=null?` &middot; <b style="color:${rood?'#B4472B':'#0F7A52'}">${veiligTekst(mbProcent(pct,0))}</b>`:''}</div>`;
+      }
       const mg=MANDAG.filter(x=>x.kraam_id===k.kraam_id);
       const mw=mg.filter(x=>x.soort==='manager'), ww=mg.filter(x=>x.soort==='weekend');
       if(mg.length)uit+=`<div style="font-size:12px;color:#6D28D9;margin:-2px 0 6px;line-height:1.5">${
@@ -3914,10 +3936,14 @@ async function mbOverzicht(){
         </div>`;
       mensen.forEach(m=>{
         const binnen=m.ingeklokt_op&&!m.uitgeklokt_op;
+        const laat=nietBinnen(m,sh);
+        if(laat)LAAT.push({m,sh,k});
         uit+=`<div style="display:flex;align-items:center;gap:8px;padding:3px 0 0 2px;font-size:13px">
-          <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${binnen?'#0F7A52':(m.uitgeklokt_op?'#B4B2A9':'#1A1917')}"></span>
+          <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${laat?'#B4472B':(binnen?'#0F7A52':(m.uitgeklokt_op?'#B4B2A9':'#1A1917'))}"></span>
           <span style="flex-grow:1;min-width:0">${mbNaamLink(m.gebruiker_id,m.naam,'font-size:13px')}</span>
-          ${binnen?`<span style="font-size:11.5px;color:#0F7A52;white-space:nowrap">in ${veiligTekst(mbKlokT(m.ingeklokt_op))}</span>`
+          ${laat?`<span style="font-size:11.5px;color:#B4472B;font-weight:700;white-space:nowrap">nog niet binnen (${veiligTekst(mbUur(sh.start_tijd))})</span>
+            ${m.telefoon?mbTel(m.telefoon,'font-size:11.5px;color:#fff;background:#B4472B;border-radius:12px;padding:2px 8px;text-decoration:none;white-space:nowrap').replace(/>[^<]*<\/a>$/,'>Bel</a>'):''}`
+          :binnen?`<span style="font-size:11.5px;color:#0F7A52;white-space:nowrap">in ${veiligTekst(mbKlokT(m.ingeklokt_op))}</span>`
             :(m.uitgeklokt_op?`<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">${veiligTekst(mbKlokT(m.ingeklokt_op))}&ndash;${veiligTekst(mbKlokT(m.uitgeklokt_op))}</span>`:'')}
         </div>`;
       });
@@ -3929,6 +3955,15 @@ async function mbOverzicht(){
   });
   if(!lijst.length)uit+='<div class="mb-kaart">Er staan nog geen kramen.</div>';
   uit+='</div>';
+  if(LAAT.length){
+    const blok=`<div class="mb-kaart" style="border:1.5px solid #B4472B;background:#FBEDE9">
+      <div style="font-size:14px;font-weight:700;color:#B4472B">${LAAT.length} ${LAAT.length===1?'persoon is':'mensen zijn'} nog niet binnen</div>
+      <div style="font-size:12.5px;color:#5B2A1D;margin-top:2px">Meer dan 10 minuten na de start en niet ingeklokt (Britse tijd ${veiligTekst(String(Math.floor(nuMin/60)).padStart(2,'0')+':'+String(nuMin%60).padStart(2,'0'))}).</div>
+      ${LAAT.map(x=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:13px">
+        ${mbStip(x.k.kleur)}<b>${veiligTekst(x.m.naam)}</b><span style="color:#5B2A1D">${veiligTekst(x.k.kraam)} &middot; ${veiligTekst(mbUur(x.sh.start_tijd))}</span>
+        ${x.m.telefoon?mbTel(x.m.telefoon,'color:#B4472B;font-weight:700;text-decoration:none'):''}</div>`).join('')}</div>`;
+    uit=uit.replace('<div class="mb-rij3">',blok+'<div class="mb-rij3">');
+  }
   uit+=mbAfsluitHtml();
   uit+=mbAgendaVandaagHtml(agd&&!agd.error?agd.data:[]);
 
@@ -3966,8 +4001,10 @@ async function mbOverzicht(){
       </div>
       <div style="margin-top:14px;padding-top:13px;border-top:1px solid var(--border);display:flex;gap:26px;flex-wrap:wrap">
         <div><div class="mb-groot">${w.mensen_actief||0}</div><div class="mb-klein">mensen actief</div></div>
-        <div><div class="mb-groot">${veiligTekst(Number(w.uren_totaal||0).toLocaleString('nl-NL'))}</div><div class="mb-klein">uren tot nu</div></div>
-        <div><div class="mb-groot">${veiligTekst(mbPondKort(w.loon_totaal))}</div><div class="mb-klein">kosten personeel</div></div>
+        <div><div class="mb-groot">${veiligTekst(Number(w.uren_totaal||0).toLocaleString('nl-NL'))}</div><div class="mb-klein">uren goedgekeurd</div></div>
+        <div><div class="mb-groot">${veiligTekst(mbPondKort(w.loon_totaal))}</div><div class="mb-klein">loonkosten goedgekeurd</div></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5">Alleen uren waar jij akkoord op gaf. Bij Cijfers en Dagrapport telt alles wat geklokt is, ook wat nog wacht.
       </div>
     </div></div>`;
   document.getElementById('mbInhoud').innerHTML=uit;
@@ -4044,7 +4081,7 @@ function mbAfsluitHtml(){
           <span style="color:${rood?'#B45309':'var(--muted)'}">${veiligTekst(MB_UITKOMST[c.uitkomst]||c.uitkomst)}${c.uitkomst==='te_laat'?' ('+c.minuten+' min)':''}</span>
           ${c.uren_status==='goedgekeurd'?'<span style="color:#0F7A52">&check; akkoord</span>':''}
           ${c.voorval_id&&c.uitkomst==='niet_gekomen'?(Number(c.boete)>0?`<span style="color:#B4472B">boete ${veiligTekst(mbPond(c.boete))}</span>`
-            :`<button class="mb-mini" style="padding:2px 8px;font-size:11.5px" onclick="mbAfsBoete('${veiligJs(c.voorval_id)}')">Boete ${veiligTekst(mbPondKort(MB_AFS_BOETE))}</button>`):''}</div>`;
+            :`<button class="mb-mini" style="padding:2px 8px;font-size:11.5px" onclick="mbAfsBoete('${veiligJs(c.voorval_id)}','${veiligJs(c.naam||'')}',this)">Boete ${veiligTekst(mbPondKort(MB_AFS_BOETE))}</button>`):''}</div>`;
       });
       uit+='</div>';
     }
@@ -4063,10 +4100,14 @@ async function mbAfsAkkoord(kraam){
        toast(`Akkoord op ${data||0} ${data===1?'urenregistratie':'urenregistraties'}`); mbNaar('overzicht');
   }catch(e){ toast(mbFout(e),'fout'); }
 }
-async function mbAfsBoete(vid){
+async function mbAfsBoete(vid,naam,knop){
+  const ok=await vraagBevestiging('Boete vastleggen?',
+    `${naam?veiligTekst(naam)+' krijgt':'Er komt'} een boete van <b>${veiligTekst(mbPond(MB_AFS_BOETE))}</b> voor niet komen opdagen. Die wordt bij de volgende betaalronde ingehouden.`,'Ja, boete vastleggen');
+  if(!ok)return;
+  if(knop)knop.disabled=true;
   try{ const{error}=await sb.rpc('mcr_voorval_boete',{p_id:vid,p_boete:MB_AFS_BOETE}); if(error)throw error;
        toast('Boete vastgelegd'); mbNaar('overzicht');
-  }catch(e){ toast(mbFout(e),'fout'); }
+  }catch(e){ if(knop)knop.disabled=false; toast(mbFout(e),'fout'); }
 }
 async function mbAfsHeropen(kraam){
   if(!confirm('Deze dag weer openzetten? De kraammanager kan dan opnieuw controleren en afsluiten.'))return;
@@ -6544,7 +6585,7 @@ async function mbCijfers(){
     +tegel('Per personeelsuur', tot.uren>0?veiligTekst(mbPondKort(tot.omzet/tot.uren)):'&mdash;',
        `${mbNum(tot.uren,0)} uur ingezet`)
     +tegel('Loon als deel van de omzet', tot.omzet>0?mbProcent(tot.loon/tot.omzet*100):'&mdash;',
-       veiligTekst(mbPondKort(tot.loon)))
+       veiligTekst(mbPondKort(tot.loon))+' loon &middot; alle geklokte uren, ook nog niet goedgekeurd')
     +'</div>';
 
   // Verschil met de forecast per dag
@@ -6651,7 +6692,7 @@ function mbKostBtw(t,inv){
 }
 function mbKostBtwUitleg(){
   const el=document.getElementById('mbKbtwUit'); if(!el)return;
-  const n=finGetal((document.getElementById('mbKbedrag')||{}).value);
+  const n=mbBedragLees((document.getElementById('mbKbedrag')||{}).value);
   const t=Number(MB_KOST_BTW||0);
   if(n==null||Number.isNaN(n)||n<=0){ el.textContent=t?`${t}% btw · bedrag is ${MB_KOST_BTWIN==='excl'?'zonder':'met'} btw`:'Geen btw'; return; }
   const incl=MB_KOST_BTWIN==='excl'?n*(1+t/100):n, ex=MB_KOST_BTWIN==='excl'?n:n/(1+t/100);
@@ -6739,7 +6780,7 @@ async function mbKosten(){
         <input class="mb-veld" id="mbKopm" maxlength="500" value="${veiligTekst(b?(b.opmerking||''):'')}" onkeydown="if(event.key==='Enter')mbKostOpslaan()"></div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
-      <button class="mb-mini zwart" style="padding:9px 16px" onclick="mbKostOpslaan()">${b?'Wijziging opslaan':'Toevoegen'}</button>
+      <button class="mb-mini zwart" style="padding:9px 16px" id="mbKostKnop" onclick="mbKostOpslaan()">${b?'Wijziging opslaan':'Toevoegen'}</button>
       ${b?`<button class="mb-mini" style="padding:9px 14px" onclick="MB_KOST_BEWERK=null;mbNaar('kosten')">Annuleren</button>`:''}
       <span id="mbKuit" style="font-size:12.5px;color:var(--muted)"></span>
     </div>
@@ -6814,23 +6855,27 @@ function mbKostVal(v){
   document.querySelectorAll('#mbKval button').forEach((b,i)=>b.classList.toggle('zwart',(i===0?'GBP':'EUR')===v));
   mbKostBtw(null,null);
 }
+let MB_KOST_BEZIG=false;   // tegen dubbel tikken / twee keer Enter
 async function mbKostOpslaan(){
+  if(MB_KOST_BEZIG)return;
   const uit=document.getElementById('mbKuit');
   const zeg=(t,kl)=>{ if(uit){uit.style.color=kl||'var(--muted)';uit.textContent=t;} };
   const datum=(document.getElementById('mbKdatum')||{}).value;
   const kraam=(document.getElementById('mbKkraam')||{}).value||null;
   const cat=(document.getElementById('mbKcat')||{}).value;
   const oms=((document.getElementById('mbKoms')||{}).value||'').trim();
-  const bedrag=finGetal((document.getElementById('mbKbedrag')||{}).value);
+  const bedrag=mbBedragLees((document.getElementById('mbKbedrag')||{}).value);
   const via=((document.getElementById('mbKvia')||{}).value||'').trim();
   const opm=((document.getElementById('mbKopm')||{}).value||'').trim();
   if(!datum){zeg('Vul een datum in.','#B4472B');return;}
   if(!oms){zeg('Vul een omschrijving in.','#B4472B');return;}
   if(bedrag==null||Number.isNaN(bedrag)||bedrag<=0){zeg('Vul een geldig bedrag in, bv. 245,50.','#B4472B');return;}
   zeg('Opslaan…');
+  MB_KOST_BEZIG=true; const knop=document.getElementById('mbKostKnop'); if(knop)knop.disabled=true;
   const{error}=await sb.rpc('mcr_kosten_zetten2',{p_id:MB_KOST_BEWERK,p_datum:datum,p_kraam:kraam,p_categorie:cat,
     p_omschrijving:oms,p_bedrag:bedrag,p_valuta:MB_KOST_VAL,p_betaald_via:via||null,p_opmerking:opm||null,
     p_btw_tarief:Number(MB_KOST_BTW||0),p_btw_invoer:MB_KOST_BTWIN});
+  MB_KOST_BEZIG=false; if(knop)knop.disabled=false;
   if(error){zeg(mbFout(error),'#B4472B');return;}
   MB_KOST_LAATSTE_DATUM=datum; MB_KOST_LAATSTE_CAT=cat; MB_KOST_LAATSTE_VIA=via;
   const wasBewerk=!!MB_KOST_BEWERK; MB_KOST_BEWERK=null;
@@ -7610,10 +7655,10 @@ function mbPersoonHtml(m, vv){
           <select class="mb-veld" id="mbVvSoort${id}" onchange="mbVoorvalSoort('${veiligJs(m.id)}')">
             ${MB_SOORTEN.map(([s,l])=>`<option value="${s}">${l}</option>`).join('')}</select></div>
         <div style="flex:1 1 110px"><label class="mb-lab">Boete</label>
-          <input class="mb-veld" type="number" step="0.01" min="0" id="mbVvBoete${id}" placeholder="vanzelf"></div>
+          <input class="mb-veld" inputmode="decimal" autocomplete="off" id="mbVvBoete${id}" placeholder="vanzelf"></div>
         <div style="flex:2 1 220px"><label class="mb-lab">Toelichting</label>
           <input class="mb-veld" id="mbVvNot${id}" placeholder="bv. zonder bericht weggebleven"></div>
-        <div style="align-self:flex-end"><button class="mb-mini zwart" onclick="mbVoorvalOpslaan('${veiligJs(m.id)}')">Vastleggen</button></div>
+        <div style="align-self:flex-end"><button class="mb-mini zwart" id="mbVvKnop${id}" onclick="mbVoorvalOpslaan('${veiligJs(m.id)}')">Vastleggen</button></div>
       </div>
       <div id="mbVvUit${id}" style="font-size:12.5px;margin-top:6px"></div>
     </div>`;
@@ -7683,17 +7728,24 @@ async function mbKledingOpslaan(id){
     MB_PERSOON=null; await mbPersoonOpen(id);
   }catch(e){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
 }
+// Bedrag mag met komma of punt ("12,50" / "12.50"). Klopt het niet, dan een
+// melding — nooit stil terugvallen op de standaardboete.
 async function mbVoorvalOpslaan(id){
-  const uit=document.getElementById('mbVvUit'+id);
+  const uit=document.getElementById('mbVvUit'+id), knop=document.getElementById('mbVvKnop'+id);
   const v=x=>{const e=document.getElementById(x+id);return e?e.value:'';};
-  const boete=v('mbVvBoete');
+  const zeg=t=>{ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(t)}</span>`; };
+  const boete=mbBedragLees(v('mbVvBoete'));
+  if(boete!==null&&(Number.isNaN(boete)||boete<0)){ zeg('Dat bedrag begrijp ik niet. Typ bv. 12,50 of laat het leeg.'); return; }
+  if(knop&&knop.disabled)return;
+  if(knop)knop.disabled=true;
   try{
     const{error}=await sb.rpc('mcr_voorval_zetten',{
       p_gebruiker:id, p_datum:v('mbVvDatum')||mbVandaagStr(), p_soort:v('mbVvSoort'),
-      p_notitie:v('mbVvNot')||null, p_boete:boete===''?null:Number(boete), p_shift:null});
+      p_notitie:v('mbVvNot')||null, p_boete:boete, p_shift:null});
     if(error)throw error;
+    toast(boete?'Vastgelegd · boete '+mbPond(boete):'Vastgelegd');
     MB_PERSOON=null; await mbPersoonOpen(id);
-  }catch(e){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
+  }catch(e){ if(knop)knop.disabled=false; zeg(mbFout(e)); }
 }
 async function mbVoorvalWeg(vid, id){
   if(!confirm('Dit voorval weghalen?'))return;
@@ -7888,24 +7940,37 @@ async function mbKraamOpslaan(id){
   }catch(e){ alert(mbFout(e)); }
 }
 const MB_SLEUTELS=[
-  ['factuur_naam','Bedrijfsnaam'],['factuur_kvk','KvK'],['factuur_adres','Adres'],
-  ['factuur_btw','Btw-nummer'],['factuur_email','Facturen binnen op'],
+  ['factuur_naam','Bedrijfsnaam'],['factuur_kvk','Company number'],['factuur_adres','Adres'],
+  ['factuur_btw','VAT number'],['factuur_email','Facturen binnen op'],
   ['pauze_drempel_uren','Pauze vanaf (uren)'],['pauze_minuten','Pauze (minuten)'],
   ['prijs_portie','Prijs portie (£)'],['prijs_topping','Prijs topping (£)'],
   ['inklok_venster_min','Inklokken mag x minuten voor de start'],
   ['afzegtermijn_uren','Afzegtermijn (uren)'],['te_laat_boete','Boete niet opdagen (£)'],
+  ['loon_pct_drempel','Loonkosten rood boven (% van omzet)'],
   ['borg_polo','Borg per long sleeve polo (£)'],['borg_schort','Borg per schort (£)'],
   ['noodnummer_1','Noodnummer 1'],['noodnummer_2','Noodnummer 2'],
   ['aanmelden_tot','Personeel vraagt zelf om diensten t/m (leeg = altijd)'],
 ];
+// Kijkt naar de waarden zelf (niet naar een vlaggetje dat bij opslaan verdwijnt).
+function mbFactuurTest(k){
+  const w=sl=>String((k[sl]||{}).waarde||'').trim();
+  const f=[];
+  const naam=w('factuur_naam'); if(!naam||/test/i.test(naam))f.push('Bedrijfsnaam');
+  const nr=w('factuur_kvk'); if(!nr||/^0+$/.test(nr.replace(/\s/g,'')))f.push('Company number');
+  if(!w('factuur_adres'))f.push('Adres');
+  const vat=w('factuur_btw').replace(/\s/g,''); if(vat&&(/^[A-Z]{0,2}0+(B0+)?$/i.test(vat)||/^NL0+B0+$/i.test(vat)))f.push('VAT number (nep-nummer)');
+  const em=w('factuur_email'); if(!em||/example\.(com|org|net)$/i.test(em)||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em))f.push('Facturen binnen op');
+  return f;
+}
 async function mbGegevens(){
   const{data,error}=await sb.from('vestiging_instellingen').select('sleutel,waarde,omschrijving').eq('vestiging','MCR');
   if(error)throw error;
   const k={}; (data||[]).forEach(r=>k[r.sleutel]=r);
-  const test=(data||[]).some(r=>String(r.omschrijving||'').indexOf('TESTGEGEVEN')>=0);
+  const fout=mbFactuurTest(k);
   let uit='';
-  if(test)uit+=`<div class="mb-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
-    <div style="font-size:13px;color:#8A5307;line-height:1.6"><b>Er staan nog testgegevens.</b> De factuurgegevens hieronder zijn ingevuld met TESTNAAM B.V. en dergelijke. Vervang ze voordat er iemand een factuur maakt.</div></div>`;
+  if(fout.length)uit+=`<div class="mb-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
+    <div style="font-size:13px;color:#8A5307;line-height:1.6"><b>Er staan nog testgegevens of lege velden.</b> Deze gegevens komen op elke factuur van het personeel.
+      Vul ze in voordat er iemand een factuur maakt: ${fout.map(veiligTekst).join(', ')}.</div></div>`;
   uit+='<div class="mb-kaart"><div class="mb-kop">Jouw factuurgegevens</div><div class="mb-veldrij">';
   MB_SLEUTELS.slice(0,5).forEach(([sl,lab])=>{
     uit+=`<div style="flex:1 1 200px"><label class="mb-lab">${veiligTekst(lab)}</label>
@@ -7929,7 +7994,7 @@ async function mbInstellingenOpslaan(){
     for(const [sl] of MB_SLEUTELS){
       const el=document.getElementById('mbI_'+sl); if(!el)continue;
       const{error}=await sb.from('vestiging_instellingen')
-        .update({waarde:el.value, omschrijving:null, bijgewerkt_op:new Date().toISOString()})
+        .update({waarde:el.value, bijgewerkt_op:new Date().toISOString()})
         .eq('vestiging','MCR').eq('sleutel',sl);
       if(error)throw error;
     }
