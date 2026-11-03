@@ -140,6 +140,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mpb-balk span{display:block;height:100%}
 .mpb-dag-r1{font-size:11.5px;color:#55534E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .mpb-dag-r2{font-size:11.5px;color:#2A4EA8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.mpb-dag-r3{font-size:11px;color:#55534E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-variant-numeric:tabular-nums}
+.mpb-dag-r3.rood{color:#B4472B;font-weight:700}
 .mpb-twee{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
 .mpb-links{flex:999 1 560px;min-width:0}
 .mpb-rechts{flex:1 1 320px;min-width:0;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto}
@@ -3747,17 +3749,35 @@ function mbPondKort(n){ return '£ '+Math.round(Number(n)||0).toLocaleString('nl
 function mbNum(n,d){ return (Number(n)||0).toLocaleString('nl-NL',{minimumFractionDigits:d==null?1:d,maximumFractionDigits:d==null?1:d}); }
 function mbProcent(n,d){ return mbNum(n,d==null?1:d)+'%'; }
 function mbUur(t){ return t?String(t).slice(0,5):''; }
-function mbKlokT(ts){ return ts?new Date(ts).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit',hour12:false}):''; }
-function mbFout(e){ const m=(e&&(e.message||e.details))?String(e.message||e.details):'Er ging iets mis.'; return m.replace(/^.*?:\s*/,''); }
-function mbVandaagStr(){ return fmt(new Date()); }
+// Alle tijden in Brits tijd, ook als Brams telefoon op Nederlandse tijd staat.
+const MB_TZ='Europe/London';
+function mbKlokT(ts){ return ts?new Date(ts).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:MB_TZ}):''; }
+// Minuten sinds middernacht, Britse tijd (voor "nog niet binnen" en "aan het werk").
+function mbNuMin(){ const p=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:MB_TZ}).format(new Date()).split(':'); return (+p[0]%24)*60+(+p[1]); }
+// Bedrag uit een invoerveld: "12,50", "12.50", "1.234,50" of "£ 12". NaN als het niet lukt.
+function mbBedragLees(v){ const t=String(v==null?'':v).replace(/[£€\s]/g,'');
+  if(t==='')return null; if(/^-?\d+\.\d{1,2}$/.test(t))return Number(t); return finGetal(t); }
+// Alleen technische voorvoegsels weghalen ("Error:", "TypeError:", "P0002:"), niet
+// alles tot de eerste dubbele punt: "begint om 10:00." moet heel blijven.
+function mbFout(e){ const m=(e&&(e.message||e.details))?String(e.message||e.details):'Er ging iets mis.';
+  return m.replace(/^\s*(?:(?:[A-Za-z]*(?:Error|Exception)|P\d{4}|[0-9A-Z]{5}|ERROR)\s*:\s*)+/,''); }
+function mbVandaagStr(){ return new Date().toLocaleDateString('en-CA',{timeZone:MB_TZ}); }
 // De markt duurt maar zeven weken. Staat de kalender daarbuiten, dan zou
 // "vandaag" een lege dag zijn; de database geeft dan de eerste marktdag terug.
-let MB_PEIL=null;
+// Na middernacht (Britse tijd) wordt de peildatum opnieuw opgehaald, en springt
+// een scherm dat "vandaag" liet zien mee naar de nieuwe dag (MB_DATUM_AUTO).
+let MB_PEIL=null, MB_PEIL_DAG=null, MB_DATUM_AUTO=null;
 async function mbPeil(){
-  if(!MB_PEIL){ try{ const{data}=await sb.rpc('mcr_peildatum'); MB_PEIL=data||mbVandaagStr(); }
-                catch(e){ MB_PEIL=mbVandaagStr(); } }
+  if(!MB_PEIL||MB_PEIL_DAG!==mbVandaagStr()){ MB_PEIL_DAG=mbVandaagStr();
+    try{ const{data}=await sb.rpc('mcr_peildatum'); MB_PEIL=data||mbVandaagStr(); }
+    catch(e){ MB_PEIL=mbVandaagStr(); } }
   return MB_PEIL;
 }
+async function mbDatumVandaag(){
+  if(!MB_DATUM||(MB_DATUM_AUTO&&MB_DATUM_AUTO!==mbVandaagStr())){ MB_DATUM=await mbPeil(); MB_DATUM_AUTO=mbVandaagStr(); }
+  return MB_DATUM;
+}
+function mbZetDatum(d){ MB_DATUM=d; MB_DATUM_AUTO=null; }
 function mbInit(n){ return String(n||'').split(' ').filter(Boolean).map(x=>x[0]).slice(0,2).join('').toUpperCase(); }
 function mbChip(t,kl,bg){ return `<span class="mb-chip" style="color:${kl};background:${bg}">${veiligTekst(t)}</span>`; }
 function mbStip(kleur){ return `<span style="width:9px;height:9px;border-radius:50%;background:${veiligTekst(kleur)};display:inline-block;flex-shrink:0"></span>`; }
@@ -3775,6 +3795,7 @@ async function mbKramenLijst(){
 // ── navigatie ─────────────────────────────────────────────────────
 function loadMcrBeheer(){ mbNaar(MB_TAB||'overzicht'); }
 function mbNaar(tab, knop){
+  if(!mbMensenMagWeg())return;
   MB_TAB=tab; meldingenStraks();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-mcrbeheer').classList.add('active');
@@ -3828,7 +3849,7 @@ function mbMeer(){
 
 // ── OVERZICHT ─────────────────────────────────────────────────────
 async function mbOverzicht(){
-  if(!MB_DATUM)MB_DATUM=await mbPeil();
+  await mbDatumVandaag();
   const [ovz, wacht, balk, , agd, dag, man, dr] = await Promise.all([
     sb.rpc('mcr_overzicht',{p_datum:MB_DATUM}),
     sb.rpc('mcr_wacht_op_jou'),
@@ -3839,6 +3860,17 @@ async function mbOverzicht(){
     sb.rpc('mcr_managers_week',{p_van:mbMaandag(MB_DATUM)}).then(x=>x,()=>({data:[]})),
     sb.rpc('mcr_dagrapport',{p_van:MB_DATUM,p_tot:MB_DATUM,p_kraam:null}).then(x=>x,()=>({data:[]})),
   ]);
+  // Geplande loonkosten vandaag en het resultaat van gisteren (per kraam).
+  const gisteren=(()=>{ const d=new Date(MB_DATUM+'T00:00:00'); d.setDate(d.getDate()-1); return fmt(d); })();
+  const pl=await sb.rpc('mcr_plan_loon',{p_van:gisteren,p_tot:MB_DATUM}).then(x=>x,()=>({data:null}));
+  const PLAN={}; const PL=(pl&&!pl.error&&pl.data)||{};
+  (PL.dagen||[]).forEach(d=>{ PLAN[d.kraam+'|'+d.datum]=d; });
+  const DREMPEL=Number(PL.loon_pct_drempel)||30;
+  // Nog niet binnen: vandaag (Britse tijd), meer dan 10 minuten na de start en niet ingeklokt.
+  const isVandaag=MB_DATUM===mbVandaagStr(), nuMin=mbNuMin();
+  const nietBinnen=(m,sh)=>{ if(!isVandaag||m.ingeklokt_op||!sh.start_tijd)return false;
+    const st=mpbMin(sh.start_tijd); return nuMin>st+10; };
+  const LAAT=[];
   // Dagafsluiting door de kraammanagers (los, zodat Overzicht blijft werken als dit faalt).
   const [afs, boeteR] = await Promise.all([
     sb.rpc('mcr_afsluitingen',{p_datum:MB_DATUM}).then(x=>x,()=>({data:[]})),
@@ -3863,7 +3895,7 @@ async function mbOverzicht(){
     `${MB_DATUM===mbVandaagStr()?'Vandaag &middot; ':''}${veiligTekst(mbLang(MB_DATUM))}`,
     `${w.dag_nummer>0?`Dag ${w.dag_nummer} van ${w.dagen_totaal} &middot; `:''}markt open in Britse tijd`,
     `<button class="mb-mini" onclick="mbDag(-1)">&lsaquo;</button>
-     <input type="date" class="mb-getal" style="width:150px" value="${veiligTekst(MB_DATUM)}" onchange="MB_DATUM=this.value;mbNaar('overzicht')">
+     <input type="date" class="mb-getal" style="width:150px" value="${veiligTekst(MB_DATUM)}" onchange="mbZetDatum(this.value);mbNaar('overzicht')">
      <button class="mb-mini" onclick="mbDag(1)">&rsaquo;</button>
      <button class="mb-mini" onclick="mbNaar('shifts')">Shifts plannen</button>
      <button class="mb-mini zwart" onclick="mbNaar('uren')">Uren accorderen</button>`);
@@ -3886,6 +3918,17 @@ async function mbOverzicht(){
         <span style="color:var(--muted)">pin &middot; ${Number(pin.transacties)||0} bonnen${pct!==null?` &middot; ${pct}% van forecast`:''}</span></div>`;
     }
     if(!k.dicht){
+      const p=PLAN[k.kraam_id+'|'+MB_DATUM], g=PLAN[k.kraam_id+'|'+gisteren];
+      if(p&&Number(p.gepland_loon)>0){
+        const fc=Number(p.forecast)||0, pct=fc>0?Number(p.gepland_loon)/fc*100:null, rood=pct!=null&&pct>DREMPEL;
+        uit+=`<div style="font-size:12px;line-height:1.5;margin:-2px 0 6px;color:${rood?'#B4472B':'var(--muted)'}">
+          Gepland <b style="color:${rood?'#B4472B':'var(--text)'}">${veiligTekst(mbPondKort(p.gepland_loon))}</b> loon (${veiligTekst(mbNum(p.gepland_uren,1))} u)
+          &middot; ${fc?'forecast '+veiligTekst(mbPondKort(fc)):'geen forecast'}${pct!=null?` &middot; <b>loon ${veiligTekst(mbProcent(pct,0))}</b>${rood?' (boven '+DREMPEL+'%)':''}`:''}</div>`;
+      }
+      if(g&&(g.omzet!=null||g.loon_echt!=null)){
+        const o=Number(g.omzet)||0, l=Number(g.loon_echt)||0, pct=o>0?l/o*100:null, rood=pct!=null&&pct>DREMPEL;
+        uit+=`<div style="font-size:12px;line-height:1.5;margin:-2px 0 6px;color:var(--muted)">Gisteren: omzet ${veiligTekst(mbPondKort(o))} &middot; loon ${veiligTekst(mbPondKort(l))}${pct!=null?` &middot; <b style="color:${rood?'#B4472B':'#0F7A52'}">${veiligTekst(mbProcent(pct,0))}</b>`:''}</div>`;
+      }
       const mg=MANDAG.filter(x=>x.kraam_id===k.kraam_id);
       const mw=mg.filter(x=>x.soort==='manager'), ww=mg.filter(x=>x.soort==='weekend');
       if(mg.length)uit+=`<div style="font-size:12px;color:#6D28D9;margin:-2px 0 6px;line-height:1.5">${
@@ -3909,10 +3952,14 @@ async function mbOverzicht(){
         </div>`;
       mensen.forEach(m=>{
         const binnen=m.ingeklokt_op&&!m.uitgeklokt_op;
+        const laat=nietBinnen(m,sh);
+        if(laat)LAAT.push({m,sh,k});
         uit+=`<div style="display:flex;align-items:center;gap:8px;padding:3px 0 0 2px;font-size:13px">
-          <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${binnen?'#0F7A52':(m.uitgeklokt_op?'#B4B2A9':'#1A1917')}"></span>
+          <span style="width:6px;height:6px;border-radius:50%;flex-shrink:0;background:${laat?'#B4472B':(binnen?'#0F7A52':(m.uitgeklokt_op?'#B4B2A9':'#1A1917'))}"></span>
           <span style="flex-grow:1;min-width:0">${mbNaamLink(m.gebruiker_id,m.naam,'font-size:13px')}</span>
-          ${binnen?`<span style="font-size:11.5px;color:#0F7A52;white-space:nowrap">in ${veiligTekst(mbKlokT(m.ingeklokt_op))}</span>`
+          ${laat?`<span style="font-size:11.5px;color:#B4472B;font-weight:700;white-space:nowrap">nog niet binnen (${veiligTekst(mbUur(sh.start_tijd))})</span>
+            ${m.telefoon?mbTel(m.telefoon,'font-size:11.5px;color:#fff;background:#B4472B;border-radius:12px;padding:2px 8px;text-decoration:none;white-space:nowrap').replace(/>[^<]*<\/a>$/,'>Bel</a>'):''}`
+          :binnen?`<span style="font-size:11.5px;color:#0F7A52;white-space:nowrap">in ${veiligTekst(mbKlokT(m.ingeklokt_op))}</span>`
             :(m.uitgeklokt_op?`<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">${veiligTekst(mbKlokT(m.ingeklokt_op))}&ndash;${veiligTekst(mbKlokT(m.uitgeklokt_op))}</span>`:'')}
         </div>`;
       });
@@ -3924,6 +3971,15 @@ async function mbOverzicht(){
   });
   if(!lijst.length)uit+='<div class="mb-kaart">Er staan nog geen kramen.</div>';
   uit+='</div>';
+  if(LAAT.length){
+    const blok=`<div class="mb-kaart" style="border:1.5px solid #B4472B;background:#FBEDE9">
+      <div style="font-size:14px;font-weight:700;color:#B4472B">${LAAT.length} ${LAAT.length===1?'persoon is':'mensen zijn'} nog niet binnen</div>
+      <div style="font-size:12.5px;color:#5B2A1D;margin-top:2px">Meer dan 10 minuten na de start en niet ingeklokt (Britse tijd ${veiligTekst(String(Math.floor(nuMin/60)).padStart(2,'0')+':'+String(nuMin%60).padStart(2,'0'))}).</div>
+      ${LAAT.map(x=>`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;font-size:13px">
+        ${mbStip(x.k.kleur)}<b>${veiligTekst(x.m.naam)}</b><span style="color:#5B2A1D">${veiligTekst(x.k.kraam)} &middot; ${veiligTekst(mbUur(x.sh.start_tijd))}</span>
+        ${x.m.telefoon?mbTel(x.m.telefoon,'color:#B4472B;font-weight:700;text-decoration:none'):''}</div>`).join('')}</div>`;
+    uit=uit.replace('<div class="mb-rij3">',blok+'<div class="mb-rij3">');
+  }
   uit+=mbAfsluitHtml();
   uit+=mbAgendaVandaagHtml(agd&&!agd.error?agd.data:[]);
 
@@ -3961,8 +4017,10 @@ async function mbOverzicht(){
       </div>
       <div style="margin-top:14px;padding-top:13px;border-top:1px solid var(--border);display:flex;gap:26px;flex-wrap:wrap">
         <div><div class="mb-groot">${w.mensen_actief||0}</div><div class="mb-klein">mensen actief</div></div>
-        <div><div class="mb-groot">${veiligTekst(Number(w.uren_totaal||0).toLocaleString('nl-NL'))}</div><div class="mb-klein">uren tot nu</div></div>
-        <div><div class="mb-groot">${veiligTekst(mbPondKort(w.loon_totaal))}</div><div class="mb-klein">kosten personeel</div></div>
+        <div><div class="mb-groot">${veiligTekst(Number(w.uren_totaal||0).toLocaleString('nl-NL'))}</div><div class="mb-klein">uren goedgekeurd</div></div>
+        <div><div class="mb-groot">${veiligTekst(mbPondKort(w.loon_totaal))}</div><div class="mb-klein">loonkosten goedgekeurd</div></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:6px;line-height:1.5">Alleen uren waar jij akkoord op gaf. Bij Cijfers en Dagrapport telt alles wat geklokt is, ook wat nog wacht.
       </div>
     </div></div>`;
   document.getElementById('mbInhoud').innerHTML=uit;
@@ -4039,7 +4097,7 @@ function mbAfsluitHtml(){
           <span style="color:${rood?'#B45309':'var(--muted)'}">${veiligTekst(MB_UITKOMST[c.uitkomst]||c.uitkomst)}${c.uitkomst==='te_laat'?' ('+c.minuten+' min)':''}</span>
           ${c.uren_status==='goedgekeurd'?'<span style="color:#0F7A52">&check; akkoord</span>':''}
           ${c.voorval_id&&c.uitkomst==='niet_gekomen'?(Number(c.boete)>0?`<span style="color:#B4472B">boete ${veiligTekst(mbPond(c.boete))}</span>`
-            :`<button class="mb-mini" style="padding:2px 8px;font-size:11.5px" onclick="mbAfsBoete('${veiligJs(c.voorval_id)}')">Boete ${veiligTekst(mbPondKort(MB_AFS_BOETE))}</button>`):''}</div>`;
+            :`<button class="mb-mini" style="padding:2px 8px;font-size:11.5px" onclick="mbAfsBoete('${veiligJs(c.voorval_id)}','${veiligJs(c.naam||'')}',this)">Boete ${veiligTekst(mbPondKort(MB_AFS_BOETE))}</button>`):''}</div>`;
       });
       uit+='</div>';
     }
@@ -4058,10 +4116,14 @@ async function mbAfsAkkoord(kraam){
        toast(`Akkoord op ${data||0} ${data===1?'urenregistratie':'urenregistraties'}`); mbNaar('overzicht');
   }catch(e){ toast(mbFout(e),'fout'); }
 }
-async function mbAfsBoete(vid){
+async function mbAfsBoete(vid,naam,knop){
+  const ok=await vraagBevestiging('Boete vastleggen?',
+    `${naam?veiligTekst(naam)+' krijgt':'Er komt'} een boete van <b>${veiligTekst(mbPond(MB_AFS_BOETE))}</b> voor niet komen opdagen. Die wordt bij de volgende betaalronde ingehouden.`,'Ja, boete vastleggen');
+  if(!ok)return;
+  if(knop)knop.disabled=true;
   try{ const{error}=await sb.rpc('mcr_voorval_boete',{p_id:vid,p_boete:MB_AFS_BOETE}); if(error)throw error;
        toast('Boete vastgelegd'); mbNaar('overzicht');
-  }catch(e){ toast(mbFout(e),'fout'); }
+  }catch(e){ if(knop)knop.disabled=false; toast(mbFout(e),'fout'); }
 }
 async function mbAfsHeropen(kraam){
   if(!confirm('Deze dag weer openzetten? De kraammanager kan dan opnieuw controleren en afsluiten.'))return;
@@ -4072,7 +4134,7 @@ async function mbAfsHeropen(kraam){
 
 function mbDag(stap){
   const d=new Date((MB_DATUM||mbVandaagStr())+'T00:00:00');
-  d.setDate(d.getDate()+stap); MB_DATUM=fmt(d); mbNaar('overzicht');
+  d.setDate(d.getDate()+stap); mbZetDatum(fmt(d)); mbNaar('overzicht');
 }
 
 // ── AGENDA — influencers, leveringen, bezoeken ────────────────────
@@ -4218,10 +4280,30 @@ function mpbKortTijd(s){ const k=t=>mbUur(t).replace(/:00$/,''); return k(s.star
 async function mbShiftsPlannen(){
   if(!MB_WEEK)MB_WEEK=mbMaandag(MB_DATUM||await mbPeil());
   if(MB_PB_TAB==='diensten')return mbShiftsDiensten();
-  const [pb]=await Promise.all([sb.rpc('mcr_planbord',{p_van:MB_WEEK}), mbRuilLaden(), mbErvaringLaden()]);
+  const [pb]=await Promise.all([sb.rpc('mcr_planbord',{p_van:MB_WEEK}), mbRuilLaden(), mbErvaringLaden(), mpbLoonLaden(MB_WEEK)]);
   if(pb.error)throw pb.error;
   MB_PB=pb.data; mpbIndex();
   mpbTeken();
+}
+// Geplande loonkosten: tarieven, pauzeregel en forecast komen van de server
+// (mcr_plan_loon); het bedrag rekent het planbord zelf uit, zodat het meteen
+// klopt na indelen of eraf halen.
+let MB_PB_LOON=null;
+async function mpbLoonLaden(van){
+  if(MB_PB_LOON&&MB_PB_LOON.van===van)return;
+  const tot=(()=>{ const d=new Date(van+'T00:00:00'); d.setDate(d.getDate()+6); return fmt(d); })();
+  const{data,error}=await sb.rpc('mcr_plan_loon',{p_van:van,p_tot:tot}).then(x=>x,()=>({data:null,error:true}));
+  MB_PB_LOON=(!error&&data)?Object.assign({van},data):{van,tarieven:{},dagen:[]};
+}
+function mpbLoon(d,kraam){
+  const L=MB_PB_LOON||{}, T=L.tarieven||{}, drempel=Number(L.pauze_drempel_uren)||6, pmin=Number(L.pauze_minuten)||30;
+  let loon=0, uren=0, fc=0;
+  MB_PB.shifts.forEach(s=>{ if(s.datum!==d||s.dicht||(kraam&&s.kraam!==kraam))return;
+    let min=Math.max(0,s.et-s.st); if(min>=drempel*60)min-=pmin;
+    s.inn.forEach(g=>{ uren+=min/60; loon+=min/60*(Number(T[g])||0); }); });
+  (L.dagen||[]).forEach(x=>{ if(x.datum===d&&(!kraam||x.kraam===kraam))fc+=Number(x.forecast)||0; });
+  const pct=fc>0?loon/fc*100:null;
+  return {loon,uren,fc,pct,rood:pct!=null&&pct>(Number(L.loon_pct_drempel)||30)};
 }
 async function mpbHerlaad(){
   const{data,error}=await sb.rpc('mcr_planbord',{p_van:MB_WEEK});
@@ -4343,7 +4425,8 @@ function mpbDagbordHtml(){
       <span class="mpb-dag-nr">${dt.getDate()}</span>
       <span class="mpb-balk"><span style="width:${pct}%;background:${kl}"></span></span>
       <span class="mpb-dag-r1">${t.nodig?(t.nodig-t.bezet?(t.nodig-t.bezet)+' open':'vol'):'geen diensten'}</span>
-      <span class="mpb-dag-r2">${t.vr?t.vr+(t.vr===1?' aanvraag':' aanvragen'):'&nbsp;'}</span></button>`;
+      <span class="mpb-dag-r2">${t.vr?t.vr+(t.vr===1?' aanvraag':' aanvragen'):'&nbsp;'}</span>
+      ${(()=>{ const l=mpbLoon(d); return l.loon>0?`<span class="mpb-dag-r3${l.rood?' rood':''}" title="Gepland loon${l.fc?' tegen forecast '+mbPondKort(l.fc):''}">${veiligTekst(mbPondKort(l.loon))}${l.pct!=null?' · '+Math.round(l.pct)+'%':''}</span>`:''; })()}</button>`;
   });
   uit+='</div><div class="mpb-twee"><div class="mpb-links">';
   const tot={open:0,vr:0,gat:[]};
@@ -4353,7 +4436,9 @@ function mpbDagbordHtml(){
     let nodig=0,bezet=0,vr=0;
     sh.forEach(s=>{ nodig+=s.nodig; bezet+=Math.min(s.inn.length,s.nodig); vr+=s.aanv.filter(a=>!s.inn.includes(a.g)).length; });
     uit+=`<section class="mb-kaart mpb-kraam"><div class="mpb-kraamkop">${mbStip(k.kleur)}<h2>${veiligTekst(k.naam)}</h2>
-      <span class="mpb-samen">${dg.dicht?'dicht':(sh.length?bezet+' van '+nodig+' plekken gevuld'+(vr?' · '+vr+(vr===1?' aanvraag':' aanvragen'):''):'')}</span>
+      <span class="mpb-samen">${dg.dicht?'dicht':(sh.length?bezet+' van '+nodig+' plekken gevuld'+(vr?' · '+vr+(vr===1?' aanvraag':' aanvragen'):''):'')}
+        ${(()=>{ if(dg.dicht)return ''; const l=mpbLoon(dag,k.id); if(!l.loon&&!l.fc)return '';
+          return ` · <span style="${l.rood?'color:#B4472B;font-weight:700':''}">gepland ${veiligTekst(mbPondKort(l.loon))}${l.fc?' · forecast '+veiligTekst(mbPondKort(l.fc)):''}${l.pct!=null?' · loon '+Math.round(l.pct)+'%':''}</span>`; })()}</span>
       <button class="mb-mini" style="margin-left:auto" onclick="mpbNieuweDienst('${veiligJs(k.id)}','${dag}')">+ dienst</button></div>`;
     if(dg.dicht){ uit+='<div class="mpb-leeg">Deze kraam is dicht op deze dag.</div></section>'; return; }
     if(!sh.length){ uit+='<div class="mpb-leeg">Geen diensten op deze dag.</div></section>'; return; }
@@ -5181,7 +5266,7 @@ function mbDagHtml(datum, rijen){
         </div>
       </div>
       <div style="display:flex;gap:6px">
-        <button class="mb-mini" onclick="MB_DATUM='${veiligJs(datum)}';mbNaar('dagrapport')">Dagrapport</button>
+        <button class="mb-mini" onclick="mbZetDatum('${veiligJs(datum)}');mbNaar('dagrapport')">Dagrapport</button>
         <button class="mb-mini" onclick="mbDagDicht()">Sluiten</button>
       </div>
     </div>`;
@@ -5547,57 +5632,194 @@ async function mbUrenGa(k){
   }catch(e){ console.error(e); if(el)el.innerHTML=`<div class="mb-kaart" style="color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
 }
 
+// ── Te accorderen ─────────────────────────────────────────────────
+// Per dag en kraam gegroepeerd. Akkoord haalt alleen die ene rij weg (geen
+// herladen, je blijft waar je was). Wie nu nog werkt staat er als "aan het
+// werk"; pas als de dag voorbij is en er geen eindtijd is, moet jij iets doen.
+// Alle tijden zijn Britse tijd; de server rekent ze om.
+let MB_UREN_RIJEN=[];
+function mbTel(t,stijl){ const n=String(t||'').replace(/[^0-9+]/g,''); return n?`<a href="tel:${veiligTekst(n)}" style="${stijl||'color:#2A4EA8;text-decoration:none;font-weight:600'}">${veiligTekst(t)}</a>`:''; }
+function mbUurWerkt(r){ return !r.uitgeklokt_op && r.datum===mbVandaagStr(); }
+function mbUrenKopZet(){
+  const kop=document.getElementById('mbUrenKop'); if(!kop)return;
+  const rij=MB_UREN_RIJEN, n=rij.filter(r=>r.uitgeklokt_op||r._t).length, werk=rij.filter(mbUurWerkt).length;
+  const verg=rij.filter(r=>!r.uitgeklokt_op&&!r._t&&!mbUurWerkt(r)).length;
+  kop.innerHTML=mbKop('Uren accorderen',
+    `${n} ${n===1?'registratie wacht':'registraties wachten'}${verg?` &middot; <b style="color:#B45309">${verg} zonder eindtijd</b>`:''}${werk?` &middot; ${werk} nu aan het werk`:''}`
+    +' &middot; tijden in Britse tijd &middot; stuk voor stuk, er is bewust geen knop die alles tegelijk goedkeurt');
+}
 async function mbUrenAkkoord(){
-  const{data,error}=await sb.rpc('mcr_uren_open',{p_van:null,p_tot:null});
-  if(error)throw error;
-  const rijen=data||[];
-  const kop=document.getElementById('mbUrenKop');
-  if(kop)kop.innerHTML=mbKop('Uren accorderen',
-    `${rijen.filter(r=>r.uitgeklokt_op).length} registraties wachten &middot; stuk voor stuk, er is bewust geen knop die alles tegelijk goedkeurt`);
-  if(!rijen.length){ mbZet('<div class="mb-kaart">Er wacht niets op akkoord.</div>'); return; }
-  let uit='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2">'
-    +'<thead><tr><th>Wie</th><th>Datum</th><th>Kraam</th><th>Geklokt</th><th>Pauze</th><th>Uren</th><th>Bedrag</th><th></th></tr></thead><tbody>';
-  rijen.forEach(r=>{
-    const id=veiligTekst(r.uren_id);
-    const open=!r.uitgeklokt_op;
-    let let_op='';
-    if(open)let_op='niet uitgeklokt &mdash; vul de eindtijd in';
-    else if(r.te_laat>10)let_op=r.te_laat+' minuten later begonnen dan ingeroosterd';
-    uit+=`<tr>
-      <td><div style="display:flex;align-items:center;gap:9px">
-        <div class="mb-av">${veiligTekst(mbInit(r.naam))}</div>
-        <div><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
-        ${let_op?`<div style="font-size:11.5px;color:#B45309">${veiligTekst(let_op)}</div>`:''}
-        ${r.notitie_pers?`<div style="font-size:11.5px;color:var(--muted)">&ldquo;${veiligTekst(r.notitie_pers)}&rdquo;</div>`:''}
-        ${r.auto_uitgeklokt?`<div style="font-size:11.5px;color:#B4472B;max-width:280px;white-space:normal">Automatisch uitgeklokt na 24 uur &mdash; eindtijd is een schatting, controleer voor je akkoord geeft.</div>`
-          :r.notitie_beh?`<div style="font-size:11.5px;color:var(--muted);max-width:280px;white-space:normal">${veiligTekst(r.notitie_beh)}</div>`:''}</div>
-      </div></td>
-      <td style="white-space:nowrap">${veiligTekst(mbKort(r.datum))}</td>
-      <td><div style="display:flex;align-items:center;gap:7px">${mbStip(r.kleur)}${veiligTekst(r.kraam)}</div></td>
-      <td style="white-space:nowrap;font-variant-numeric:tabular-nums">
-        <input type="time" class="mb-getal" style="width:86px" id="mbUI${id}" value="${veiligTekst(mbKlokT(r.ingeklokt_op))}" title="Begintijd"> &ndash;
-        <input type="time" class="mb-getal" style="width:86px" id="mbUT${id}" value="${open?'':veiligTekst(mbKlokT(r.uitgeklokt_op))}" title="Eindtijd">
-        ${r.uit_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.uit_op))}">eindtijd door ${veiligTekst(r.uit_door)}</div>`:''}</td>
-      <td><input type="number" min="0" max="180" class="mb-getal" style="width:58px" id="mbUP${id}" value="${r.pauze}">
-        ${r.pauze_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.pauze_op))}">door ${veiligTekst(r.pauze_door)}</div>`:''}</td>
-      <td style="font-variant-numeric:tabular-nums;font-weight:600">${open?'&mdash;':veiligTekst(mbNum(r.uren,2))}</td>
-      <td style="font-variant-numeric:tabular-nums">${open?'&mdash;':veiligTekst(mbPond(r.bedrag))}</td>
-      <td style="white-space:nowrap">
-        <button class="mb-mini" title="Bijstellen" onclick="mbUurBijstellen('${veiligJs(r.uren_id)}','${veiligJs(r.datum)}',${open?'true':'false'})">Bijstellen</button>
-        <button class="mb-mini" onclick="mbUurAkkoord('${veiligJs(r.uren_id)}',false)">Vraag</button>
-        ${open?'':`<button class="mb-mini zwart" onclick="mbUurAkkoord('${veiligJs(r.uren_id)}',true)">Akkoord</button>`}
-      </td></tr>`;
-  });
-  uit+='</tbody></table></div>';
+  const [o,v]=await Promise.all([sb.rpc('mcr_uren_open',{p_van:null,p_tot:null}),
+    sb.rpc('mcr_uren_vraag').then(x=>x,()=>({data:[]}))]);
+  if(o.error)throw o.error;
+  MB_UREN_RIJEN=(o.data||[]).slice().sort((a,b)=>String(a.datum).localeCompare(String(b.datum))
+    ||String(a.kraam||'').localeCompare(String(b.kraam||''))||String(a.naam||'').localeCompare(String(b.naam||'')));
+  mbUrenKopZet();
+  let uit=`<div id="mbUrenLijst">${mbUrenTabelHtml()}</div>`;
+  uit+=`<div id="mbVraagBlok">${mbVraagBlokHtml((v&&!v.error&&v.data)||[])}</div>`;
   uit+=`<div class="mb-kaart" style="background:var(--bg)"><div style="font-size:12.5px;color:var(--muted);line-height:1.6">
-    Zodra jij akkoord geeft, kan die persoon de uren op een factuur zetten. Met <b style="color:var(--text)">Vraag</b> zet je de registratie terug
-    en krijgt die persoon een melding met jouw reden &mdash; er verandert niets aan de tijden zonder dat jij het doet.</div></div>`;
+    Zodra jij akkoord geeft, kan die persoon de uren op een factuur zetten. Pas je in een rij de tijden aan, dan slaat
+    <b style="color:var(--text)">Akkoord</b> eerst die tijden op. Met <b style="color:var(--text)">Vraag</b> zet je de registratie apart
+    (bij &ldquo;Uitgezocht&rdquo;) en ziet die persoon jouw vraag in de app &mdash; er verandert niets aan de tijden zonder dat jij het doet.</div></div>`;
   mbZet(uit);
 }
-function mbKlokDatum(t){ return t?new Date(t).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''; }
+function mbUrenTabelHtml(){
+  const rijen=MB_UREN_RIJEN;
+  if(!rijen.length)return '<div class="mb-kaart">Er wacht niets op akkoord.</div>';
+  const groepen=[]; const idx={};
+  rijen.forEach(r=>{ const k=r.datum+'|'+(r.kraam||''); if(!(k in idx)){ idx[k]=groepen.length; groepen.push({k,r,rijen:[]}); } groepen[idx[k]].rijen.push(r); });
+  let uit='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2" id="mbUrenTabel">'
+    +'<thead><tr><th>Wie</th><th>Geklokt (Britse tijd)</th><th>Pauze</th><th>Uren</th><th>Bedrag</th><th></th></tr></thead>';
+  groepen.forEach(g=>{
+    uit+=`<tbody data-groep="${veiligTekst(g.k)}"><tr class="mb-groeprij"><td colspan="6" style="background:var(--bg);padding:8px 12px">
+      <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700">${mbStip(g.r.kleur)}${veiligTekst(mbLang(g.r.datum))} &middot; ${veiligTekst(g.r.kraam)}
+      <span class="mb-groepteller" style="font-weight:500;color:var(--muted)">${g.rijen.length}</span></div></td></tr>`;
+    g.rijen.forEach(r=>{ uit+=mbUurRijHtml(r); });
+    uit+='</tbody>';
+  });
+  return uit+'</table></div>';
+}
+function mbUurRijHtml(r){
+  const id=veiligTekst(r.uren_id), jid=veiligJs(r.uren_id);
+  const werkt=mbUurWerkt(r), open=!r.uitgeklokt_op&&!r._t;
+  const b=r._b||mbKlokT(r.ingeklokt_op), t=r._t||(r.uitgeklokt_op?mbKlokT(r.uitgeklokt_op):'');
+  let let_op='';
+  if(open&&!werkt)let_op='niet uitgeklokt &mdash; vul de eindtijd in';
+  else if(r.te_laat>10)let_op=r.te_laat+' minuten later begonnen dan ingeroosterd';
+  const naam=`<div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(r.naam))}</div>
+      <div><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
+      ${let_op?`<div style="font-size:11.5px;color:#B45309">${let_op}</div>`:''}
+      ${r.notitie_pers?`<div style="font-size:11.5px;color:var(--muted)">&ldquo;${veiligTekst(r.notitie_pers)}&rdquo;</div>`:''}
+      ${r.auto_uitgeklokt?`<div style="font-size:12px;color:#B4472B;max-width:300px;white-space:normal;margin-top:2px">${mbChip('nakijken','#fff','#B4472B')}
+          <b>${r.notitie_beh?veiligTekst(r.notitie_beh):'Automatisch uitgeklokt &mdash; de eindtijd is een schatting.'}</b> Controleer de eindtijd voor je akkoord geeft.</div>`
+        :r.notitie_beh?`<div style="font-size:11.5px;color:var(--muted);max-width:280px;white-space:normal">${veiligTekst(r.notitie_beh)}</div>`:''}</div></div>`;
+  if(werkt){
+    return `<tr id="mbUR${id}"><td>${naam}</td>
+      <td colspan="4"><span class="mb-chip" style="color:#0F7A52;background:#F2FBF6">aan het werk sinds ${veiligTekst(b)}</span>
+        ${r.ingeroosterd?`<span style="font-size:11.5px;color:var(--muted);margin-left:6px">ingeroosterd ${veiligTekst(mbUur(r.ingeroosterd))}</span>`:''}</td>
+      <td style="font-size:11.5px;color:var(--muted);white-space:nowrap">na uitklokken te accorderen</td></tr>`;
+  }
+  return `<tr id="mbUR${id}">
+    <td>${naam}</td>
+    <td style="white-space:nowrap;font-variant-numeric:tabular-nums">
+      <input type="time" class="mb-getal" style="width:86px" id="mbUI${id}" data-oud="${veiligTekst(b)}" value="${veiligTekst(b)}" title="Begintijd (Britse tijd)" oninput="mbUurGewijzigd('${jid}')"> &ndash;
+      <input type="time" class="mb-getal" style="width:86px" id="mbUT${id}" data-oud="${veiligTekst(t)}" value="${veiligTekst(t)}" title="Eindtijd (Britse tijd)" oninput="mbUurGewijzigd('${jid}')">
+      ${r.uit_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.uit_op))}">eindtijd door ${veiligTekst(r.uit_door)}</div>`:''}</td>
+    <td><input type="number" min="0" max="180" class="mb-getal" style="width:58px" id="mbUP${id}" data-oud="${veiligTekst(r.pauze)}" value="${veiligTekst(r.pauze)}" oninput="mbUurGewijzigd('${jid}')">
+      ${r.pauze_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.pauze_op))}">door ${veiligTekst(r.pauze_door)}</div>`:''}</td>
+    <td style="font-variant-numeric:tabular-nums;font-weight:600">${open?'&mdash;':veiligTekst(mbNum(r.uren,2))}</td>
+    <td style="font-variant-numeric:tabular-nums">${open?'&mdash;':veiligTekst(mbPond(r.bedrag))}</td>
+    <td style="white-space:nowrap">
+      <button class="mb-mini" onclick="mbUurBijstellen('${jid}')">Bijstellen</button>
+      ${open?'':`<button class="mb-mini" onclick="mbUurAkkoord('${jid}',false)">Vraag</button>`}
+      <button class="mb-mini zwart" id="mbUA${id}" onclick="mbUurAkkoord('${jid}',true)">${open?'Eindtijd + akkoord':'Akkoord'}</button>
+      <div id="mbUM${id}" style="font-size:11px;color:#B45309;margin-top:3px;display:none;white-space:normal;max-width:200px">Tijden aangepast: Akkoord slaat ze eerst op.</div>
+    </td></tr>`;
+}
+function mbUurInvoer(id){
+  const g=x=>document.getElementById(x+id);
+  const bi=g('mbUI'), ti=g('mbUT'), pi=g('mbUP');
+  const b=bi?bi.value:'', t=ti?ti.value:'', pa=pi?(parseInt(pi.value,10)||0):0;
+  const gewijzigd=!!(bi&&ti&&pi)&&(b!==bi.dataset.oud||t!==ti.dataset.oud||String(pa)!==String(parseInt(pi.dataset.oud,10)||0));
+  return {b,t,pa,gewijzigd};
+}
+function mbUurGewijzigd(id){
+  const inv=mbUurInvoer(id), tr=document.getElementById('mbUR'+id), m=document.getElementById('mbUM'+id);
+  if(tr){ tr.style.background=inv.gewijzigd?'#FFFBEB':''; tr.dataset.gewijzigd=inv.gewijzigd?'1':''; }
+  if(m)m.style.display=inv.gewijzigd?'':'none';
+}
+// Live herladen wacht zolang er op Uren of Mensen iets is aangepast maar nog niet opgeslagen.
+function mbLiveRust(){
+  if(MB_TAB==='mensen'&&MB_MENS_GEWIJZIGD.size)return true;
+  if(MB_TAB==='uren'&&document.querySelector('#mbUrenTabel tr[data-gewijzigd="1"]'))return true;
+  return false;
+}
+function mbUurKnoppen(id,aan){ const tr=document.getElementById('mbUR'+id); if(tr)tr.querySelectorAll('button,input').forEach(b=>b.disabled=!aan); }
+function mbUurRijWeg(id){
+  MB_UREN_RIJEN=MB_UREN_RIJEN.filter(r=>r.uren_id!==id);
+  const tr=document.getElementById('mbUR'+id);
+  if(tr){ const tb=tr.parentNode; tr.remove();
+    const over=tb.querySelectorAll('tr[id^="mbUR"]').length;
+    if(!over)tb.remove(); else { const t=tb.querySelector('.mb-groepteller'); if(t)t.textContent=over; } }
+  if(!MB_UREN_RIJEN.length){ const l=document.getElementById('mbUrenLijst'); if(l)l.innerHTML=mbUrenTabelHtml(); }
+  mbUrenKopZet();
+}
+// Tijden (en pauze) opslaan in Britse tijd; met akkoord=true meteen goedkeuren.
+async function mbUurTijden(id,akkoord){
+  const r=MB_UREN_RIJEN.find(x=>x.uren_id===id); if(!r)return;
+  const inv=mbUurInvoer(id);
+  if(!inv.b||!inv.t){ alert(akkoord&&!inv.t?'Vul eerst de eindtijd in.':'Vul een begin- en eindtijd in.'); return; }
+  if(inv.b===inv.t){ alert('Begin- en eindtijd zijn hetzelfde ('+inv.b+'). Pas eerst een van de twee aan.'); return; }
+  let volgende=false;
+  if(inv.t<inv.b){
+    const ok=await vraagBevestiging('Eindtijd ligt vóór de begintijd',
+      `${veiligTekst(inv.b)} tot ${veiligTekst(inv.t)}: is dit een nachtdienst die de volgende dag eindigt?`,'Ja, volgende dag');
+    if(!ok)return; volgende=true;
+  }
+  mbUurKnoppen(id,false);
+  const{error}=await sb.rpc('mcr_uur_tijden_londen',{p_uren:id,p_in:inv.b,p_uit:inv.t,p_pauze:inv.pa,p_volgende_dag:volgende,p_akkoord:!!akkoord});
+  if(error){ mbUurKnoppen(id,true); alert(mbFout(error)); return; }
+  if(akkoord){ toast(inv.gewijzigd?'Tijden opgeslagen en akkoord':'Akkoord'); mbUurRijWeg(id); return; }
+  // Alleen deze rij bijwerken.
+  const [hb,mb]=inv.b.split(':').map(Number), [ht,mt]=inv.t.split(':').map(Number);
+  const min=Math.max(0,(ht*60+mt+(volgende?1440:0))-(hb*60+mb)-inv.pa);
+  Object.assign(r,{_b:inv.b,_t:inv.t,pauze:inv.pa,uren:Math.round(min/60*100)/100,
+    bedrag:Math.round(min/60*(Number(r.tarief)||0)*100)/100,status:r.status==='lopend'?'wacht':r.status});
+  const tr=document.getElementById('mbUR'+id); if(tr)tr.outerHTML=mbUurRijHtml(r);
+  mbUrenKopZet(); toast('Tijden aangepast');
+}
+async function mbUurBijstellen(id){ return mbUurTijden(id,false); }
+async function mbUurAkkoord(id,ja){
+  const r=MB_UREN_RIJEN.find(x=>x.uren_id===id);
+  const inv=mbUurInvoer(id);
+  if(ja){
+    if(inv.gewijzigd||(r&&!r.uitgeklokt_op&&!r._t))return mbUurTijden(id,true);
+    mbUurKnoppen(id,false);
+    const{error}=await sb.rpc('mcr_uur_akkoord',{p_uren:id,p_akkoord:true,p_notitie:null});
+    if(error){ mbUurKnoppen(id,true); alert(mbFout(error)); return; }
+    toast('Akkoord'); mbUurRijWeg(id); return;
+  }
+  if(inv.gewijzigd){ alert('Je hebt in deze rij tijden aangepast. Sla die eerst op met Bijstellen (of zet ze terug); daarna kun je een vraag stellen.'); return; }
+  const reden=prompt('Wat wil je vragen of waarom klopt dit niet? Die persoon ziet dit in de app.'); if(reden===null)return;
+  mbUurKnoppen(id,false);
+  const{error}=await sb.rpc('mcr_uur_akkoord',{p_uren:id,p_akkoord:false,p_notitie:reden});
+  if(error){ mbUurKnoppen(id,true); alert(mbFout(error)); return; }
+  toast('Vraag gesteld · staat nu bij Uitgezocht'); mbUurRijWeg(id); mbVraagHerlaad();
+}
+// ── Uitgezocht / wacht op antwoord ────────────────────────────────
+// Registraties waar Bram een vraag over stelde ('afgewezen' in de database).
+// In de betaalronde tellen ze als open; terugzetten maakt ze weer te accorderen.
+function mbVraagBlokHtml(rijen){
+  if(!rijen.length)return '';
+  let uit=`<div class="mb-kaart" style="border:1.5px solid #F3D9A4"><div class="mb-kop" style="color:#8A5307">Uitgezocht &middot; wacht op antwoord (${rijen.length})</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin-bottom:6px">Hier stelde jij een vraag over. Ze tellen in de betaalronde als <b>open</b>
+      en komen pas op een factuur als je ze weer accordeert.</div>`;
+  rijen.forEach(r=>{
+    uit+=`<div class="mb-persoon" style="flex-wrap:wrap" id="mbVR${veiligTekst(r.uren_id)}">
+      ${mbStip(r.kleur)}
+      <div style="flex:1 1 200px;min-width:0"><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)} ${r.telefoon?'<span style="font-weight:400;font-size:12px">&middot; '+mbTel(r.telefoon)+'</span>':''}</div>
+        <div style="font-size:11.5px;color:var(--muted)">${veiligTekst(mbLang(r.datum))} &middot; ${veiligTekst(r.kraam)} &middot;
+          ${veiligTekst(mbKlokT(r.ingeklokt_op))}&ndash;${veiligTekst(mbKlokT(r.uitgeklokt_op))}, pauze ${r.pauze} min &middot; ${veiligTekst(mbNum(r.uren,2))} u</div>
+        <div style="font-size:12.5px;margin-top:3px"><span style="color:var(--muted)">Jouw vraag:</span> ${r.vraag?veiligTekst(r.vraag):'<i style="color:var(--muted)">geen tekst</i>'}</div>
+        ${r.notitie_pers?`<div style="font-size:12.5px"><span style="color:var(--muted)">Notitie van ${veiligTekst(String(r.naam).split(' ')[0])}:</span> ${veiligTekst(r.notitie_pers)}</div>`:''}</div>
+      <button class="mb-mini zwart" onclick="mbUurTerug('${veiligJs(r.uren_id)}',this)">Terug naar te accorderen</button></div>`;
+  });
+  return uit+'</div>';
+}
+async function mbVraagHerlaad(){
+  const el=document.getElementById('mbVraagBlok'); if(!el)return;
+  const{data,error}=await sb.rpc('mcr_uren_vraag'); if(!error)el.innerHTML=mbVraagBlokHtml(data||[]);
+}
+async function mbUurTerug(id,knop){
+  if(knop)knop.disabled=true;
+  const{error}=await sb.rpc('mcr_uur_terug',{p_uren:id});
+  if(error){ if(knop)knop.disabled=false; alert(mbFout(error)); return; }
+  toast('Staat weer bij Te accorderen'); mbUrenGa('akkoord');
+}
+function mbKlokDatum(t){ return t?new Date(t).toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:MB_TZ}):''; }
 let MB_GK_VAN=null, MB_GK_TOT=null;
 async function mbGoedgekeurd(){
-  if(!MB_GK_VAN){ const d=new Date(); d.setDate(d.getDate()-30); MB_GK_VAN=fmt(d); MB_GK_TOT=fmt(new Date()); }
+  if(!MB_GK_VAN){ const d=new Date(mbVandaagStr()+'T00:00:00'); MB_GK_TOT=fmt(d); d.setDate(d.getDate()-30); MB_GK_VAN=fmt(d); }
   const{data,error}=await sb.rpc('uren_goedgekeurd',{p_van:MB_GK_VAN,p_tot:MB_GK_TOT,p_gebruiker:null});
   if(error)throw error;
   const rijen=data||[];
@@ -5663,53 +5885,29 @@ async function mbWijzigingen(){
   uit+='</tbody></table></div>';
   mbZet(uit);
 }
-async function mbUurAkkoord(id,ja){
-  let reden=null;
-  if(!ja){ reden=prompt('Wat wil je vragen of waarom klopt dit niet? Die persoon ziet dit in de app.'); if(reden===null)return; }
-  try{ const{error}=await sb.rpc('mcr_uur_akkoord',{p_uren:id,p_akkoord:ja,p_notitie:reden}); if(error)throw error; mbUrenGa('akkoord'); }
-  catch(e){ alert(mbFout(e)); }
-}
-// Begin- én eindtijd (en pauze) aanpassen. Ligt de eindtijd vóór de begintijd,
-// dan is het een nachtdienst en hoort de eindtijd bij de volgende dag.
-async function mbUurBijstellen(id,datum,open){
-  const b=(document.getElementById('mbUI'+id)||{}).value, t=(document.getElementById('mbUT'+id)||{}).value;
-  if(!b||!t){ alert('Vul een begin- en eindtijd in.'); return; }
-  if(b===t){ alert('Begin- en eindtijd zijn hetzelfde ('+b+'). Pas eerst een van de twee aan.'); return; }
-  const pa=parseInt((document.getElementById('mbUP'+id)||{}).value,10)||0;
-  try{
-    const inD=new Date(datum+'T'+b+':00'), uitD=new Date(datum+'T'+t+':00');
-    if(uitD<=inD){
-      const ok=await vraagBevestiging('Eindtijd ligt vóór de begintijd',
-        `${veiligTekst(b)} tot ${veiligTekst(t)}: is dit een nachtdienst die de volgende dag eindigt?`,'Ja, volgende dag');
-      if(!ok)return;
-      uitD.setDate(uitD.getDate()+1);
-    }
-    const{error}=await sb.rpc('mcr_uur_tijden',{p_uren:id,p_in:inD.toISOString(),p_uit:uitD.toISOString(),p_pauze:pa});
-    if(error)throw error; toast('Tijden aangepast'); mbUrenGa('akkoord');
-  }catch(e){ if(!(e&&/^P000[12]$/.test(e.code||'')))alert(mbFout(e)); }
-}
-
 async function mbAandacht(){
   const{data,error}=await sb.rpc('mcr_aandacht');
   if(error)throw error;
   const open=(data||[]).filter(r=>r.soort==='open');
   const laat=(data||[]).filter(r=>r.soort==='telaat');
   const kop=document.getElementById('mbUrenKop');
-  if(kop)kop.innerHTML=mbKop('Aandacht nodig','Open gebleven diensten en wie later begon dan ingeroosterd');
+  if(kop)kop.innerHTML=mbKop('Aandacht nodig','Open gebleven diensten en wie later begon dan ingeroosterd &middot; tijden in Britse tijd');
   let uit=`<div class="mb-kaart"><div style="font-size:15px;font-weight:700">Open gebleven diensten</div>
-    <div style="font-size:12.5px;color:var(--muted);margin:3px 0 2px">Ingeklokt maar niet uitgeklokt. De app verzint nooit zelf een eindtijd &mdash; hij doet een voorstel, jij zet hem vast.</div>`;
+    <div style="font-size:12.5px;color:var(--muted);margin:3px 0 2px">Ingeklokt maar niet uitgeklokt. De app verzint nooit zelf een eindtijd &mdash; hij doet een voorstel, jij zet hem vast.
+      Pauze: staat er al een pauze, dan blijft die staan; anders gaat de pauze uit je instellingen eraf als de dienst lang genoeg was.</div>`;
   if(!open.length)uit+='<div style="font-size:13px;color:var(--muted);padding-top:10px">Niets open.</div>';
   open.forEach(r=>{
-    const id=veiligTekst(r.uren_id);
-    uit+=`<div class="mb-persoon">
+    const id=veiligTekst(r.uren_id), inT=mbKlokT(r.ingeklokt_op);
+    uit+=`<div class="mb-persoon" id="mbAR${id}" style="flex-wrap:wrap">
       ${mbStip(r.kleur)}
       <div style="flex:1 1 150px"><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
         <div style="font-size:11.5px;color:var(--muted)">${veiligTekst(r.kraam)} &middot; ${veiligTekst(mbDatum(r.datum))}</div></div>
-      <div style="font-size:12.5px;font-variant-numeric:tabular-nums">${veiligTekst(mbKlokT(r.ingeklokt_op))} &rarr; <b style="color:#B45309">&mdash;</b></div>
-      <input type="time" class="mb-getal" style="width:88px" id="mbAT${id}" value="${veiligTekst(mbKlokT(r.voorstel)||'21:00')}">
-      <button class="mb-mini zwart" onclick="mbAandachtVast('${veiligJs(r.uren_id)}','${veiligJs(r.datum)}')">Vastzetten</button></div>`;
+      <div style="font-size:12.5px;font-variant-numeric:tabular-nums">${veiligTekst(inT)} &rarr; <b style="color:#B45309">&mdash;</b></div>
+      <input type="time" class="mb-getal" style="width:88px" id="mbAT${id}" data-in="${veiligTekst(inT)}" value="${veiligTekst(mbKlokT(r.voorstel)||'21:00')}" title="Eindtijd (Britse tijd)">
+      <button class="mb-mini zwart" onclick="mbAandachtVast('${veiligJs(r.uren_id)}',this)">Vastzetten</button></div>`;
   });
-  uit+=`<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px">Elke regel heeft zijn eigen knop; er komt geen knop die alles in een keer afhandelt.</div></div>`;
+  uit+=`<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:10px">Elke regel heeft zijn eigen knop; er komt geen knop die alles in een keer afhandelt.
+    Na vastzetten staat de registratie bij Te accorderen.</div></div>`;
   uit+=`<div class="mb-kaart"><div style="font-size:15px;font-weight:700">Later begonnen dan ingeroosterd</div>
     <div style="font-size:12.5px;color:var(--muted);margin:3px 0 2px">Hier hoef je niets te doen: de uren lopen vanaf het inklokmoment, dus dit is al verrekend.</div>`;
   if(!laat.length)uit+='<div style="font-size:13px;color:var(--muted);padding-top:10px">Iedereen was op tijd.</div>';
@@ -5722,32 +5920,44 @@ async function mbAandacht(){
   uit+='</div>';
   mbZet(uit);
 }
-async function mbAandachtVast(id,datum){
-  const t=document.getElementById('mbAT'+id).value;
+async function mbAandachtVast(id,knop){
+  const inp=document.getElementById('mbAT'+id); const t=inp?inp.value:'';
   if(!t){ alert('Vul een eindtijd in.'); return; }
-  try{
-    const iso=new Date(datum+'T'+t+':00').toISOString();
-    const{error}=await sb.rpc('mcr_uur_bijstellen',{p_uren:id,p_uit:iso,p_pauze:30});
-    if(error)throw error; mbUrenGa('aandacht');
-  }catch(e){ alert(mbFout(e)); }
+  let volgende=false;
+  const begin=(inp&&inp.dataset.in)||'';
+  if(begin&&t<=begin){
+    const ok=await vraagBevestiging('Eindtijd ligt vóór de begintijd',
+      `Ingeklokt om ${veiligTekst(begin)}, eindtijd ${veiligTekst(t)}: eindigde deze dienst de volgende dag?`,'Ja, volgende dag');
+    if(!ok)return; volgende=true;
+  }
+  if(knop)knop.disabled=true;
+  const{data,error}=await sb.rpc('mcr_uur_vastzetten',{p_uren:id,p_uit:t,p_volgende_dag:volgende});
+  if(error){ if(knop)knop.disabled=false; alert(mbFout(error)); return; }
+  const p=Number(data)||0;
+  toast(`Vastgezet tot ${t}${p?' · pauze '+p+' min':' · geen pauze'} · staat nu bij Te accorderen`);
+  const rij=document.getElementById('mbAR'+id); if(rij)rij.remove();
 }
 
-let MB_RONDE=null;
+let MB_RONDE=null, MB_RONDE_RIJEN=[], MB_RONDE_INFO=null;
 async function mbRondes(){
-  const{data,error}=await sb.rpc('mcr_rondes');
+  const [res,vast]=await Promise.all([sb.rpc('mcr_rondes'), sb.rpc('mcr_rondes_vast').then(x=>x,()=>({data:[]}))]);
+  const{data,error}=res;
   if(error)throw error;
   const rondes=data||[];
+  const VAST={}; ((vast&&!vast.error&&vast.data)||[]).forEach(v=>{ VAST[v.ronde_id]=v; });
   const kop=document.getElementById('mbUrenKop');
-  if(kop)kop.innerHTML=mbKop('Betaalrondes','Acht rondes &middot; zij maken zelf een PDF en mailen die naar je; hier vink je af wat binnen is');
+  if(kop)kop.innerHTML=mbKop('Betaalrondes','Alleen Manchester-uren &middot; zij maken zelf een PDF en mailen die naar je; hier vink je af wat binnen is, zie je wat je overmaakt en zet je de ronde vast');
   if(!MB_RONDE||!rondes.some(r=>r.ronde_id===MB_RONDE)){
-    const o=rondes.find(r=>r.afgelopen&&r.facturen<r.mensen)||rondes.find(r=>r.afgelopen)||rondes[0];
+    const o=rondes.find(r=>r.afgelopen&&!VAST[r.ronde_id]&&r.mensen>0)||rondes.find(r=>r.afgelopen&&r.facturen<r.mensen)||rondes.find(r=>r.afgelopen)||rondes[0];
     MB_RONDE=o?o.ronde_id:null;
   }
-  let uit='<div class="mb-rij2"><div style="flex:1 1 340px;min-width:300px">';
+  let uit='<div class="mb-rij2"><div style="flex:1 1 280px;max-width:360px;min-width:260px">';
   rondes.forEach(r=>{
-    const aan=(r.ronde_id===MB_RONDE);
-    const st = !r.afgelopen ? mbChip('komt nog','#6B6A66','#F3F2EE')
-             : (r.facturen>=r.mensen&&r.mensen>0 ? mbChip('compleet','#0F7A52','#F2FBF6') : mbChip('open','#B45309','#FEF6E7'));
+    const aan=(r.ronde_id===MB_RONDE), v=VAST[r.ronde_id];
+    const st = v ? mbChip('vastgezet','#0F7A52','#F2FBF6')
+             : !r.afgelopen ? mbChip('komt nog','#6B6A66','#F3F2EE')
+             : (Number(r.wachtende_uren)>0 ? mbChip('uren open','#B4472B','#FBEDE9')
+             : (r.facturen>=r.mensen&&r.mensen>0 ? mbChip('compleet','#0F7A52','#F2FBF6') : mbChip('open','#B45309','#FEF6E7')));
     uit+=`<button class="mb-kaart mb-rondeknop${aan?' aan':''}" onclick="MB_RONDE='${veiligJs(r.ronde_id)}';mbUrenGa('rondes')">
       <div style="display:flex;align-items:center;gap:11px;width:100%">
         <div class="mb-nr">${r.nummer}</div>
@@ -5756,52 +5966,169 @@ async function mbRondes(){
           <div style="font-size:11.5px;color:var(--muted);margin-top:1px">uitbetalen ${veiligTekst(mbDatum(r.betaaldatum))}</div>
         </div>
         <div style="text-align:right;flex-shrink:0">
-          <div style="font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(r.bedrag))}</div>
-          <div style="font-size:11px;color:var(--muted)">${r.facturen} van ${r.mensen} facturen</div></div>
+          <div style="font-size:13px;font-weight:600;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(v?v.netto:r.bedrag))}</div>
+          <div style="font-size:11px;color:var(--muted)">${v?'netto':`${r.facturen} van ${r.mensen} facturen`}</div></div>
         ${st}</div>
+      ${Number(r.wachtende_uren)>0?`<div style="font-size:11.5px;color:#B4472B;margin-top:6px;text-align:left">${veiligTekst(mbNum(r.wachtende_uren,2))} uur nog niet geaccordeerd of uitgezocht</div>`:''}
       ${r.notitie?`<div style="font-size:11.5px;color:#B45309;margin-top:7px;line-height:1.5;text-align:left">${veiligTekst(r.notitie)}</div>`:''}
     </button>`;
   });
-  uit+='</div><div style="flex:1 1 420px;min-width:320px" id="mbRondeDetail"></div></div>';
+  uit+='</div><div style="flex:3 1 480px;min-width:0" id="mbRondeDetail"></div></div>';
   mbZet(uit);
+  MB_RONDE_INFO=rondes.find(r=>r.ronde_id===MB_RONDE)||null;
   if(MB_RONDE)mbRondeDetail(MB_RONDE);
+}
+// Wat er na inhouding per uur overblijft, tegen het minimumloon bij die leeftijd.
+function mbRondeMinWaarschuwing(r){
+  const inh=Number(r.boetes||0)+Number(r.borg_in||0), u=Number(r.uren||0);
+  if(!inh||!u)return null;
+  const b=mbMinLoon(r.leeftijd); if(!b)return null;
+  const per=(Number(r.bruto||0)-inh)/u;
+  return per<b.min-0.0001?{per,min:b.min,band:b.band}:null;
 }
 async function mbRondeDetail(id){
   const el=document.getElementById('mbRondeDetail'); if(!el)return;
   el.innerHTML='<div class="mb-kaart" style="color:var(--muted)">Bezig&hellip;</div>';
   try{
-    const{data,error}=await sb.rpc('mcr_ronde_mensen',{p_ronde:id});
+    const{data,error}=await sb.rpc('mcr_ronde_uitbetaling',{p_ronde:id});
     if(error)throw error;
-    const m=data||[];
-    if(!m.length){ el.innerHTML='<div class="mb-kaart">In deze periode heeft nog niemand gewerkt.</div>'; return; }
-    let t='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr><th>Naam</th>'
-      +'<th style="text-align:right">Uren</th><th style="text-align:right">Bedrag</th><th style="text-align:right">Factuur</th></tr></thead><tbody>';
+    const m=MB_RONDE_RIJEN=(data||[]);
+    const R=MB_RONDE_INFO||{};
+    if(!m.length){ el.innerHTML='<div class="mb-kaart">In deze periode heeft nog niemand in Manchester gewerkt.</div>'; return; }
+    const som=k=>m.reduce((a,r)=>a+Number(r[k]||0),0);
+    const vast=m.some(r=>r.vastgezet_op), open=m.reduce((a,r)=>a+Number(r.open_n||0),0);
+    const minW=m.filter(mbRondeMinWaarschuwing), geenBank=m.filter(r=>Number(r.netto)>0&&!(r.sort_code&&r.bank_account));
+    let t=`<div class="mb-kaart">
+      <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
+        <div style="flex:1 1 220px"><div style="font-size:15px;font-weight:700">Ronde ${veiligTekst(R.nummer||'')} &middot; uitbetaling</div>
+          <div style="font-size:12px;color:var(--muted)">${veiligTekst(mbKort(R.periode_van))} &ndash; ${veiligTekst(mbKort(R.periode_tot))} &middot; overmaken ${veiligTekst(mbDatum(R.betaaldatum))}
+          ${vast?` &middot; <b style="color:#0F7A52">vastgezet ${veiligTekst(mbKlokDatum(m.find(r=>r.vastgezet_op).vastgezet_op))}</b>`:''}</div></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="mb-mini" onclick="mbRondeCsv('overzicht')">Download (Excel)</button>
+          <button class="mb-mini" onclick="mbRondeCsv('bank')">Bankbestand</button>
+          ${vast?`<button class="mb-mini" onclick="mbRondeVastzetten(false,this)">Vastzetten ongedaan</button>`
+                :`<button class="mb-mini zwart" onclick="mbRondeVastzetten(true,this)"${!R.afgelopen||open?' disabled title="Kan pas als de ronde voorbij is en alle uren zijn afgehandeld"':''}>Ronde vastzetten</button>`}
+        </div></div>
+      <div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:12px">
+        <div><div class="mb-groot">${veiligTekst(mbPondKort(som('bruto')))}</div><div class="mb-klein">bruto</div></div>
+        <div><div class="mb-groot" style="color:${som('boetes')+som('borg_in')?'#B4472B':'inherit'}">&minus;${veiligTekst(mbPondKort(som('boetes')+som('borg_in')))}</div><div class="mb-klein">boetes en borg</div></div>
+        ${som('borg_terug')?`<div><div class="mb-groot" style="color:#0F7A52">+${veiligTekst(mbPondKort(som('borg_terug')))}</div><div class="mb-klein">borg terug</div></div>`:''}
+        <div><div class="mb-groot">${veiligTekst(mbPond(som('netto')))}</div><div class="mb-klein">over te maken</div></div>
+      </div>`;
+    const meld=[];
+    if(!R.afgelopen)meld.push('Deze ronde loopt nog: de bedragen kunnen nog veranderen.');
+    if(open)meld.push(`<b>${open} ${open===1?'registratie staat':'registraties staan'} nog open</b> (te accorderen of bij Uitgezocht). Die tellen hier nog niet mee; vastzetten kan pas als ze zijn afgehandeld.`);
+    if(geenBank.length)meld.push(`Geen sort code of rekeningnummer: ${geenBank.map(r=>veiligTekst(r.naam)).join(', ')}.`);
+    if(minW.length)meld.push(`<b>Let op het minimumloon.</b> Bij ${minW.map(r=>{const w=mbRondeMinWaarschuwing(r);return `${veiligTekst(r.naam)} (na inhouding &pound; ${mbPondTxt(w.per)}/u, minimaal &pound; ${mbPondTxt(w.min)})`;}).join(', ')} komt het uurloon in deze ronde onder het minimum.
+      In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. Overweeg de borg over meer rondes te spreiden.`);
+    if(meld.length)t+=`<div style="font-size:12.5px;line-height:1.6;margin-top:12px;padding:9px 11px;border-radius:10px;background:#FEF6E7;color:#5B3A07">${meld.join('<br>')}</div>`;
+    t+=`<div style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:10px">Bruto = goedgekeurde uren &times; tarief. Boetes en kledingborg worden ingehouden zolang er genoeg is; netto komt nooit onder &pound; 0
+      (wat overblijft schuift door naar de volgende ronde). Levert iemand kleding in, dan komt de borg terug. Pas na <b>Ronde vastzetten</b> ligt vast wat is ingehouden &mdash; zo wordt niets twee keer ingehouden.</div></div>`;
+    t+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr><th>Naam</th>'
+      +'<th style="text-align:right">Uren</th><th style="text-align:right">Tarief</th><th style="text-align:right">Bruto</th>'
+      +'<th style="text-align:right">Boete</th><th style="text-align:right">Borg</th><th style="text-align:right">Netto</th>'
+      +'<th>Bank &amp; UTR</th><th style="text-align:right">Factuur</th></tr></thead><tbody>';
     m.forEach(r=>{
       let st;
       if(r.betaald_op)        st=mbChip('betaald','#0F7A52','#F2FBF6');
       else if(r.ontvangen_op) st=mbChip('ontvangen','#2A4EA8','#EEF4FF');
       else if(r.factuur_id)   st=mbChip('gedownload','#6B6A66','#F3F2EE');
-      else if(!r.iban)        st=mbChip('geen IBAN','#B4472B','#FBEDE9');
-      else if(Number(r.wachtend)>0) st=mbChip(mbNum(r.wachtend,2)+' u wacht','#B4472B','#FBEDE9');
+      else if(Number(r.open_n)>0) st=mbChip(r.open_n+' open','#B4472B','#FBEDE9');
       else                    st=mbChip('nog niets binnen','#B45309','#FEF6E7');
-      t+=`<tr><td><div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(r.naam))}</div>
-          <div><div style="font-size:13.5px">${veiligTekst(r.naam)}</div>
-          ${r.factuur_nummer?`<div style="font-size:11px;color:var(--muted)">${veiligTekst(r.factuur_nummer)}</div>`:''}</div></div></td>
-        <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbNum(r.uren,2))}</td>
-        <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(r.bedrag))}</td>
+      const w=mbRondeMinWaarschuwing(r);
+      const fAfw=r.factuur_bedrag!=null&&Math.abs(Number(r.factuur_bedrag)-Number(r.bruto))>0.01;
+      const borg=Number(r.borg_in)?`<span style="color:#B4472B">&minus;${veiligTekst(mbPond(r.borg_in))}</span>`
+        :Number(r.borg_terug)?`<span style="color:#0F7A52">+${veiligTekst(mbPond(r.borg_terug))}</span>`:'<span style="color:var(--muted)">&mdash;</span>';
+      t+=`<tr${w?' style="background:#FBEDE9"':''}><td><div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(r.naam))}</div>
+          <div style="min-width:140px"><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
+          ${Number(r.borg_nu)?`<div style="font-size:11px;color:var(--muted)">kleding: borg ${veiligTekst(mbPond(r.borg_nu))}${Number(r.borg_al)?', al ingehouden '+veiligTekst(mbPond(r.borg_al)):''}</div>`:''}
+          ${Number(r.boetes_open)>Number(r.boetes)?`<div style="font-size:11px;color:#B45309">nog ${veiligTekst(mbPond(Number(r.boetes_open)-Number(r.boetes)))} boete open</div>`:''}
+          ${w?`<div style="font-size:11px;color:#B4472B;font-weight:600">onder minimumloon na inhouding</div>`:''}</div></div></td>
+        <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${veiligTekst(mbNum(r.uren,2))}</td>
+        <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${r.tarief!=null?veiligTekst(mbPond(r.tarief)):'&mdash;'}</td>
+        <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(r.bruto))}</td>
+        <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${Number(r.boetes)?`<span style="color:#B4472B">&minus;${veiligTekst(mbPond(r.boetes))}</span>`:'<span style="color:var(--muted)">&mdash;</span>'}</td>
+        <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${borg}</td>
+        <td style="text-align:right;white-space:nowrap;font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(r.netto))}</td>
+        <td style="font-size:12px;white-space:nowrap">${r.sort_code||r.bank_account?`${veiligTekst(r.sort_code||'?')} &middot; ${veiligTekst(r.bank_account||'?')}`:'<span style="color:#B4472B">geen bank</span>'}
+          <div style="font-size:11px;color:var(--muted)">UTR ${r.utr?veiligTekst(r.utr):'&mdash;'}</div></td>
         <td style="text-align:right;white-space:nowrap">${st}
+          ${r.factuur_nummer?`<div style="font-size:11px;color:${fAfw?'#B45309':'var(--muted)'};margin-top:3px">${veiligTekst(r.factuur_nummer)}${fAfw?' &middot; factuur '+veiligTekst(mbPond(r.factuur_bedrag)):''}</div>`:''}
           ${r.factuur_id?`<div style="margin-top:5px;display:flex;gap:5px;justify-content:flex-end">
-            <button class="mb-mini" onclick="mbStempel('${veiligJs(r.factuur_id)}','ontvangen')">${r.ontvangen_op?'niet ontv.':'ontvangen'}</button>
-            <button class="mb-mini" onclick="mbStempel('${veiligJs(r.factuur_id)}','betaald')">${r.betaald_op?'niet betaald':'betaald'}</button></div>`:''}
+            <button class="mb-mini" onclick="mbStempel('${veiligJs(r.factuur_id)}','ontvangen',this)">${r.ontvangen_op?'niet ontv.':'ontvangen'}</button>
+            <button class="mb-mini" onclick="mbStempel('${veiligJs(r.factuur_id)}','betaald',this)">${r.betaald_op?'niet betaald':'betaald'}</button></div>`:''}
         </td></tr>`;
     });
+    t+=`<tr style="border-top:2px solid var(--border)"><td><b>Totaal</b></td><td style="text-align:right">${veiligTekst(mbNum(som('uren'),2))}</td><td></td>
+      <td style="text-align:right;white-space:nowrap">${veiligTekst(mbPond(som('bruto')))}</td><td style="text-align:right;white-space:nowrap">${som('boetes')?'&minus;'+veiligTekst(mbPond(som('boetes'))):''}</td>
+      <td style="text-align:right;white-space:nowrap">${som('borg_in')||som('borg_terug')?(som('borg_terug')-som('borg_in')<0?'&minus;':'+')+veiligTekst(mbPond(Math.abs(som('borg_terug')-som('borg_in')))):''}</td>
+      <td style="text-align:right;white-space:nowrap;font-weight:700">${veiligTekst(mbPond(som('netto')))}</td><td colspan="2"></td></tr>`;
     t+='</tbody></table></div>';
     el.innerHTML=t;
   }catch(e){ el.innerHTML=`<div class="mb-kaart" style="color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
 }
-async function mbStempel(id,wat){
+async function mbStempel(id,wat,knop){
+  if(knop)knop.disabled=true;
   try{ const{error}=await sb.rpc('mcr_factuur_stempel',{p_factuur:id,p_wat:wat}); if(error)throw error; mbRondeDetail(MB_RONDE); }
-  catch(e){ alert(mbFout(e)); }
+  catch(e){ if(knop)knop.disabled=false; alert(mbFout(e)); }
+}
+async function mbRondeVastzetten(aan,knop){
+  const R=MB_RONDE_INFO||{}, m=MB_RONDE_RIJEN||[];
+  const netto=m.reduce((a,r)=>a+Number(r.netto||0),0), inh=m.reduce((a,r)=>a+Number(r.boetes||0)+Number(r.borg_in||0),0);
+  const ok=aan
+    ? await vraagBevestiging('Ronde '+(R.nummer||'')+' vastzetten?',
+        `Hiermee leg je vast wat je overmaakt: <b>${veiligTekst(mbPond(netto))}</b> aan ${m.filter(r=>Number(r.netto)>0).length} mensen, met <b>${veiligTekst(mbPond(inh))}</b> aan boetes en borg ingehouden.
+         Volgende rondes rekenen hiermee verder, zodat niets twee keer wordt ingehouden.`,'Vastzetten')
+    : await vraagBevestiging('Vastzetten ongedaan maken?','De bedragen worden weer opnieuw berekend. Doe dit alleen als je nog niet hebt overgemaakt.','Ongedaan maken');
+  if(!ok)return;
+  if(knop)knop.disabled=true;
+  const{error}=await sb.rpc('mcr_ronde_vastzetten',{p_ronde:MB_RONDE,p_aan:!!aan});
+  if(error){ if(knop)knop.disabled=false; alert(mbFout(error)); return; }
+  toast(aan?'Ronde vastgezet':'Vastzetten ongedaan gemaakt'); mbUrenGa('rondes');
+}
+// Bestand bewaren: in de app via het deelmenu, in de browser als download.
+async function mbBestandDelen(tekst,naam,mime){
+  const C=window.Capacitor;
+  if(C&&C.Plugins&&C.Plugins.Filesystem&&C.Plugins.Share){
+    try{
+      const b64=btoa(unescape(encodeURIComponent(tekst)));
+      const res=await C.Plugins.Filesystem.writeFile({path:naam,data:b64,directory:'CACHE'});
+      await C.Plugins.Share.share({title:naam,files:[res.uri]}); return;
+    }catch(e){ console.error('Delen mislukt:',e); }
+  }
+  const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([tekst],{type:mime}));
+  a.download=naam; document.body.appendChild(a); a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500);
+}
+// overzicht: puntkomma's en komma-decimalen, zodat Nederlandse Excel het goed opent.
+// bank: eenvoudig Brits formaat (naam, sort code, rekeningnummer, bedrag met punt,
+// referentie max 18 tekens). Controleer vóór de eerste keer of je bank dit
+// formaat zo accepteert; anders de kolommen in de bankportal koppelen.
+function mbRondeCsv(soort){
+  const R=MB_RONDE_INFO||{}, m=MB_RONDE_RIJEN||[];
+  if(!m.length){ alert('Er staat niemand in deze ronde.'); return; }
+  const ref=('TCG R'+(R.nummer||'')+' '+String(R.periode_tot||'').slice(5)).slice(0,18);
+  if(soort==='bank'){
+    const q=v=>{ const s=String(v==null?'':v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+    const rijen=[['Name','Sort code','Account number','Amount','Reference']];
+    const zonder=[];
+    m.filter(r=>Number(r.netto)>0).forEach(r=>{
+      const sc=String(r.sort_code||'').replace(/\D/g,''), ac=String(r.bank_account||'').replace(/\D/g,'');
+      if(sc.length!==6||ac.length<6){ zonder.push(r.naam); return; }
+      rijen.push([String(r.naam||'').slice(0,18),sc,ac.padStart(8,'0'),Number(r.netto).toFixed(2),ref]);
+    });
+    mbBestandDelen(rijen.map(r=>r.map(q).join(',')).join('\r\n')+'\r\n','Manchester ronde '+(R.nummer||'')+' bank.csv','text/csv;charset=utf-8');
+    if(zonder.length)alert('Niet in het bankbestand (sort code of rekeningnummer ontbreekt of klopt niet): '+zonder.join(', '));
+    return;
+  }
+  const g=n=>(Number(n)||0).toFixed(2).replace('.',',');
+  const q=v=>{ const s=String(v==null?'':v); return /[";\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+  const kop=['Naam','Uren','Tarief','Bruto','Boetes ingehouden','Borg ingehouden','Borg terug','Netto','Sort code','Rekeningnummer','UTR','Factuurnummer','Factuurbedrag','Factuurstatus','Open registraties','Onder minimumloon na inhouding'];
+  const rijen=m.map(r=>[r.naam,g(r.uren),g(r.tarief),g(r.bruto),g(r.boetes),g(r.borg_in),g(r.borg_terug),g(r.netto),
+    r.sort_code||'',r.bank_account||'',r.utr||'',r.factuur_nummer||'',r.factuur_bedrag!=null?g(r.factuur_bedrag):'',
+    r.betaald_op?'betaald':r.ontvangen_op?'ontvangen':r.factuur_id?'gedownload':'geen factuur',r.open_n||0,mbRondeMinWaarschuwing(r)?'ja':'']);
+  const tekst='﻿'+[kop,...rijen].map(r=>r.map(q).join(';')).join('\r\n')+'\r\n';
+  mbBestandDelen(tekst,'Manchester ronde '+(R.nummer||'')+' uitbetaling.csv','text/csv;charset=utf-8');
 }
 
 // ── DAGRAPPORT — één dag, kraam als tabblad ───────────────────────
@@ -5809,7 +6136,7 @@ async function mbDagrapport(){
   const kramen=await mbKramenLijst();
   if(!kramen.length){ document.getElementById('mbInhoud').innerHTML='<div class="mb-kaart">Er staan nog geen kramen.</div>'; return; }
   if(!MB_DAG_KRAAM||!kramen.some(k=>k.id===MB_DAG_KRAAM))MB_DAG_KRAAM=kramen[0].id;
-  if(!MB_DATUM)MB_DATUM=await mbPeil();
+  await mbDatumVandaag();
   const [{data,error},tb]=await Promise.all([
     sb.rpc('mcr_dagrapport',{p_van:MB_DATUM,p_tot:MB_DATUM,p_kraam:MB_DAG_KRAAM}),
     sb.rpc('mcr_dag_te_beoordelen',{p_kraam:MB_DAG_KRAAM,p_datum:MB_DATUM}).then(x=>x,()=>({data:[]}))]);
@@ -5820,7 +6147,7 @@ async function mbDagrapport(){
   let uit=mbKop('Dagrapport &middot; '+veiligTekst(mbLang(MB_DATUM)),
     'Vijf minuten per avond &mdash; de rest staat er al in',
     `<button class="mb-mini" onclick="mbDagR(-1)">&lsaquo;</button>
-     <input type="date" class="mb-getal" style="width:150px" value="${veiligTekst(MB_DATUM)}" onchange="MB_DATUM=this.value;mbNaar('dagrapport')">
+     <input type="date" class="mb-getal" style="width:150px" value="${veiligTekst(MB_DATUM)}" onchange="mbZetDatum(this.value);mbNaar('dagrapport')">
      <button class="mb-mini" onclick="mbDagR(1)">&rsaquo;</button>`);
   uit+='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">';
   kramen.forEach(k=>uit+=`<button class="mb-mini${k.id===MB_DAG_KRAAM?' zwart':''}" onclick="MB_DAG_KRAAM='${veiligJs(k.id)}';mbNaar('dagrapport')">${veiligTekst(k.naam)}</button>`);
@@ -5904,7 +6231,7 @@ async function mbDagrapport(){
 }
 function mbDagR(stap){
   const d=new Date((MB_DATUM||mbVandaagStr())+'T00:00:00'); d.setDate(d.getDate()+stap);
-  MB_DATUM=fmt(d); mbNaar('dagrapport');
+  mbZetDatum(fmt(d)); mbNaar('dagrapport');
 }
 async function mbDagOpslaan(){
   const v=id=>{const e=document.getElementById(id);return e?e.value:null;};
@@ -5966,7 +6293,7 @@ async function mbLeesBestand(file){
   if(h<0)throw new Error('Dit lijkt geen myPOS-export: de kolom TID ontbreekt.');
   const k=mbKolommen(rijen[h]);
   if(k.tid<0||k.datum<0)throw new Error('De kolommen TID of Datum ontbreken.');
-  const uit=[]; let over=0, geweigerd=0, tid='', naam='', omzet=0;
+  const uit=[]; let over=0, geweigerd=0, tid='', naam='', omzet=0, terug=0, terugBedrag=0;
   for(let i=h+1;i<rijen.length;i++){
     const r=rijen[i];
     const t=String(r[k.tid]||'').trim();
@@ -5975,14 +6302,17 @@ async function mbLeesBestand(file){
     const type=String(r[k.type]||'').trim().toLowerCase();
     const status=String(r[k.status]||'').trim().toLowerCase();
     if(status && !/goedgekeurd|approved/.test(status)){ geweigerd++; continue; }
-    if(type && !/betaling|payment|sale/.test(type)){ over++; continue; }
-    const bedrag=mbGetal(k.transactie>=0?r[k.transactie]:0);
+    // Terugbetaling eerst herkennen: "Terugbetaling" bevat ook "betaling".
+    const isTerug=!!type&&/terug|refund|retour|reversal|storno|void|credit/.test(type);
+    if(type && !isTerug && !/betaling|payment|sale|purchase|aankoop/.test(type)){ over++; continue; }
+    let bedrag=mbGetal(k.transactie>=0?r[k.transactie]:0);
+    if(isTerug){ bedrag=-Math.abs(bedrag); terug++; terugBedrag+=bedrag; }
     tid=t; naam=String(k.naam>=0?r[k.naam]:'').trim(); omzet+=bedrag;
     uit.push({ref:String(r[k.ref]||'').trim()||(t+'-'+dt.dag+'-'+i), tid:t, dag:dt.dag, uur:dt.uur,
       bedrag, kosten:mbGetal(k.afschrift>=0?r[k.afschrift+2]:0), fooi:mbGetal(k.fooi>=0?r[k.fooi]:0),
       merk:String(k.verwerker>=0?r[k.verwerker]:'').trim()});
   }
-  return {rijen:uit, overgeslagen:over, geweigerd, tid, naam, omzet, bestand:file.name};
+  return {rijen:uit, overgeslagen:over, geweigerd, tid, naam, omzet, terug, terugBedrag, bestand:file.name};
 }
 async function mbInlezen(){
   const [kramen,terminals,mp,mt]=await Promise.all([mbKramenLijst(), sb.rpc('terminals_lijst'),
@@ -6032,7 +6362,7 @@ async function mbInlezen(){
       van dat nummer vanzelf op hun plaats.</div></div>
     <div class="mb-kaart"><div class="mb-kop">Wat de app overslaat</div>
     <div style="font-size:12.5px;color:var(--muted);line-height:1.6">
-      Alleen <b style="color:var(--text)">Betaling</b> met status <b style="color:var(--text)">Goedgekeurd</b> telt mee. Terugbetalingen gaan eraf,
+      Alleen <b style="color:var(--text)">Betaling</b> met status <b style="color:var(--text)">Goedgekeurd</b> telt mee. Terugbetalingen worden herkend en van de omzet afgetrokken (ze tellen niet als bon),
       geweigerde transacties tellen niet. Dezelfde transactiereferentie twee keer inlezen kan niet &mdash; je omzet verdubbelt niet.
       Het bestand wordt in je browser gelezen; kaartnummers gaan nooit naar de server.</div></div>
     <div class="mb-kaart"><div class="mb-kop">Forecast inlezen</div>
@@ -6186,8 +6516,8 @@ async function mbTerminal(tid,kraam){
 // Het geheim gaat alleen de database in; de app krijgt het nooit terug.
 let MB_MYPOS=null, MB_MYPOS_OPEN=null, MB_MYPOS_TID=[], MB_MYPOS_NEG=false;
 function mbMyposTijd(t){ if(!t)return ''; const d=new Date(t);
-  const vandaag=d.toDateString()===new Date().toDateString();
-  return vandaag?'vandaag '+mbKlokT(t):d.toLocaleString('nl-NL',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}); }
+  const vandaag=d.toLocaleDateString('en-CA',{timeZone:MB_TZ})===mbVandaagStr();
+  return vandaag?'vandaag '+mbKlokT(t):mbKlokDatum(t); }
 function mbMyposHtml(){
   const l=MB_MYPOS||[];
   let h=`<div class="mb-kaart"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;flex-wrap:wrap">
@@ -6343,8 +6673,9 @@ async function mbImportStart(bestanden){
     t+=`<tr><td style="font-size:12.5px">${veiligTekst(b.bestand)}</td>
       <td>${veiligTekst(b.naam||'')}<div style="font-size:11px;color:var(--muted)">TID ${veiligTekst(b.tid)}</div></td>
       <td>${kr?veiligTekst(kr):'&mdash;'}</td>
-      <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(b.omzet))}</td>
-      <td style="text-align:right">${b.rijen.length}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(b.omzet))}
+        ${b.terug?`<div style="font-size:11px;color:#B4472B">${b.terug} terugbetaald (${veiligTekst(mbPond(b.terugBedrag))})</div>`:''}</td>
+      <td style="text-align:right">${b.rijen.length-(b.terug||0)}</td>
       <td>${kr?mbChip('herkend','#0F7A52','#F2FBF6'):mbChip('onbekend','#B45309','#FEF6E7')}</td></tr>`;
   });
   t+='</tbody></table>';
@@ -6425,7 +6756,7 @@ async function mbCijfers(){
     +tegel('Per personeelsuur', tot.uren>0?veiligTekst(mbPondKort(tot.omzet/tot.uren)):'&mdash;',
        `${mbNum(tot.uren,0)} uur ingezet`)
     +tegel('Loon als deel van de omzet', tot.omzet>0?mbProcent(tot.loon/tot.omzet*100):'&mdash;',
-       veiligTekst(mbPondKort(tot.loon)))
+       veiligTekst(mbPondKort(tot.loon))+' loon &middot; alle geklokte uren, ook nog niet goedgekeurd')
     +'</div>';
 
   // Verschil met de forecast per dag
@@ -6532,7 +6863,7 @@ function mbKostBtw(t,inv){
 }
 function mbKostBtwUitleg(){
   const el=document.getElementById('mbKbtwUit'); if(!el)return;
-  const n=finGetal((document.getElementById('mbKbedrag')||{}).value);
+  const n=mbBedragLees((document.getElementById('mbKbedrag')||{}).value);
   const t=Number(MB_KOST_BTW||0);
   if(n==null||Number.isNaN(n)||n<=0){ el.textContent=t?`${t}% btw · bedrag is ${MB_KOST_BTWIN==='excl'?'zonder':'met'} btw`:'Geen btw'; return; }
   const incl=MB_KOST_BTWIN==='excl'?n*(1+t/100):n, ex=MB_KOST_BTWIN==='excl'?n:n/(1+t/100);
@@ -6620,7 +6951,7 @@ async function mbKosten(){
         <input class="mb-veld" id="mbKopm" maxlength="500" value="${veiligTekst(b?(b.opmerking||''):'')}" onkeydown="if(event.key==='Enter')mbKostOpslaan()"></div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:12px;flex-wrap:wrap">
-      <button class="mb-mini zwart" style="padding:9px 16px" onclick="mbKostOpslaan()">${b?'Wijziging opslaan':'Toevoegen'}</button>
+      <button class="mb-mini zwart" style="padding:9px 16px" id="mbKostKnop" onclick="mbKostOpslaan()">${b?'Wijziging opslaan':'Toevoegen'}</button>
       ${b?`<button class="mb-mini" style="padding:9px 14px" onclick="MB_KOST_BEWERK=null;mbNaar('kosten')">Annuleren</button>`:''}
       <span id="mbKuit" style="font-size:12.5px;color:var(--muted)"></span>
     </div>
@@ -6695,23 +7026,27 @@ function mbKostVal(v){
   document.querySelectorAll('#mbKval button').forEach((b,i)=>b.classList.toggle('zwart',(i===0?'GBP':'EUR')===v));
   mbKostBtw(null,null);
 }
+let MB_KOST_BEZIG=false;   // tegen dubbel tikken / twee keer Enter
 async function mbKostOpslaan(){
+  if(MB_KOST_BEZIG)return;
   const uit=document.getElementById('mbKuit');
   const zeg=(t,kl)=>{ if(uit){uit.style.color=kl||'var(--muted)';uit.textContent=t;} };
   const datum=(document.getElementById('mbKdatum')||{}).value;
   const kraam=(document.getElementById('mbKkraam')||{}).value||null;
   const cat=(document.getElementById('mbKcat')||{}).value;
   const oms=((document.getElementById('mbKoms')||{}).value||'').trim();
-  const bedrag=finGetal((document.getElementById('mbKbedrag')||{}).value);
+  const bedrag=mbBedragLees((document.getElementById('mbKbedrag')||{}).value);
   const via=((document.getElementById('mbKvia')||{}).value||'').trim();
   const opm=((document.getElementById('mbKopm')||{}).value||'').trim();
   if(!datum){zeg('Vul een datum in.','#B4472B');return;}
   if(!oms){zeg('Vul een omschrijving in.','#B4472B');return;}
   if(bedrag==null||Number.isNaN(bedrag)||bedrag<=0){zeg('Vul een geldig bedrag in, bv. 245,50.','#B4472B');return;}
   zeg('Opslaan…');
+  MB_KOST_BEZIG=true; const knop=document.getElementById('mbKostKnop'); if(knop)knop.disabled=true;
   const{error}=await sb.rpc('mcr_kosten_zetten2',{p_id:MB_KOST_BEWERK,p_datum:datum,p_kraam:kraam,p_categorie:cat,
     p_omschrijving:oms,p_bedrag:bedrag,p_valuta:MB_KOST_VAL,p_betaald_via:via||null,p_opmerking:opm||null,
     p_btw_tarief:Number(MB_KOST_BTW||0),p_btw_invoer:MB_KOST_BTWIN});
+  MB_KOST_BEZIG=false; if(knop)knop.disabled=false;
   if(error){zeg(mbFout(error),'#B4472B');return;}
   MB_KOST_LAATSTE_DATUM=datum; MB_KOST_LAATSTE_CAT=cat; MB_KOST_LAATSTE_VIA=via;
   const wasBewerk=!!MB_KOST_BEWERK; MB_KOST_BEWERK=null;
@@ -6867,7 +7202,7 @@ function mbSindsSelect(id,waarde){
   const jaar=new Date().getFullYear(); let o='<option value="">&mdash;</option>';
   o+=`<option value="${jaar}"${waarde===jaar?' selected':''}>${jaar} (nieuw)</option>`;
   for(let j=jaar-1;j>=2015;j--)o+=`<option value="${j}"${waarde===j?' selected':''}>${j}</option>`;
-  return `<select class="mb-getal" style="width:104px;text-align:left" id="mbPS${id}" data-oud="${waarde||''}" title="Sinds welk jaar werkt deze persoon bij ons?">${o}</select>`;
+  return `<select class="mb-getal" style="width:104px;text-align:left" id="mbPS${id}" data-oud="${waarde||''}" onchange="mbMensGewijzigd('${veiligJs(id)}')" title="Sinds welk jaar werkt deze persoon bij ons?">${o}</select>`;
 }
 // Wettelijk minimumloon in het VK vanaf 1 april 2026 (gov.uk).
 // [band, minimum, voorstel bij nieuwe aanmelding]
@@ -6886,8 +7221,9 @@ function mbOnderMin(m){
 }
 async function mbNaarMinimum(id){
   const el=document.getElementById('mbPL'+id); if(!el)return;
-  el.value=el.dataset.min;
+  el.value=el.dataset.min; mbMensGewijzigd(id);
   await mbPersoonOpslaan(id,false);
+  if(!MB_MENS_GEWIJZIGD.size)mbNaar('mensen');
 }
 // Zoeken bij Mensen: op naam, e-mail of telefoon; blijft staan na Opslaan.
 let MB_ZOEK='';
@@ -6904,6 +7240,7 @@ function mbMensenZoek(w){
   const x=document.getElementById('mbZoekWis'); if(x)x.style.display=MB_ZOEK?'':'none';
 }
 async function mbMensen(){
+  MB_MENS_GEWIJZIGD=new Set();
   await mbErvaringLaden();
   const [res,al]=await Promise.all([sb.rpc('mcr_mensen'), sb.rpc('mcr_alleen_lijst').then(x=>x,()=>({data:[]}))]);
   const{data,error}=res;
@@ -6930,6 +7267,10 @@ async function mbMensen(){
   <div id="mbZoekLeeg" class="mb-kaart" style="display:none;color:var(--muted);font-size:13px">Niemand gevonden met deze naam.</div>`;
   uit+=`<datalist id="mbViaLijst">${Object.keys(via).sort((a,b)=>a.localeCompare(b)).map(v=>`<option value="${veiligTekst(v)}">`).join('')}</datalist>`;
   uit+='<div id="mbMensenBoven"></div>';
+  uit+=`<div id="mbMensBalk" style="display:none;position:sticky;top:0;z-index:20;margin-bottom:10px;padding:10px 14px;border-radius:12px;background:#FFFBEB;border:1.5px solid #F3D9A4;align-items:center;gap:10px;flex-wrap:wrap">
+    <span id="mbMensBalkTekst" style="font-size:13px;color:#8A5307;font-weight:600;flex:1 1 200px"></span>
+    <button class="mb-mini" onclick="mbMensenTerugzetten()">Terugzetten</button>
+    <button class="mb-mini zwart" id="mbMensAlles" onclick="mbMensenAllesOpslaan()">Alles opslaan</button></div>`;
   uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr>'
     +'<th style="text-align:right;width:28px">#</th><th style="min-width:210px">Naam</th><th style="text-align:right">Lft</th><th style="text-align:right">Tarief</th>'
     +'<th style="text-align:right">Shifts</th><th style="text-align:right">Uren</th>'
@@ -7065,14 +7406,14 @@ function mbPersoonRij(m){
   if(m.alleen)extra.push('alleen beschikbaarheid');
   if(m.eigen_opmerking)extra.push(m.eigen_opmerking);
   if(!m.iban)extra.push('geen bankrekening');
-  return `<tr data-zoek="${veiligTekst(mbZoekSleutel(m))}"${m.beoordeling==='niet meer'?' style="opacity:.55"':''}>
+  return `<tr data-zoek="${veiligTekst(mbZoekSleutel(m))}" id="mbPR${id}"${m.beoordeling==='niet meer'?' style="opacity:.55"':''}>
     <td class="mb-nr" style="text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12.5px"></td>
     <td style="min-width:210px"><div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
       <div><a href="#" class="mb-naamlink" onclick="mbPersoonKaart('${veiligJs(m.id)}');return false" title="Planning en aanvragen bekijken">${veiligTekst(m.naam)}</a>
       <div style="font-size:11.5px;color:var(--muted)">${mbViaHtml(m)}${extra.length?' &middot; '+extra.map(veiligTekst).join(' &middot; '):''}</div></div></div></td>
     <td style="text-align:right">${m.leeftijd||'&mdash;'}</td>
     <td style="text-align:right">${(()=>{const b=mbMinLoon(m.leeftijd),o=mbOnderMin(m);
-      return `<input class="mb-getal" type="number" step="0.01" style="width:68px${o?';border-color:#B4472B;color:#B4472B;font-weight:700':''}" id="mbPL${id}" data-min="${b?b.min.toFixed(2):''}" value="${m.uurloon!=null?veiligTekst(m.uurloon):''}"${o?` title="Onder het minimumloon: ${m.leeftijd} jaar = minimaal £ ${mbPondTxt(b.min)}"`:''}>`
+      return `<input class="mb-getal" type="number" step="0.01" style="width:68px${o?';border-color:#B4472B;color:#B4472B;font-weight:700':''}" id="mbPL${id}" data-min="${b?b.min.toFixed(2):''}" data-oud="${m.uurloon!=null?veiligTekst(m.uurloon):''}" oninput="mbMensGewijzigd('${veiligJs(m.id)}')" value="${m.uurloon!=null?veiligTekst(m.uurloon):''}"${o?` title="Onder het minimumloon: ${m.leeftijd} jaar = minimaal £ ${mbPondTxt(b.min)}"`:''}>`
         +(o?`<div style="font-size:10.5px;color:#B4472B;white-space:nowrap;margin-top:2px">min &pound; ${mbPondTxt(b.min)}</div>`:'');})()}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${m.shifts}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbNum(m.uren,1))}</td>
@@ -7083,10 +7424,10 @@ function mbPersoonRij(m){
       : '<span style="color:var(--muted)">&mdash;</span>'}</td>
     <td>${mbSindsSelect(id,(MB_ERV[m.id]||{}).werkt_sinds||null)}
       <div style="font-size:10.5px;color:var(--muted);margin-top:2px;white-space:nowrap">${(MB_ERV[m.id]||{}).shifts_gewerkt||0} gewerkt</div></td>
-    <td><select class="mb-getal" style="width:118px;text-align:left" id="mbPB${id}"><option value="">&mdash;</option>
+    <td><select class="mb-getal" style="width:118px;text-align:left" id="mbPB${id}" data-oud="${veiligTekst(m.beoordeling||'')}" onchange="mbMensGewijzigd('${veiligJs(m.id)}')"><option value="">&mdash;</option>
       ${MB_OORDELEN.map(o=>`<option value="${o}"${m.beoordeling===o?' selected':''}>${o}</option>`).join('')}</select>
       ${m.beoordeling_door?`<div style="font-size:10.5px;color:var(--muted);margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(m.beoordeling_op))}">door ${veiligTekst(m.beoordeling_door)}</div>`:''}</td>
-    <td style="white-space:nowrap"><button class="mb-mini" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',false)">Opslaan</button>
+    <td style="white-space:nowrap"><button class="mb-mini" id="mbPO${id}" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',false)">Opslaan</button>
       <button class="mb-mini" onclick="mbPersoonOpen('${veiligJs(m.id)}')">Meer</button>
       <button class="mb-mini rood" onclick="mbPersoonWeg('${veiligJs(m.id)}')" title="Weghalen">Weghalen</button></td></tr>`;
 }
@@ -7491,10 +7832,10 @@ function mbPersoonHtml(m, vv){
           <select class="mb-veld" id="mbVvSoort${id}" onchange="mbVoorvalSoort('${veiligJs(m.id)}')">
             ${MB_SOORTEN.map(([s,l])=>`<option value="${s}">${l}</option>`).join('')}</select></div>
         <div style="flex:1 1 110px"><label class="mb-lab">Boete</label>
-          <input class="mb-veld" type="number" step="0.01" min="0" id="mbVvBoete${id}" placeholder="vanzelf"></div>
+          <input class="mb-veld" inputmode="decimal" autocomplete="off" id="mbVvBoete${id}" placeholder="vanzelf"></div>
         <div style="flex:2 1 220px"><label class="mb-lab">Toelichting</label>
           <input class="mb-veld" id="mbVvNot${id}" placeholder="bv. zonder bericht weggebleven"></div>
-        <div style="align-self:flex-end"><button class="mb-mini zwart" onclick="mbVoorvalOpslaan('${veiligJs(m.id)}')">Vastleggen</button></div>
+        <div style="align-self:flex-end"><button class="mb-mini zwart" id="mbVvKnop${id}" onclick="mbVoorvalOpslaan('${veiligJs(m.id)}')">Vastleggen</button></div>
       </div>
       <div id="mbVvUit${id}" style="font-size:12.5px;margin-top:6px"></div>
     </div>`;
@@ -7534,6 +7875,7 @@ async function mbManagerZetten(id){
     const weg=Number(data)||0;
     if(uit)uit.innerHTML=`<span style="color:#0F7A52">${aan?'Is nu kraammanager'+(sel&&sel.value?' van '+veiligTekst(sel.options[sel.selectedIndex].text):' van alle kramen')+'. De app schakelt om zodra hij hem opnieuw opent.'
       +(weg?` Van ${weg} ${weg===1?'dienst':'diensten'} vanaf vandaag gehaald: een manager werkt niet zelf mee.`:''):'Is geen kraammanager meer.'}</span>`;
+    if(MB_MENS_GEWIJZIGD.size)await mbMensenAllesOpslaan(true);
     MB_PERSOON=id; mbMensen();
   }catch(e){
     if(cb)cb.checked=!aan;
@@ -7564,17 +7906,25 @@ async function mbKledingOpslaan(id){
     MB_PERSOON=null; await mbPersoonOpen(id);
   }catch(e){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
 }
+// Bedrag mag met komma of punt ("12,50" / "12.50"). Klopt het niet, dan een
+// melding — nooit stil terugvallen op de standaardboete.
 async function mbVoorvalOpslaan(id){
-  const uit=document.getElementById('mbVvUit'+id);
+  const uit=document.getElementById('mbVvUit'+id), knop=document.getElementById('mbVvKnop'+id);
   const v=x=>{const e=document.getElementById(x+id);return e?e.value:'';};
-  const boete=v('mbVvBoete');
+  const zeg=t=>{ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(t)}</span>`; };
+  const boete=mbBedragLees(v('mbVvBoete'));
+  if(boete!==null&&(Number.isNaN(boete)||boete<0)){ zeg('Dat bedrag begrijp ik niet. Typ bv. 12,50 of laat het leeg.'); return; }
+  if(knop&&knop.disabled)return;
+  if(knop)knop.disabled=true;
   try{
     const{error}=await sb.rpc('mcr_voorval_zetten',{
       p_gebruiker:id, p_datum:v('mbVvDatum')||mbVandaagStr(), p_soort:v('mbVvSoort'),
-      p_notitie:v('mbVvNot')||null, p_boete:boete===''?null:Number(boete), p_shift:null});
+      p_notitie:v('mbVvNot')||null, p_boete:boete, p_shift:null});
     if(error)throw error;
+    toast(boete?'Vastgelegd · boete '+mbPond(boete):'Vastgelegd');
+    if(knop)knop.disabled=false;
     MB_PERSOON=null; await mbPersoonOpen(id);
-  }catch(e){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
+  }catch(e){ if(knop)knop.disabled=false; zeg(mbFout(e)); }
 }
 async function mbVoorvalWeg(vid, id){
   if(!confirm('Dit voorval weghalen?'))return;
@@ -7583,19 +7933,74 @@ async function mbVoorvalWeg(vid, id){
   catch(e){ alert(mbFout(e)); }
 }
 
+// Mensen-tabel: gewijzigde rijen worden gemarkeerd; Opslaan bewaart alleen die
+// rij zonder het scherm te herladen, zodat andere wijzigingen blijven staan.
+// "Alles opslaan (n)" bewaart ze allemaal. Weggaan met open wijzigingen vraagt eerst.
+let MB_MENS_GEWIJZIGD=new Set();
+function mbMensVeldGewijzigd(el){ return !!el&&String(el.value||'')!==String(el.dataset.oud||''); }
+function mbMensGewijzigd(id){
+  const vuil=['mbPL','mbPB','mbPS'].some(x=>mbMensVeldGewijzigd(document.getElementById(x+id)));
+  if(vuil)MB_MENS_GEWIJZIGD.add(id); else MB_MENS_GEWIJZIGD.delete(id);
+  const tr=document.getElementById('mbPR'+id); if(tr)tr.style.background=vuil?'#FFFBEB':'';
+  const k=document.getElementById('mbPO'+id); if(k){ k.classList.toggle('zwart',vuil); }
+  mbMensBalk();
+}
+function mbMensBalk(){
+  const b=document.getElementById('mbMensBalk'), n=MB_MENS_GEWIJZIGD.size; if(!b)return;
+  b.style.display=n?'flex':'none';
+  const t=document.getElementById('mbMensBalkTekst'); if(t)t.textContent=n+(n===1?' persoon gewijzigd, nog niet opgeslagen':' mensen gewijzigd, nog niet opgeslagen');
+  const k=document.getElementById('mbMensAlles'); if(k)k.textContent='Alles opslaan ('+n+')';
+}
+function mbMensenMagWeg(){
+  const n=MB_MENS_GEWIJZIGD.size; if(!n||MB_TAB!=='mensen')return true;
+  if(!document.getElementById('mbMensBalk')){ MB_MENS_GEWIJZIGD.clear(); return true; }
+  if(confirm(`Je hebt bij ${n} ${n===1?'persoon':'mensen'} iets veranderd dat nog niet is opgeslagen. Weggaan zonder opslaan?`)){ MB_MENS_GEWIJZIGD.clear(); return true; }
+  return false;
+}
+window.addEventListener('beforeunload',e=>{ if(MB_TAB==='mensen'&&MB_MENS_GEWIJZIGD.size&&document.getElementById('mbMensBalk')){ e.preventDefault(); e.returnValue=''; } });
+function mbMensenTerugzetten(){
+  [...MB_MENS_GEWIJZIGD].forEach(id=>{ ['mbPL','mbPB','mbPS'].forEach(x=>{ const el=document.getElementById(x+id); if(el)el.value=el.dataset.oud||''; }); mbMensGewijzigd(id); });
+}
+// Eén rij opslaan; gooit een fout als het niet lukt.
+async function mbMensRijOpslaan(id,vrijgeven){
+  const pl=document.getElementById('mbPL'+id), pb=document.getElementById('mbPB'+id), ps=document.getElementById('mbPS'+id);
+  const l=pl?pl.value:'', b=pb?pb.value:'';
+  if(l!==''&&(isNaN(Number(l))||Number(l)<0))throw new Error('Het tarief van '+((MB_MENSEN_LIJST.find(x=>x.id===id)||{}).naam||'deze persoon')+' klopt niet.');
+  if(ps&&ps.value!==(ps.dataset.oud||'')){
+    const{error:e2}=await sb.rpc('mcr_werkt_sinds_zetten',{p_id:id,p_jaar:ps.value?Number(ps.value):null});
+    if(e2)throw e2;
+  }
+  const{error}=await sb.rpc('mcr_persoon_opslaan',{p_id:id,p_kleding:null,
+    p_uurloon:(l===''||l==null)?null:Number(l), p_beoordeling:b||null, p_goedkeuren:vrijgeven?true:null});
+  if(error)throw error;
+  if(pl)pl.dataset.oud=l; if(pb)pb.dataset.oud=b; if(ps)ps.dataset.oud=ps.value;
+  const m=MB_MENSEN_LIJST.find(x=>x.id===id); if(m){ m.uurloon=l===''?null:Number(l); m.beoordeling=b||null; }
+  if(ps&&MB_ERV[id])MB_ERV[id].werkt_sinds=ps.value?Number(ps.value):null;
+  mbMensGewijzigd(id);
+}
 async function mbPersoonOpslaan(id,vrijgeven){
-  const l=(document.getElementById('mbPL'+id)||{}).value;
-  const b=(document.getElementById('mbPB'+id)||{}).value;
-  const ps=document.getElementById('mbPS'+id);
+  const k=document.getElementById('mbPO'+id); if(k)k.disabled=true;
   try{
-    if(ps&&ps.value!==(ps.dataset.oud||'')){
-      const{error:e2}=await sb.rpc('mcr_werkt_sinds_zetten',{p_id:id,p_jaar:ps.value?Number(ps.value):null});
-      if(e2)throw e2;
+    await mbMensRijOpslaan(id,vrijgeven);
+    // Vrijgeven (of een nieuwe aanmelding) verandert de lijsten: dan wel herladen,
+    // maar eerst de andere gewijzigde rijen bewaren.
+    if(vrijgeven||!document.getElementById('mbPR'+id)){
+      if(MB_MENS_GEWIJZIGD.size)await mbMensenAllesOpslaan(true);
+      MB_MENS_GEWIJZIGD.clear(); mbNaar('mensen'); return;
     }
-    const{error}=await sb.rpc('mcr_persoon_opslaan',{p_id:id,p_kleding:null,
-      p_uurloon:(l===''||l==null)?null:Number(l), p_beoordeling:b||null, p_goedkeuren:vrijgeven?true:null});
-    if(error)throw error; mbNaar('mensen');
+    toast('Opgeslagen');
   }catch(e){ alert(mbFout(e)); }
+  if(k)k.disabled=false;
+}
+async function mbMensenAllesOpslaan(stil){
+  const ids=[...MB_MENS_GEWIJZIGD]; if(!ids.length)return true;
+  const knop=document.getElementById('mbMensAlles'); if(knop)knop.disabled=true;
+  const mis=[];
+  for(const id of ids){ try{ await mbMensRijOpslaan(id,false); }catch(e){ mis.push(mbFout(e)); } }
+  if(knop)knop.disabled=false;
+  if(mis.length){ alert('Niet alles is opgeslagen:\n'+mis.join('\n')); return false; }
+  if(!stil)toast(ids.length+(ids.length===1?' persoon':' mensen')+' opgeslagen');
+  return true;
 }
 
 // ── INSTELLINGEN ──────────────────────────────────────────────────
@@ -7769,24 +8174,37 @@ async function mbKraamOpslaan(id){
   }catch(e){ alert(mbFout(e)); }
 }
 const MB_SLEUTELS=[
-  ['factuur_naam','Bedrijfsnaam'],['factuur_kvk','KvK'],['factuur_adres','Adres'],
-  ['factuur_btw','Btw-nummer'],['factuur_email','Facturen binnen op'],
+  ['factuur_naam','Bedrijfsnaam'],['factuur_kvk','Company number'],['factuur_adres','Adres'],
+  ['factuur_btw','VAT number'],['factuur_email','Facturen binnen op'],
   ['pauze_drempel_uren','Pauze vanaf (uren)'],['pauze_minuten','Pauze (minuten)'],
   ['prijs_portie','Prijs portie (£)'],['prijs_topping','Prijs topping (£)'],
   ['inklok_venster_min','Inklokken mag x minuten voor de start'],
   ['afzegtermijn_uren','Afzegtermijn (uren)'],['te_laat_boete','Boete niet opdagen (£)'],
+  ['loon_pct_drempel','Loonkosten rood boven (% van omzet)'],
   ['borg_polo','Borg per long sleeve polo (£)'],['borg_schort','Borg per schort (£)'],
   ['noodnummer_1','Noodnummer 1'],['noodnummer_2','Noodnummer 2'],
   ['aanmelden_tot','Personeel vraagt zelf om diensten t/m (leeg = altijd)'],
 ];
+// Kijkt naar de waarden zelf (niet naar een vlaggetje dat bij opslaan verdwijnt).
+function mbFactuurTest(k){
+  const w=sl=>String((k[sl]||{}).waarde||'').trim();
+  const f=[];
+  const naam=w('factuur_naam'); if(!naam||/test/i.test(naam))f.push('Bedrijfsnaam');
+  const nr=w('factuur_kvk'); if(!nr||/^0+$/.test(nr.replace(/\s/g,'')))f.push('Company number');
+  if(!w('factuur_adres'))f.push('Adres');
+  const vat=w('factuur_btw').replace(/\s/g,''); if(vat&&(/^[A-Z]{0,2}0+(B0+)?$/i.test(vat)||/^NL0+B0+$/i.test(vat)))f.push('VAT number (nep-nummer)');
+  const em=w('factuur_email'); if(!em||/example\.(com|org|net)$/i.test(em)||!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em))f.push('Facturen binnen op');
+  return f;
+}
 async function mbGegevens(){
   const{data,error}=await sb.from('vestiging_instellingen').select('sleutel,waarde,omschrijving').eq('vestiging','MCR');
   if(error)throw error;
   const k={}; (data||[]).forEach(r=>k[r.sleutel]=r);
-  const test=(data||[]).some(r=>String(r.omschrijving||'').indexOf('TESTGEGEVEN')>=0);
+  const fout=mbFactuurTest(k);
   let uit='';
-  if(test)uit+=`<div class="mb-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
-    <div style="font-size:13px;color:#8A5307;line-height:1.6"><b>Er staan nog testgegevens.</b> De factuurgegevens hieronder zijn ingevuld met TESTNAAM B.V. en dergelijke. Vervang ze voordat er iemand een factuur maakt.</div></div>`;
+  if(fout.length)uit+=`<div class="mb-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
+    <div style="font-size:13px;color:#8A5307;line-height:1.6"><b>Er staan nog testgegevens of lege velden.</b> Deze gegevens komen op elke factuur van het personeel.
+      Vul ze in voordat er iemand een factuur maakt: ${fout.map(veiligTekst).join(', ')}.</div></div>`;
   uit+='<div class="mb-kaart"><div class="mb-kop">Jouw factuurgegevens</div><div class="mb-veldrij">';
   MB_SLEUTELS.slice(0,5).forEach(([sl,lab])=>{
     uit+=`<div style="flex:1 1 200px"><label class="mb-lab">${veiligTekst(lab)}</label>
@@ -7810,7 +8228,7 @@ async function mbInstellingenOpslaan(){
     for(const [sl] of MB_SLEUTELS){
       const el=document.getElementById('mbI_'+sl); if(!el)continue;
       const{error}=await sb.from('vestiging_instellingen')
-        .update({waarde:el.value, omschrijving:null, bijgewerkt_op:new Date().toISOString()})
+        .update({waarde:el.value, bijgewerkt_op:new Date().toISOString()})
         .eq('vestiging','MCR').eq('sleutel',sl);
       if(error)throw error;
     }
@@ -11161,6 +11579,7 @@ function liveMagNu(){
   if(typeof MB_UITZ_VRAAG!=='undefined'&&MB_UITZ_VRAAG)return false;
   if(typeof MB_FORECAST!=='undefined'&&MB_FORECAST)return false;
   if(typeof MB_AG_OPEN!=='undefined'&&MB_AG_OPEN)return false;
+  if(typeof mbLiveRust==='function'&&mbLiveRust())return false;
   if(typeof MB_MYPOS_OPEN!=='undefined'&&MB_MYPOS_OPEN)return false;
   if(typeof MGR_AG_OPEN!=='undefined'&&MGR_AG_OPEN)return false;
   if(typeof mgrClBezig==='function'&&mgrClBezig())return false;
