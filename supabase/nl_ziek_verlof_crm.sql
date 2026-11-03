@@ -268,3 +268,143 @@ begin
      where b.vestiging = 'NL' and public.bestel_tekort_actief(r, b);
   end if;
 end $function$;
+
+-- ════════════════════════════════════════════════════════════════════
+-- 2. CRM: OPTIE MET VERVALDATUM
+-- ════════════════════════════════════════════════════════════════════
+
+-- De vervaldatum staat bij de klus zelf, zodat hij ook in de planning (klus
+-- openen) te zien is en er maar één plek is waar hij staat.
+alter table public.klussen add column if not exists optie_tot date;
+
+-- "Zet als optie": klus maken én koppelen in één keer. Lukt een stap niet,
+-- dan gebeurt er niets. Twee keer tikken of opnieuw proberen maakt geen
+-- tweede optie: heeft de aanvraag al een klus, dan wordt alleen de
+-- vervaldatum bijgewerkt.
+create or replace function public.crm_maak_optie(p_aanvraag uuid, p_tot date default null)
+ returns uuid
+ language plpgsql
+ security definer
+ set search_path to 'public'
+as $function$
+declare a public.crm_aanvragen%rowtype; v_klus uuid; v_tot date; v_naam text; v_cap text;
+        v_vandaag date := (now() at time zone 'Europe/Amsterdam')::date;
+begin
+  if not public.crm_mag() then raise exception 'Je hebt geen toegang tot de aanvragen.' using errcode='P0002'; end if;
+  select * into a from public.crm_aanvragen where id = p_aanvraag for update;
+  if not found then raise exception 'Deze aanvraag bestaat niet meer.' using errcode='P0002'; end if;
+  if a.datum is null then raise exception 'Vul eerst een datum in.' using errcode='P0002'; end if;
+  v_tot := coalesce(p_tot, v_vandaag + 7);
+  if v_tot < v_vandaag then raise exception 'De vervaldatum ligt in het verleden.' using errcode='P0002'; end if;
+
+  -- Al een klus gekoppeld? Dan niets nieuws maken.
+  if a.klus_id is not null and exists (select 1 from public.klussen k where k.id = a.klus_id) then
+    update public.klussen set optie_tot = v_tot where id = a.klus_id and is_optie;
+    return a.klus_id;
+  end if;
+
+  v_cap := nullif(btrim(coalesce(a.gelegenheid,'')),'');
+  v_cap := upper(left(v_cap,1)) || substr(v_cap,2);
+  v_naam := concat_ws(' ', v_cap, nullif(btrim(coalesce(a.contact_naam,'')),''),
+                      case when nullif(btrim(coalesce(a.plaats,'')),'') is not null then '· ' || btrim(a.plaats) end);
+  insert into public.klussen (naam, datum, notitie, personen, personeel_nodig, food, adres, contactpersoon, telefoon,
+                              klant, categorie, start_feest, einde_feest, is_optie, optie_tot, vestiging)
+  values (coalesce(nullif(v_naam,''),'Aanvraag'), a.datum,
+          concat_ws(E'\n',
+            'Uit CRM' || coalesce(' · ref. ' || nullif(a.ref,''),'') || coalesce(' · formulier #' || nullif(a.formulier_nr,''),''),
+            'Food: ' || nullif(a.soort_food,''), nullif(a.wensen,''), 'Mail: ' || nullif(a.email,'')),
+          coalesce(a.gasten,0), 0, coalesce(a.soort_food,''), coalesce(a.adres,''), coalesce(a.contact_naam,''),
+          coalesce(a.telefoon,''), nullif(a.contact_naam,''), 'klus', a.start_tijd, a.eind_tijd, true, v_tot,
+          coalesce(a.vestiging,'NL'))
+  returning id into v_klus;
+
+  update public.crm_aanvragen
+     set klus_id = v_klus,
+         status = case when status in ('nieuw','vragen','offerte') then 'optie' else status end
+   where id = p_aanvraag;
+  insert into public.crm_berichten (aanvraag_id, soort, samenvatting)
+  values (p_aanvraag, 'status', 'Als optie in de planning gezet, tot ' || to_char(v_tot,'DD-MM-YYYY'));
+  return v_klus;
+end $function$;
+alter function public.crm_maak_optie(uuid, date) owner to postgres;
+revoke all on function public.crm_maak_optie(uuid, date) from public, anon;
+grant execute on function public.crm_maak_optie(uuid, date) to authenticated, service_role;
+
+-- Datum of tijden van een aanvraag gewijzigd? Dan schuift een gekoppelde
+-- OPTIE mee (een bevestigde klus niet: daar staat misschien al personeel op;
+-- het CRM-scherm waarschuwt dan). Tijden alleen als de klus nog de oude
+-- tijden uit de aanvraag had.
+create or replace function public.crm_aanvraag_optie_mee()
+ returns trigger
+ language plpgsql
+ security definer
+ set search_path to 'public'
+as $function$
+begin
+  if new.klus_id is null then return null; end if;
+  update public.klussen k
+     set datum       = case when new.datum is not null then new.datum else k.datum end,
+         datum_eind  = case when new.datum is not null and old.datum is not null and k.datum_eind is not null
+                            then k.datum_eind + (new.datum - old.datum) else k.datum_eind end,
+         start_feest = case when k.start_feest is not distinct from old.start_tijd then new.start_tijd else k.start_feest end,
+         einde_feest = case when k.einde_feest is not distinct from old.eind_tijd then new.eind_tijd else k.einde_feest end
+   where k.id = new.klus_id and k.is_optie
+     and (new.datum is distinct from old.datum or new.start_tijd is distinct from old.start_tijd
+          or new.eind_tijd is distinct from old.eind_tijd);
+  return null;
+end $function$;
+alter function public.crm_aanvraag_optie_mee() owner to postgres;
+revoke all on function public.crm_aanvraag_optie_mee() from public, anon, authenticated;
+
+create or replace trigger crm_aanvragen_optie_mee
+  after update of datum, start_tijd, eind_tijd on public.crm_aanvragen
+  for each row execute function public.crm_aanvraag_optie_mee();
+
+-- Herinneringen: 3 dagen voor de vervaldatum en op de dag zelf, aan de
+-- eigenaar van de aanvraag (of, zonder eigenaar, iedereen met CRM-toegang).
+-- Gaat via de pushwachtrij (soort 'nl_crm_optie'), één keer per dag per optie.
+create or replace function public.crm_opties_herinneren()
+ returns integer
+ language plpgsql
+ security definer
+ set search_path to 'public'
+as $function$
+declare v_vandaag date := (now() at time zone 'Europe/Amsterdam')::date; n int;
+begin
+  with opties as (
+    select a.id, a.eigenaar_id, k.id as klus_id, k.optie_tot,
+           coalesce(nullif(btrim(a.contact_naam),''), nullif(btrim(k.naam),''), 'een klant') as klant
+      from public.crm_aanvragen a
+      join public.klussen k on k.id = a.klus_id
+     where k.is_optie and k.optie_tot in (v_vandaag, v_vandaag + 3)
+       and a.status not in ('bevestigd','verloren')
+  ), crm as (
+    select t.gebruiker_id as id
+      from public.crm_toegang t join public.gebruikers g on g.id = t.gebruiker_id
+     where g.rol = 'beheerder' and coalesce(g.goedgekeurd,false) and g.gearchiveerd_op is null
+  ), ontv as (
+    select o.*, c.id as gid
+      from opties o join crm c on c.id = o.eigenaar_id
+    union all
+    select o.*, c.id
+      from opties o cross join crm c
+     where o.eigenaar_id is null or not exists (select 1 from crm c2 where c2.id = o.eigenaar_id)
+  )
+  insert into public.push_wachtrij (gebruiker_id, soort, klus_id, regel)
+  select x.gid, 'nl_crm_optie', x.klus_id,
+         'Optie voor ' || x.klant || case when x.optie_tot = v_vandaag then ' loopt vandaag af.'
+                                          else ' loopt over 3 dagen af (' || to_char(x.optie_tot,'DD-MM') || ').' end
+    from ontv x
+   where not exists (select 1 from public.push_wachtrij w
+                      where w.soort = 'nl_crm_optie' and w.klus_id = x.klus_id and w.gebruiker_id = x.gid
+                        and w.aangemaakt_op > now() - interval '20 hours');
+  get diagnostics n = row_count;
+  return n;
+end $function$;
+alter function public.crm_opties_herinneren() owner to postgres;
+revoke all on function public.crm_opties_herinneren() from public, anon, authenticated;
+grant execute on function public.crm_opties_herinneren() to service_role;
+
+-- Elke ochtend om 7:12 UTC (8:12 of 9:12 Nederlandse tijd) klaarzetten. De
+-- herinneringen-functie verstuurt de wachtrij vanaf 8 uur Engelse tijd.
+select cron.schedule('crm-opties-herinneren', '12 7 * * *', $$select public.crm_opties_herinneren();$$);

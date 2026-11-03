@@ -12818,7 +12818,7 @@ function renderAll(){
       ?'<span class="bdg" style="background:#EEF2FF;color:#3730A3">Intern</span>':'')
       +(k.milieuzone?'<span class="bdg" style="background:#ECFDF5;color:#065F46">Milieuzone</span>':'');
     const soortBadges=vastBadge+(k.truckSoorten&&k.truckSoorten.length
-      ?[...new Set(k.truckSoorten.map(ts=>ts.soort.titel))].map(t=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${t}</span>`).join('')
+      ?[...new Set(k.truckSoorten.map(ts=>ts.soort.titel))].map(t=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${veiligTekst(t)}</span>`).join('')
       :k.soorten&&k.soorten.length?k.soorten.map(s=>`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${veiligTekst(s.titel)}</span>`).join('')
       :k.food?`<span class="bdg" style="background:#F5F3FF;color:#4C1D95">${veiligTekst(k.food)}</span>`:'');
     const pdfLinks=k.pdfs&&k.pdfs.length?k.pdfs.map(p=>`<span class="pdf-link" onclick="openPdf(\`${veiligJs(p.url)}\`,\`${veiligJs(p.naam)}\`)">${veiligTekst(p.naam)}</span>`).join(''):'';
@@ -13894,8 +13894,8 @@ function openDetail(id){
   const ds=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
   const dsEind=k.datum_eind?parseDate(k.datum_eind).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long',year:'numeric'}):'';
   const datumStr=dsEind&&dsEind!==ds?`${ds} – ${dsEind}`:ds;
-  document.getElementById('detailNaam').innerHTML=(k.naam||k.food||'Klus')
-    +(k.is_optie?' <span class="bdg optie-bdg" style="vertical-align:middle">Optie</span>':'');
+  document.getElementById('detailNaam').innerHTML=veiligTekst(k.naam||k.food||'Klus')
+    +(k.is_optie?' <span class="bdg optie-bdg" style="vertical-align:middle">Optie'+(k.optie_tot?' tot '+parseDate(k.optie_tot).toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):'')+'</span>':'');
   document.getElementById('detailTijden').innerHTML=tijdLines.map(t=>`<div style="font-size:14px;font-weight:600;color:var(--text)">${t}</div>`).join('');
   document.getElementById('detailDatum').textContent=datumStr;
   // Alleen de namen van de trucks. De gegevens per truck (rijbewijs,
@@ -13906,7 +13906,7 @@ function openDetail(id){
   const soortEl=document.getElementById('detailSoort');
   if(k.truckSoorten&&k.truckSoorten.length){
     const byTruck={};k.truckSoorten.forEach(ts=>{if(!byTruck[ts.truck.id])byTruck[ts.truck.id]={truck:ts.truck,soorten:[]};byTruck[ts.truck.id].soorten.push(ts.soort.titel);});
-    soortEl.innerHTML=Object.values(byTruck).map(({truck,soorten})=>`<div style="margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:${truck.color}">${veiligTekst(truck.label)}:</span> <span style="font-size:13px">${soorten.join(', ')}</span></div>`).join('');
+    soortEl.innerHTML=Object.values(byTruck).map(({truck,soorten})=>`<div style="margin-bottom:4px"><span style="font-size:11px;font-weight:600;color:${truck.color}">${veiligTekst(truck.label)}:</span> <span style="font-size:13px">${soorten.map(veiligTekst).join(', ')}</span></div>`).join('');
   }else{
     const sl=k.soorten&&k.soorten.length?k.soorten:k.food?[{titel:k.food}]:[];
     soortEl.innerHTML=sl.length?sl.map(s=>`<span style="font-size:13px">${veiligTekst(s.titel)}</span>`).join(', '):'–';
@@ -23057,7 +23057,15 @@ function crmHerinneringOp(a){
 }
 function crmHerinneringNu(a){ const d=crmHerinneringOp(a); return !!d&&d<=new Date(); }
 function crmOpen(a){ return !['bevestigd','verloren'].includes(a.status); }
-function crmWijAanZet(a){ return crmOpen(a)&&(a.aan_zet==='wij'||crmHerinneringNu(a)); }
+// ── optie met vervaldatum (staat bij de klus: optie_tot) ──────────
+function crmKlus(a){ return a&&a.klus_id&&typeof KLUSSEN!=='undefined'?(KLUSSEN||[]).find(x=>x.id===a.klus_id)||null:null; }
+function crmDagenTot(d){ if(!d)return null; const x=new Date(String(d).slice(0,10)+'T00:00:00'), t=new Date(); t.setHours(0,0,0,0); return Math.round((x-t)/864e5); }
+// Hoeveel dagen heeft de optie nog? null = geen optie of geen vervaldatum.
+function crmOptieDagen(a){ const k=crmKlus(a); if(!k||!k.is_optie||!k.optie_tot||!crmOpen(a))return null; return crmDagenTot(k.optie_tot); }
+function crmOptieBijna(a){ const d=crmOptieDagen(a); return d!==null&&d<=3; }
+function crmOptieTekst(d){ return d<0?'Optie verlopen':d===0?'Optie loopt vandaag af':d===1?'Optie loopt morgen af':`Optie loopt over ${d} dagen af`; }
+function crmPlusDagen(n){ const d=new Date(); d.setDate(d.getDate()+n); return fmt(d); }
+function crmWijAanZet(a){ return crmOpen(a)&&(a.aan_zet==='wij'||crmHerinneringNu(a)||crmOptieBijna(a)); }
 function crmWacht(a){
   const nu=Date.now();
   if(crmHerinneringNu(a))return nu-crmHerinneringOp(a).getTime();
@@ -23240,6 +23248,7 @@ function crmSorteer(rijen){
 function crmPilHtml(a){
   if(!crmOpen(a))return '';
   const w=crmWacht(a);
+  if(crmOptieBijna(a))return `<span class="crm-pil laat">${crmOptieTekst(crmOptieDagen(a))}</span>`;
   if(crmHerinneringNu(a))return `<span class="crm-pil herin">Herinnering sturen</span>`;
   if(a.aan_zet==='wij')return `<span class="crm-pil ${w>2*864e5?'laat':'wij'}">Wij aan zet · ${crmDuur(w)}</span>`;
   return `<span class="crm-pil klant">Klant aan zet${w!=null?' · '+crmDuur(w):''}</span>`;
@@ -23283,9 +23292,10 @@ function crmBordHtml(rijen){
 }
 function crmLijstHtml(rijen){
   const groepen=CRM.filter==='verloren'?[['Verloren',rijen]]:[
-    ['Herinnering sturen',rijen.filter(crmHerinneringNu)],
-    ['Wij aan zet · oudste eerst',rijen.filter(a=>crmOpen(a)&&a.aan_zet==='wij')],
-    ['Wacht op de klant',rijen.filter(a=>crmOpen(a)&&a.aan_zet==='klant'&&!crmHerinneringNu(a))],
+    ['Optie loopt af',rijen.filter(crmOptieBijna)],
+    ['Herinnering sturen',rijen.filter(a=>crmHerinneringNu(a)&&!crmOptieBijna(a))],
+    ['Wij aan zet · oudste eerst',rijen.filter(a=>crmOpen(a)&&a.aan_zet==='wij'&&!crmOptieBijna(a))],
+    ['Wacht op de klant',rijen.filter(a=>crmOpen(a)&&a.aan_zet==='klant'&&!crmHerinneringNu(a)&&!crmOptieBijna(a))],
     ['Bevestigd',rijen.filter(a=>a.status==='bevestigd')],
   ];
   let h='<div class="crm-lijst">';
@@ -23319,6 +23329,8 @@ function crmDetailHtml(a){
       <div style="font-size:12.5px;color:var(--muted);margin-top:3px">${[a.ref?'Ref. '+crmE(a.ref):'',a.formulier_nr?'Formulier #'+crmE(a.formulier_nr):'','via '+crmE(a.bron),'binnen '+crmTijdstip(a.ontvangen_op)].filter(Boolean).join(' · ')}</div></div>
   </div>`;
   if(sig)h+=`<div class="crm-banner rood"><span><b>Klant lijkt af te zien.</b> &ldquo;${crmE(sig.tekst.slice(0,140))}&rdquo;</span><button class="crm-knop klein" onclick="crmVerloren('${a.id}','${sig.reden}')">Markeer als verloren (${crmE(sig.reden)})</button></div>`;
+  const optieD=crmOptieDagen(a);
+  if(optieD!==null&&optieD<=3)h+=`<div class="crm-banner ${optieD<=0?'rood':'oranje'}"><span><b>${crmOptieTekst(optieD)}.</b> De optie staat tot ${crmE(crmDatum(crmKlus(a).optie_tot,{weekday:'long',day:'numeric',month:'long'}))}. Bevestigen, verlengen of als verloren markeren?</span><button class="crm-knop klein" onclick="crmOptieVerleng('${a.id}',7)">7 dagen verlengen</button></div>`;
   if(herinNu)h+=`<div class="crm-banner oranje"><span><b>Herinnering sturen.</b> De klant heeft sinds ${crmTijdstip(a.laatste_uitgaand)} niet gereageerd.</span><button class="crm-knop klein" onclick="crmKiesSjabloonNaam('Herinnering')">Herinnering klaarzetten</button></div>`;
   if(a.status==='verloren')h+=`<div class="crm-banner" style="background:#F3F2EE;color:#4A4945"><span><b>Verloren</b>${a.verlies_reden?' · '+crmE(a.verlies_reden):''}${a.verlies_toelichting?' &mdash; '+crmE(a.verlies_toelichting):''}</span><button class="crm-knop klein" onclick="crmZetStatus('${a.id}','nieuw')">Weer openen</button></div>`;
 
@@ -23492,12 +23504,17 @@ function crmPlanningHtml(a){
   }
   h+='<div style="height:1px;background:var(--border);margin:12px 0"></div>';
   if(k){
-    h+=`<div style="font-size:13px;margin-bottom:8px">${k.is_optie?'<b style="color:#2A4EA8">Staat als optie in de planning</b>':'<b style="color:#0F7A52">Staat als klus in de planning</b>'}</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="crm-knop" onclick="openDetail('${k.id}')">Open klus</button>
+    const od=k.is_optie&&k.optie_tot?crmDagenTot(k.optie_tot):null;
+    h+=`<div style="font-size:13px;margin-bottom:8px">${k.is_optie?'<b style="color:#2A4EA8">Staat als optie in de planning</b>':'<b style="color:#0F7A52">Staat als klus in de planning</b>'}</div>`;
+    if(a.datum&&k.datum&&k.datum!==a.datum)h+=`<div class="crm-banner rood" style="margin-bottom:8px;padding:9px 11px"><span>De klus staat op <b>${crmE(crmDatum(k.datum))}</b>, de aanvraag op <b>${crmE(crmDatum(a.datum))}</b>. Pas de klus aan als de datum echt verschoven is.</span></div>`;
+    if(k.is_optie&&crmOpen(a))h+=`<label class="crm-veld" style="margin-bottom:8px">Optie geldig tot${od!==null?` <span style="font-weight:500;color:${od<=3?'#8E3520':'var(--muted)'}">&middot; ${od<0?'verlopen':od===0?'verloopt vandaag':od===1?'nog 1 dag':'nog '+od+' dagen'}</span>`:''}
+        <input class="crm-in" type="date" id="crmOptieTot" min="${todayStr}" value="${crmE(k.optie_tot||'')}" onchange="crmOptieTotZet('${a.id}',this.value,this)"></label>`;
+    h+=`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="crm-knop" onclick="openDetail('${k.id}')">Open klus</button>
       ${k.is_optie?`<button class="crm-knop zwart" onclick="crmBevestig('${a.id}')">Bevestigen</button>`:''}</div>`;
   }else if(crmOpen(a)){
     h+=`<div style="display:flex;flex-direction:column;gap:8px">
-      <button class="crm-knop blauw" ${a.datum?'':'disabled'} onclick="crmMaakOptie('${a.id}')">Zet als optie in de planning</button>
+      <label class="crm-veld">Optie geldig tot<input class="crm-in" type="date" id="crmOptieNieuwTot" min="${todayStr}" value="${crmPlusDagen(7)}"></label>
+      <button class="crm-knop blauw" ${a.datum?'':'disabled'} onclick="crmMaakOptie('${a.id}',this)">Zet als optie in de planning</button>
       <button class="crm-knop zwart" ${a.datum?'':'disabled'} onclick="crmBevestig('${a.id}')">Bevestigd &mdash; maak klus aan</button></div>
       <div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.5">Klant, datum, gasten, adres en tijden gaan mee. Trucks en personeel plan je daarna in de klus.</div>`;
   }else if(a.klus_id){
@@ -23512,20 +23529,42 @@ function crmKlusVelden(a){
     contactpersoon:a.contact_naam||'',telefoon:a.telefoon||'',klant:a.contact_naam||null,categorie:'klus',
     start_feest:a.start_tijd||null,einde_feest:a.eind_tijd||null};
 }
-async function crmMaakOptie(id){
+// Klus maken en koppelen gebeurt in één serverfunctie (crm_maak_optie): lukt
+// het niet, dan blijft er niets half staan, en opnieuw proberen maakt geen
+// tweede optie. Standaard 7 dagen geldig; aan te passen.
+async function crmMaakOptie(id,knop){
   if(CRM.bezig)return; const a=CRM.aanvragen.find(x=>x.id===id); if(!a||!a.datum)return;
-  CRM.bezig=true;
+  const tot=crmVal('crmOptieNieuwTot')||crmPlusDagen(7);
+  if(tot<fmt(new Date())){ toast('Kies een datum vanaf vandaag','fout'); return; }
+  CRM.bezig=true; if(knop)knop.disabled=true;
   try{
-    const{data,error}=await sb.from('klussen').insert({...crmKlusVelden(a),is_optie:true}).select('id').single();
+    const{error}=await sb.rpc('crm_maak_optie',{p_aanvraag:id,p_tot:tot});
     if(error)throw error;
-    const upd={klus_id:data.id}; if(['nieuw','vragen','offerte'].includes(a.status))upd.status='optie';
-    const r=await sb.from('crm_aanvragen').update(upd).eq('id',id); if(r.error)throw r.error;
-    await sb.from('crm_berichten').insert({aanvraag_id:id,soort:'status',samenvatting:'Als optie in de planning gezet'});
-    toast('Optie staat in de planning');
+    toast('Optie staat in de planning tot '+crmDatum(tot,{day:'numeric',month:'long'}));
     if(typeof loadAll==='function')await loadAll();
     await crmLaden(); crmTeken();
-  }catch(e){ toast('Optie maken mislukt: '+(e.message||e),'fout'); }
+  }catch(e){ toast('Optie maken mislukt: '+(e.message||e),'fout'); if(knop)knop.disabled=false; }
   finally{ CRM.bezig=false; }
+}
+async function crmOptieTotZet(id,tot,veld){
+  if(CRM.bezig||!tot)return;
+  if(tot<fmt(new Date())){ toast('Kies een datum vanaf vandaag','fout'); return; }
+  CRM.bezig=true; if(veld)veld.disabled=true;
+  try{
+    const{error}=await sb.rpc('crm_maak_optie',{p_aanvraag:id,p_tot:tot});
+    if(error)throw error;
+    await sb.from('crm_berichten').insert({aanvraag_id:id,soort:'status',samenvatting:'Optie verlengd tot '+crmDatum(tot,{day:'numeric',month:'long',year:'numeric'})});
+    toast('Optie staat nu tot '+crmDatum(tot,{day:'numeric',month:'long'}));
+    if(typeof loadAll==='function')await loadAll();
+    await crmLaden(); crmTeken();
+  }catch(e){ toast('Opslaan mislukt: '+(e.message||e),'fout'); if(veld)veld.disabled=false; }
+  finally{ CRM.bezig=false; }
+}
+function crmOptieVerleng(id,dagen){
+  const k=crmKlus(CRM.aanvragen.find(x=>x.id===id));
+  const basis=k&&k.optie_tot&&k.optie_tot>fmt(new Date())?new Date(k.optie_tot+'T12:00:00'):new Date();
+  basis.setDate(basis.getDate()+dagen);
+  crmOptieTotZet(id,fmt(basis));
 }
 async function crmBevestig(id){
   if(CRM.bezig)return; const a=CRM.aanvragen.find(x=>x.id===id); if(!a||!a.datum)return;
@@ -23553,9 +23592,16 @@ async function crmBewaarGegevens(id){
     gasten:gasten===''?null:parseInt(gasten,10),start_tijd:g('start_tijd'),eind_tijd:g('eind_tijd'),plaats:g('plaats'),
     gelegenheid:g('gelegenheid'),adres:g('adres'),soort_food:g('soort_food'),wensen:crmLeeg(crmVal('crmF_wensen')),
     bedrag:bedrag===''?null:Number(bedrag),bron:g('bron')||'anders'};
+  const oud=CRM.aanvragen.find(x=>x.id===id), k=crmKlus(oud);
   const{error}=await sb.from('crm_aanvragen').update(upd).eq('id',id);
   if(error){toast('Opslaan mislukt: '+error.message,'fout');return;}
-  toast('Opgeslagen'); await crmLaden(); crmTeken();
+  // Een gekoppelde optie schuift in de database vanzelf mee met de datum en
+  // tijden (trigger crm_aanvragen_optie_mee). Planning opnieuw ophalen zodat
+  // je dat hier ook ziet.
+  const verschoven=k&&oud&&(upd.datum!==oud.datum||(upd.start_tijd||null)!==(oud.start_tijd?String(oud.start_tijd).slice(0,5):null)||(upd.eind_tijd||null)!==(oud.eind_tijd?String(oud.eind_tijd).slice(0,5):null));
+  if(verschoven&&typeof loadAll==='function'){ try{ await loadAll(); }catch(e){} }
+  toast(verschoven&&k.is_optie&&upd.datum!==oud.datum?'Opgeslagen · de optie in de planning is mee verschoven':'Opgeslagen');
+  await crmLaden(); crmTeken();
 }
 async function crmZetStatus(id,status,extra){
   const a=CRM.aanvragen.find(x=>x.id===id); if(!a||a.status===status&&!extra)return;
