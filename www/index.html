@@ -6808,6 +6808,7 @@ async function mbMensen(){
       style="display:none;position:absolute;right:6px;top:50%;transform:translateY(-50%);border:0;background:none;font-size:18px;color:var(--muted);cursor:pointer" aria-label="Wissen">&times;</button>
   </div>
   <div id="mbZoekLeeg" class="mb-kaart" style="display:none;color:var(--muted);font-size:13px">Niemand gevonden met deze naam.</div>`;
+  uit+=`<datalist id="mbViaLijst">${Object.keys(via).sort((a,b)=>a.localeCompare(b)).map(v=>`<option value="${veiligTekst(v)}">`).join('')}</datalist>`;
   uit+='<div id="mbMensenBoven"></div>';
   uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr>'
     +'<th style="text-align:right;width:28px">#</th><th style="min-width:210px">Naam</th><th style="text-align:right">Lft</th><th style="text-align:right">Tarief</th>'
@@ -6849,7 +6850,7 @@ async function mbMensen(){
         <div class="mb-kop" style="color:#B4472B">Nieuwe aanmelding</div>
         <div style="font-size:18px;font-weight:700">${veiligTekst(m.naam)}</div>
         <div style="font-size:12.5px;color:var(--muted);margin-top:2px">
-          ${m.aangebracht_door?'via '+veiligTekst(m.aangebracht_door)+' &middot; ':''}${m.leeftijd?m.leeftijd+' jaar &middot; ':''}${veiligTekst(m.telefoon||'')}</div>
+          ${mbViaHtml(m)} &middot; ${m.leeftijd?m.leeftijd+' jaar &middot; ':''}${veiligTekst(m.telefoon||'')}</div>
         <div style="font-size:14px;margin-top:4px;word-break:break-all"><span style="color:var(--muted);font-size:12px">E-mail</span> <b style="${tik?'color:#B4472B':''}">${veiligTekst(m.email||'—')}</b></div>
         ${tik?`<div style="font-size:12.5px;color:#B4472B;margin-top:3px;font-weight:600">Lijkt een tikfout &mdash; bedoeld is waarschijnlijk ${veiligTekst(tik)}. Op dit adres komt geen mail aan.</div>`:''}
         ${dub.length?`<div style="font-size:12.5px;background:#FEF6E7;color:#8A5307;border-radius:8px;padding:7px 9px;margin-top:8px;line-height:1.5">
@@ -6901,6 +6902,40 @@ async function mbMensen(){
   mbMensenZoek(MB_ZOEK);
   if(MB_PERSOON){ const w=MB_PERSOON; MB_PERSOON=null; mbPersoonOpen(w); }
 }
+// "Via wie": met één tik bewerken, direct onder de naam. Enter of wegtikken
+// slaat op, Esc laat het zoals het was.
+function mbViaHtml(m){
+  const id=veiligJs(m.id), v=(m.aangebracht_door||'').trim();
+  return `<span class="mb-via" data-via="${veiligTekst(m.id)}" onclick="mbViaBewerk('${id}')" title="Tik om aan te passen"
+    style="cursor:pointer;border-bottom:1px dashed ${v?'var(--muted)':'#B45309'};color:${v?'inherit':'#B45309'}">${v?'via '+veiligTekst(v):'+ via wie?'}</span>`;
+}
+function mbViaBewerk(id){
+  const span=document.querySelector(`.mb-via[data-via="${CSS.escape(id)}"]`); if(!span)return;
+  const m=(MB_MENSEN_LIJST||[]).find(x=>x.id===id)||{};
+  const inp=document.createElement('input');
+  inp.className='mb-getal'; inp.setAttribute('list','mbViaLijst'); inp.placeholder='bv. Kirsty, Indeed, flyer';
+  inp.value=m.aangebracht_door||''; inp.style.cssText='width:150px;text-align:left;font-size:12px;padding:3px 6px';
+  let klaar=false;
+  const terug=()=>{ const t=document.createElement('span'); t.innerHTML=mbViaHtml(m); inp.replaceWith(t.firstElementChild); };
+  const bewaar=async()=>{
+    if(klaar)return; klaar=true;
+    const nieuw=inp.value.trim(), oud=(m.aangebracht_door||'').trim();
+    if(nieuw===oud){ terug(); return; }
+    inp.disabled=true;
+    try{
+      const{error}=await sb.rpc('mcr_persoon_gegevens_zetten',{p_id:id,p_gegevens:{aangebracht_door:nieuw}});
+      if(error)throw error;
+      m.aangebracht_door=nieuw||null;
+      const dl=document.getElementById('mbViaLijst');
+      if(dl&&nieuw&&![...dl.options].some(o=>o.value===nieuw)){ const o=document.createElement('option'); o.value=nieuw; dl.appendChild(o); }
+      toast(nieuw?'Opgeslagen: via '+nieuw:'"Via wie" leeggemaakt');
+    }catch(e){ alert(mbFout(e)); }
+    terug();
+  };
+  inp.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();bewaar();} else if(e.key==='Escape'){klaar=true;terug();} });
+  inp.addEventListener('blur',()=>setTimeout(bewaar,120));
+  span.replaceWith(inp); inp.focus(); inp.select();
+}
 function mbPersoonRij(m){
   const id=veiligTekst(m.id);
   const kl={'topper':['#0F7A52','#F2FBF6'],'goed':['#0F7A52','#F2FBF6'],'prima':['#2A4EA8','#EEF4FF'],
@@ -6908,14 +6943,13 @@ function mbPersoonRij(m){
   const extra=[];
   if(m.kraammanager)extra.push('kraammanager'+(m.manager_kraam?' '+m.manager_kraam:''));
   if(m.alleen)extra.push('alleen beschikbaarheid');
-  if(m.aangebracht_door)extra.push('via '+m.aangebracht_door);
   if(m.eigen_opmerking)extra.push(m.eigen_opmerking);
   if(!m.iban)extra.push('geen bankrekening');
   return `<tr data-zoek="${veiligTekst(mbZoekSleutel(m))}"${m.beoordeling==='niet meer'?' style="opacity:.55"':''}>
     <td class="mb-nr" style="text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12.5px"></td>
     <td style="min-width:210px"><div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
       <div><a href="#" class="mb-naamlink" onclick="mbPersoonKaart('${veiligJs(m.id)}');return false" title="Planning en aanvragen bekijken">${veiligTekst(m.naam)}</a>
-      ${extra.length?`<div style="font-size:11.5px;color:var(--muted)">${extra.map(veiligTekst).join(' &middot; ')}</div>`:''}</div></div></td>
+      <div style="font-size:11.5px;color:var(--muted)">${mbViaHtml(m)}${extra.length?' &middot; '+extra.map(veiligTekst).join(' &middot; '):''}</div></div></div></td>
     <td style="text-align:right">${m.leeftijd||'&mdash;'}</td>
     <td style="text-align:right">${(()=>{const b=mbMinLoon(m.leeftijd),o=mbOnderMin(m);
       return `<input class="mb-getal" type="number" step="0.01" style="width:68px${o?';border-color:#B4472B;color:#B4472B;font-weight:700':''}" id="mbPL${id}" data-min="${b?b.min.toFixed(2):''}" value="${m.uurloon!=null?veiligTekst(m.uurloon):''}"${o?` title="Onder het minimumloon: ${m.leeftijd} jaar = minimaal £ ${mbPondTxt(b.min)}"`:''}>`
