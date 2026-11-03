@@ -2478,7 +2478,7 @@ textarea.crm-in{resize:vertical;line-height:1.5}
       <div class="sc" id="mijnVerlofCard" style="margin-bottom:1rem;display:none">
         <div class="sc-header" style="margin-bottom:.75rem">
           <div class="st">Mijn verlof</div>
-          <button class="btn-edit" onclick="meldZiek()" style="font-size:12px;padding:7px 14px">Ik ben ziek vandaag</button>
+          <button class="btn-edit" onclick="meldZiek(this)" style="font-size:12px;padding:7px 14px">Ik ben ziek vandaag</button>
         </div>
         <div id="mijnVerlof"><div class="spin">Laden...</div></div>
       </div>
@@ -18520,20 +18520,21 @@ async function laadMijnVerlof(){
   }catch(e){kaart.style.display='none';}
 }
 
-async function meldZiek(){
-  if(!confirm('Je meldt jezelf ziek voor vandaag. Je beheerder krijgt er meteen bericht van en haalt je van de planning. Doorgaan?'))return;
-  const{data,error}=await sb.rpc('meld_ziek',{});
-  if(error){toast('Ziek melden mislukt: '+error.message,'fout');return;}
-  if(data==='stond al'){toast('Je stond vandaag al ziek gemeld');return;}
-  toast('Je bent ziek gemeld voor vandaag');
-  loadPersoonlijkSchema();
-  // De beheerders moeten dit meteen weten; zij halen je van de planning af.
+// Ziek melden. De server zet zelf een melding klaar voor de planners (met de
+// klus(sen) van vandaag) en zet het op hun dashboard. Vroeger stuurde de app
+// zelf pushberichten, maar dat mag een medewerker niet: die gingen nooit weg.
+let ZIEK_BEZIG=false;
+async function meldZiek(knop){
+  if(ZIEK_BEZIG)return;
+  if(!confirm('Je meldt je ziek voor vandaag.\n\nDe planning krijgt een melding en zoekt vervanging voor je klus. Begint je klus binnen een paar uur? Bel dan ook even.\n\nDoorgaan?'))return;
+  ZIEK_BEZIG=true; if(knop)knop.disabled=true;
   try{
-    const beheerders=(PERSONEEL||[]).filter(x=>x.rol==='beheerder');
-    const vandaag=new Date().toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
-    beheerders.forEach(bh=>sendPushNotificatie(bh.id,'Ziekmelding',
-      `${CURRENT_NAAM||'Een medewerker'} heeft zich ziek gemeld voor ${vandaag}.`));
-  }catch(e){}
+    const{data,error}=await sb.rpc('meld_ziek',{p_datum:fmt(new Date())});
+    if(error){toast('Ziek melden mislukt: '+error.message,'fout');return;}
+    if(data==='stond al'){toast('Je stond vandaag al ziek gemeld');return;}
+    toast('Je bent ziek gemeld. De planning krijgt een melding. Beterschap!');
+    loadPersoonlijkSchema();
+  }finally{ ZIEK_BEZIG=false; if(knop)knop.disabled=false; }
 }
 
 async function restantMeenemen(){
@@ -21334,9 +21335,10 @@ async function laadDashboard(){
   const nu=new Date(), jaar=nu.getFullYear();
   const cijfers=MAG_CIJFERS&&(magBlok('omzet_target')||magBlok('marge')||magBlok('klussen_marge'));
   const leeg=Promise.resolve({data:null});
-  let maanden,klussen,wacht,plekken,kwijt,ontbreekt,capaciteit,verlof,signalen,plusmin,trucks,bellen,weer,apk,wijzigingen;
+  let maanden,klussen,wacht,plekken,kwijt,ontbreekt,capaciteit,verlof,signalen,plusmin,trucks,bellen,weer,apk,wijzigingen,ziek;
+  const magZiek=dbMagZiek();
   try{
-    [maanden,klussen,wacht,plekken,kwijt,ontbreekt,capaciteit,verlof,signalen,plusmin,trucks,bellen,weer,apk,wijzigingen]=await Promise.all([
+    [maanden,klussen,wacht,plekken,kwijt,ontbreekt,capaciteit,verlof,signalen,plusmin,trucks,bellen,weer,apk,wijzigingen,ziek]=await Promise.all([
       cijfers?sb.rpc('dashboard_maanden',{p_jaar:jaar}):leeg,
       (cijfers&&(magBlok('klussen_marge')||magBlok('marge')))
         ?sb.rpc('dashboard_klussen',{p_van:jaar+'-01-01',p_tot:fmt(nu)}):leeg,
@@ -21353,6 +21355,8 @@ async function laadDashboard(){
       magBlok('weer')?sb.rpc('dashboard_weer'):leeg,
       magBlok('apk')?sb.rpc('dashboard_apk'):leeg,
       magBlok('wijzigingen')?sb.rpc('dashboard_wijzigingen'):leeg,
+      // Nieuw blok: als de functie er (nog) niet is, gewoon niets tonen.
+      magZiek?sb.rpc('dashboard_ziek').then(r=>r,()=>({data:null})):leeg,
     ]);
   }catch(e){
     el.innerHTML='<div class="db-blok"><div class="db-leeg">Het dashboard kon niet geladen worden. Probeer het zo nog eens.</div></div>';
@@ -21372,6 +21376,8 @@ async function laadDashboard(){
   const P=plekken.data||[];
 
   let h='';
+  // Ziekmeldingen eerst: daar moet vandaag nog iets mee.
+  if(magZiek)h+=dbZiekBlok((ziek&&!ziek.error&&ziek.data)||[]);
   if(cijfers&&(magBlok('omzet_target')||magBlok('marge')))h+=dbTegels(M,K,nu);
   if(cijfers&&magBlok('omzet_target')&&M.length)h+=dbGrafiek(M,nu,jaar);
   if(magBlok('wijzigingen'))h+=dbWijzigingenBlok(wijzigingen.data||[]);
@@ -21401,6 +21407,42 @@ async function laadDashboard(){
 }
 
 function dbPct(a,b){return b>0?Math.max(0,Math.min(100,Math.round(a/b*100))):0;}
+
+// ── ZIEKMELDINGEN ───────────────────────────────────────────────────────
+// Wie heeft zich vandaag of morgen ziek gemeld en staat nog op een klus? Per
+// klus een knop om hem te openen en vervanging te regelen. Haal je de zieke
+// van de klus af, dan verdwijnt de regel vanzelf (ook het rode bolletje).
+function dbMagZiek(){ return magBlok('meld_verlof')||magBlok('verlof')||magBlok('let_op'); }
+async function dbZiekKlus(id){
+  const er=()=>(typeof KLUSSEN!=='undefined'?KLUSSEN:[]).some(k=>k.id===id);
+  if(!er()&&typeof loadAll==='function'){ try{ await loadAll(); }catch(e){} }
+  if(er())openDetail(id); else toast('Deze klus kon niet geopend worden. Kijk bij Planning.','fout');
+}
+function dbZiekBlok(rijen){
+  if(!rijen.length)return '';
+  const vandaag=fmt(new Date());
+  const metKlus=rijen.filter(r=>r.klus_id);
+  const pers={};
+  rijen.forEach(r=>{ const s=r.gebruiker_id+'|'+r.datum; (pers[s]=pers[s]||{r,klussen:[]}); if(r.klus_id)pers[s].klussen.push(r); });
+  const blok=Object.values(pers).map(({r,klussen})=>{
+    const dag=r.datum===vandaag?'vandaag':'morgen';
+    const tel=r.telefoon?String(r.telefoon).replace(/[^0-9+]/g,''):'';
+    const kop=`<div class="db-regel" style="cursor:default">
+      <span class="db-tel${klussen.length?' rood':' grijs'}">${dag}</span>
+      <div class="db-tk" style="flex:1"><b>${veiligTekst(r.naam||'Iemand')} is ziek</b><span>${klussen.length?'staat nog op '+klussen.length+(klussen.length===1?' klus':' klussen'):'staat die dag niet ingepland'} &middot; gemeld ${new Date(r.gemeld_op).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit'})}</span></div>
+      ${tel?`<a class="btn-nav" style="font-size:11.5px;white-space:nowrap;text-decoration:none" href="tel:${veiligTekst(tel)}">Bellen</a>`:''}
+    </div>`;
+    return kop+klussen.map(k=>`<div class="db-regel" onclick="dbZiekKlus('${veiligJs(k.klus_id)}')" style="padding-left:18px">
+      <span class="db-tel grijs">${veiligTekst(k.van||'')}</span>
+      <div class="db-tk" style="flex:1"><b>${veiligTekst(k.klus_naam||'Klus')}</b><span>${k.van?veiligTekst(k.van)+(k.tot?'&ndash;'+veiligTekst(k.tot):''):'geen tijd'} &middot; zoek vervanging en haal ${veiligTekst((r.naam||'').split(' ')[0]||'hem')} van de klus</span></div>
+      <button class="btn-sm" style="font-size:11.5px;padding:6px 11px;white-space:nowrap" onclick="event.stopPropagation();dbZiekKlus('${veiligJs(k.klus_id)}')">Open klus</button>
+    </div>`).join('');
+  }).join('');
+  return `<div class="db-blok" style="border-color:#F5C2B8">
+    <div class="db-blok-kop"><div class="db-blok-titel">Ziek gemeld</div><div class="db-blok-meta">${metKlus.length?metKlus.length+(metKlus.length===1?' klus zonder vervanging':' klussen zonder vervanging'):'niemand op een klus'}</div></div>
+    ${blok}
+  </div>`;
+}
 
 function dbTegels(M,K,nu){
   const mnd=nu.getMonth()+1;
@@ -22768,6 +22810,12 @@ async function initPushNotifications(){
           if(d.pagina==='mcr-shifts'||d.pagina==='mcr-open'){
             const app=document.getElementById('mcrApp');
             if(app&&app.style.display==='flex'&&typeof mcrGa==='function')mcrGa(d.pagina==='mcr-open'?'open':'shifts');
+            return;
+          }
+          if(d.pagina==='nl-ziek'||d.pagina==='nl-crm'){
+            const p=d.pagina==='nl-ziek'?'dashboard':'aanvragen';
+            const kn=document.querySelector(".bnav-item[onclick*=\"'"+p+"'\"]");
+            if(kn)switchNav(p,kn); else showPage(p);
             return;
           }
           if(d.pagina==='open-klussen'||d.pagina==='beschikbaarheid'){
