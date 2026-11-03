@@ -3780,6 +3780,7 @@ async function mbKramenLijst(){
 // ── navigatie ─────────────────────────────────────────────────────
 function loadMcrBeheer(){ mbNaar(MB_TAB||'overzicht'); }
 function mbNaar(tab, knop){
+  if(!mbMensenMagWeg())return;
   MB_TAB=tab; meldingenStraks();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-mcrbeheer').classList.add('active');
@@ -5685,8 +5686,14 @@ function mbUurInvoer(id){
 }
 function mbUurGewijzigd(id){
   const inv=mbUurInvoer(id), tr=document.getElementById('mbUR'+id), m=document.getElementById('mbUM'+id);
-  if(tr)tr.style.background=inv.gewijzigd?'#FFFBEB':'';
+  if(tr){ tr.style.background=inv.gewijzigd?'#FFFBEB':''; tr.dataset.gewijzigd=inv.gewijzigd?'1':''; }
   if(m)m.style.display=inv.gewijzigd?'':'none';
+}
+// Live herladen wacht zolang er op Uren of Mensen iets is aangepast maar nog niet opgeslagen.
+function mbLiveRust(){
+  if(MB_TAB==='mensen'&&MB_MENS_GEWIJZIGD.size)return true;
+  if(MB_TAB==='uren'&&document.querySelector('#mbUrenTabel tr[data-gewijzigd="1"]'))return true;
+  return false;
 }
 function mbUurKnoppen(id,aan){ const tr=document.getElementById('mbUR'+id); if(tr)tr.querySelectorAll('button,input').forEach(b=>b.disabled=!aan); }
 function mbUurRijWeg(id){
@@ -7031,7 +7038,7 @@ function mbSindsSelect(id,waarde){
   const jaar=new Date().getFullYear(); let o='<option value="">&mdash;</option>';
   o+=`<option value="${jaar}"${waarde===jaar?' selected':''}>${jaar} (nieuw)</option>`;
   for(let j=jaar-1;j>=2015;j--)o+=`<option value="${j}"${waarde===j?' selected':''}>${j}</option>`;
-  return `<select class="mb-getal" style="width:104px;text-align:left" id="mbPS${id}" data-oud="${waarde||''}" title="Sinds welk jaar werkt deze persoon bij ons?">${o}</select>`;
+  return `<select class="mb-getal" style="width:104px;text-align:left" id="mbPS${id}" data-oud="${waarde||''}" onchange="mbMensGewijzigd('${veiligJs(id)}')" title="Sinds welk jaar werkt deze persoon bij ons?">${o}</select>`;
 }
 // Wettelijk minimumloon in het VK vanaf 1 april 2026 (gov.uk).
 // [band, minimum, voorstel bij nieuwe aanmelding]
@@ -7050,8 +7057,9 @@ function mbOnderMin(m){
 }
 async function mbNaarMinimum(id){
   const el=document.getElementById('mbPL'+id); if(!el)return;
-  el.value=el.dataset.min;
+  el.value=el.dataset.min; mbMensGewijzigd(id);
   await mbPersoonOpslaan(id,false);
+  if(!MB_MENS_GEWIJZIGD.size)mbNaar('mensen');
 }
 // Zoeken bij Mensen: op naam, e-mail of telefoon; blijft staan na Opslaan.
 let MB_ZOEK='';
@@ -7068,6 +7076,7 @@ function mbMensenZoek(w){
   const x=document.getElementById('mbZoekWis'); if(x)x.style.display=MB_ZOEK?'':'none';
 }
 async function mbMensen(){
+  MB_MENS_GEWIJZIGD=new Set();
   await mbErvaringLaden();
   const [res,al]=await Promise.all([sb.rpc('mcr_mensen'), sb.rpc('mcr_alleen_lijst').then(x=>x,()=>({data:[]}))]);
   const{data,error}=res;
@@ -7094,6 +7103,10 @@ async function mbMensen(){
   <div id="mbZoekLeeg" class="mb-kaart" style="display:none;color:var(--muted);font-size:13px">Niemand gevonden met deze naam.</div>`;
   uit+=`<datalist id="mbViaLijst">${Object.keys(via).sort((a,b)=>a.localeCompare(b)).map(v=>`<option value="${veiligTekst(v)}">`).join('')}</datalist>`;
   uit+='<div id="mbMensenBoven"></div>';
+  uit+=`<div id="mbMensBalk" style="display:none;position:sticky;top:0;z-index:20;margin-bottom:10px;padding:10px 14px;border-radius:12px;background:#FFFBEB;border:1.5px solid #F3D9A4;align-items:center;gap:10px;flex-wrap:wrap">
+    <span id="mbMensBalkTekst" style="font-size:13px;color:#8A5307;font-weight:600;flex:1 1 200px"></span>
+    <button class="mb-mini" onclick="mbMensenTerugzetten()">Terugzetten</button>
+    <button class="mb-mini zwart" id="mbMensAlles" onclick="mbMensenAllesOpslaan()">Alles opslaan</button></div>`;
   uit+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr>'
     +'<th style="text-align:right;width:28px">#</th><th style="min-width:210px">Naam</th><th style="text-align:right">Lft</th><th style="text-align:right">Tarief</th>'
     +'<th style="text-align:right">Shifts</th><th style="text-align:right">Uren</th>'
@@ -7229,14 +7242,14 @@ function mbPersoonRij(m){
   if(m.alleen)extra.push('alleen beschikbaarheid');
   if(m.eigen_opmerking)extra.push(m.eigen_opmerking);
   if(!m.iban)extra.push('geen bankrekening');
-  return `<tr data-zoek="${veiligTekst(mbZoekSleutel(m))}"${m.beoordeling==='niet meer'?' style="opacity:.55"':''}>
+  return `<tr data-zoek="${veiligTekst(mbZoekSleutel(m))}" id="mbPR${id}"${m.beoordeling==='niet meer'?' style="opacity:.55"':''}>
     <td class="mb-nr" style="text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12.5px"></td>
     <td style="min-width:210px"><div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
       <div><a href="#" class="mb-naamlink" onclick="mbPersoonKaart('${veiligJs(m.id)}');return false" title="Planning en aanvragen bekijken">${veiligTekst(m.naam)}</a>
       <div style="font-size:11.5px;color:var(--muted)">${mbViaHtml(m)}${extra.length?' &middot; '+extra.map(veiligTekst).join(' &middot; '):''}</div></div></div></td>
     <td style="text-align:right">${m.leeftijd||'&mdash;'}</td>
     <td style="text-align:right">${(()=>{const b=mbMinLoon(m.leeftijd),o=mbOnderMin(m);
-      return `<input class="mb-getal" type="number" step="0.01" style="width:68px${o?';border-color:#B4472B;color:#B4472B;font-weight:700':''}" id="mbPL${id}" data-min="${b?b.min.toFixed(2):''}" value="${m.uurloon!=null?veiligTekst(m.uurloon):''}"${o?` title="Onder het minimumloon: ${m.leeftijd} jaar = minimaal £ ${mbPondTxt(b.min)}"`:''}>`
+      return `<input class="mb-getal" type="number" step="0.01" style="width:68px${o?';border-color:#B4472B;color:#B4472B;font-weight:700':''}" id="mbPL${id}" data-min="${b?b.min.toFixed(2):''}" data-oud="${m.uurloon!=null?veiligTekst(m.uurloon):''}" oninput="mbMensGewijzigd('${veiligJs(m.id)}')" value="${m.uurloon!=null?veiligTekst(m.uurloon):''}"${o?` title="Onder het minimumloon: ${m.leeftijd} jaar = minimaal £ ${mbPondTxt(b.min)}"`:''}>`
         +(o?`<div style="font-size:10.5px;color:#B4472B;white-space:nowrap;margin-top:2px">min &pound; ${mbPondTxt(b.min)}</div>`:'');})()}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${m.shifts}</td>
     <td style="text-align:right;font-variant-numeric:tabular-nums">${veiligTekst(mbNum(m.uren,1))}</td>
@@ -7247,10 +7260,10 @@ function mbPersoonRij(m){
       : '<span style="color:var(--muted)">&mdash;</span>'}</td>
     <td>${mbSindsSelect(id,(MB_ERV[m.id]||{}).werkt_sinds||null)}
       <div style="font-size:10.5px;color:var(--muted);margin-top:2px;white-space:nowrap">${(MB_ERV[m.id]||{}).shifts_gewerkt||0} gewerkt</div></td>
-    <td><select class="mb-getal" style="width:118px;text-align:left" id="mbPB${id}"><option value="">&mdash;</option>
+    <td><select class="mb-getal" style="width:118px;text-align:left" id="mbPB${id}" data-oud="${veiligTekst(m.beoordeling||'')}" onchange="mbMensGewijzigd('${veiligJs(m.id)}')"><option value="">&mdash;</option>
       ${MB_OORDELEN.map(o=>`<option value="${o}"${m.beoordeling===o?' selected':''}>${o}</option>`).join('')}</select>
       ${m.beoordeling_door?`<div style="font-size:10.5px;color:var(--muted);margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(m.beoordeling_op))}">door ${veiligTekst(m.beoordeling_door)}</div>`:''}</td>
-    <td style="white-space:nowrap"><button class="mb-mini" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',false)">Opslaan</button>
+    <td style="white-space:nowrap"><button class="mb-mini" id="mbPO${id}" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',false)">Opslaan</button>
       <button class="mb-mini" onclick="mbPersoonOpen('${veiligJs(m.id)}')">Meer</button>
       <button class="mb-mini rood" onclick="mbPersoonWeg('${veiligJs(m.id)}')" title="Weghalen">Weghalen</button></td></tr>`;
 }
@@ -7698,6 +7711,7 @@ async function mbManagerZetten(id){
     const weg=Number(data)||0;
     if(uit)uit.innerHTML=`<span style="color:#0F7A52">${aan?'Is nu kraammanager'+(sel&&sel.value?' van '+veiligTekst(sel.options[sel.selectedIndex].text):' van alle kramen')+'. De app schakelt om zodra hij hem opnieuw opent.'
       +(weg?` Van ${weg} ${weg===1?'dienst':'diensten'} vanaf vandaag gehaald: een manager werkt niet zelf mee.`:''):'Is geen kraammanager meer.'}</span>`;
+    if(MB_MENS_GEWIJZIGD.size)await mbMensenAllesOpslaan(true);
     MB_PERSOON=id; mbMensen();
   }catch(e){
     if(cb)cb.checked=!aan;
@@ -7754,19 +7768,74 @@ async function mbVoorvalWeg(vid, id){
   catch(e){ alert(mbFout(e)); }
 }
 
+// Mensen-tabel: gewijzigde rijen worden gemarkeerd; Opslaan bewaart alleen die
+// rij zonder het scherm te herladen, zodat andere wijzigingen blijven staan.
+// "Alles opslaan (n)" bewaart ze allemaal. Weggaan met open wijzigingen vraagt eerst.
+let MB_MENS_GEWIJZIGD=new Set();
+function mbMensVeldGewijzigd(el){ return !!el&&String(el.value||'')!==String(el.dataset.oud||''); }
+function mbMensGewijzigd(id){
+  const vuil=['mbPL','mbPB','mbPS'].some(x=>mbMensVeldGewijzigd(document.getElementById(x+id)));
+  if(vuil)MB_MENS_GEWIJZIGD.add(id); else MB_MENS_GEWIJZIGD.delete(id);
+  const tr=document.getElementById('mbPR'+id); if(tr)tr.style.background=vuil?'#FFFBEB':'';
+  const k=document.getElementById('mbPO'+id); if(k){ k.classList.toggle('zwart',vuil); }
+  mbMensBalk();
+}
+function mbMensBalk(){
+  const b=document.getElementById('mbMensBalk'), n=MB_MENS_GEWIJZIGD.size; if(!b)return;
+  b.style.display=n?'flex':'none';
+  const t=document.getElementById('mbMensBalkTekst'); if(t)t.textContent=n+(n===1?' persoon gewijzigd, nog niet opgeslagen':' mensen gewijzigd, nog niet opgeslagen');
+  const k=document.getElementById('mbMensAlles'); if(k)k.textContent='Alles opslaan ('+n+')';
+}
+function mbMensenMagWeg(){
+  const n=MB_MENS_GEWIJZIGD.size; if(!n||MB_TAB!=='mensen')return true;
+  if(!document.getElementById('mbMensBalk')){ MB_MENS_GEWIJZIGD.clear(); return true; }
+  if(confirm(`Je hebt bij ${n} ${n===1?'persoon':'mensen'} iets veranderd dat nog niet is opgeslagen. Weggaan zonder opslaan?`)){ MB_MENS_GEWIJZIGD.clear(); return true; }
+  return false;
+}
+window.addEventListener('beforeunload',e=>{ if(MB_TAB==='mensen'&&MB_MENS_GEWIJZIGD.size&&document.getElementById('mbMensBalk')){ e.preventDefault(); e.returnValue=''; } });
+function mbMensenTerugzetten(){
+  [...MB_MENS_GEWIJZIGD].forEach(id=>{ ['mbPL','mbPB','mbPS'].forEach(x=>{ const el=document.getElementById(x+id); if(el)el.value=el.dataset.oud||''; }); mbMensGewijzigd(id); });
+}
+// Eén rij opslaan; gooit een fout als het niet lukt.
+async function mbMensRijOpslaan(id,vrijgeven){
+  const pl=document.getElementById('mbPL'+id), pb=document.getElementById('mbPB'+id), ps=document.getElementById('mbPS'+id);
+  const l=pl?pl.value:'', b=pb?pb.value:'';
+  if(l!==''&&(isNaN(Number(l))||Number(l)<0))throw new Error('Het tarief van '+((MB_MENSEN_LIJST.find(x=>x.id===id)||{}).naam||'deze persoon')+' klopt niet.');
+  if(ps&&ps.value!==(ps.dataset.oud||'')){
+    const{error:e2}=await sb.rpc('mcr_werkt_sinds_zetten',{p_id:id,p_jaar:ps.value?Number(ps.value):null});
+    if(e2)throw e2;
+  }
+  const{error}=await sb.rpc('mcr_persoon_opslaan',{p_id:id,p_kleding:null,
+    p_uurloon:(l===''||l==null)?null:Number(l), p_beoordeling:b||null, p_goedkeuren:vrijgeven?true:null});
+  if(error)throw error;
+  if(pl)pl.dataset.oud=l; if(pb)pb.dataset.oud=b; if(ps)ps.dataset.oud=ps.value;
+  const m=MB_MENSEN_LIJST.find(x=>x.id===id); if(m){ m.uurloon=l===''?null:Number(l); m.beoordeling=b||null; }
+  if(ps&&MB_ERV[id])MB_ERV[id].werkt_sinds=ps.value?Number(ps.value):null;
+  mbMensGewijzigd(id);
+}
 async function mbPersoonOpslaan(id,vrijgeven){
-  const l=(document.getElementById('mbPL'+id)||{}).value;
-  const b=(document.getElementById('mbPB'+id)||{}).value;
-  const ps=document.getElementById('mbPS'+id);
+  const k=document.getElementById('mbPO'+id); if(k)k.disabled=true;
   try{
-    if(ps&&ps.value!==(ps.dataset.oud||'')){
-      const{error:e2}=await sb.rpc('mcr_werkt_sinds_zetten',{p_id:id,p_jaar:ps.value?Number(ps.value):null});
-      if(e2)throw e2;
+    await mbMensRijOpslaan(id,vrijgeven);
+    // Vrijgeven (of een nieuwe aanmelding) verandert de lijsten: dan wel herladen,
+    // maar eerst de andere gewijzigde rijen bewaren.
+    if(vrijgeven||!document.getElementById('mbPR'+id)){
+      if(MB_MENS_GEWIJZIGD.size)await mbMensenAllesOpslaan(true);
+      MB_MENS_GEWIJZIGD.clear(); mbNaar('mensen'); return;
     }
-    const{error}=await sb.rpc('mcr_persoon_opslaan',{p_id:id,p_kleding:null,
-      p_uurloon:(l===''||l==null)?null:Number(l), p_beoordeling:b||null, p_goedkeuren:vrijgeven?true:null});
-    if(error)throw error; mbNaar('mensen');
+    toast('Opgeslagen');
   }catch(e){ alert(mbFout(e)); }
+  if(k)k.disabled=false;
+}
+async function mbMensenAllesOpslaan(stil){
+  const ids=[...MB_MENS_GEWIJZIGD]; if(!ids.length)return true;
+  const knop=document.getElementById('mbMensAlles'); if(knop)knop.disabled=true;
+  const mis=[];
+  for(const id of ids){ try{ await mbMensRijOpslaan(id,false); }catch(e){ mis.push(mbFout(e)); } }
+  if(knop)knop.disabled=false;
+  if(mis.length){ alert('Niet alles is opgeslagen:\n'+mis.join('\n')); return false; }
+  if(!stil)toast(ids.length+(ids.length===1?' persoon':' mensen')+' opgeslagen');
+  return true;
 }
 
 // ── INSTELLINGEN ──────────────────────────────────────────────────
@@ -10812,6 +10881,7 @@ function liveMagNu(){
   if(typeof MB_UITZ_VRAAG!=='undefined'&&MB_UITZ_VRAAG)return false;
   if(typeof MB_FORECAST!=='undefined'&&MB_FORECAST)return false;
   if(typeof MB_AG_OPEN!=='undefined'&&MB_AG_OPEN)return false;
+  if(typeof mbLiveRust==='function'&&mbLiveRust())return false;
   if(typeof MB_MYPOS_OPEN!=='undefined'&&MB_MYPOS_OPEN)return false;
   if(typeof MGR_AG_OPEN!=='undefined'&&MGR_AG_OPEN)return false;
   if(typeof mgrClBezig==='function'&&mgrClBezig())return false;
