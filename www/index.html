@@ -434,6 +434,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .agk-fchip[aria-pressed="false"] .agk-fico{color:#94938E}
 .agk.compact .agk-fab{display:flex;position:fixed;right:16px;bottom:calc(var(--bnav-h,64px) + 16px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:18px;border:0;background:#1A1917;color:#fff;box-shadow:0 6px 18px rgba(0,0,0,.25);z-index:60;align-items:center;justify-content:center;cursor:pointer}
 .agk.compact .agk-hoofd{border-radius:12px}
+#mcrApp .agk.compact .agk-fab{bottom:calc(68px + 16px + env(safe-area-inset-bottom))}
 .agk.compact .agk-mcel{min-height:78px;padding:3px 2px 4px;gap:2px}
 .agk.compact .agk-mnr{width:24px;height:24px;font-size:11.5px}
 .agk.compact .agk-balkje{font-size:9.5px;padding:1px 2px 1px 3px;gap:2px;border-left-width:2px;border-radius:3px;line-height:1.3}
@@ -9149,7 +9150,7 @@ async function mcrGaNu(tab,stil){
   if(tab!=='shifts')MCR_SHIFT_OPEN=null;
   if(['rota','stall','agenda','close','team'].includes(tab) && !MCR_MGR)tab='shifts';
   if(tab!=='team'){ MGR_TEAM_OPEN=null; if(tab!=='close')MGR_TEAM_TERUG=false; }
-  if(tab!=='agenda')MGR_AG_OPEN=null;
+  if(tab!=='agenda'){ MGR_AG_OPEN=null; if(typeof agkDetailSluit==='function')agkDetailSluit('mg'); }
   // Een manager werkt niet zelf: geen inklokken, eigen uren of facturen.
   if(MCR_MGR && ['shifts','open','avail','clock','hours','invoice'].includes(tab))tab='rota';
   if(tab==='rota' && MCR_TAB!=='rota')MGR_DAG=null;   // via de balk kom je altijd bij de week uit
@@ -10555,7 +10556,7 @@ async function mgrNuInklokken(kraam,gid){
 // Hij zet er zelf iets bij voor zijn eigen kraam (manager van alle kramen:
 // voor elke kraam) en kan alleen zijn eigen items wijzigen of weghalen. Bram
 // krijgt een melding als een manager iets toevoegt.
-let MGR_AG_OPEN=null, MGR_AG_EERDER=false, MGR_AG_RIJEN=[], MGR_AG_KRAMEN=null;
+let MGR_AG_OPEN=null, MGR_AG_NIEUW=null, MGR_AG_RIJEN=[], MGR_AG_KRAMEN=null;
 function mgrAgKaart(r,knoppen){
   return `<div class="mcr-kaart" style="padding:11px 14px;margin-bottom:9px">
     <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">${agSoortChip(r.soort,true)}
@@ -10578,45 +10579,47 @@ function mgrAgContact(t){
   const i=t.indexOf(m[1]);
   return veiligTekst(t.slice(0,i))+mgrTel(m[1])+veiligTekst(t.slice(i+m[1].length));
 }
+// Zelfde kalender als bij Bram (agk*), in het Engels. Alles wordt in één keer
+// opgehaald (ook wat voorbij is), zodat zoeken ook in het verleden werkt.
 async function mcrAgenda(){
-  const van=new Date(); if(MGR_AG_EERDER)van.setDate(van.getDate()-60);
-  const [res,kr]=await Promise.all([sb.rpc('mgr_agenda',{p_van:fmt(van),p_tot:null}),
+  const [res,kr]=await Promise.all([sb.rpc('mgr_agenda',{p_van:'2000-01-01',p_tot:null}),
     (MGR_KRAAM&&MGR_KRAAM.id)||MGR_AG_KRAMEN?Promise.resolve(null):sb.rpc('mcr_kramen')]);
   if(res.error)throw res.error;
   if(kr&&!kr.error)MGR_AG_KRAMEN=(kr.data||[]).filter(k=>k.actief!==false);
-  MGR_AG_RIJEN=res.data||[];
-  document.getElementById('mcrSub').textContent=MGR_AG_EERDER?'Last 60 days and coming up':'Visits, deliveries and other things coming up';
-  const vandaag=fmt(new Date());
-  let uit=`<div id="mgrAgForm"></div>
-    <button class="mcr-knop" onclick="mgrAgOpen('nieuw')">+ Add to calendar</button>
-    <div style="text-align:right;margin:8px 2px 4px"><button class="mcr-linkje" onclick="MGR_AG_EERDER=!MGR_AG_EERDER;mcrGa('agenda')">${MGR_AG_EERDER?'Hide past':'Show the last 60 days'}</button></div>`;
-  if(!MGR_AG_RIJEN.length)uit+=mcrLeeg('Nothing planned yet. Bram puts influencer visits and deliveries here, and you can add things for your stall.');
-  const perDag={};
-  MGR_AG_RIJEN.forEach(r=>{ (perDag[r.datum]=perDag[r.datum]||[]).push(r); });
-  Object.keys(perDag).forEach(d=>{
-    const dt=new Date(d+'T00:00:00');
-    uit+=`<div style="font-size:12px;font-weight:700;color:#6B6A66;text-transform:uppercase;letter-spacing:.04em;margin:14px 2px 7px${d<vandaag?';opacity:.6':''}">
-      ${veiligTekst(dt.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}${d===vandaag?' &middot; today':''}</div>`;
-    perDag[d].forEach(r=>{ uit+=mgrAgKaart(r,true); });
-  });
-  document.getElementById('mcrMain').innerHTML=uit;
+  MGR_AG_RIJEN=agkSorteer(res.data||[]);
+  document.getElementById('mcrSub').textContent='Visits, deliveries and other things';
+  const A=agkMaak('mg',{en:true,sleutel:'tc_mgr_agenda',el:()=>document.getElementById('mgrAgKal'),vandaag:mbVandaagStr,
+    kramen:()=>MGR_AG_KRAMEN||((MGR_KRAAM&&MGR_KRAAM.id)?[{id:MGR_KRAAM.id,naam:MGR_KRAAM.naam,kleur:MGR_KRAAM.kleur}]:[]),
+    // Een manager wijzigt alleen wat hij zelf zette (van_mij, bepaald door de server).
+    magWijzigen:r=>!!r.van_mij,
+    nieuw:(d,v,t)=>{ MGR_AG_NIEUW={datum:d,tijd_van:v,tijd_tot:t}; mgrAgOpen('nieuw'); },
+    wijzig:id=>mgrAgOpen(id),weg:id=>mgrAgWeg(id),formOpen:()=>!!MGR_AG_OPEN,formSluit:()=>mgrAgSluit(),
+    door:r=>`Added by ${r.van_mij?'you':veiligTekst(r.door||'Bram')}`});
+  A.rijen=MGR_AG_RIJEN;
+  document.getElementById('mcrMain').innerHTML='<div id="mgrAgKal"></div><div id="mgrAgForm"></div>';
+  agkTeken('mg');
   if(MGR_AG_OPEN)mgrAgTeken();
 }
-function mgrAgOpen(id){ MGR_AG_OPEN=id; mgrAgTeken(); const m=document.getElementById('mcrMain'); if(m)m.scrollTop=0; }
-function mgrAgSluit(){ MGR_AG_OPEN=null; mgrAgTeken(); }
+function mgrAgOpen(id){ MGR_AG_OPEN=id; if(id!=='nieuw')MGR_AG_NIEUW=null; agkDetailSluit('mg'); mgrAgTeken(); }
+function mgrAgSluit(){ MGR_AG_OPEN=null; MGR_AG_NIEUW=null; mgrAgTeken(); }
 function mgrAgTeken(){
   const el=document.getElementById('mgrAgForm'); if(!el)return;
   if(!MGR_AG_OPEN){ el.innerHTML=''; return; }
-  const r=MGR_AG_OPEN==='nieuw'?{datum:fmt(new Date()),soort:'levering',kraam_id:MGR_KRAAM&&MGR_KRAAM.id||null}
+  const N=MGR_AG_NIEUW||{};
+  const r=MGR_AG_OPEN==='nieuw'?{datum:N.datum||mbVandaagStr(),tijd_van:N.tijd_van||null,tijd_tot:N.tijd_tot||null,soort:'levering',kraam_id:MGR_KRAAM&&MGR_KRAAM.id||null}
           :(MGR_AG_RIJEN.find(x=>x.id===MGR_AG_OPEN)||{});
+  const vel=!(AGK.mg&&!AGK.mg.compact);
   const lab=t=>`<div style="font-size:12.5px;font-weight:600;color:#6B6A66;margin:10px 0 5px">${t}</div>`;
   const vast=MGR_KRAAM&&MGR_KRAAM.id;
   const kraamVeld=vast
     ?`<div style="font-size:15px;padding:4px 0">${veiligTekst(MGR_KRAAM.naam||'Your stall')}</div>`
     :`<select class="mcr-veld" id="mgAgK"><option value="">All stalls</option>
         ${(MGR_AG_KRAMEN||[]).map(k=>`<option value="${veiligTekst(k.id)}"${r.kraam_id===k.id?' selected':''}>${veiligTekst(k.naam)}</option>`).join('')}</select>`;
-  el.innerHTML=`<div class="mcr-kaart" style="border-color:#1A1917">
-    <div style="font-size:16px;font-weight:700">${MGR_AG_OPEN==='nieuw'?'Add to the calendar':'Edit'}</div>
+  el.innerHTML=`<div class="agk-modal-achter${vel?' vel':''}" onclick="if(event.target===this)mgrAgSluit()">
+   <div class="mcr-kaart agk-modal" role="dialog" aria-modal="true" aria-label="${MGR_AG_OPEN==='nieuw'?'Add to the calendar':'Edit'}">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+      <div style="font-size:17px;font-weight:700">${MGR_AG_OPEN==='nieuw'?'Add to the calendar':'Edit'}</div>
+      <button class="agk-pijl" onclick="mgrAgSluit()" aria-label="Close">${agkIc('x',18)}</button></div>
     <div style="font-size:12.5px;color:#6B6A66;margin-top:2px">${vast?'For your stall. ':''}Bram sees everything you add.</div>
     ${lab('Date')}<input class="mcr-veld" type="date" id="mgAgD" value="${veiligTekst(r.datum||'')}">
     <div style="display:flex;gap:10px"><div style="flex:1">${lab('From')}<input class="mcr-veld" type="time" id="mgAgV" value="${veiligTekst(mcrTijd(r.tijd_van))}"></div>
@@ -10630,7 +10633,7 @@ function mgrAgTeken(){
     <div style="display:flex;gap:8px;margin-top:10px">
       <button class="mcr-knop" id="mgAgOpslaan" style="flex:1" onclick="mgrAgOpslaan()">Save</button>
       <button class="mcr-knop licht" style="flex:1" onclick="mgrAgSluit()">Cancel</button></div>
-  </div>`;
+   </div></div>`;
 }
 async function mgrAgOpslaan(){
   const v=id=>(document.getElementById(id)||{}).value||'';
@@ -10648,7 +10651,8 @@ async function mgrAgOpslaan(){
   if(kn){kn.disabled=false;kn.textContent='Save';}
   if(error)return fout(mcrFout(error));
   const nieuw=MGR_AG_OPEN==='nieuw';
-  MGR_AG_OPEN=null; toast(nieuw?'Added to the calendar':'Changes saved'); mcrGa('agenda');
+  if(AGK.mg){ AGK.mg.datum=v('mgAgD'); AGK.mg.mini=null; }
+  MGR_AG_OPEN=null; MGR_AG_NIEUW=null; toast(nieuw?'Added to the calendar':'Changes saved'); mcrGa('agenda');
 }
 async function mgrAgWeg(id){
   const r=MGR_AG_RIJEN.find(x=>x.id===id); if(!r)return;
@@ -10656,6 +10660,7 @@ async function mgrAgWeg(id){
   const{error}=await sb.rpc('mgr_agenda_weg',{p_id:id});
   if(error){alert(mcrFout(error));return;}
   if(MGR_AG_OPEN===id)MGR_AG_OPEN=null;
+  agkDetailSluit('mg');
   mcrGa('agenda');
 }
 // Regel in het weekrooster en het dagoverzicht.
