@@ -4630,7 +4630,7 @@ function agkDagGroepen(A,rijen,w){
   const k=A.k, vandaag=A.vandaag(), loc=agkLoc(A), groep=[];
   rijen.forEach(r=>{ const g=groep[groep.length-1]; if(g&&g.d===r.datum)g.l.push(r); else groep.push({d:r.datum,l:[r]}); });
   return groep.map(({d,l})=>{ const dd=agkD(d);
-    const sub=dd.toLocaleDateString(loc,{month:'short'}).replace('.','')+', '+dd.toLocaleDateString(loc,{weekday:'short'}).replace('.','')+(dd.getFullYear()!==agkD(vandaag).getFullYear()?' '+dd.getFullYear():'');
+    const sub=dd.toLocaleDateString(loc,{weekday:'short'}).replace('.','')+' '+dd.toLocaleDateString(loc,{month:'short'}).replace('.','')+(dd.getFullYear()!==agkD(vandaag).getFullYear()?' '+dd.getFullYear():'');
     return `<div class="agk-ldag${d===vandaag?' vandaag':''}${d<vandaag?' voorbij':''}">
       <button class="agk-ldatum" onclick="agkDag('${k}','${d}')" aria-label="${veiligTekst(dd.toLocaleDateString(loc,{weekday:'long',day:'numeric',month:'long'}))}"><span class="nr">${dd.getDate()}</span><span class="wd">${veiligTekst(sub)}</span></button>
       <div class="agk-litems">${l.map(r=>agkRij(A,r,w)).join('')}</div></div>`; }).join('');
