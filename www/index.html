@@ -6020,9 +6020,9 @@ async function mbRondeDetail(id){
     if(open)meld.push(`<b>${open} ${open===1?'registratie staat':'registraties staan'} nog open</b> (te accorderen of bij Uitgezocht). Die tellen hier nog niet mee; vastzetten kan pas als ze zijn afgehandeld.`);
     if(geenBank.length)meld.push(`Geen sort code of rekeningnummer: ${geenBank.map(r=>veiligTekst(r.naam)).join(', ')}.`);
     if(minW.length)meld.push(`<b>Let op het minimumloon.</b> Bij ${minW.map(r=>{const w=mbRondeMinWaarschuwing(r);return `${veiligTekst(r.naam)} (na inhouding &pound; ${mbPondTxt(w.per)}/u, minimaal &pound; ${mbPondTxt(w.min)})`;}).join(', ')} komt het uurloon in deze ronde onder het minimum.
-      In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. Overweeg de borg over meer rondes te spreiden.`);
+      In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. De borg wordt al over twee rondes gespreid; overweeg de boete te verlagen of later in te houden.`);
     if(meld.length)t+=`<div style="font-size:12.5px;line-height:1.6;margin-top:12px;padding:9px 11px;border-radius:10px;background:#FEF6E7;color:#5B3A07">${meld.join('<br>')}</div>`;
-    t+=`<div style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:10px">Bruto = goedgekeurde uren &times; tarief. Boetes en kledingborg worden ingehouden zolang er genoeg is; netto komt nooit onder &pound; 0
+    t+=`<div style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:10px">Bruto = goedgekeurde uren &times; tarief. Boetes en kledingborg worden ingehouden zolang er genoeg is (borg verdeeld over twee rondes: per ronde hooguit de helft); netto komt nooit onder &pound; 0
       (wat overblijft schuift door naar de volgende ronde). Levert iemand kleding in, dan komt de borg terug. Pas na <b>Ronde vastzetten</b> ligt vast wat is ingehouden &mdash; zo wordt niets twee keer ingehouden.</div></div>`;
     t+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr><th>Naam</th>'
       +'<th style="text-align:right">Uren</th><th style="text-align:right">Tarief</th><th style="text-align:right">Bruto</th>'

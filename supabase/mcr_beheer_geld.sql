@@ -342,7 +342,8 @@ as $function$  select * from (
       from basis x
   ), reken2 as (
     select y.*,
-           least(greatest(0, y.borg_nu - y.borg_al), y.bruto + y.r_terug - y.r_boete) r_borg_in
+           -- Bram (5 nov): borg gespreid over twee rondes, dus per ronde hooguit de helft.
+           least(greatest(0, y.borg_nu - y.borg_al), round(y.borg_nu / 2, 2), y.bruto + y.r_terug - y.r_boete) r_borg_in
       from reken y
   )
   select z.id, z.naam, z.lft,
