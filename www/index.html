@@ -7488,9 +7488,10 @@ async function mbOmzet(){
   MB_OMZ_VAN=van; MB_OMZ_TOT=tot;
   // Vandaag en gisteren altijd ophalen, ook als ze buiten de gekozen periode vallen.
   const ophVan=[van,gist].sort()[0], ophTot=[tot,vandaag].sort()[1];
-  const [rap,ter]=await Promise.all([
+  const [rap,ter,vjr]=await Promise.all([
     sb.rpc('mcr_omzet_dagen',{p_van:ophVan,p_tot:ophTot}),
-    doorklik?sb.rpc('mypos_terminals_gezien').then(x=>x,()=>({data:[]})):Promise.resolve({data:[]})]);
+    doorklik?sb.rpc('mypos_terminals_gezien').then(x=>x,()=>({data:[]})):Promise.resolve({data:[]}),
+    sb.rpc('mcr_omzet_vorig_jaar',{p_van:ophVan,p_tot:ophTot}).then(x=>x,()=>({data:[]}))]);
   if(rap.error)throw rap.error;
   const alle=rap.data||[];
   const kramen=kramenAlle.filter(k=>alle.some(r=>r.kraam_id===k.id));
@@ -7509,6 +7510,21 @@ async function mbOmzet(){
   const beste=klaar.reduce((b,d)=>(!b||dagTot(d)>dagTot(b))?d:b,null);
   const maxDag=Math.max(1,...dagen.map(dagTot));
   const contantMist=d=>d<vandaag&&alle.some(r=>r.datum===d&&!r.dicht&&r.omzet_contant==null);
+  // Vorig jaar: dezelfde weekdag 52 weken eerder (vr 6 nov 2026 ↔ vr 7 nov 2025).
+  const VJ=(vjr&&!vjr.error&&Array.isArray(vjr.data))?vjr.data:[];
+  const heeftVJ=VJ.length>0;
+  const vjRij=d=>VJ.filter(r=>r.datum===d);
+  const vjDag=d=>vjRij(d).reduce((a,r)=>a+n(r.totaal),0);
+  const vjDatum=d=>{ const r=VJ.find(x=>x.datum===d); return r?r.datum_vorig:plus(d,-364); };
+  const vjOpm=d=>{ const r=VJ.find(x=>x.datum===d&&x.opmerking); return r?r.opmerking:''; };
+  const vjKraam=(d,kid)=>{ const r=VJ.find(x=>x.datum===d&&x.kraam_id===kid); return r?n(r.totaal):null; };
+  const vjNaam=d=>new Date(String(vjDatum(d))+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short',year:'numeric'});
+  const pctChip=(nu,toen,klein)=>{ if(!(toen>0))return ''; const p=(nu/toen-1)*100; const g=p>=0;
+    return `<span style="display:inline-block;font-size:${klein?11:12}px;font-weight:700;padding:${klein?'0 5px':'1px 7px'};border-radius:9px;white-space:nowrap;color:${g?'#0F7A52':'#B4472B'};background:${g?'#EAF6EF':'#FBEDE9'}">${g?'+':'−'}${Math.abs(Math.round(p))}%</span>`; };
+  // Vergelijken op afgesloten dagen (t/m gisteren): vandaag loopt nog.
+  const klaarDagen=dagen.filter(d=>d<vandaag);
+  const nuKlaar=klaarDagen.reduce((a,d)=>a+dagTot(d),0);
+  const vjKlaar=klaarDagen.reduce((a,d)=>a+vjDag(d),0);
 
   const knop=(m,l)=>`<button class="mb-mini${MB_OMZ===m?' zwart':''}" onclick="mbOmzKies('${m}')">${l}</button>`;
   let uit=mbKop(MB_OMZ_KIJK?'Manchester &middot; omzet':'Omzet','Per dag, per kraam en totaal &middot; pin + contant',
@@ -7536,13 +7552,18 @@ async function mbOmzet(){
   const inSeizoen=d=>alle.some(r=>r.datum===d);
   uit+='<div class="mb-rij4">'
     +tegel('Vandaag', inSeizoen(vandaag)?veiligTekst(mbPondKort(dagTot(vandaag))):'&mdash;',
-        inSeizoen(vandaag)?kraamRegel(vandaag)+'<br>loopt nog &middot; pin komt elke 15 min binnen':'geen marktdag')
+        inSeizoen(vandaag)?kraamRegel(vandaag)+'<br>loopt nog &middot; pin komt elke 15 min binnen'
+          +(heeftVJ&&vjDag(vandaag)>0?`<br>vorig jaar (${veiligTekst(vjNaam(vandaag))}) hele dag: <b style="color:var(--text)">${veiligTekst(mbPondKort(vjDag(vandaag)))}</b>`:''):'geen marktdag')
     +tegel('Gisteren', inSeizoen(gist)?veiligTekst(mbPondKort(dagTot(gist))):'&mdash;',
-        inSeizoen(gist)?kraamRegel(gist)+(contantMist(gist)?'<br><span style="color:#B45309">contant nog niet overal ingevuld</span>':''):'geen marktdag')
+        inSeizoen(gist)?kraamRegel(gist)+(contantMist(gist)?'<br><span style="color:#B45309">contant nog niet overal ingevuld</span>':'')
+          +(heeftVJ&&vjDag(gist)>0?`<br>${pctChip(dagTot(gist),vjDag(gist))} vorig jaar ${veiligTekst(mbPondKort(vjDag(gist)))}`:''):'geen marktdag')
     +tegel('Totaal periode', veiligTekst(mbPondKort(totaal)),
         `${veiligTekst(mbKort(van))} &ndash; ${veiligTekst(mbKort(tot))} &middot; ${dagen.length} ${dagen.length===1?'dag':'dagen'}`)
     +tegel('Gemiddeld per dag', klaar.length?veiligTekst(mbPondKort(gem)):'&mdash;',
         beste?`beste: ${veiligTekst(mbOmzDagNaam(beste))}, ${veiligTekst(mbPondKort(dagTot(beste)))}`:'over afgesloten dagen')
+    +(heeftVJ?(()=>{ const p=vjKlaar>0?(nuKlaar/vjKlaar-1)*100:null;
+        return tegel('Tegen vorig jaar', p==null?'&mdash;':`<span style="color:${p>=0?'#0F7A52':'#B4472B'}">${p>=0?'+':'−'}${Math.abs(Math.round(p))}%</span>`,
+          klaarDagen.length?`${veiligTekst(mbPondKort(nuKlaar))} nu &middot; ${veiligTekst(mbPondKort(vjKlaar))} vorig jaar<br>t/m gisteren, zelfde weekdagen`:'nog geen afgesloten dag'); })():'')
     +'</div>';
 
   // Per kraam in de periode, met een balk naar verhouding.
@@ -7555,8 +7576,18 @@ async function mbOmzet(){
         <div style="flex:1;min-width:0;display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600">${mbStip(x.k.kleur)}${veiligTekst(x.k.naam)}</div>
         <div style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(x.omzet))}</div>
         <div style="flex:0 0 34px;text-align:right;font-size:12px;color:var(--muted)">${pct}%</div></div>
-      <div style="height:10px;background:#F1EFEA;border-radius:5px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.round(x.omzet/maxK*100)}%;background:${veiligTekst(x.k.kleur)}"></div></div></div>`;
+      <div style="height:10px;background:#F1EFEA;border-radius:5px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.round(x.omzet/maxK*100)}%;background:${veiligTekst(x.k.kleur)}"></div></div>
+      ${heeftVJ?(()=>{ const nu=klaarDagen.reduce((a,d)=>{ const r=cel(d,x.k.id); return a+(r?n(r.omzet_totaal):0); },0);
+          const vj=klaarDagen.reduce((a,d)=>a+(vjKraam(d,x.k.id)||0),0);
+          return vj>0?`<div style="font-size:12px;color:var(--muted);margin-top:5px">t/m gisteren ${veiligTekst(mbPondKort(nu))} &middot; vorig jaar ${veiligTekst(mbPondKort(vj))} ${pctChip(nu,vj,true)}</div>`
+                     :(klaarDagen.length?'<div style="font-size:12px;color:var(--muted);margin-top:5px">vorig jaar: geen omzet op deze dagen</div>':''); })():''}</div>`;
   });
+  if(heeftVJ){
+    const weg=[...new Set(VJ.filter(r=>!r.kraam_id&&klaarDagen.includes(r.datum)).map(r=>r.kraam_naam))];
+    weg.forEach(nm=>{ const v=VJ.filter(r=>r.kraam_naam===nm&&klaarDagen.includes(r.datum)).reduce((a,r)=>a+n(r.totaal),0);
+      if(v>0)uit+=`<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;font-size:12.5px;color:var(--muted)">
+        <span>${veiligTekst(nm)} &middot; alleen vorig jaar</span><span style="font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(v))}</span></div>`; });
+  }
   uit+=`<div style="display:flex;justify-content:space-between;border-top:2px solid var(--border);margin-top:6px;padding-top:9px;font-size:15px;font-weight:700">
     <span>Totaal</span><span style="font-variant-numeric:tabular-nums">${veiligTekst(mbPond(totaal))}</span></div>
     <div style="font-size:12px;color:var(--muted);margin-top:3px;text-align:right">pin ${veiligTekst(mbPond(totPin))} &middot; contant ${veiligTekst(mbPond(totCon))}</div></div>`;
@@ -7570,8 +7601,10 @@ async function mbOmzet(){
     if(r.dicht)return '<span style="color:var(--muted)">dicht</span>';
     const sub=d===vandaag?'loopt nog':(r.omzet_contant==null?'<span style="color:#B45309">contant?</span>'
       :`pin ${veiligTekst(mbPondKort(r.omzet_pin))} &middot; contant ${veiligTekst(mbPondKort(r.omzet_contant))}`);
+    const vk=heeftVJ?vjKraam(d,k.id):null;
     const inh=`<div style="font-weight:600;font-size:14px">${veiligTekst(mbPondKort(r.omzet_totaal))}</div>
-      <div style="font-size:11px;color:var(--muted);white-space:nowrap">${sub}</div>`;
+      <div style="font-size:11px;color:var(--muted);white-space:nowrap">${sub}</div>
+      ${vk?`<div style="font-size:11px;color:var(--muted);white-space:nowrap">vj ${veiligTekst(mbPondKort(vk))}</div>`:''}`;
     return doorklik?`<a href="#" onclick="mbOmzNaarDag('${veiligJs(k.id)}','${veiligJs(d)}');return false" style="color:inherit;text-decoration:none">${inh}</a>`:inh; };
   const balk=d=>{ const t=dagTot(d); if(t<=0)return '';
     return `<div style="display:flex;height:6px;border-radius:3px;overflow:hidden;background:#F1EFEA;margin-top:5px;width:${Math.max(4,Math.round(t/maxDag*100))}%">`
@@ -7580,17 +7613,23 @@ async function mbOmzet(){
 
   uit+='<div class="mb-kaart mbo-tabel" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr><th>Dag</th>'
     +kramen.map(k=>`<th style="text-align:right"><span style="display:inline-flex;align-items:center;gap:6px">${mbStip(k.kleur)}${veiligTekst(k.naam)}</span></th>`).join('')
-    +'<th style="text-align:right;min-width:150px">Totaal</th></tr>'
+    +'<th style="text-align:right;min-width:150px">Totaal</th>'+(heeftVJ?'<th style="text-align:right;min-width:140px">Vorig jaar</th>':'')+'</tr>'
     +`<tr style="background:#FAF9F6"><td style="font-weight:700">Totaal periode</td>`
     +perKraam.map(x=>`<td style="text-align:right;font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(x.omzet))}</td>`).join('')
-    +`<td style="text-align:right;font-weight:800;font-size:15px;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(totaal))}</td></tr></thead><tbody>`;
+    +`<td style="text-align:right;font-weight:800;font-size:15px;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(totaal))}</td>`
+    +(heeftVJ?`<td style="text-align:right"><div style="font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(vjKlaar))} ${pctChip(nuKlaar,vjKlaar,true)}</div><div style="font-size:11px;color:var(--muted)">t/m gisteren</div></td>`:'')
+    +`</tr></thead><tbody>`;
   dagen.forEach(d=>{
     const nu=d===vandaag;
     uit+=`<tr${nu?' style="background:#FFFBF2"':''}><td style="white-space:nowrap"><div style="font-weight:600">${veiligTekst(mbOmzDagNaam(d))}</div>
       ${nu?'<div style="font-size:11px;color:#B45309;font-weight:600">vandaag</div>':''}</td>`
       +kramen.map(k=>`<td style="text-align:right;font-variant-numeric:tabular-nums">${celHtml(d,k)}</td>`).join('')
       +`<td style="text-align:right"><div style="font-weight:800;font-size:15px;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(dagTot(d)))}</div>
-        <div style="display:flex;justify-content:flex-end">${balk(d)}</div></td></tr>`;
+        <div style="display:flex;justify-content:flex-end">${balk(d)}</div></td>`
+      +(heeftVJ?(()=>{ const v=vjDag(d), o=vjOpm(d);
+          return `<td style="text-align:right"${o?` title="${veiligTekst(o)}"`:''}><div style="font-weight:600;font-variant-numeric:tabular-nums">${v>0?veiligTekst(mbPondKort(v)):'&ndash;'} ${!nu&&v>0?pctChip(dagTot(d),v,true):''}</div>
+            <div style="font-size:11px;color:var(--muted);white-space:nowrap">${veiligTekst(vjNaam(d))}${o?' &#9729;':''}</div></td>`; })():'')
+      +'</tr>';
   });
   uit+='</tbody></table></div>';
 
@@ -7602,11 +7641,14 @@ async function mbOmzet(){
         <div style="font-size:15px;font-weight:700">${veiligTekst(mbOmzDagNaam(d))}${nu?' <span style="font-size:11.5px;color:#B45309">&middot; loopt nog</span>':''}</div>
         <div style="font-size:19px;font-weight:800;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(dagTot(d)))}</div></div>
       ${balk(d)}
+      ${heeftVJ&&vjDag(d)>0?`<div style="font-size:12.5px;color:var(--muted);margin-top:7px">Vorig jaar (${veiligTekst(vjNaam(d))}): <b style="color:var(--text)">${veiligTekst(mbPondKort(vjDag(d)))}</b> ${nu?'':pctChip(dagTot(d),vjDag(d),true)}
+        ${vjOpm(d)?`<div style="font-style:italic;margin-top:2px">&ldquo;${veiligTekst(vjOpm(d))}&rdquo;</div>`:''}</div>`:''}
       <div style="margin-top:8px">`
       +kramen.map(k=>{ const r=cel(d,k.id); if(!r)return '';
         const rechts=r.dicht?'<span style="color:var(--muted)">dicht</span>':veiligTekst(mbPondKort(r.omzet_totaal));
         const sub=r.dicht||nu?'':(r.omzet_contant==null?'<span style="color:#B45309">contant nog invullen</span>'
-          :`pin ${veiligTekst(mbPondKort(r.omzet_pin))} &middot; contant ${veiligTekst(mbPondKort(r.omzet_contant))}`);
+          :`pin ${veiligTekst(mbPondKort(r.omzet_pin))} &middot; contant ${veiligTekst(mbPondKort(r.omzet_contant))}`)
+          +(heeftVJ&&vjKraam(d,k.id)?`${r.dicht||nu?'':' &middot; '}vj ${veiligTekst(mbPondKort(vjKraam(d,k.id)))}`:'');
         return `<div ${doorklik?`onclick="mbOmzNaarDag('${veiligJs(k.id)}','${veiligJs(d)}')" `:''}style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border);cursor:${doorklik?'pointer':'default'}">
           <div style="min-width:0"><div style="display:flex;align-items:center;gap:7px;font-size:13.5px">${mbStip(k.kleur)}${veiligTekst(k.naam)}</div>
           ${sub?`<div style="font-size:11.5px;color:var(--muted);margin-left:16px">${sub}</div>`:''}</div>
@@ -7618,6 +7660,7 @@ async function mbOmzet(){
   uit+=`<div style="font-size:12px;color:var(--muted);line-height:1.6;margin:4px 2px 0">
     Omzet = pin uit myPOS (komt elke 15 minuten vanzelf binnen) + contant zoals ingevuld in het dagrapport.
     Staat er <span style="color:#B45309">contant?</span>, dan is het contant van die dag nog niet ingevuld en is het bedrag alleen pin.
+    ${heeftVJ?'Vorig jaar = dezelfde weekdag 52 weken eerder (vr 6 nov 2026 &harr; vr 7 nov 2025, beide marktdag 1); &ldquo;vj&rdquo; is die kraam vorig jaar. Het percentage telt alleen afgesloten dagen, want vandaag loopt nog. Houd de muis op een dag voor je opmerking van vorig jaar (&#9729;).':''}
     ${doorklik?'Tik op een bedrag om het dagrapport van die kraam en dag te openen.':''}</div>`;
   mbOmzDoel().innerHTML=uit;
 }
