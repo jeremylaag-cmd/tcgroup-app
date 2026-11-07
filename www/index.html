@@ -3958,6 +3958,12 @@ const MB_WEEKDAGEN=['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag
 const MB_TABS=[['overzicht','Overzicht'],['omzet','Omzet'],['shifts','Shifts'],['agenda','Agenda'],['uren','Uren'],['dagrapport','Dagrapport'],
                ['inlezen','Inlezen'],['cijfers','Cijfers'],['kosten','Kosten'],['bezetting','Bezetting'],
                ['mensen','Mensen'],['huisregels','Huisregels'],['instellingen','Instellingen']];
+// Omzet en alles wat geld binnen laat zien: alleen Bram's account (zie
+// supabase/mcr_omzet_alleen_bram.sql, daar dwingt de database het af).
+const MB_OMZET_EIGENAAR='adb8bd40-f0b6-4aa2-a16d-a67932202c02';
+const MB_OMZET_TABS=['omzet','dagrapport','inlezen','cijfers','kosten','bezetting'];
+function mbMagOmzet(){ return typeof isAdmin==='function'&&isAdmin()&&!!CURRENT_USER&&CURRENT_USER.id===MB_OMZET_EIGENAAR; }
+function mbTabs(){ return mbMagOmzet()?MB_TABS:MB_TABS.filter(([k])=>!MB_OMZET_TABS.includes(k)); }
 
 // ── kleine hulpjes ────────────────────────────────────────────────
 function mbDatum(d){ return d?new Date(String(d)+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}):''; }
@@ -4016,13 +4022,14 @@ async function mbKramenLijst(){
 function loadMcrBeheer(){ mbNaar(MB_TAB||'overzicht'); }
 function mbNaar(tab, knop){
   if(!mbMensenMagWeg())return;
+  if(MB_OMZET_TABS.includes(tab)&&!mbMagOmzet()){ tab='overzicht'; knop=null; }
   MB_TAB=tab; meldingenStraks();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-mcrbeheer').classList.add('active');
   const alle=[...document.querySelectorAll('.htab')];
   alle.forEach(t=>t.classList.remove('active'));
   if(knop)knop.classList.add('active');
-  else{ const i=MB_TABS.findIndex(x=>x[0]===tab); if(alle[i])alle[i].classList.add('active'); }
+  else{ const i=mbTabs().findIndex(x=>x[0]===tab); if(alle[i])alle[i].classList.add('active'); }
   mbOnderbalk(tab);
   const el=document.getElementById('mbInhoud');
   el.innerHTML='<div class="mb-kaart" style="text-align:center;color:var(--muted)">Bezig&hellip;</div>';
@@ -4044,7 +4051,8 @@ function mbOnderbalk(tab){
     omzet:'<path d="M4 20h16"/><rect x="5" y="11" width="3.5" height="7" rx="1"/><rect x="10.25" y="6" width="3.5" height="12" rx="1"/><rect x="15.5" y="9" width="3.5" height="9" rx="1"/>',
     meer:'<circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/>',
   };
-  const items=[['overzicht','Overzicht'],['omzet','Omzet'],['shifts','Shifts'],['uren','Uren'],['meer','Meer']];
+  const items=mbMagOmzet()?[['overzicht','Overzicht'],['omzet','Omzet'],['shifts','Shifts'],['uren','Uren'],['meer','Meer']]
+                          :[['overzicht','Overzicht'],['shifts','Shifts'],['uren','Uren'],['meer','Meer']];
   bn.classList.add('visible');
   bn.innerHTML=items.map(([k,l])=>{
     const aan=(k===tab)||(k==='meer'&&!items.some(i=>i[0]===tab));
@@ -4055,7 +4063,7 @@ function mbOnderbalk(tab){
   }).join('');
 }
 function mbMeer(){
-  const rest=MB_TABS.filter(([k])=>!['overzicht','omzet','shifts','uren'].includes(k));
+  const rest=mbTabs().filter(([k])=>!['overzicht','omzet','shifts','uren'].includes(k));
   let ov=document.getElementById('mbMeerOverlay');
   if(!ov){ ov=document.createElement('div'); ov.id='mbMeerOverlay'; document.body.appendChild(ov); }
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:9000;display:flex;align-items:flex-end';
@@ -12615,7 +12623,7 @@ async function initApp(user){
     // Sta je op Manchester, dan gaat de hele Nederlandse balk eraf en komen
     // er alleen Manchester-tabbladen voor in de plaats.
     if(ACTIEVE_VESTIGING==='MCR'){
-      tabs.innerHTML = MB_TABS.map(([k,l],i)=>
+      tabs.innerHTML = mbTabs().map(([k,l],i)=>
         `<button class="htab${i===0?' active':''}" onclick="mbNaar('${k}',this)">${veiligTekst(l)}</button>`).join('');
       ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
       const bn=document.getElementById('bottomNav'); if(bn)bn.classList.remove('visible');
