@@ -1546,6 +1546,7 @@ textarea.crm-in{resize:vertical;line-height:1.5}
     <div class="ingang" id="ingangKeuze">
       <button type="button" data-ingang="NL" onclick="kiesIngang('NL')">Nederland</button>
       <button type="button" data-ingang="MCR" onclick="kiesIngang('MCR')">Manchester</button>
+      <button type="button" data-ingang="LPL" onclick="kiesIngang('LPL')">Liverpool</button>
     </div>
     <div class="auth-logo" id="authLogo">TC Group <span>/ Planning</span></div>
     <div class="notr" id="authTaal" style="text-align:right;margin:-6px 0 6px;font-size:12px"><button type="button" onclick="kiesTaal(TAAL==='en'?'nl':'en')" style="background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font-family:var(--font);font-size:12px;padding:0"></button></div>
@@ -1691,6 +1692,7 @@ textarea.crm-in{resize:vertical;line-height:1.5}
     <div>
       <div class="mcr-title" id="mcrTitel">My shifts</div>
       <div class="mcr-sub" id="mcrSub"></div>
+      <div class="vest-switch" id="mcrVestSwitch" style="display:none;margin-top:8px;width:max-content"></div>
     </div>
     <div class="mcr-avatar" id="mcrAvatar"></div>
   </header>
@@ -3721,8 +3723,8 @@ function toast(tekst,soort){
 // Wie via de Manchester-ingang binnenkomt of bij Manchester hoort, krijgt
 // Engelse meldingen. Anders stond er ineens Nederlands op een Engels scherm.
 function engelsScherm(){
-  try{ if(typeof MIJN_VESTIGING!=='undefined' && MIJN_VESTIGING==='MCR')return true; }catch(e){}
-  try{ return localStorage.getItem('tc_ingang')==='MCR'; }catch(e){ return false; }
+  try{ if(typeof MIJN_VESTIGING!=='undefined' && isMarkt(MIJN_VESTIGING))return true; }catch(e){}
+  try{ return isMarkt(localStorage.getItem('tc_ingang')); }catch(e){ return false; }
 }
 async function sbFetch(input,init){
   const url=typeof input==='string'?input:(input&&input.url)||'';
@@ -4002,7 +4004,24 @@ const MB_TABS=[['overzicht','Overzicht'],['omzet','Omzet'],['shifts','Shifts'],[
 const MB_OMZET_EIGENAAR='adb8bd40-f0b6-4aa2-a16d-a67932202c02';
 const MB_OMZET_TABS=['omzet','dagrapport','inlezen','cijfers','kosten','bezetting'];
 function mbMagOmzet(){ return typeof isAdmin==='function'&&isAdmin()&&!!CURRENT_USER&&CURRENT_USER.id===MB_OMZET_EIGENAAR; }
-function mbTabs(){ return mbMagOmzet()?MB_TABS:MB_TABS.filter(([k])=>!MB_OMZET_TABS.includes(k)); }
+// Een planner (geen beheerder) ziet alleen plannen, uren, mensen en huisregels.
+const MB_PLANNER_TABS=['overzicht','shifts','agenda','uren','mensen','huisregels'];
+function mbTabs(){
+  if(PLANNER_MODUS)return MB_TABS.filter(([k])=>MB_PLANNER_TABS.includes(k));
+  return mbMagOmzet()?MB_TABS:MB_TABS.filter(([k])=>!MB_OMZET_TABS.includes(k)); }
+
+// Per kraam: contant ja/nee, waar de pin vandaan komt (myPOS of met de hand
+// van de bon) en welk percentage naar de markt gaat. Liverpool: geen contant,
+// terminals van de organisatie, 28% afdracht.
+let MB_KRAAM_INFO=null;
+async function mbKraamInfo(){
+  if(MB_KRAAM_INFO)return MB_KRAAM_INFO;
+  const{data,error}=await sb.rpc('markt_kraam_info');
+  MB_KRAAM_INFO={};
+  if(!error)(data||[]).forEach(r=>{ MB_KRAAM_INFO[r.kraam_id]={contant:r.contant!==false,pin:r.pin_bron||'mypos',afdracht:Number(r.afdracht_pct)||0,vestiging:r.vestiging}; });
+  return MB_KRAAM_INFO;
+}
+function mbKraamContant(kid){ const i=MB_KRAAM_INFO&&MB_KRAAM_INFO[kid]; return !i||i.contant; }
 
 // ── kleine hulpjes ────────────────────────────────────────────────
 function mbDatum(d){ return d?new Date(String(d)+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}):''; }
@@ -4062,6 +4081,7 @@ function loadMcrBeheer(){ mbNaar(MB_TAB||'overzicht'); }
 function mbNaar(tab, knop){
   if(!mbMensenMagWeg())return;
   if(MB_OMZET_TABS.includes(tab)&&!mbMagOmzet()){ tab='overzicht'; knop=null; }
+  if(PLANNER_MODUS&&!MB_PLANNER_TABS.includes(tab)){ tab='overzicht'; knop=null; }
   MB_TAB=tab; MB_OMZ_KIJK=false; meldingenStraks();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-mcrbeheer').classList.add('active');
@@ -4143,7 +4163,7 @@ async function mbOverzicht(){
   // Dagafsluiting door de kraammanagers (los, zodat Overzicht blijft werken als dit faalt).
   const [afs, boeteR] = await Promise.all([
     sb.rpc('mcr_afsluitingen',{p_datum:MB_DATUM}).then(x=>x,()=>({data:[]})),
-    sb.from('vestiging_instellingen').select('waarde').eq('vestiging','MCR').eq('sleutel','te_laat_boete').maybeSingle().then(x=>x,()=>({data:null}))]);
+    sb.from('vestiging_instellingen').select('waarde').eq('vestiging',dezeMarkt()).eq('sleutel','te_laat_boete').maybeSingle().then(x=>x,()=>({data:null}))]);
   MB_AFS=(afs&&!afs.error&&Array.isArray(afs.data))?afs.data:[];
   MB_AFS_BOETE=Number(String((boeteR&&boeteR.data&&boeteR.data.waarde)||'').replace(',','.'))||50;
   // Pinomzet per kraam die dag (uit myPOS, via ophalen of inlezen).
@@ -6922,7 +6942,7 @@ async function mbRondes(){
   const rondes=data||[];
   const VAST={}; ((vast&&!vast.error&&vast.data)||[]).forEach(v=>{ VAST[v.ronde_id]=v; });
   const kop=document.getElementById('mbUrenKop');
-  if(kop)kop.innerHTML=mbKop('Betaalrondes','Alleen Manchester-uren &middot; zij maken zelf een PDF en mailen die naar je; hier vink je af wat binnen is, zie je wat je overmaakt en zet je de ronde vast');
+  if(kop)kop.innerHTML=mbKop('Betaalrondes','Alleen '+veiligTekst(marktNaam(dezeMarkt()))+'-uren &middot; zij maken zelf een PDF en mailen die naar je; hier vink je af wat binnen is, zie je wat je overmaakt en zet je de ronde vast');
   if(!MB_RONDE||!rondes.some(r=>r.ronde_id===MB_RONDE)){
     const o=rondes.find(r=>r.afgelopen&&!VAST[r.ronde_id]&&r.mensen>0)||rondes.find(r=>r.afgelopen&&r.facturen<r.mensen)||rondes.find(r=>r.afgelopen)||rondes[0];
     MB_RONDE=o?o.ronde_id:null;
@@ -6970,7 +6990,7 @@ async function mbRondeDetail(id){
     if(error)throw error;
     const m=MB_RONDE_RIJEN=(data||[]);
     const R=MB_RONDE_INFO||{};
-    if(!m.length){ el.innerHTML='<div class="mb-kaart">In deze periode heeft nog niemand in Manchester gewerkt.</div>'; return; }
+    if(!m.length){ el.innerHTML='<div class="mb-kaart">In deze periode heeft nog niemand in '+veiligTekst(marktNaam(dezeMarkt()))+' gewerkt.</div>'; return; }
     const som=k=>m.reduce((a,r)=>a+Number(r[k]||0),0);
     const vast=m.some(r=>r.vastgezet_op), open=m.reduce((a,r)=>a+Number(r.open_n||0),0);
     const minW=m.filter(mbRondeMinWaarschuwing), geenBank=m.filter(r=>Number(r.netto)>0&&!(r.sort_code&&r.bank_account));
@@ -7093,7 +7113,7 @@ function mbRondeCsv(soort){
       if(sc.length!==6||ac.length<6){ zonder.push(r.naam); return; }
       rijen.push([String(r.naam||'').slice(0,18),sc,ac.padStart(8,'0'),Number(r.netto).toFixed(2),ref]);
     });
-    mbBestandDelen(rijen.map(r=>r.map(q).join(',')).join('\r\n')+'\r\n','Manchester ronde '+(R.nummer||'')+' bank.csv','text/csv;charset=utf-8');
+    mbBestandDelen(rijen.map(r=>r.map(q).join(',')).join('\r\n')+'\r\n',marktNaam(dezeMarkt())+' ronde '+(R.nummer||'')+' bank.csv','text/csv;charset=utf-8');
     if(zonder.length)alert('Niet in het bankbestand (sort code of rekeningnummer ontbreekt of klopt niet): '+zonder.join(', '));
     return;
   }
@@ -7104,20 +7124,26 @@ function mbRondeCsv(soort){
     r.sort_code||'',r.bank_account||'',r.utr||'',r.factuur_nummer||'',r.factuur_bedrag!=null?g(r.factuur_bedrag):'',
     r.betaald_op?'betaald':r.ontvangen_op?'ontvangen':r.factuur_id?'gedownload':'geen factuur',r.open_n||0,mbRondeMinWaarschuwing(r)?'ja':'']);
   const tekst='﻿'+[kop,...rijen].map(r=>r.map(q).join(';')).join('\r\n')+'\r\n';
-  mbBestandDelen(tekst,'Manchester ronde '+(R.nummer||'')+' uitbetaling.csv','text/csv;charset=utf-8');
+  mbBestandDelen(tekst,marktNaam(dezeMarkt())+' ronde '+(R.nummer||'')+' uitbetaling.csv','text/csv;charset=utf-8');
 }
 
 // ── DAGRAPPORT — één dag, kraam als tabblad ───────────────────────
+let MB_DAG_INFO=null, MB_DAG_TERM=[];
 async function mbDagrapport(){
   const kramen=await mbKramenLijst();
   if(!kramen.length){ document.getElementById('mbInhoud').innerHTML='<div class="mb-kaart">Er staan nog geen kramen.</div>'; return; }
   if(!MB_DAG_KRAAM||!kramen.some(k=>k.id===MB_DAG_KRAAM))MB_DAG_KRAAM=kramen[0].id;
   await mbDatumVandaag();
-  const [{data,error},tb]=await Promise.all([
+  const info=(await mbKraamInfo())[MB_DAG_KRAAM]||{contant:true,pin:'mypos',afdracht:0};
+  const [{data,error},tb,hp]=await Promise.all([
     sb.rpc('mcr_dagrapport',{p_van:MB_DATUM,p_tot:MB_DATUM,p_kraam:MB_DAG_KRAAM}),
-    sb.rpc('mcr_dag_te_beoordelen',{p_kraam:MB_DAG_KRAAM,p_datum:MB_DATUM}).then(x=>x,()=>({data:[]}))]);
+    sb.rpc('mcr_dag_te_beoordelen',{p_kraam:MB_DAG_KRAAM,p_datum:MB_DATUM}).then(x=>x,()=>({data:[]})),
+    info.pin==='handmatig'?sb.rpc('mcr_pin_handmatig_lijst',{p_kraam:MB_DAG_KRAAM,p_datum:MB_DATUM}).then(x=>x,()=>({data:[]})):Promise.resolve({data:[]})]);
   if(error)throw error;
   const r=(data&&data[0])||null;
+  MB_DAG_INFO=info;
+  MB_DAG_TERM=((hp&&!hp.error&&hp.data)||[]).map(x=>({tid:x.tid,omzet:x.omzet,transacties:x.transacties}));
+  if(info.pin==='handmatig'&&!MB_DAG_TERM.length)MB_DAG_TERM=[{tid:'Terminal 1',omzet:null,transacties:null},{tid:'Terminal 2',omzet:null,transacties:null}];
   MB_DAG_BEOORDEEL=(tb&&!tb.error&&Array.isArray(tb.data))?tb.data:[];
 
   let uit=mbKop('Dagrapport &middot; '+veiligTekst(mbLang(MB_DATUM)),
@@ -7158,8 +7184,9 @@ async function mbDagrapport(){
   uit+='<div class="mb-rij2">';
   uit+=`<div class="mb-kaart" style="flex:1;min-width:300px">
     <div class="mb-kop">Wat jij invult</div>
+    ${MB_DAG_INFO&&MB_DAG_INFO.pin==='handmatig'?mbDagTerminalsHtml():''}
     <div class="mb-veldrij">
-      ${inv('Omzet contant (&pound;)','mbDC','number',r.omzet_contant,'0,00')}
+      ${MB_DAG_INFO&&!MB_DAG_INFO.contant?'':inv('Omzet contant (&pound;)','mbDC','number',r.omzet_contant,'0,00')}
       ${keuze('Weer (ervaren)','mbDW',r.weer||'Kies —',['Kies —','Zon / droog','Bewolkt / droog','Lichte regen','Hele dag regen','Storm / harde wind','Sneeuw / ijzel'])}
       ${keuze('Wachtrij op de piek','mbDQ',r.wachtrij_piek||'Geen',['Geen','Kort (< 5 min)','Lang (10+ mensen)'])}
     </div>
@@ -7178,7 +7205,7 @@ async function mbDagrapport(){
   uit+=`<div class="mb-kaart" style="flex:1;min-width:300px">
     <div class="mb-kop">Wat de app zelf invult</div>
     <div class="mb-veldrij">
-      ${vast('Omzet pin (&pound;)', veiligTekst(mbPond(r.omzet_pin)))}
+      ${vast(MB_DAG_INFO&&MB_DAG_INFO.pin==='handmatig'?'Omzet pin, alle terminals (&pound;)':'Omzet pin (&pound;)', veiligTekst(mbPond(r.omzet_pin)))}
       ${vast('Transacties', r.transacties||0)}
       ${vast('Gem. bon (&pound;)', r.gem_bon?veiligTekst(mbPond(r.gem_bon)):'&mdash;')}
     </div>
@@ -7197,13 +7224,45 @@ async function mbDagrapport(){
     <div class="mb-veldrij">
       ${vast('Porties', r.porties!=null?r.porties:'&mdash;')}
       ${vast('Toppings', r.toppings!=null?r.toppings:'&mdash;')}
-      ${vast('myPOS-kosten', veiligTekst(mbPond(r.mypos_kosten)))}
+      ${MB_DAG_INFO&&MB_DAG_INFO.pin==='handmatig'?'':vast('myPOS-kosten', veiligTekst(mbPond(r.mypos_kosten)))}
     </div>
+    ${MB_DAG_INFO&&MB_DAG_INFO.afdracht>0?`<div class="mb-veldrij">
+      ${vast('Afdracht markt ('+MB_DAG_INFO.afdracht+'%)', '&minus; '+veiligTekst(mbPond(Number(r.omzet_totaal||0)*MB_DAG_INFO.afdracht/100)))}
+      ${vast('Netto voor jou', '<b style="color:#0F7A52">'+veiligTekst(mbPond(Number(r.omzet_totaal||0)*(100-MB_DAG_INFO.afdracht)/100))+'</b>')}
+    </div>`:''}
     <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:12px">
-      Personeelsuren en bezetting komen uit de geklokte uren van die dag. Pinomzet, transacties, gemiddelde bon,
-      porties en toppings komen uit de myPOS-bestanden die je <button class="mb-linktekst" onclick="mbNaar('inlezen')">hier inleest</button>.
+      Personeelsuren en bezetting komen uit de geklokte uren van die dag. ${MB_DAG_INFO&&MB_DAG_INFO.pin==='handmatig'
+        ?'Pinomzet en transacties zijn de dagtotalen die je hierboven per terminal van de bon overneemt. De uitbetaling van de organisatie moet gelijk zijn aan &ldquo;Netto voor jou&rdquo; over dezelfde periode.'
+        :`Pinomzet, transacties, gemiddelde bon,
+      porties en toppings komen uit de myPOS-bestanden die je <button class="mb-linktekst" onclick="mbNaar('inlezen')">hier inleest</button>.`}
     </div></div></div>`;
   document.getElementById('mbInhoud').innerHTML=uit;
+}
+// Liverpool: per terminal het dagtotaal en het aantal transacties van de bon.
+function mbDagTerminalsHtml(){
+  const rij=(t,i)=>`<div class="mb-veldrij" style="align-items:flex-end">
+      <div style="flex:1 1 150px"><label class="mb-lab">Terminal</label>
+        <input class="mb-veld" id="mbTN${i}" maxlength="40" value="${veiligTekst(t.tid||'')}" placeholder="bv. Terminal 1"></div>
+      <div style="flex:1 1 120px"><label class="mb-lab">Dagtotaal (&pound;)</label>
+        <input class="mb-veld" id="mbTO${i}" inputmode="decimal" value="${t.omzet!=null?veiligTekst(t.omzet):''}" placeholder="0,00"></div>
+      <div style="flex:1 1 110px"><label class="mb-lab">Transacties</label>
+        <input class="mb-veld" id="mbTT${i}" type="number" min="0" value="${t.transacties!=null?veiligTekst(t.transacties):''}" placeholder="0"></div>
+    </div>`;
+  return `<div style="font-size:12.5px;color:var(--muted);margin:-2px 0 8px">Van de terminalbon (Z-rapport) van de organisatie, per terminal.</div>
+    <div id="mbTermLijst">${MB_DAG_TERM.map(rij).join('')}</div>
+    <button class="mb-mini" style="margin:2px 0 12px" onclick="mbDagTermErbij()">+ Terminal</button>`;
+}
+function mbDagTermLees(){
+  return MB_DAG_TERM.map((t,i)=>{
+    const g=id=>{const e=document.getElementById(id);return e?e.value:'';};
+    return {tid:g('mbTN'+i).trim(), omzet:g('mbTO'+i).trim(), transacties:g('mbTT'+i).trim()};
+  });
+}
+function mbDagTermErbij(){
+  MB_DAG_TERM=mbDagTermLees();
+  MB_DAG_TERM.push({tid:'Terminal '+(MB_DAG_TERM.length+1),omzet:null,transacties:null});
+  const el=document.getElementById('mbTermLijst');
+  if(el){ const tmp=document.createElement('div'); tmp.innerHTML=mbDagTerminalsHtml(); const l=tmp.querySelector('#mbTermLijst'); if(l)el.innerHTML=l.innerHTML; }
 }
 function mbDagR(stap){
   const d=new Date((MB_DATUM||mbVandaagStr())+'T00:00:00'); d.setDate(d.getDate()+stap);
@@ -7221,17 +7280,32 @@ async function mbDagOpslaan(){
     alert('Vul eerst de beoordeling in van: '+mist.map(k=>k.p.naam).join(', ')+'.');
     return;
   }
+  // Terminals (Liverpool): bedragen controleren vóór er iets wordt opgeslagen.
+  let term=null;
+  if(MB_DAG_INFO&&MB_DAG_INFO.pin==='handmatig'){
+    term=mbDagTermLees().filter(t=>t.tid||t.omzet||t.transacties);
+    for(const t of term){
+      if(!t.tid){ alert('Geef elke terminal een naam.'); return; }
+      const b=t.omzet===''?0:mbBedragLees(t.omzet);
+      if(b==null||isNaN(b)||b<0){ alert('Het dagtotaal van '+t.tid+' klopt niet.'); return; }
+      t.omzet=String(b);
+    }
+  }
   try{
     for(const k of keuzes){
       const{error:eb}=await sb.rpc('mcr_persoon_opslaan',{p_id:k.p.id,p_uurloon:null,p_beoordeling:k.el.value,p_goedkeuren:null,p_kleding:null});
       if(eb)throw eb;
+    }
+    if(term){
+      const{error:et}=await sb.rpc('mcr_pin_handmatig_zetten',{p_kraam:MB_DAG_KRAAM,p_datum:MB_DATUM,p_regels:term});
+      if(et)throw et;
     }
     const{error}=await sb.rpc('mcr_dagrapport_opslaan',{
       p_kraam:MB_DAG_KRAAM,p_datum:MB_DATUM,p_forecast:n('mbDF'),p_contant:n('mbDC'),
       p_weer:leeg(v('mbDW')),p_temp:null,p_neerslag:null,p_wachtrij:leeg(v('mbDQ')),
       p_incident:leeg(v('mbDI')),p_event:v('mbDE'),p_voorraad:leeg(v('mbDV')),p_opmerking:v('mbDO')});
     if(error)throw error;
-    if(keuzes.length){ toast(keuzes.length===1?'Beoordeling en dagrapport opgeslagen':'Beoordelingen en dagrapport opgeslagen'); mbNaar('dagrapport'); return; }
+    if(keuzes.length||term){ toast(keuzes.length===1?'Beoordeling en dagrapport opgeslagen':(keuzes.length?'Beoordelingen en dagrapport opgeslagen':'Dagrapport opgeslagen')); mbNaar('dagrapport'); return; }
     const ok=document.getElementById('mbDagOk'); if(ok){ok.style.display='';setTimeout(()=>ok.style.display='none',2200);}
   }catch(e){ alert(mbFout(e)); }
 }
@@ -7827,10 +7901,13 @@ function mbOmzEigen(wat,v){ if(!v)return; if(MB_OMZ!=='eigen'){ MB_OMZ='eigen'; 
 function mbOmzNaarDag(kid,d){ MB_DAG_KRAAM=kid; mbZetDatum(d); mbNaar('dagrapport'); }
 function mbOmzDagNaam(d){ return new Date(String(d)+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}); }
 async function mbOmzet(){
-  const kr=await sb.rpc('mcr_omzet_kramen');
+  const [kr]=await Promise.all([sb.rpc('mcr_omzet_kramen'), mbKraamInfo()]);
   if(kr.error)throw kr.error;
   const kramenAlle=kr.data||[];
-  if(!kramenAlle.length){ mbOmzDoel().innerHTML='<div class="mb-kaart">Er is (nog) geen Manchester-omzet om te laten zien.</div>'; return; }
+  if(!kramenAlle.length){ mbOmzDoel().innerHTML='<div class="mb-kaart">Er is (nog) geen omzet om te laten zien.</div>'; return; }
+  const metContant=kramenAlle.some(k=>mbKraamContant(k.id));
+  const afdr=kramenAlle.map(k=>(MB_KRAAM_INFO[k.id]||{}).afdracht||0);
+  const afdracht=afdr.length&&afdr.every(x=>x===afdr[0])?afdr[0]:0;
   const doorklik=!MB_OMZ_KIJK&&mbMagOmzet();
   const vandaag=mbVandaagStr();
   const gist=(()=>{ const x=new Date(vandaag+'T00:00:00'); x.setDate(x.getDate()-1); return fmt(x); })();
@@ -7870,7 +7947,7 @@ async function mbOmzet(){
   const gem=klaar.length?klaar.reduce((a,d)=>a+dagTot(d),0)/klaar.length:0;
   const beste=klaar.reduce((b,d)=>(!b||dagTot(d)>dagTot(b))?d:b,null);
   const maxDag=Math.max(1,...dagen.map(dagTot));
-  const contantMist=d=>d<vandaag&&alle.some(r=>r.datum===d&&!r.dicht&&r.omzet_contant==null);
+  const contantMist=d=>d<vandaag&&alle.some(r=>r.datum===d&&!r.dicht&&r.omzet_contant==null&&mbKraamContant(r.kraam_id));
   // Vorig jaar: dezelfde weekdag 52 weken eerder (vr 6 nov 2026 ↔ vr 7 nov 2025).
   const VJ=(vjr&&!vjr.error&&Array.isArray(vjr.data))?vjr.data:[];
   const heeftVJ=VJ.length>0;
@@ -7888,7 +7965,7 @@ async function mbOmzet(){
   const vjKlaar=klaarDagen.reduce((a,d)=>a+vjDag(d),0);
 
   const knop=(m,l)=>`<button class="mb-mini${MB_OMZ===m?' zwart':''}" onclick="mbOmzKies('${m}')">${l}</button>`;
-  let uit=mbKop(MB_OMZ_KIJK?'Manchester &middot; omzet':'Omzet','Per dag, per kraam en totaal &middot; pin + contant',
+  let uit=mbKop(MB_OMZ_KIJK?'Markten &middot; omzet':'Omzet','Per dag, per kraam en totaal &middot; '+(metContant?'pin + contant':'pin'),
     knop('seizoen','Hele seizoen')+knop('week','Deze week')+knop('vorige','Vorige week')
     +`<input type="date" class="mb-getal" style="width:145px" value="${veiligTekst(van)}" min="${veiligTekst(seizVan)}" max="${veiligTekst(tot0)}" onchange="mbOmzEigen('van',this.value)">
       <input type="date" class="mb-getal" style="width:145px" value="${veiligTekst(tot)}" min="${veiligTekst(seizVan)}" max="${veiligTekst(tot0)}" onchange="mbOmzEigen('tot',this.value)">`);
@@ -7951,7 +8028,7 @@ async function mbOmzet(){
   }
   uit+=`<div style="display:flex;justify-content:space-between;border-top:2px solid var(--border);margin-top:6px;padding-top:9px;font-size:15px;font-weight:700">
     <span>Totaal</span><span style="font-variant-numeric:tabular-nums">${veiligTekst(mbPond(totaal))}</span></div>
-    <div style="font-size:12px;color:var(--muted);margin-top:3px;text-align:right">pin ${veiligTekst(mbPond(totPin))} &middot; contant ${veiligTekst(mbPond(totCon))}</div></div>`;
+    <div style="font-size:12px;color:var(--muted);margin-top:3px;text-align:right">pin ${veiligTekst(mbPond(totPin))}${metContant?` &middot; contant ${veiligTekst(mbPond(totCon))}`:''}${afdracht>0?` &middot; na ${afdracht}% afdracht: <b style="color:var(--text)">${veiligTekst(mbPond(totaal*(100-afdracht)/100))}</b>`:''}</div></div>`;
 
   if(!dagen.length){ uit+='<div class="mb-kaart">Geen marktdagen in deze periode.</div>';
     mbOmzDoel().innerHTML=uit; return; }
@@ -7960,7 +8037,8 @@ async function mbOmzet(){
   const celHtml=(d,k)=>{ const r=cel(d,k.id);
     if(!r)return '<span style="color:var(--muted)">&ndash;</span>';
     if(r.dicht)return '<span style="color:var(--muted)">dicht</span>';
-    const sub=d===vandaag?'loopt nog':(r.omzet_contant==null?'<span style="color:#B45309">contant?</span>'
+    const sub=d===vandaag?'loopt nog':(!mbKraamContant(k.id)?`pin ${veiligTekst(mbPondKort(r.omzet_pin))}`
+      :r.omzet_contant==null?'<span style="color:#B45309">contant?</span>'
       :`pin ${veiligTekst(mbPondKort(r.omzet_pin))} &middot; contant ${veiligTekst(mbPondKort(r.omzet_contant))}`);
     const vk=heeftVJ?vjKraam(d,k.id):null;
     const inh=`<div style="font-weight:600;font-size:14px">${veiligTekst(mbPondKort(r.omzet_totaal))}</div>
@@ -8007,7 +8085,8 @@ async function mbOmzet(){
       <div style="margin-top:8px">`
       +kramen.map(k=>{ const r=cel(d,k.id); if(!r)return '';
         const rechts=r.dicht?'<span style="color:var(--muted)">dicht</span>':veiligTekst(mbPondKort(r.omzet_totaal));
-        const sub=r.dicht||nu?'':(r.omzet_contant==null?'<span style="color:#B45309">contant nog invullen</span>'
+        const sub=r.dicht||nu?'':(!mbKraamContant(k.id)?`pin ${veiligTekst(mbPondKort(r.omzet_pin))}`
+          :r.omzet_contant==null?'<span style="color:#B45309">contant nog invullen</span>'
           :`pin ${veiligTekst(mbPondKort(r.omzet_pin))} &middot; contant ${veiligTekst(mbPondKort(r.omzet_contant))}`)
           +(heeftVJ&&vjKraam(d,k.id)?`${r.dicht||nu?'':' &middot; '}vj ${veiligTekst(mbPondKort(vjKraam(d,k.id)))}`:'');
         return `<div ${doorklik?`onclick="mbOmzNaarDag('${veiligJs(k.id)}','${veiligJs(d)}')" `:''}style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--border);cursor:${doorklik?'pointer':'default'}">
@@ -8019,8 +8098,9 @@ async function mbOmzet(){
   uit+='</div>';
 
   uit+=`<div style="font-size:12px;color:var(--muted);line-height:1.6;margin:4px 2px 0">
-    Omzet = pin uit myPOS (komt elke 15 minuten vanzelf binnen) + contant zoals ingevuld in het dagrapport.
-    Staat er <span style="color:#B45309">contant?</span>, dan is het contant van die dag nog niet ingevuld en is het bedrag alleen pin.
+    ${metContant?`Omzet = pin uit myPOS (komt elke 15 minuten vanzelf binnen) + contant zoals ingevuld in het dagrapport.
+    Staat er <span style="color:#B45309">contant?</span>, dan is het contant van die dag nog niet ingevuld en is het bedrag alleen pin.`
+    :`Omzet = de dagtotalen per terminal die je in het dagrapport van de bon overneemt. Geen contant.${afdracht>0?` &ldquo;Na afdracht&rdquo; is wat er overblijft nadat de markt ${afdracht}% heeft ingehouden.`:''}`}
     ${heeftVJ?'Vorig jaar = dezelfde weekdag 52 weken eerder (vr 6 nov 2026 &harr; vr 7 nov 2025, beide marktdag 1); &ldquo;vj&rdquo; is die kraam vorig jaar. Het percentage telt alleen afgesloten dagen, want vandaag loopt nog. Houd de muis op een dag voor je opmerking van vorig jaar (&#9729;).':''}
     ${doorklik?'Tik op een bedrag om het dagrapport van die kraam en dag te openen.':''}</div>`;
   mbOmzDoel().innerHTML=uit;
@@ -8096,7 +8176,7 @@ async function mbKosten(){
   const som=(lijst,val)=>lijst.filter(x=>x.valuta===val).reduce((a,x)=>a+Number(x.bedrag||0),0);
   const gbp=som(r,'GBP'), eur=som(r,'EUR');
 
-  let uit=mbKop('Kosten','Uitgaven tijdens de Manchester-periode, per kraam of algemeen',
+  let uit=mbKop('Kosten','Uitgaven tijdens de '+veiligTekst(marktNaam(dezeMarkt()))+'-periode, per kraam of algemeen',
     `<input type="date" class="mb-getal" style="width:150px" title="Vanaf" value="${veiligTekst(MB_KOST_VAN||'')}" onchange="MB_KOST_VAN=this.value||null;mbNaar('kosten')">
      <input type="date" class="mb-getal" style="width:150px" title="Tot en met" value="${veiligTekst(MB_KOST_TOT||'')}" onchange="MB_KOST_TOT=this.value||null;mbNaar('kosten')">
      ${(MB_KOST_VAN||MB_KOST_TOT)?`<button class="mb-mini" onclick="MB_KOST_VAN=null;MB_KOST_TOT=null;mbNaar('kosten')">Alles tonen</button>`:''}`);
@@ -8385,7 +8465,7 @@ async function mbExport(){
     blad('Betaalrondes',(ronden.data||[]).map(r=>({Ronde:r.nummer,Van:r.periode_van,'Tot en met':r.periode_tot,
       Betaaldatum:r.betaaldatum,Mensen:r.mensen,'Goedgekeurde uren':r.uren,Bedrag:r.bedrag,
       Facturen:r.facturen,Ontvangen:r.ontvangen,'Uren die nog wachten':r.wachtende_uren})));
-    XLSX.writeFile(wb,'Manchester '+(MB_CIJ_VAN||'')+' tot '+(MB_CIJ_TOT||'')+'.xlsx');
+    XLSX.writeFile(wb,marktNaam(dezeMarkt())+' '+(MB_CIJ_VAN||'')+' tot '+(MB_CIJ_TOT||'')+'.xlsx');
     if(uit){ uit.textContent='Geexporteerd.'; setTimeout(()=>uit.textContent='',3000); }
   }catch(e){ if(uit)uit.textContent=mbFout(e); }
 }
@@ -8977,7 +9057,7 @@ function mbPersoonHtml(m, vv){
     ${m.kraammanager?'':`<label style="display:flex;align-items:flex-start;gap:9px;margin-top:10px;padding:11px 13px;border:1px solid var(--border);border-radius:12px;cursor:pointer;background:${m.alleen?'var(--bg)':'#fff'}">
       <input type="checkbox" id="mbAlleen${id}" ${m.alleen?'checked':''} onchange="mbAlleenZetten('${veiligJs(m.id)}')" style="margin-top:3px">
       <span style="font-size:13px;line-height:1.5;flex:1"><b>Alleen beschikbaarheid</b> &mdash; vraagt niet zelf om diensten (ook niet om ruil-shifts), geeft alleen op wanneer hij kan. Jij deelt in via het planbord.
-        Nieuwe Manchester-accounts krijgen dit vanzelf bij goedkeuren; haal het vinkje weg als iemand toch zelf mag vragen.
+        Nieuwe accounts op de markten krijgen dit vanzelf bij goedkeuren; haal het vinkje weg als iemand toch zelf mag vragen.
         <span id="mbAlleenUit${id}" style="display:block;font-size:12px;margin-top:3px"></span></span>
     </label>`}
 
@@ -9200,11 +9280,12 @@ async function mbMensenAllesOpslaan(stil){
 // ── INSTELLINGEN ──────────────────────────────────────────────────
 async function mbInstellingen(){
   const onder=[['kramen','Kramen & seizoen'],
-               ['gegevens','Factuurgegevens & bedragen'],['tags','NFC-tags'],['weekend','Weekendmanagers']];
+               ['gegevens','Factuurgegevens & bedragen'],['tags','NFC-tags'],['weekend','Weekendmanagers'],
+               ['verplaatsen','Personeel verplaatsen']];
   if(mbMagOmzet())onder.push(['drukte','Drukte per uur']);
   else if(MB_INST==='drukte')MB_INST='kramen';
   document.getElementById('mbInhoud').innerHTML=
-    mbKop('Instellingen &middot; Manchester','Elke kraam heeft zijn eigen seizoen en eigen openingstijden')
+    mbKop('Instellingen &middot; '+veiligTekst(marktNaam(dezeMarkt())),'Elke kraam heeft zijn eigen seizoen en eigen openingstijden')
     +`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${
       onder.map(([k,l])=>`<button class="mb-mini${MB_INST===k?' zwart':''}" onclick="mbInstGa('${k}')">${l}</button>`).join('')
     }</div><div id="mbInstInhoud"></div>`;
@@ -9221,8 +9302,41 @@ async function mbInstGa(k){
     if(k==='tags')    return await mbTags();
     if(k==='weekend') return await mbWmBeheer();
     if(k==='drukte'&&mbMagOmzet()) return await mdrInstellingen();
+    if(k==='verplaatsen') return await mbVerplaatsen();
     return await mbGegevens();
   }catch(e){ console.error(e); if(el)el.innerHTML=`<div class="mb-kaart" style="color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
+}
+
+// Iemand van de ene markt naar de andere zetten (bv. Manchester → Liverpool).
+async function mbVerplaatsen(){
+  const el=document.getElementById('mbInstInhoud'); if(!el)return;
+  if(!isAdmin()){ el.innerHTML='<div class="mb-kaart">Alleen de administrator kan iemand verplaatsen.</div>'; return; }
+  const{data,error}=await sb.rpc('mcr_mensen'); if(error)throw error;
+  const hier=dezeMarkt();
+  const mensen=(data||[]).filter(m=>!m.gearchiveerd_op).sort((a,b)=>String(a.naam).localeCompare(String(b.naam)));
+  const doelen=Object.keys(MARKT_NAMEN).filter(c=>c!==hier);
+  el.innerHTML=`<div class="mb-kaart"><div class="mb-kop">Naar een andere markt</div>
+    <div style="font-size:13px;color:var(--muted);line-height:1.55;margin-bottom:12px">
+      Iemand uit ${veiligTekst(marktNaam(hier))} gaat voortaan in een andere markt werken. Staat hij hier nog op diensten
+      vanaf vandaag, haal hem daar eerst af. Gewerkte uren en betalingen blijven bij ${veiligTekst(marktNaam(hier))}.</div>
+    <div class="mb-veldrij" style="align-items:flex-end">
+      <div style="flex:2 1 220px"><label class="mb-lab">Wie</label>
+        <select class="mb-veld" id="mbVpWie"><option value="">Kies iemand uit ${veiligTekst(marktNaam(hier))} &hellip;</option>
+        ${mensen.map(m=>`<option value="${veiligTekst(m.id)}">${veiligTekst(m.naam)}${m.goedgekeurd?'':' (nog niet goedgekeurd)'}</option>`).join('')}</select></div>
+      <div style="flex:1 1 150px"><label class="mb-lab">Naar</label>
+        <select class="mb-veld" id="mbVpNaar">${doelen.map(c=>`<option value="${c}">${veiligTekst(marktNaam(c))}</option>`).join('')}</select></div>
+      <div><button class="mb-mini zwart" onclick="mbVerplaatsDoe()">Verplaatsen</button></div>
+    </div><div id="mbVpUit" style="margin-top:10px;font-size:13px"></div></div>`;
+}
+async function mbVerplaatsDoe(){
+  const wie=document.getElementById('mbVpWie'), naar=document.getElementById('mbVpNaar'), uit=document.getElementById('mbVpUit');
+  if(!wie||!wie.value){ if(uit)uit.innerHTML='<span style="color:#B4472B">Kies eerst wie.</span>'; return; }
+  const naam=wie.options[wie.selectedIndex].text;
+  if(!confirm(naam+' naar '+marktNaam(naar.value)+' verplaatsen?'))return;
+  const{error}=await sb.rpc('mcr_persoon_verplaatsen',{p_id:wie.value,p_vestiging:naar.value});
+  if(error){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(error))}</span>`; return; }
+  toast(naam+' werkt nu in '+marktNaam(naar.value));
+  await mbVerplaatsen();
 }
 
 async function mbKramen(){
@@ -9394,7 +9508,7 @@ function mbFactuurTest(k){
   return f;
 }
 async function mbGegevens(){
-  const{data,error}=await sb.from('vestiging_instellingen').select('sleutel,waarde,omschrijving').eq('vestiging','MCR');
+  const{data,error}=await sb.from('vestiging_instellingen').select('sleutel,waarde,omschrijving').eq('vestiging',dezeMarkt());
   if(error)throw error;
   const k={}; (data||[]).forEach(r=>k[r.sleutel]=r);
   const fout=mbFactuurTest(k);
@@ -9426,7 +9540,7 @@ async function mbInstellingenOpslaan(){
       const el=document.getElementById('mbI_'+sl); if(!el)continue;
       const{error}=await sb.from('vestiging_instellingen')
         .update({waarde:el.value, bijgewerkt_op:new Date().toISOString()})
-        .eq('vestiging','MCR').eq('sleutel',sl);
+        .eq('vestiging',dezeMarkt()).eq('sleutel',sl);
       if(error)throw error;
     }
     MCR_INST=null;
@@ -9543,7 +9657,7 @@ function mcrLeeg(t){ return `<div class="mcr-leeg">${veiligTekst(t)}</div>`; }
 // Het scherm voor een account dat uit dienst is gezet. Hetzelfde kader als de
 // wachtkamer, maar met een eerlijk verhaal: hier komt niemand meer langs.
 function toonAfgesloten(naam){
-  const en = (MIJN_VESTIGING==='MCR') || (function(){try{return localStorage.getItem('tc_ingang')==='MCR';}catch(e){return false;}})();
+  const en = isMarkt(MIJN_VESTIGING) || (function(){try{return isMarkt(localStorage.getItem('tc_ingang'));}catch(e){return false;}})();
   document.getElementById('authWrap').style.display='none';
   document.getElementById('appWrap').style.display='none';
   const mcrApp=document.getElementById('mcrApp'); if(mcrApp)mcrApp.style.display='none';
@@ -9594,6 +9708,7 @@ async function mcrStart(){
     MCR_MGR=(ik.manager===true); MGR_KRAAM=MCR_MGR?{id:ik.kraam_id||null,naam:ik.kraam||null}:null;
   }
   mcrNav();
+  zetMcrVestSwitch();
   if(!MCR_WACHT&&!MCR_MGR)nfcKan();   // vast opvragen; het inklokscherm heeft het antwoord nodig
   if(!MCR_WACHT)mcrNoodBewaren();      // noodnummers alvast op de telefoon, voor als er geen bereik is
   mcrTerugLuisteren();
@@ -10024,8 +10139,8 @@ async function mcrShiftDetail(id){
   // Waar en wie
   const mgr=(d.managers||[]);
   uit+=`<div class="mcr-kaart" style="padding:4px 15px">
-    ${rij(I.pin,`<b>${veiligTekst(d.adres||d.kraam+', Manchester')}</b><br><span style="color:#6B6A66">Manchester Christmas Markets &middot; open ${veiligTekst(mcrTijd(d.open_van))}&ndash;${veiligTekst(mcrTijd(d.open_tot))}</span>
-      <br><button class="mcr-linkje" style="margin-top:4px;color:#2A4EA8" onclick="mcrOpenLink('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent('${veiligJs(d.adres||d.kraam+', Manchester')}'))">Open in Maps</button>`)}
+    ${rij(I.pin,`<b>${veiligTekst(d.adres||d.kraam+', '+marktNaam(dezeMarkt()))}</b><br><span style="color:#6B6A66">${veiligTekst(marktTitel(dezeMarkt()))} &middot; open ${veiligTekst(mcrTijd(d.open_van))}&ndash;${veiligTekst(mcrTijd(d.open_tot))}</span>
+      <br><button class="mcr-linkje" style="margin-top:4px;color:#2A4EA8" onclick="mcrOpenLink('https://www.google.com/maps/search/?api=1&query='+encodeURIComponent('${veiligJs(d.adres||d.kraam+', '+marktNaam(dezeMarkt()))}'))">Open in Maps</button>`)}
     ${rij(I.pers,mgr.length?mgr.map(x=>`<b>${veiligTekst(x.naam)}</b> <span style="color:#6B6A66">&middot; ${x.soort==='weekend'?'weekend manager':'stall manager'}</span>${x.telefoon?'<br>'+mcrTelLink(x.telefoon):''}`).join('<div style="height:6px"></div>')
       :'<span style="color:#6B6A66">The stall manager for this day isn\'t known yet.</span>')}
   </div>`;
@@ -10778,7 +10893,7 @@ async function mcrFacturen(){
 let MCR_INST=null;
 async function mcrInstellingen(){
   if(MCR_INST)return MCR_INST;
-  const{data}=await sb.from('vestiging_instellingen').select('sleutel,waarde').eq('vestiging','MCR');
+  const{data}=await sb.from('vestiging_instellingen').select('sleutel,waarde').eq('vestiging',dezeMarkt());
   MCR_INST={}; (data||[]).forEach(r=>MCR_INST[r.sleutel]=r.waarde);
   return MCR_INST;
 }
@@ -11889,7 +12004,7 @@ async function mcrProfiel(){
       ${veld('mcrPStraat','Address',g.straat,'text','14 Grosvenor St')}
       <div style="display:flex;gap:10px">
         <div style="flex:1">${veld('mcrPPost','Postcode',g.postcode,'text','M1 7HE')}</div>
-        <div style="flex:1">${veld('mcrPPlaats','Town',g.plaats,'text','Manchester')}</div>
+        <div style="flex:1">${veld('mcrPPlaats','Town',g.plaats,'text',marktNaam(dezeMarkt()))}</div>
       </div>
       ${veld('mcrPMaat','Polo size',g.shirtmaat,'text','M','Your long sleeve work polo: S, M, L, XL …')}
     </div>
@@ -11954,6 +12069,20 @@ let INGANG = 'NL';
 let MIJN_VESTIGING = 'NL';
 let MAG_ALLE_VESTIGINGEN = false;
 let ACTIEVE_VESTIGING = 'NL';
+// Liverpool: tijdelijk ook in een tweede vestiging (Andras: thuis LPL, t/m 21 nov
+// ook MCR) en plannen zonder beheerder te zijn (plant_vestiging).
+let TWEEDE_VESTIGING = null;
+let PLANT_VESTIGING = null;
+let PLANNER_MODUS = false;
+// De markten: alles behalve Nederland. Zelfde app, eigen personeel, eigen kramen.
+const MARKT_NAMEN = {MCR:'Manchester', LPL:'Liverpool'};
+const MARKT_TITELS = {MCR:'Manchester Christmas Markets', LPL:'Liverpool Christmas Market'};
+function isMarkt(v){ return !!v && v!=='NL' && v!=='*'; }
+function marktNaam(v){ return MARKT_NAMEN[v]||v||''; }
+function marktTitel(v){ return MARKT_TITELS[v]||((MARKT_NAMEN[v]||v||'')+' Christmas Market'); }
+// De markt waar dit scherm nu over gaat (crew en beheer).
+function dezeMarkt(){ return isMarkt(ACTIEVE_VESTIGING)?ACTIEVE_VESTIGING:(isMarkt(MIJN_VESTIGING)?MIJN_VESTIGING:'MCR'); }
+function londenVandaag(){ return new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'}); }
 let VESTIGINGEN = [];
 let HUISREGELS = null;
 let HUISREGELS_AKKOORD = false;
@@ -11996,7 +12125,7 @@ function bewaarNederlandseTeksten(){
 }
 
 function kiesIngang(code){
-  INGANG = (code==='MCR') ? 'MCR' : 'NL';
+  INGANG = isMarkt(code) ? code : 'NL';
   try{ localStorage.setItem('tc_ingang', INGANG); }catch(e){}
   pasIngangToe();
   switchAuthTab('login');
@@ -12004,7 +12133,7 @@ function kiesIngang(code){
 
 function pasIngangToe(){
   bewaarNederlandseTeksten();
-  const eng = INGANG==='MCR';
+  const eng = isMarkt(INGANG);
   const tk=document.querySelector('#authTaal'); if(tk){ tk.style.display=eng?'none':''; const b=tk.querySelector('button'); if(b)b.textContent=TAAL==='en'?'Nederlands':'English'; }
   document.querySelectorAll('#ingangKeuze button').forEach(b=>{
     b.classList.toggle('active', b.getAttribute('data-ingang')===INGANG);
@@ -12012,8 +12141,8 @@ function pasIngangToe(){
   const bron = eng ? AUTH_EN : AUTH_NL_ORIGINEEL;
   Object.keys(AUTH_EN).forEach(id=>{
     const el=document.getElementById(id); if(!el||!bron[id])return;
-    if(bron[id].html!==undefined) el.innerHTML=bron[id].html;
-    else el.textContent=bron[id].tekst;
+    if(bron[id].html!==undefined) el.innerHTML=eng?bron[id].html.replace('Manchester',marktNaam(INGANG)):bron[id].html;
+    else el.textContent=eng?String(bron[id].tekst).replace('Manchester',marktNaam(INGANG)):bron[id].tekst;
   });
   Object.keys(AUTH_PLAATS_EN).forEach(id=>{
     const el=document.getElementById(id); if(!el)return;
@@ -12049,7 +12178,8 @@ function huisregelsNaarHtml(t){
 async function laadHuisregels(){
   if(HUISREGELS)return HUISREGELS;
   try{
-    const{data}=await sb.rpc('huisregels_actief',{p_vestiging:'MCR',p_taal:'en'});
+    const v=isMarkt(MIJN_VESTIGING)?MIJN_VESTIGING:(isMarkt(INGANG)?INGANG:'MCR');
+    const{data}=await sb.rpc('huisregels_actief',{p_vestiging:v,p_taal:'en'});
     if(data&&data.length){ HUISREGELS=data[0]; }
   }catch(e){ console.error('Huisregels ophalen mislukt:',e); }
   return HUISREGELS;
@@ -12148,7 +12278,7 @@ async function doRegisterMCR(){
   if(data.user){
     // Geen contractvorm meesturen: die mag alleen een beheerder zetten, en de
     // database vult 'zzp' zelf in zodra de vestiging op Manchester staat.
-    const extra={telefoon,geboortedatum:geb,vestiging:'MCR',aangebracht_door:via||null};
+    const extra={telefoon,geboortedatum:geb,vestiging:(isMarkt(INGANG)?INGANG:'MCR'),aangebracht_door:via||null};
     let gelukt=false, zetFout=null;
     for(let poging=0;poging<5&&!gelukt;poging++){
       const{data:rij}=await sb.from('gebruikers').select('id').eq('id',data.user.id);
@@ -12168,7 +12298,7 @@ async function doRegisterMCR(){
     // geen detail voor de console: dan ziet Bram het niet in zijn lijst staan.
     if(zetFout){
       return stop('Your account was created, but we could not save your details. '
-                + 'Please sign in and tell Bram, so he can put you on the Manchester list.');
+                + 'Please sign in and tell Bram, so he can put you on the '+marktNaam(isMarkt(INGANG)?INGANG:'MCR')+' list.');
     }
     if(hr){
       try{ await sb.from('huisregels_akkoord').insert({gebruiker_id:data.user.id,huisregels_id:hr.id,naam_getypt:naam}); }
@@ -12184,12 +12314,38 @@ async function doRegisterMCR(){
 function zetVestigingSwitch(){
   const el=document.getElementById('vestSwitch');
   if(!el)return;
-  if(!MAG_ALLE_VESTIGINGEN){ el.style.display='none'; el.innerHTML=''; return; }
-  const keuzes=[{code:'NL',label:'Nederland',klasse:'nl'},{code:'MCR',label:'Manchester',klasse:''}];
+  const keuzes=vestigingKeuzes();
+  if(keuzes.length<2&&!PLANNER_MODUS){ el.style.display='none'; el.innerHTML=''; return; }
   el.innerHTML=keuzes.map(k=>{
     const aan=(ACTIEVE_VESTIGING===k.code);
     return `<button type="button" class="${k.klasse}${aan?' active':''}" onclick="wisselVestiging('${k.code}')">${veiligTekst(k.label)}</button>`;
-  }).join('');
+  }).join('')
+  // Planner: naar de app van de kraammanager (inklokken, dagafsluiting).
+  +(PLANNER_MODUS?`<button type="button" onclick="planModus('app')" title="Open the stall manager app">Kraam-app</button>`:'');
+  el.style.display='flex';
+}
+// Tussen welke vestigingen mag deze gebruiker wisselen?
+function vestigingKeuzes(){
+  if(MAG_ALLE_VESTIGINGEN)
+    return [{code:'NL',label:'Nederland',klasse:'nl'},{code:'MCR',label:'Manchester',klasse:''},{code:'LPL',label:'Liverpool',klasse:''}];
+  if(TWEEDE_VESTIGING)
+    return [MIJN_VESTIGING,TWEEDE_VESTIGING].map(c=>({code:c,label:c==='NL'?'Nederland':marktNaam(c),klasse:c==='NL'?'nl':''}))
+      .sort((a,b)=>a.label.localeCompare(b.label));
+  return [];
+}
+// Planner: wisselen tussen het planscherm en de kraam-app.
+function planModus(m){
+  try{ localStorage.setItem('tc_planmodus', m==='app'?'app':'plan'); }catch(e){}
+  location.reload();
+}
+// Dezelfde schakelaar in de crew-app (Andras tot en met 21 november).
+function zetMcrVestSwitch(){
+  const el=document.getElementById('mcrVestSwitch'); if(!el)return;
+  const keuzes=vestigingKeuzes();
+  const planKnop=PLANT_VESTIGING&&ACTIEVE_VESTIGING===PLANT_VESTIGING&&CURRENT_ROL!=='wachtend';
+  if(keuzes.length<2&&!planKnop){ el.style.display='none'; el.innerHTML=''; return; }
+  el.innerHTML=(keuzes.length>=2?keuzes.map(k=>`<button type="button" class="${ACTIEVE_VESTIGING===k.code?'active':''}" onclick="wisselVestiging('${k.code}')">${veiligTekst(k.label)}</button>`).join(''):'')
+    +(planKnop?`<button type="button" onclick="planModus('plan')">Planning</button>`:'');
   el.style.display='flex';
 }
 
@@ -12214,7 +12370,7 @@ async function wisselVestiging(code){
 // Het scherm zelf zet pasIngangToe() om; dit zijn de meldingen die er
 // onderweg bij komen (fout in het rood, bevestiging in het groen).
 let AUTH_EN_GEFORCEERD=false;   // nieuw-wachtwoordscherm van een Manchester-account
-function authEn(){ return AUTH_EN_GEFORCEERD || INGANG==='MCR' || TAAL==='en'; }
+function authEn(){ return AUTH_EN_GEFORCEERD || isMarkt(INGANG) || TAAL==='en'; }
 function authTekst(nl,en){ return authEn()?en:nl; }
 // Supabase geeft Engelse vaktaal terug ("Invalid login credentials"). Hier
 // maken we er een gewone zin van, in de taal van het scherm.
@@ -12255,8 +12411,8 @@ function switchAuthTab(tab){
   const nl=document.getElementById('registerForm');
   const en=document.getElementById('registerFormMCR');
   const toonReg=(tab==='register');
-  if(nl)nl.style.display=(toonReg&&INGANG!=='MCR')?'':'none';
-  if(en)en.style.display=(toonReg&&INGANG==='MCR')?'':'none';
+  if(nl)nl.style.display=(toonReg&&!isMarkt(INGANG))?'':'none';
+  if(en)en.style.display=(toonReg&&isMarkt(INGANG))?'':'none';
   document.getElementById('authErr').style.display='none';
   document.getElementById('authMsg').style.display='none';
 }
@@ -12377,9 +12533,9 @@ function toonNieuwWachtwoord(){
     try{
       const{data:{session}}=await sb.auth.getSession(); if(!session)return;
       const{data}=await sb.from('gebruikers').select('vestiging,taal').eq('id',session.user.id).maybeSingle();
-      if(data&&(data.vestiging==='MCR'||data.taal==='en')){
+      if(data&&(isMarkt(data.vestiging)||data.taal==='en')){
         AUTH_EN_GEFORCEERD=true;
-        if(data.vestiging==='MCR'){ INGANG='MCR'; try{localStorage.setItem('tc_ingang','MCR');}catch(e){} pasIngangToe(); }
+        if(isMarkt(data.vestiging)){ INGANG=data.vestiging; try{localStorage.setItem('tc_ingang',data.vestiging);}catch(e){} pasIngangToe(); }
         nieuwPwTeksten();
       }
     }catch(e){ console.error('Taal voor nieuw wachtwoord bepalen mislukt:',e); }
@@ -12544,7 +12700,7 @@ const PRIVACY_URL_EN='https://jeremylaag-cmd.github.io/tcgroup-app/privacy-en.ht
 
 // Engels voor de Manchester-ingang en voor wie bij de vestiging MCR hoort.
 function openPrivacy(taal){
-  const en = taal==='en' || (taal!=='nl' && ((typeof INGANG!=='undefined'&&INGANG==='MCR') || (typeof MIJN_VESTIGING!=='undefined'&&MIJN_VESTIGING==='MCR')));
+  const en = taal==='en' || (taal!=='nl' && ((typeof INGANG!=='undefined'&&isMarkt(INGANG)) || (typeof MIJN_VESTIGING!=='undefined'&&isMarkt(MIJN_VESTIGING))));
   const url = en ? PRIVACY_URL_EN : PRIVACY_URL;
   const B=window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.Browser;
   if(B&&B.open){ B.open({url}).catch(()=>window.open(url,'_blank')); return; }
@@ -12799,7 +12955,7 @@ function liveMagNu(){
 // ('*') ziet alles.
 function liveVestigingOk(rij){
   const v=rij&&rij.vestiging; if(!v)return true;
-  if(typeof mcrZichtbaar==='function'&&mcrZichtbaar())return v==='MCR';
+  if(typeof mcrZichtbaar==='function'&&mcrZichtbaar())return v===dezeMarkt();
   const act=(typeof ACTIEVE_VESTIGING!=='undefined'&&ACTIEVE_VESTIGING)||(typeof MIJN_VESTIGING!=='undefined'&&MIJN_VESTIGING)||'NL';
   if(act==='*')return true;
   return v===act;
@@ -12921,14 +13077,18 @@ async function initApp(user){
   // Haal rol op — probeer meerdere keren als nodig
   let rol='part-timer',naam=user.email,goedgekeurd=null,beheerRol=null,gearchiveerd=null;
   try{
-    const velden='rol,naam,goedgekeurd,beheer_rol,vestiging,alle_vestigingen,actieve_vestiging,gearchiveerd_op,taal';
+    const velden='rol,naam,goedgekeurd,beheer_rol,vestiging,alle_vestigingen,actieve_vestiging,gearchiveerd_op,taal,tweede_vestiging,tweede_tot,plant_vestiging';
     const neem=r=>{
       rol=r.rol||'part-timer';naam=r.naam||user.email;goedgekeurd=r.goedgekeurd;beheerRol=r.beheer_rol||null;
       gearchiveerd=r.gearchiveerd_op||null;
       MIJN_VESTIGING=r.vestiging||'NL';
-      if(MIJN_VESTIGING!=='MCR')i18nNaInloggen(r.taal||null,user.id);
+      if(!isMarkt(MIJN_VESTIGING))i18nNaInloggen(r.taal||null,user.id);
       MAG_ALLE_VESTIGINGEN=!!r.alle_vestigingen;
-      ACTIEVE_VESTIGING=MAG_ALLE_VESTIGINGEN?(r.actieve_vestiging||MIJN_VESTIGING):MIJN_VESTIGING;
+      // Tweede vestiging telt alleen tot en met tweede_tot (Britse datum).
+      TWEEDE_VESTIGING=(r.tweede_vestiging&&(!r.tweede_tot||londenVandaag()<=r.tweede_tot))?r.tweede_vestiging:null;
+      PLANT_VESTIGING=r.plant_vestiging||null;
+      ACTIEVE_VESTIGING=MAG_ALLE_VESTIGINGEN?(r.actieve_vestiging||MIJN_VESTIGING)
+        :((TWEEDE_VESTIGING&&r.actieve_vestiging===TWEEDE_VESTIGING)?TWEEDE_VESTIGING:MIJN_VESTIGING);
     };
     const{data,error}=await sb.from('gebruikers').select(velden).eq('id',user.id).single();
     if(data){neem(data);}
@@ -12941,9 +13101,9 @@ async function initApp(user){
 
   // Hoort iemand bij Manchester, dan staat de ingang daar voortaan ook op —
   // ook als hij per ongeluk via Nederland inlogde.
-  if(MIJN_VESTIGING==='MCR'&&INGANG!=='MCR'){
-    INGANG='MCR';
-    try{ localStorage.setItem('tc_ingang','MCR'); }catch(e){}
+  if(isMarkt(MIJN_VESTIGING)&&INGANG!==MIJN_VESTIGING){
+    INGANG=MIJN_VESTIGING;
+    try{ localStorage.setItem('tc_ingang',MIJN_VESTIGING); }catch(e){}
     pasIngangToe();
   }
   zetVestigingSwitch();
@@ -12968,7 +13128,14 @@ async function initApp(user){
 
   // Engels personeel krijgt zijn eigen, losse app. Beheerders niet: die werken
   // in het Nederlandse scherm en wisselen met de schakelaar bovenin.
-  if(MIJN_VESTIGING==='MCR' && rol!=='beheerder'){
+  // Een planner (Andras in Liverpool) krijgt in zijn eigen vestiging het
+  // beheerscherm met alleen de plantabbladen; met de knop "Kraam-app" kan hij
+  // naar de app van de kraammanager. In een andere vestiging is hij crew/manager.
+  PLANNER_MODUS = !WACHT_OP_GOEDKEURING && rol!=='beheerder' && !!PLANT_VESTIGING
+    && ACTIEVE_VESTIGING===PLANT_VESTIGING
+    && (function(){ try{ return localStorage.getItem('tc_planmodus')!=='app'; }catch(e){ return true; } })();
+  zetVestigingSwitch();
+  if(isMarkt(MIJN_VESTIGING) && rol!=='beheerder' && !PLANNER_MODUS){
     return mcrStart();
   }
 
@@ -12979,6 +13146,8 @@ async function initApp(user){
   // Tabs op basis van rol
   const tabs=document.getElementById('headerTabs');
   const isBeheerder=CURRENT_ROL==='beheerder';
+  // Marktbeheer: de beheerder op een markt, of een planner in zijn vestiging.
+  const marktModus=(isBeheerder&&isMarkt(ACTIEVE_VESTIGING))||PLANNER_MODUS;
   const isHal=CURRENT_ROL==='hal';
   const isFullTimer=CURRENT_ROL==='full-timer';
   const isPartTimer=CURRENT_ROL==='part-timer';
@@ -13042,9 +13211,9 @@ async function initApp(user){
       <button class="htab" onclick="showPage('beschikbaarheid-beheer',this)">Beschikbaarheid</button>
       <button class="htab" onclick="showPage('finance',this)">Finance</button>
       <button class="htab" onclick="showPage('accounts',this)">Accounts</button>`;
-    // Sta je op Manchester, dan gaat de hele Nederlandse balk eraf en komen
-    // er alleen Manchester-tabbladen voor in de plaats.
-    if(ACTIEVE_VESTIGING==='MCR'){
+    // Sta je op een markt, dan gaat de hele Nederlandse balk eraf en komen
+    // er alleen de markttabbladen voor in de plaats.
+    if(isMarkt(ACTIEVE_VESTIGING)){
       tabs.innerHTML = mbTabs().map(([k,l],i)=>
         `<button class="htab${i===0?' active':''}" onclick="mbNaar('${k}',this)">${veiligTekst(l)}</button>`).join('');
       ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
@@ -13054,6 +13223,11 @@ async function initApp(user){
       const optieBtn=document.getElementById('addOptieBtnTop');if(optieBtn)optieBtn.style.display='';
       document.getElementById('addMedBtn').style.display='';
     }
+  }else if(PLANNER_MODUS){
+    tabs.innerHTML = mbTabs().map(([k,l],i)=>
+      `<button class="htab${i===0?' active':''}" onclick="mbNaar('${k}',this)">${veiligTekst(l)}</button>`).join('');
+    ['addKlusBtnTop','addOptieBtnTop','addMedBtn'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
+    const bn=document.getElementById('bottomNav'); if(bn)bn.classList.remove('visible');
   }else if(isHal){
     zetKlokkaartenTerug();
     tabs.innerHTML=`
@@ -13088,7 +13262,7 @@ async function initApp(user){
   if(av){av.textContent=initials;av.onclick=()=>switchNav('profiel',null);av.title='Profiel';}
 
   const bn=document.getElementById('bottomNav');
-  const mcrModus = isBeheerder && ACTIEVE_VESTIGING==='MCR';
+  const mcrModus = marktModus;
   if(bn && !mcrModus){
     bn.classList.add('visible');
     if(isBeheerder){
@@ -13190,7 +13364,7 @@ verbergAppleOpAndroid();
 
 // De gekozen ingang wordt onthouden op het toestel, zodat Engels personeel
 // hem maar een keer hoeft aan te tikken.
-try{ INGANG = (localStorage.getItem('tc_ingang')==='MCR') ? 'MCR' : 'NL'; }catch(e){ INGANG='NL'; }
+try{ const g=localStorage.getItem('tc_ingang'); INGANG = isMarkt(g) ? g : 'NL'; }catch(e){ INGANG='NL'; }
 pasIngangToe();
 
 sb.auth.getSession().then(({data:{session}})=>{
@@ -25404,7 +25578,7 @@ async function mcrOmzetNavToevoegen(){
   if(tabs&&!tabs.querySelector('[data-mcromzet]')){
     const b=document.createElement('button');
     b.className='htab'; b.dataset.mcromzet='1'; b.setAttribute('onclick',"showPage('mcromzet',this)");
-    b.textContent='Manchester omzet';
+    b.textContent='Markten omzet';
     tabs.appendChild(b);
   }
   const bn=document.getElementById('bottomNav');
