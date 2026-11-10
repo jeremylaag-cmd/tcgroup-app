@@ -5370,7 +5370,9 @@ async function mdrPbLaden(van){
 }
 function mdrInst(D){ const i=(D&&D.instellingen)||{};
   const mn=Number(i.min_bezetting);
-  return {pp:Number(i.drukte_per_persoon)||30, erbij:Number(i.drukte_erbij)||35, af:Number(i.drukte_af)||15, min:isFinite(mn)&&mn>=0?Math.round(mn):0}; }
+  const mx=Number(i.max_bezetting);
+  return {pp:Number(i.drukte_per_persoon)||30, erbij:Number(i.drukte_erbij)||35, af:Number(i.drukte_af)||15, min:isFinite(mn)&&mn>=0?Math.round(mn):0,
+          max:isFinite(mx)&&mx>=1?Math.round(mx):6}; }
 // Zelfde regel als mcr_drukte_advies. De bakkers staan er altijd: met niemand
 // aan de kassa vangen zij tot "erbij" betalingen per uur op.
 // +n zolang verwacht > max(mensen,1) × erbij (n = verwacht/per_persoon naar boven − mensen, minstens 1);
@@ -5378,7 +5380,8 @@ function mdrInst(D){ const i=(D&&D.instellingen)||{};
 function mdrCapaciteit(m,I){ return Math.max(m||0,1)*I.erbij; }
 function mdrAdvies(v,m,I){
   if(v==null||m==null)return 0;
-  if(v>mdrCapaciteit(m,I))return Math.max(1,Math.ceil(v/I.pp)-m);
+  // Er passen maar I.max mensen tegelijk in een kraam (Bram: max 6): nooit meer adviseren.
+  if(v>mdrCapaciteit(m,I))return Math.max(0,Math.min(Math.max(1,Math.ceil(v/I.pp)-m),(I.max||6)-m));
   if(m>I.min&&v<m*I.af)return -1;
   return 0;
 }
@@ -5524,8 +5527,8 @@ function mdrOvDelen(){
     const binnen=vandaag?(Number(d.nu_binnen)||0):null;
     // Seintje: lopende of vorige uur boven "erbij" × aanwezige mensen, of advies +1 voor het komende uur.
     const red=[];
-    if(cur&&cur.echt!=null&&cur.echt>mdrCapaciteit(binnen,I))red.push(`dit uur al <b>${cur.echt}</b> betalingen met ${binnen} ${binnen===1?'persoon':'mensen'} binnen (loopt nog)`);
-    if(prev&&!prev.buiten&&prev.echt!=null&&prev.geklokt!=null&&prev.echt>mdrCapaciteit(prev.geklokt,I))red.push(`vorig uur (${mdrU(prev.uur)}–${mdrU(prev.uur+1)}u) <b>${prev.echt}</b> betalingen met ${prev.geklokt} ${prev.geklokt===1?'persoon':'mensen'}`);
+    if(cur&&cur.echt!=null&&binnen<I.max&&cur.echt>mdrCapaciteit(binnen,I))red.push(`dit uur al <b>${cur.echt}</b> betalingen met ${binnen} ${binnen===1?'persoon':'mensen'} binnen (loopt nog)`);
+    if(prev&&!prev.buiten&&prev.echt!=null&&prev.geklokt!=null&&prev.geklokt<I.max&&prev.echt>mdrCapaciteit(prev.geklokt,I))red.push(`vorig uur (${mdrU(prev.uur)}–${mdrU(prev.uur+1)}u) <b>${prev.echt}</b> betalingen met ${prev.geklokt} ${prev.geklokt===1?'persoon':'mensen'}`);
     if(next&&!next.buiten&&next.advies>0)red.push(`komend uur (${mdrU(next.uur)}–${mdrU(next.uur+1)}u) verwacht ± <b>${next.verwacht}</b> betalingen, ${next.gepland} ${next.gepland===1?'persoon':'mensen'} ingedeeld: zet er ${next.advies} bij`);
     if(red.length)SEIN.push({k,red,nu:red.length>(next&&!next.buiten&&next.advies>0?1:0)});
     const totNu=uren.reduce((a,u)=>a+(u.echt||0),0);
@@ -5588,11 +5591,11 @@ async function mdrOvStil(){
 }
 
 // Instellingen › Drukte per uur
-const MDR_SLEUTELS=['drukte_per_persoon','drukte_erbij','drukte_af','min_bezetting'];
+const MDR_SLEUTELS=['drukte_per_persoon','drukte_erbij','drukte_af','min_bezetting','max_bezetting'];
 async function mdrInstellingen(){
   const{data,error}=await sb.from('vestiging_instellingen').select('sleutel,waarde').eq('vestiging','MCR').in('sleutel',MDR_SLEUTELS);
   if(error)throw error;
-  const w={drukte_per_persoon:'30',drukte_erbij:'35',drukte_af:'15',min_bezetting:'0'};
+  const w={drukte_per_persoon:'30',drukte_erbij:'35',drukte_af:'15',min_bezetting:'0',max_bezetting:'6'};
   (data||[]).forEach(r=>{ if(r.waarde!=null&&r.waarde!=='')w[r.sleutel]=r.waarde; });
   const veld=(sl,lab,uitleg)=>`<div style="flex:1 1 230px;min-width:0">
       <label class="mb-lab" for="mdrI_${sl}">${lab}</label>
@@ -5600,12 +5603,13 @@ async function mdrInstellingen(){
       <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:5px">${uitleg}</div></div>`;
   mbZet(`<div class="mb-kaart"><div class="mb-kop">Drukte per uur</div>
     <div style="font-size:13px;line-height:1.6;margin-bottom:12px">Het planbord en Overzicht laten per kraam zien hoeveel <b>pinbetalingen per uur</b> er verwacht worden en hoeveel er echt waren.
-      Met deze vier getallen geeft de app het advies <span class="mdr-pil erbij">+1</span> (zet er iemand bij) of <span class="mdr-pil af">−1</span> (er kan iemand af).</div>
+      Met deze getallen geeft de app het advies <span class="mdr-pil erbij">+1</span> (zet er iemand bij) of <span class="mdr-pil af">−1</span> (er kan iemand af).</div>
     <div class="mb-veldrij" style="gap:16px">
       ${veld('drukte_per_persoon','Betalingen per uur die één persoon aankan','Hiermee rekent de app uit hoeveel mensen er nodig zijn.')}
       ${veld('drukte_erbij','Iemand erbij boven','Komen er per uur meer betalingen dan dit getal &times; het aantal mensen, dan: <b>+1</b>. Staat er niemand, dan vangen de bakkers tot dit getal op.')}
       ${veld('drukte_af','Er kan iemand af onder','Komen er per uur minder betalingen dan dit getal &times; het aantal mensen, dan: <b>&minus;1</b>.')}
       ${veld('min_bezetting','Minimaal aantal mensen aan de kassa','De bakkers staan er altijd, dus 0 mensen aan de kassa mag. Het advies gaat nooit onder dit aantal.')}
+      ${veld('max_bezetting','Maximaal aantal mensen in de kraam','Meer mensen passen er niet tegelijk in een kraam. Het advies gaat nooit boven dit aantal.')}
     </div>
     <div id="mdrVoorbeeld" style="margin-top:14px;padding:11px 13px;background:var(--bg);border-radius:10px;font-size:13px;line-height:1.65"></div>
     <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="mb-mini zwart" id="mdrOpslaan" onclick="mdrInstOpslaan()">Opslaan</button>
@@ -5614,11 +5618,13 @@ async function mdrInstellingen(){
 }
 function mdrInstLees(){
   const v=sl=>{ const e=document.getElementById('mdrI_'+sl); return e?Number(String(e.value).replace(',','.')):NaN; };
-  return {pp:v('drukte_per_persoon'),erbij:v('drukte_erbij'),af:v('drukte_af'),min:v('min_bezetting')};
+  return {pp:v('drukte_per_persoon'),erbij:v('drukte_erbij'),af:v('drukte_af'),min:v('min_bezetting'),max:v('max_bezetting')};
 }
 function mdrInstFout(I){
   if(![I.pp,I.erbij,I.af].every(n=>isFinite(n)&&n>0))return 'Vul bij de betalingen een getal groter dan 0 in.';
   if(!isFinite(I.min)||!Number.isInteger(I.min)||I.min<0||I.min>10)return 'Minimaal aantal mensen: een heel getal van 0 tot 10.';
+  if(!isFinite(I.max)||!Number.isInteger(I.max)||I.max<1||I.max>20)return 'Maximaal aantal mensen: een heel getal van 1 tot 20.';
+  if(I.max<I.min)return 'Het maximum moet minstens zo hoog zijn als het minimum.';
   if(I.af>=I.erbij)return '"Er kan iemand af onder" moet lager zijn dan "Iemand erbij boven".';
   return '';
 }
@@ -5626,12 +5632,12 @@ function mdrInstVoorbeeld(){
   const el=document.getElementById('mdrVoorbeeld'); if(!el)return;
   const I=mdrInstLees(), f=mdrInstFout(I);
   if(f){ el.innerHTML=`<span style="color:#B4472B">${veiligTekst(f)}</span>`; return; }
-  const m=3, nodig=n=>Math.max(I.min,Math.ceil(n/I.pp));
+  const m=3, nodig=n=>Math.min(I.max,Math.max(I.min,Math.ceil(n/I.pp)));
   el.innerHTML=`<b>Voorbeeld met ${m} mensen aan de kassa:</b><br>
     &bull; meer dan <b>${Math.floor(I.erbij*m)}</b> betalingen in een uur: <span class="mdr-pil erbij">+1</span><br>
     &bull; minder dan <b>${Math.ceil(I.af*m)}</b> betalingen in een uur: <span class="mdr-pil af">&minus;1</span>${m<=I.min?' (maar niet onder '+I.min+' mensen, dus hier niet)':''}<br>
     &bull; staat er niemand aan de kassa, dan vangen de bakkers tot <b>${Math.floor(I.erbij)}</b> betalingen in een uur op; daarboven <span class="mdr-pil erbij">+1</span><br>
-    &bull; bij 120 betalingen in een uur zijn er <b>${nodig(120)}</b> mensen nodig, bij 60 zijn het er <b>${nodig(60)}</b>.`;
+    &bull; bij 120 betalingen in een uur zijn er <b>${nodig(120)}</b> mensen nodig, bij 60 zijn het er <b>${nodig(60)}</b> (nooit meer dan ${I.max}).`;
 }
 async function mdrInstOpslaan(){
   const I=mdrInstLees(), f=mdrInstFout(I), uit=document.getElementById('mdrInstUit');
@@ -5639,7 +5645,7 @@ async function mdrInstOpslaan(){
   const kn=document.getElementById('mdrOpslaan'); if(kn){kn.disabled=true;kn.textContent='Bezig…';}
   try{
     const nu=new Date().toISOString();
-    const rijen=[['drukte_per_persoon',I.pp],['drukte_erbij',I.erbij],['drukte_af',I.af],['min_bezetting',I.min]]
+    const rijen=[['drukte_per_persoon',I.pp],['drukte_erbij',I.erbij],['drukte_af',I.af],['min_bezetting',I.min],['max_bezetting',I.max]]
       .map(([sleutel,w])=>({vestiging:'MCR',sleutel,waarde:String(w),bijgewerkt_op:nu}));
     const{error}=await sb.from('vestiging_instellingen').upsert(rijen,{onConflict:'vestiging,sleutel'});
     if(error)throw error;
