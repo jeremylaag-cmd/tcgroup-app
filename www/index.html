@@ -210,6 +210,40 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mpb-vrij{display:flex;align-items:center;gap:12px;flex-wrap:wrap;width:100%;text-align:left;padding:11px 16px;border:none;border-top:1px solid #F1EFE9;background:#fff;cursor:pointer;font-family:var(--font);color:var(--text)}
 .mpb-vrij:first-of-type{border-top:none}
 .mpb-vrij.uit{background:var(--bg);opacity:.7}
+/* Drukte per uur (betalingen per uur, mcr_drukte) */
+.mdr-kopregel{display:flex;gap:6px 10px;flex-wrap:wrap;align-items:center;font-size:12px;color:var(--muted);margin:-2px 0 8px;line-height:1.5}
+.mdr-pil{display:inline-block;font-size:11.5px;font-weight:700;border-radius:9px;padding:1px 8px;white-space:nowrap}
+.mdr-pil.erbij{color:#9B3A22;background:#FBE3DC}.mdr-pil.af{color:#1F5F99;background:#E3EFFA}
+.mdr-pil.erbij.ach{background:#fff;border:1px dashed #D9846C}.mdr-pil.af.ach{background:#fff;border:1px dashed #8DB5DB}
+.mdr-strook{position:relative;height:82px;margin:2px 0 2px;border-bottom:1px solid #F1EFE9}
+.mdr-uur{position:absolute;top:0;bottom:0;display:flex;flex-direction:column;align-items:center}
+.mdr-staven{flex:0 0 42px;width:100%;display:flex;align-items:flex-end;justify-content:center;gap:2px;background:#F7F6F2;border-radius:5px 5px 0 0}
+.mdr-staven span{display:block;width:38%;max-width:16px;border-radius:3px 3px 0 0;min-height:2px}
+.mdr-v{background:#C9D3E3}.mdr-e{background:#4A6390}.mdr-e.nu{background:repeating-linear-gradient(135deg,#4A6390 0 3px,#7D93BB 3px 6px)}
+.mdr-getal{font-size:10.5px;line-height:1.2;margin-top:2px;white-space:nowrap;font-variant-numeric:tabular-nums;text-align:center}
+.mdr-getal b{color:var(--text)}.mdr-getal span{color:#7F8BA3}
+.mdr-mens{display:flex;align-items:center;gap:2px;font-size:10.5px;font-weight:700;color:#55534E;line-height:1.2;font-variant-numeric:tabular-nums}
+.mdr-advrij{position:relative;height:20px;margin:3px 0 4px}
+.mdr-adv{position:absolute;top:0;height:18px;border-radius:6px;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden;white-space:nowrap}
+.mdr-adv.erbij{color:#9B3A22;background:#FBE3DC}.mdr-adv.af{color:#1F5F99;background:#E3EFFA}
+.mdr-adv.ach{background:#fff}.mdr-adv.erbij.ach{border:1px dashed #D9846C}.mdr-adv.af.ach{border:1px dashed #8DB5DB}
+.mdr-leg{display:inline-block;width:10px;height:10px;border-radius:2px}
+.mdr-ov{display:flex;gap:14px;flex-wrap:wrap}
+.mdr-ovk{flex:1 1 280px;min-width:0;border-top:1px solid var(--border);padding-top:10px}
+.mdr-graf{display:flex;align-items:flex-end;gap:3px;height:92px;margin-top:6px;position:relative}
+.mdr-kol{flex:1 1 0;min-width:0;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;position:relative}
+.mdr-kol .vw{position:absolute;bottom:0;left:8%;right:8%;background:#E4E9F1;border-radius:4px 4px 0 0}
+.mdr-kol .ec{position:relative;width:56%;background:#4A6390;border-radius:3px 3px 0 0;min-height:2px}
+.mdr-kol .ec.rood{background:#C2553A}.mdr-kol .ec.blauw{background:#8DB5DB}
+.mdr-kol .ec.nu{background:repeating-linear-gradient(135deg,#4A6390 0 3px,#8EA2C6 3px 6px)}
+.mdr-kol .ec.nu.rood{background:repeating-linear-gradient(135deg,#C2553A 0 3px,#E29A86 3px 6px)}
+.mdr-kol .gt{position:relative;font-size:10px;font-weight:700;color:#3A3936;line-height:1.1;margin-bottom:1px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.mdr-kol.nu{outline:1.5px solid #1A1917;outline-offset:1px;border-radius:4px}
+.mdr-as{display:flex;gap:3px;margin-top:3px}
+.mdr-as span{flex:1 1 0;min-width:0;text-align:center;font-size:10px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mdr-as span.nu{color:var(--text);font-weight:700}
+.mdr-regel{font-size:12.5px;line-height:1.55;margin-top:6px;color:#3A3936}
+.mdr-regel .grijs{color:var(--muted)}
 .mpb-vink{width:24px;height:24px;flex-shrink:0;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;border:2px solid var(--text);background:var(--text);color:#fff}
 .mpb-vrij.uit .mpb-vink{border-color:#B4B1A8;background:#fff}
 .mpb-vtijd{flex:0 0 140px;font-size:12.5px;color:var(--muted)}
@@ -4084,6 +4118,7 @@ function mbMeer(){
 // ── OVERZICHT ─────────────────────────────────────────────────────
 async function mbOverzicht(){
   await mbDatumVandaag();
+  const drP=mdrLaden(MB_DATUM,MB_DATUM);   // drukte per uur (alleen Bram), loopt parallel
   const [ovz, wacht, balk, , agd, dag, man, dr] = await Promise.all([
     sb.rpc('mcr_overzicht',{p_datum:MB_DATUM}),
     sb.rpc('mcr_wacht_op_jou'),
@@ -4214,6 +4249,12 @@ async function mbOverzicht(){
         ${x.m.telefoon?mbTel(x.m.telefoon,'color:#B4472B;font-weight:700;text-decoration:none'):''}</div>`).join('')}</div>`;
     uit=uit.replace('<div class="mb-rij3">',blok+'<div class="mb-rij3">');
   }
+  // Drukte per uur: blok onder de kramen, seintje bovenaan (zie mdrOvDelen).
+  MDR_OV=await drP; MDR_OV_DATUM=MB_DATUM; MDR_OV_KRAMEN=lijst.map(o=>o.k);
+  const druk=mdrOvDelen();
+  uit=uit.replace('<div class="mb-rij3">','<div id="mdrSein">'+druk.sein+'</div><div class="mb-rij3">');
+  uit+=druk.blok;
+  if(MDR_OV)mdrOvTimerStart();
   uit+=mbAfsluitHtml();
   uit+=mbAgendaVandaagHtml(agd&&!agd.error?agd.data:[]);
 
@@ -4895,7 +4936,7 @@ function mpbKortTijd(s){ const k=t=>mbUur(t).replace(/:00$/,''); return k(s.star
 async function mbShiftsPlannen(){
   if(!MB_WEEK)MB_WEEK=mbMaandag(MB_DATUM||await mbPeil());
   if(MB_PB_TAB==='diensten')return mbShiftsDiensten();
-  const [pb]=await Promise.all([sb.rpc('mcr_planbord',{p_van:MB_WEEK}), mbRuilLaden(), mbErvaringLaden(), mpbLoonLaden(MB_WEEK)]);
+  const [pb]=await Promise.all([sb.rpc('mcr_planbord',{p_van:MB_WEEK}), mbRuilLaden(), mbErvaringLaden(), mpbLoonLaden(MB_WEEK), mdrPbLaden(MB_WEEK)]);
   if(pb.error)throw pb.error;
   MB_PB=pb.data; mpbIndex();
   mpbTeken();
@@ -5055,6 +5096,7 @@ function mpbDagbordHtml(){
         ${(()=>{ if(dg.dicht)return ''; const l=mpbLoon(dag,k.id); if(!l.loon&&!l.fc)return '';
           return ` · <span style="${l.rood?'color:#B4472B;font-weight:700':''}">gepland ${veiligTekst(mbPondKort(l.loon))}${l.fc?' · forecast '+veiligTekst(mbPondKort(l.fc)):''}${l.pct!=null?' · loon '+Math.round(l.pct)+'%':''}</span>`; })()}</span>
       <button class="mb-mini" style="margin-left:auto" onclick="mpbNieuweDienst('${veiligJs(k.id)}','${dag}')">+ dienst</button></div>`;
+    if(!dg.dicht&&sh.length)uit+=mdrPbKopHtml(k.id,dag);
     if(dg.dicht){ uit+='<div class="mpb-leeg">Deze kraam is dicht op deze dag.</div></section>'; return; }
     if(!sh.length){ uit+='<div class="mpb-leeg">Geen diensten op deze dag.</div></section>'; return; }
     tot.open+=nodig-bezet; tot.vr+=vr;
@@ -5065,7 +5107,7 @@ function mpbDagbordHtml(){
       const l=pos(h*60), tr=h*60===O?'0':(h*60>=C?'-100%':'-50%');
       uit+=`<span style="left:${l}%;transform:translateX(${tr})">${h*60>=C?'sluit':h}</span>`;
     }
-    uit+='</div><div class="mpb-dekking">';
+    uit+='</div>'+mdrPbStrookHtml(k.id,dag,pos,O,C)+'<div class="mpb-dekking">';
     for(let m=Math.floor(O/60)*60;m<C;m+=60){
       const van=Math.max(m,O), totm=Math.min(m+60,C), mid=(van+totm)/2;
       let plan=0,staan=0;
@@ -5089,7 +5131,7 @@ function mpbDagbordHtml(){
     uit+='</div></div></section>';
   });
   uit+=`<div class="mpb-legenda"><span><i class="vol"></i>vol</span><span><i class="deels"></i>deels</span><span><i class="leeg"></i>nog niemand</span>
-    <span><b class="mpb-tel" style="position:static">2</b> aanvragen</span><span>Bovenste rij per kraam: hoeveel mensen er per uur staan tegen hoeveel er gepland zijn.</span></div>`;
+    <span><b class="mpb-tel" style="position:static">2</b> aanvragen</span><span>${MDR_PB?'Rij onder de betalingen':'Bovenste rij per kraam'}: hoeveel mensen er per uur staan tegen hoeveel er gepland zijn.</span>${mdrPbLegenda()}</div>`;
   uit+='</div><aside class="mb-kaart mpb-rechts" id="mpbPaneel">'+mpbPaneelHtml(tot)+'</aside></div>';
   return uit;
 }
@@ -5269,7 +5311,7 @@ function mpbWeekHtml(){
     const dt=new Date(x.d+'T00:00:00');
     uit+=`<th><button class="mpb-wkop" onclick="MB_PB_TAB='dag';MB_PB_DAG='${x.d}';MB_PB_SEL=null;mpbTeken()" title="Dagbord van deze dag">
       ${veiligTekst(dt.toLocaleDateString('nl-NL',{weekday:'short'}))} ${dt.getDate()}</button>
-      <div style="font-size:11.5px;font-weight:600;color:${x.open?'#9A4A12':'#0F7A52'}">${x.nodig?(x.open?x.open+' open':'vol'):'–'}</div></th>`;
+      <div style="font-size:11.5px;font-weight:600;color:${x.open?'#9A4A12':'#0F7A52'}">${x.nodig?(x.open?x.open+' open':'vol'):'–'}</div>${mdrWeekKopHtml(x.d)}</th>`;
   });
   uit+='<th class="mpb-tot">Deze week</th></tr></thead><tbody>';
   rijen.forEach(x=>{
@@ -5285,13 +5327,309 @@ function mpbWeekHtml(){
   uit+=`<div class="mpb-legenda"><span><b class="mpb-chip" style="background:#B4472B;border-color:#B4472B;color:#fff">EX 10–14</b> ingedeeld (kleur = kraam)</span>
     <span><b class="mpb-chip vraag">CG 12 ?</b> vroeg erom &middot; tik om in te delen</span>
     <span><span class="mpb-noot groen">kan 17:00+</span> opgegeven beschikbaar</span><span><span class="mpb-noot">kan niet</span></span>
-    <span>${P.kramen.map(k=>veiligTekst(mpbKraamCode(k)+' '+k.naam)).join(' &middot; ')}</span></div>`;
+    <span>${P.kramen.map(k=>veiligTekst(mpbKraamCode(k)+' '+k.naam)).join(' &middot; ')}</span>
+    ${MDR_PB?'<span><span class="mdr-pil erbij">+1</span> / <span class="mdr-pil af">−1</span> drukte per kraam: zet er iemand bij / er kan iemand af (uren in het dagbord)</span>':''}</div>`;
   return uit;
 }
 function mpbKraamCode(k){
   if(k.code&&String(k.code).length<=3)return String(k.code).toUpperCase();
   const w=String(k.naam||'?').split(' ').filter(Boolean);
   return (w.length>1?w[0][0]+w[1][0]:String(k.naam||'?').slice(0,2)).toUpperCase();
+}
+
+// ── DRUKTE PER UUR (alleen Bram) ──────────────────────────────────
+// Bram: "kunnen we ook kijken met het schema als we zien hoeveel transacties
+// er per uur worden gedaan en dat je dan kan adviseren wanneer er iemand bij
+// moet of af". Overal betalingen per uur (pinbetalingen uit myPOS) en het
+// aantal mensen als los getal; nooit een getal "per persoon". Het advies
+// (+1 / −1) rekent intern wel met een verhouding: mdrAdvies hieronder doet
+// precies wat mcr_drukte_advies in de database doet, zodat het planbord na
+// indelen of eraf halen meteen het nieuwe advies laat zien.
+// Data: mcr_drukte(van, tot) — zie supabase/mcr_drukte.sql.
+const MDR_WD_MV=['zondagen','maandagen','dinsdagen','woensdagen','donderdagen','vrijdagen','zaterdagen'];
+let MDR_PB=null;                                   // drukte van de week op het planbord
+let MDR_OV=null, MDR_OV_DATUM=null, MDR_OV_KRAMEN=[], MDR_OV_TIMER=null;   // Overzicht
+function mdrIndex(data){
+  if(!data||!Array.isArray(data.dagen))return null;
+  data.D={};
+  data.dagen.forEach(d=>{ data.D[d.kraam+'|'+d.datum]=d; d.U={}; (d.uren||[]).forEach(u=>{ d.U[u.uur]=u; }); });
+  return data;
+}
+async function mdrLaden(van,tot){
+  if(!mbMagOmzet())return null;
+  const{data,error}=await sb.rpc('mcr_drukte',{p_van:van,p_tot:tot}).then(x=>x,e=>({data:null,error:e}));
+  if(error||!data)return null;
+  return mdrIndex(data);
+}
+async function mdrPbLaden(van){
+  if(!mbMagOmzet()){ MDR_PB=null; return; }
+  const d=new Date(van+'T00:00:00'); d.setDate(d.getDate()+6);
+  MDR_PB=await mdrLaden(van,fmt(d));
+}
+function mdrInst(D){ const i=(D&&D.instellingen)||{};
+  return {pp:Number(i.drukte_per_persoon)||30, erbij:Number(i.drukte_erbij)||35, af:Number(i.drukte_af)||15, min:Math.max(0,Math.round(Number(i.min_bezetting)||2))}; }
+// Zelfde regel als mcr_drukte_advies: +n = er moeten n mensen bij, −n = er kunnen n af.
+function mdrAdvies(v,m,I){
+  if(v==null||m==null)return 0;
+  const nodig=Math.max(I.min,Math.ceil(v/I.pp));
+  if(m<=0)return v>0?Math.max(nodig,1):0;
+  if(v/m>I.erbij)return Math.max(1,nodig-m);
+  if(v/m<I.af&&m>I.min)return -Math.min(m-I.min,Math.max(1,m-nodig));
+  return 0;
+}
+function mdrU(h){ return String(h).padStart(2,'0'); }
+function mdrTeken(n){ return (n>0?'+':'−')+Math.abs(n); }
+// Aaneengesloten uren met advies in dezelfde richting samenvoegen: [{a:+2,van:16,tot:20,per:[…]}]
+// (tot = eind, exclusief; a = het meeste in dat blok; per = advies per uur voor de uitleg).
+function mdrBlokken(rijen,veld){
+  const uit=[];
+  rijen.forEach(r=>{ const a=r[veld]||0; if(!a)return;
+    const l=uit[uit.length-1];
+    if(l&&Math.sign(l.a)===Math.sign(a)&&l.tot===r.uur&&l.ach===!!r.ach){ l.tot=r.uur+1; l.per.push([r.uur,a]); if(Math.abs(a)>Math.abs(l.a))l.a=a; }
+    else uit.push({a,van:r.uur,tot:r.uur+1,ach:!!r.ach,per:[[r.uur,a]]}); });
+  return uit;
+}
+function mdrBlokTekst(b){ return mdrTeken(b.a)+' '+(b.tot-b.van===1?b.van+'u':b.van+'–'+b.tot+'u'); }
+function mdrBlokUitleg(b){
+  const wat=b.a>0?'zet er iemand bij':'er kan iemand af';
+  return (b.ach?'Achteraf (zo druk was het echt, met wie er ingeklokt was): ':'')+wat+' — '+b.per.map(([u,a])=>u+'u '+mdrTeken(a)).join(', ');
+}
+// "verwacht = gemiddelde van de vorige zaterdagen (2)"
+function mdrBasisTekst(b,datum){
+  const wd=new Date(datum+'T00:00:00').getDay();
+  const n=(b&&b.dagen)||0, dd=(b&&b.data)||[];
+  const dk=x=>new Date(x+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'});
+  if(!b||!n||b.soort==='geen')return 'nog geen eerdere marktdagen, dus nog geen verwachting';
+  if(b.soort==='weekdag')return n===1?'verwacht = de vorige '+MB_WEEKDAGEN[wd]+' ('+dk(dd[0])+')':'verwacht = gemiddelde van de vorige '+MDR_WD_MV[wd]+' ('+n+')';
+  if(b.soort==='dagtype')return n===1?'verwacht = de vorige doordeweekse dag ('+MB_WEEKDAGEN[new Date(dd[0]+'T00:00:00').getDay()]+' '+dk(dd[0])+'), nog geen '+MB_WEEKDAGEN[wd]
+                                     :'verwacht = gemiddelde van de vorige doordeweekse dagen ('+n+'), nog geen '+MB_WEEKDAGEN[wd];
+  return n===1?'verwacht = de vorige marktdag ('+dk(dd[0])+'), nog geen '+MB_WEEKDAGEN[wd]
+              :'verwacht = gemiddelde van de vorige '+n+' marktdagen, nog geen '+MB_WEEKDAGEN[wd];
+}
+const MDR_MENS_IC='<svg width="9" height="9" viewBox="0 0 24 24" fill="#8A877F" aria-hidden="true"><circle cx="12" cy="7" r="4.5"/><path d="M3 22c0-5 4-8.5 9-8.5s9 3.5 9 8.5z"/></svg>';
+
+// Planbord: per kraam per uur. Mensen = wie het planbord nu heeft ingedeeld
+// (minstens 30 minuten van dat uur), dus het advies klopt meteen na indelen.
+function mdrPbGepland(kraam,datum,uur){
+  const ids=new Set();
+  MB_PB.shifts.forEach(s=>{ if(s.kraam!==kraam||s.datum!==datum||s.dicht)return;
+    if(Math.min(s.et,(uur+1)*60)-Math.max(s.st,uur*60)>=30)s.inn.forEach(g=>ids.add(g)); });
+  return ids.size;
+}
+function mdrPbRijen(kraam,datum){
+  const D=MDR_PB, d=D&&D.D[kraam+'|'+datum]; if(!d||d.dicht)return null;
+  const I=mdrInst(D);
+  // Voorbij = al geweest: daar telt "achteraf" (echt tegen wie er ingeklokt was).
+  const voorbij=u=>datum<D.vandaag||(datum===D.vandaag&&u.uur<D.nu_uur);
+  const rijen=(d.uren||[]).filter(u=>!u.buiten).map(u=>{
+    const m=mdrPbGepland(kraam,datum,u.uur), vb=voorbij(u);
+    return {uur:u.uur, v:u.verwacht, e:u.echt, m, vb, nu:datum===D.vandaag&&u.uur===D.nu_uur,
+            a:vb?0:mdrAdvies(u.verwacht,m,I), ach:vb, aa:vb?(u.achteraf||0):0};
+  });
+  rijen.forEach(r=>{ r.toon=r.vb?r.aa:r.a; });
+  return {d,rijen,I};
+}
+function mdrPbKopHtml(kraam,datum){
+  const x=mdrPbRijen(kraam,datum); if(!x)return '';
+  const bl=mdrBlokken(x.rijen,'toon');
+  const pil=b=>`<span class="mdr-pil ${b.a>0?'erbij':'af'}${b.ach?' ach':''}" title="${veiligTekst(mdrBlokUitleg(b))}">${b.ach?'achteraf ':''}${veiligTekst(mdrBlokTekst(b))}</span>`;
+  return `<div class="mdr-kopregel"><span style="font-weight:600;color:#55534E">Drukte</span>
+    ${bl.length?bl.map(pil).join(''):'<span>de bezetting past bij de verwachte drukte</span>'}</div>
+    <div class="mdr-kopregel" style="margin-top:-5px">Betalingen per uur &middot; ${veiligTekst(mdrBasisTekst(x.d.basis,datum))}</div>`;
+}
+function mdrPbStrookHtml(kraam,datum,pos,O,C){
+  const x=mdrPbRijen(kraam,datum); if(!x)return '';
+  const rij=x.rijen.filter(r=>r.uur*60<C&&(r.uur+1)*60>O);
+  if(!rij.length)return '';
+  // Eén schaal voor alle kramen van die dag, zodat je ze naast elkaar kunt vergelijken.
+  let max=20; Object.values(MDR_PB.D).forEach(d=>{ if(d.datum!==datum)return; (d.uren||[]).forEach(u=>{ if(!u.buiten)max=Math.max(max,u.verwacht||0,u.echt||0); }); });
+  const h=n=>n==null?0:Math.max(3,Math.round(n/max*100));
+  let uit='<div class="mdr-strook" aria-label="Betalingen per uur">';
+  rij.forEach(r=>{
+    const van=Math.max(r.uur*60,O), tot=Math.min(r.uur*60+60,C);
+    const tip=`${mdrU(r.uur)}:00–${mdrU(r.uur+1)}:00: `+(r.e!=null?r.e+(r.nu?' betalingen tot nu (loopt nog)':' betalingen')+', ':'')
+      +(r.v!=null?'verwacht ± '+r.v:'nog geen verwachting')+', '+r.m+(r.m===1?' persoon':' mensen')+' ingedeeld';
+    uit+=`<div class="mdr-uur" style="left:${pos(van)}%;width:calc(${pos(tot)-pos(van)}% - 2px)" title="${veiligTekst(tip)}">
+      <div class="mdr-staven">${r.v!=null?`<span class="mdr-v" style="height:${h(r.v)}%"></span>`:''}${r.e!=null?`<span class="mdr-e${r.nu?' nu':''}" style="height:${h(r.e)}%"></span>`:''}</div>
+      <div class="mdr-getal">${r.e!=null?`<b>${r.e}</b> `:''}<span>${r.v!=null?'±'+r.v:'–'}</span></div>
+      <div class="mdr-mens">${MDR_MENS_IC}${r.m}</div></div>`;
+  });
+  uit+='</div>';
+  const bl=mdrBlokken(rij,'toon');
+  if(bl.length){
+    uit+='<div class="mdr-advrij">';
+    bl.forEach(b=>{ const van=Math.max(b.van*60,O), tot=Math.min(b.tot*60,C);
+      uit+=`<span class="mdr-adv ${b.a>0?'erbij':'af'}${b.ach?' ach':''}" style="left:${pos(van)}%;width:calc(${pos(tot)-pos(van)}% - 2px)" title="${veiligTekst(mdrBlokUitleg(b))}">${veiligTekst(mdrBlokTekst(b))}</span>`; });
+    uit+='</div>';
+  }
+  return uit;
+}
+function mdrPbLegenda(){
+  if(!MDR_PB)return '';
+  const I=mdrInst(MDR_PB);
+  return `<span><i class="mdr-leg" style="background:#C9D3E3"></i>verwachte betalingen per uur</span>
+    <span><i class="mdr-leg" style="background:#4A6390"></i>echte betalingen per uur (gestreept = loopt nog)</span>
+    <span>${MDR_MENS_IC} mensen ingedeeld dat uur</span>
+    <span><span class="mdr-pil erbij">+1</span> zet er iemand bij</span><span><span class="mdr-pil af">−1</span> er kan iemand af (nooit onder ${I.min})</span>
+    <span><span class="mdr-pil erbij ach">achteraf +1</span> al geweest: zo druk was het echt</span>`;
+}
+// Week per persoon: per dag per kraam het advies als klein label in de kop.
+function mdrWeekKopHtml(datum){
+  if(!MDR_PB)return '';
+  let uit='';
+  MB_PB.kramen.forEach(k=>{
+    const x=mdrPbRijen(k.id,datum); if(!x)return;
+    const bl=mdrBlokken(x.rijen.filter(r=>!r.vb),'a'); if(!bl.length)return;
+    const plus=bl.filter(b=>b.a>0), min=bl.filter(b=>b.a<0);
+    const lab=(lijst,kl)=>lijst.length?`<span class="mdr-pil ${kl}" style="font-size:10.5px;padding:0 5px" title="${veiligTekst(k.naam+': '+lijst.map(mdrBlokTekst).join(', '))}">${veiligTekst(mpbKraamCode(k)+' '+mdrTeken(kl==='erbij'?Math.max(...lijst.map(b=>b.a)):Math.min(...lijst.map(b=>b.a))))}</span>`:'';
+    uit+=lab(plus,'erbij')+lab(min,'af');
+  });
+  return uit?`<div style="display:flex;gap:3px;flex-wrap:wrap;margin-top:3px">${uit}</div>`:'';
+}
+
+// Overzicht: "Drukte vandaag" per kraam + rood seintje als een kraam nu te druk is.
+function mdrOvDelen(){
+  const D=MDR_OV, datum=MDR_OV_DATUM;
+  if(!D||!datum||datum>D.vandaag)return {blok:'',sein:''};
+  const I=mdrInst(D), vandaag=datum===D.vandaag, nu=D.nu_uur;
+  const kramen=MDR_OV_KRAMEN.filter(k=>{ const d=D.D[k.kraam_id+'|'+datum]; return d&&!d.dicht&&(d.uren||[]).length; });
+  if(!kramen.length)return {blok:'',sein:''};
+  let max=20; kramen.forEach(k=>(D.D[k.kraam_id+'|'+datum].uren||[]).forEach(u=>{ max=Math.max(max,u.verwacht||0,u.echt||0); }));
+  const h=n=>n==null?0:Math.max(2,Math.round(n/max*100));
+  const SEIN=[];
+  let blok=`<div class="mb-kaart" id="mdrOverzicht">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+      <div class="mb-kop" style="margin:0">${vandaag?'Drukte vandaag':'Drukte op '+veiligTekst(mbLang(datum))} &middot; betalingen per uur</div>
+      <span style="font-size:11.5px;color:var(--muted)">${vandaag?'Engelse tijd '+veiligTekst(D.nu||'')+' &middot; pin komt elke 15 min binnen':'pinbetalingen uit myPOS'}</span></div>
+    <div class="mdr-ov">`;
+  kramen.forEach(k=>{
+    const d=D.D[k.kraam_id+'|'+datum], U=d.U, uren=(d.uren||[]);
+    const cur=vandaag?U[nu]:null, prev=vandaag?U[nu-1]:null, next=vandaag?U[nu+1]:null;
+    const binnen=vandaag?(Number(d.nu_binnen)||0):null;
+    // Seintje: lopende of vorige uur boven "erbij" × aanwezige mensen, of advies +1 voor het komende uur.
+    const red=[];
+    if(cur&&cur.echt!=null&&binnen>0&&cur.echt>I.erbij*binnen)red.push(`dit uur al <b>${cur.echt}</b> betalingen met ${binnen} ${binnen===1?'persoon':'mensen'} binnen (loopt nog)`);
+    if(prev&&!prev.buiten&&prev.echt!=null&&prev.geklokt>0&&prev.echt>I.erbij*prev.geklokt)red.push(`vorig uur (${mdrU(prev.uur)}–${mdrU(prev.uur+1)}u) <b>${prev.echt}</b> betalingen met ${prev.geklokt} ${prev.geklokt===1?'persoon':'mensen'}`);
+    if(next&&!next.buiten&&next.advies>0)red.push(`komend uur (${mdrU(next.uur)}–${mdrU(next.uur+1)}u) verwacht ± <b>${next.verwacht}</b> betalingen, ${next.gepland} ${next.gepland===1?'persoon':'mensen'} ingedeeld: zet er ${next.advies} bij`);
+    if(red.length)SEIN.push({k,red,nu:red.length>(next&&!next.buiten&&next.advies>0?1:0)});
+    const totNu=uren.reduce((a,u)=>a+(u.echt||0),0);
+    const verwTotNu=uren.filter(u=>!vandaag||u.uur<=nu).reduce((a,u)=>a+(u.verwacht||0),0);
+    blok+=`<div class="mdr-ovk">
+      <div style="display:flex;align-items:center;gap:8px">${mbStip(k.kleur)}<span style="font-size:14px;font-weight:700">${veiligTekst(k.kraam)}</span>
+        ${vandaag?`<span style="margin-left:auto;font-size:12px;color:${red.length?'#B4472B':'var(--muted)'};font-weight:600">${binnen} ${binnen===1?'persoon':'mensen'} binnen</span>`:''}</div>
+      <div class="mdr-graf" role="img" aria-label="${veiligTekst(k.kraam+': betalingen per uur')}">`;
+    uren.forEach(u=>{
+      const isNu=vandaag&&u.uur===nu, toek=u.echt==null;
+      const kl=u.achteraf>0||(isNu&&binnen>0&&u.echt>I.erbij*binnen)?' rood':(u.achteraf<0?' blauw':'');
+      const tip=`${mdrU(u.uur)}:00–${mdrU(u.uur+1)}:00: `+(toek?'nog niet':u.echt+' betalingen'+(isNu?' tot nu (loopt nog)':''))
+        +(u.verwacht!=null?', verwacht ± '+u.verwacht:'')+(u.geklokt!=null?', '+u.geklokt+' ingeklokt':'')+', '+u.gepland+' ingedeeld';
+      blok+=`<div class="mdr-kol${isNu?' nu':''}" title="${veiligTekst(tip)}">
+        ${u.verwacht!=null?`<div class="vw" style="height:${h(u.verwacht)}%"></div>`:''}
+        ${toek?'':`<div class="gt">${u.echt}</div><div class="ec${kl}${isNu?' nu':''}" style="height:${h(u.echt)}%"></div>`}</div>`;
+    });
+    blok+=`</div><div class="mdr-as">${uren.map(u=>`<span class="${vandaag&&u.uur===nu?'nu':''}">${u.uur}</span>`).join('')}</div>`;
+    if(vandaag&&cur){
+      blok+=`<div class="mdr-regel"><b>Dit uur (${mdrU(nu)}–${mdrU(nu+1)}u):</b> loopt nog, tot nu ${cur.echt||0} betalingen <span class="grijs">&middot; verwacht hele uur ± ${cur.verwacht!=null?cur.verwacht:'?'}</span></div>`;
+    }
+    if(vandaag&&next&&!next.buiten){
+      blok+=`<div class="mdr-regel"><b>Komend uur:</b> verwacht ± ${next.verwacht!=null?next.verwacht:'?'} betalingen, ${next.gepland} ${next.gepland===1?'persoon':'mensen'} ingedeeld
+        ${next.advies>0?`<span class="mdr-pil erbij">${mdrTeken(next.advies)}</span>`:(next.advies<0?`<span class="mdr-pil af">${mdrTeken(next.advies)}</span>`:'')}</div>`;
+    }
+    blok+=`<div class="mdr-regel grijs">${vandaag?'Tot nu':'Hele dag'} ${totNu} betalingen &middot; verwacht ${vandaag?'tot nu ':''}± ${verwTotNu} &middot; ${veiligTekst(mdrBasisTekst(d.basis,datum))}</div></div>`;
+  });
+  blok+=`</div><div class="mpb-legenda" style="padding:10px 0 0">
+    <span><i class="mdr-leg" style="background:#E4E9F1;border:1px solid #C9D3E3"></i>verwacht</span>
+    <span><i class="mdr-leg" style="background:#4A6390"></i>echt</span>
+    <span><i class="mdr-leg" style="background:#C2553A"></i>te druk voor wie er stond</span>
+    <span><i class="mdr-leg" style="background:#8DB5DB"></i>rustig, er had iemand af gekund</span>
+    ${vandaag?'<span><i class="mdr-leg" style="background:repeating-linear-gradient(135deg,#4A6390 0 3px,#8EA2C6 3px 6px)"></i>loopt nog</span>':''}</div></div>`;
+  let sein='';
+  if(vandaag&&SEIN.length){
+    sein=`<div class="mb-kaart" style="border:1.5px solid #B4472B;background:#FBEDE9">
+      <div style="font-size:14px;font-weight:700;color:#B4472B">${SEIN.length===1?veiligTekst(SEIN[0].k.kraam)+(SEIN[0].nu?' is nu te druk':' wordt zo te druk'):SEIN.length+' kramen zijn (bijna) te druk'}</div>
+      ${SEIN.map(x=>`<div style="display:flex;gap:8px;align-items:flex-start;margin-top:6px;font-size:13px;line-height:1.5;color:#5B2A1D">
+        <span style="margin-top:5px">${mbStip(x.k.kleur)}</span><span>${SEIN.length>1?'<b>'+veiligTekst(x.k.kraam)+'</b>: ':''}${x.red.join(' &middot; ')}</span></div>`).join('')}
+      <div style="margin-top:9px"><button class="mb-mini" onclick="MB_WEEK=mbMaandag(MDR_OV_DATUM);MB_PB_TAB='dag';MB_PB_DAG=MDR_OV_DATUM;MB_PB_SEL=null;mbNaar('shifts')">Naar het dagbord</button></div></div>`;
+  }
+  return {blok,sein};
+}
+// Elke 5 minuten stil bijwerken (alleen het drukteblok en het seintje; geen
+// "Bezig…", scrollpositie blijft staan).
+function mdrOvTimerStart(){ if(!MDR_OV_TIMER)MDR_OV_TIMER=setInterval(mdrOvStil,5*60*1000); }
+async function mdrOvStil(){
+  if(document.hidden||MB_TAB!=='overzicht'||!MDR_OV_DATUM)return;
+  const pg=document.getElementById('page-mcrbeheer'); if(!pg||!pg.classList.contains('active'))return;
+  const blok=document.getElementById('mdrOverzicht'), sein=document.getElementById('mdrSein');
+  if(!blok||!sein)return;
+  const datum=MDR_OV_DATUM, D=await mdrLaden(datum,datum);
+  if(!D||datum!==MDR_OV_DATUM||!document.getElementById('mdrOverzicht'))return;
+  MDR_OV=D;
+  const x=mdrOvDelen(), voor=sein.offsetHeight, boven=sein.getBoundingClientRect().top<0;
+  sein.innerHTML=x.sein;
+  if(boven)window.scrollBy(0,sein.offsetHeight-voor);
+  const t=document.createElement('div'); t.innerHTML=x.blok;
+  if(t.firstElementChild)blok.replaceWith(t.firstElementChild);
+}
+
+// Instellingen › Drukte per uur
+const MDR_SLEUTELS=['drukte_per_persoon','drukte_erbij','drukte_af','min_bezetting'];
+async function mdrInstellingen(){
+  const{data,error}=await sb.from('vestiging_instellingen').select('sleutel,waarde').eq('vestiging','MCR').in('sleutel',MDR_SLEUTELS);
+  if(error)throw error;
+  const w={drukte_per_persoon:'30',drukte_erbij:'35',drukte_af:'15',min_bezetting:'2'};
+  (data||[]).forEach(r=>{ if(r.waarde!=null&&r.waarde!=='')w[r.sleutel]=r.waarde; });
+  const veld=(sl,lab,uitleg)=>`<div style="flex:1 1 230px;min-width:0">
+      <label class="mb-lab" for="mdrI_${sl}">${lab}</label>
+      <input class="mb-veld" id="mdrI_${sl}" type="number" inputmode="decimal" min="1" step="1" value="${veiligTekst(w[sl])}" oninput="mdrInstVoorbeeld()" style="max-width:140px">
+      <div style="font-size:12px;color:var(--muted);line-height:1.5;margin-top:5px">${uitleg}</div></div>`;
+  mbZet(`<div class="mb-kaart"><div class="mb-kop">Drukte per uur</div>
+    <div style="font-size:13px;line-height:1.6;margin-bottom:12px">Het planbord en Overzicht laten per kraam zien hoeveel <b>pinbetalingen per uur</b> er verwacht worden en hoeveel er echt waren.
+      Met deze vier getallen geeft de app het advies <span class="mdr-pil erbij">+1</span> (zet er iemand bij) of <span class="mdr-pil af">−1</span> (er kan iemand af).</div>
+    <div class="mb-veldrij" style="gap:16px">
+      ${veld('drukte_per_persoon','Betalingen per uur die één persoon aankan','Hiermee rekent de app uit hoeveel mensen er nodig zijn.')}
+      ${veld('drukte_erbij','Iemand erbij boven','Komen er per uur meer betalingen dan dit getal &times; het aantal mensen, dan: <b>+1</b>.')}
+      ${veld('drukte_af','Er kan iemand af onder','Komen er per uur minder betalingen dan dit getal &times; het aantal mensen, dan: <b>&minus;1</b>.')}
+      ${veld('min_bezetting','Minimaal aantal mensen in de kraam','Het advies gaat nooit onder dit aantal.')}
+    </div>
+    <div id="mdrVoorbeeld" style="margin-top:14px;padding:11px 13px;background:var(--bg);border-radius:10px;font-size:13px;line-height:1.65"></div>
+    <div style="margin-top:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button class="mb-mini zwart" id="mdrOpslaan" onclick="mdrInstOpslaan()">Opslaan</button>
+      <span id="mdrInstUit" style="font-size:12.5px"></span></div></div>`);
+  mdrInstVoorbeeld();
+}
+function mdrInstLees(){
+  const v=sl=>{ const e=document.getElementById('mdrI_'+sl); return e?Number(String(e.value).replace(',','.')):NaN; };
+  return {pp:v('drukte_per_persoon'),erbij:v('drukte_erbij'),af:v('drukte_af'),min:v('min_bezetting')};
+}
+function mdrInstFout(I){
+  if(![I.pp,I.erbij,I.af,I.min].every(n=>isFinite(n)&&n>0))return 'Vul overal een getal groter dan 0 in.';
+  if(!Number.isInteger(I.min)||I.min>10)return 'Minimaal aantal mensen: een heel getal van 1 tot 10.';
+  if(I.af>=I.erbij)return '"Er kan iemand af onder" moet lager zijn dan "Iemand erbij boven".';
+  return '';
+}
+function mdrInstVoorbeeld(){
+  const el=document.getElementById('mdrVoorbeeld'); if(!el)return;
+  const I=mdrInstLees(), f=mdrInstFout(I);
+  if(f){ el.innerHTML=`<span style="color:#B4472B">${veiligTekst(f)}</span>`; return; }
+  const m=3, nodig=n=>Math.max(I.min,Math.ceil(n/I.pp));
+  el.innerHTML=`<b>Voorbeeld met ${m} mensen in de kraam:</b><br>
+    &bull; meer dan <b>${Math.floor(I.erbij*m)}</b> betalingen in een uur: <span class="mdr-pil erbij">+1</span><br>
+    &bull; minder dan <b>${Math.ceil(I.af*m)}</b> betalingen in een uur: <span class="mdr-pil af">&minus;1</span>${m<=I.min?' (maar niet onder '+I.min+' mensen, dus hier niet)':''}<br>
+    &bull; bij 120 betalingen in een uur zijn er <b>${nodig(120)}</b> mensen nodig, bij 60 zijn het er <b>${nodig(60)}</b>.`;
+}
+async function mdrInstOpslaan(){
+  const I=mdrInstLees(), f=mdrInstFout(I), uit=document.getElementById('mdrInstUit');
+  if(f){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(f)}</span>`; return; }
+  const kn=document.getElementById('mdrOpslaan'); if(kn){kn.disabled=true;kn.textContent='Bezig…';}
+  try{
+    const nu=new Date().toISOString();
+    const rijen=[['drukte_per_persoon',I.pp],['drukte_erbij',I.erbij],['drukte_af',I.af],['min_bezetting',I.min]]
+      .map(([sleutel,w])=>({vestiging:'MCR',sleutel,waarde:String(w),bijgewerkt_op:nu}));
+    const{error}=await sb.from('vestiging_instellingen').upsert(rijen,{onConflict:'vestiging,sleutel'});
+    if(error)throw error;
+    MDR_PB=null; MDR_OV=null;
+    if(uit)uit.innerHTML='<span style="color:#0F7A52">Opgeslagen. Het planbord en Overzicht rekenen nu met deze getallen.</span>';
+  }catch(e){ if(uit)uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
+  finally{ if(kn){kn.disabled=false;kn.textContent='Opslaan';} }
 }
 
 // ── Voorstel invullen ──
@@ -8840,6 +9178,8 @@ async function mbMensenAllesOpslaan(stil){
 async function mbInstellingen(){
   const onder=[['kramen','Kramen & seizoen'],
                ['gegevens','Factuurgegevens & bedragen'],['tags','NFC-tags'],['weekend','Weekendmanagers']];
+  if(mbMagOmzet())onder.push(['drukte','Drukte per uur']);
+  else if(MB_INST==='drukte')MB_INST='kramen';
   document.getElementById('mbInhoud').innerHTML=
     mbKop('Instellingen &middot; Manchester','Elke kraam heeft zijn eigen seizoen en eigen openingstijden')
     +`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${
@@ -8857,6 +9197,7 @@ async function mbInstGa(k){
     if(k==='kramen')  return await mbKramen();
     if(k==='tags')    return await mbTags();
     if(k==='weekend') return await mbWmBeheer();
+    if(k==='drukte'&&mbMagOmzet()) return await mdrInstellingen();
     return await mbGegevens();
   }catch(e){ console.error(e); if(el)el.innerHTML=`<div class="mb-kaart" style="color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
 }
