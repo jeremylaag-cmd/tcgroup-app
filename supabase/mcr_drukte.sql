@@ -18,6 +18,20 @@
 --   verwacht (+ basis), gepland, geklokt, advies en achteraf. Alleen Bram
 --   (mag_kraambeheer() én mag_omzet_zien(): betalingen horen bij de omzet,
 --   die alleen Bram mag zien). Hooguit 62 dagen.
+--
+-- Bijgesteld na Brams reactie (10 nov):
+-- * "Er zijn altijd bakkers aan, dus soms staan er 0 mensen als het rustig
+--   is." min_bezetting standaard 0. De bakkers vangen tot "erbij" betalingen
+--   per uur op als er niemand aan de kassa staat: capaciteit =
+--   max(mensen,1) × erbij. +n zolang verwacht boven de capaciteit zit
+--   (n = betalingen / per_persoon naar boven − mensen, minstens 1); −1 alleen
+--   als er meer dan min_bezetting staan en verwacht < mensen × af.
+-- * "neem als referentie de omzetten van vorig jaar en dan de afgelopen
+--   dagen": verwacht = pin-omzet vorig jaar (zelfde weekdag, datum − 364,
+--   mcr_omzet_historie) ÷ gemiddelde bon (afgelopen 14 dagen) × groei
+--   (afgelopen 7 dagen tegen dezelfde dagen vorig jaar, tussen 0,5 en 2),
+--   verdeeld over de uren zoals de afgelopen dagen van die kraam. Geen
+--   cijfer van vorig jaar: gemiddelde van dezelfde weekdag (zoals eerst).
 --   Eigenaar postgres (zoals mcr_omzet_dagen): met app_rpc als eigenaar
 --   liepen de regels op pin_uur/urenregistraties per rij mee en duurde een
 --   week ~330 ms, nu ~50 ms. De functie controleert zelf wie het mag en
@@ -32,17 +46,23 @@ select 'MCR', x.sleutel, x.waarde, x.omschrijving
     ('drukte_per_persoon', '30', 'Betalingen per uur die één persoon goed aankan (voor het aantal mensen dat nodig is)'),
     ('drukte_erbij',       '35', 'Komen er per persoon meer betalingen per uur dan dit, dan advies: iemand erbij'),
     ('drukte_af',          '15', 'Komen er per persoon minder betalingen per uur dan dit, dan advies: er kan iemand af'),
-    ('min_bezetting',      '2',  'Minimaal aantal mensen in een open kraam, het advies gaat hier nooit onder')
+    ('min_bezetting',      '0',  'Minimaal aantal mensen aan de kassa (bakkers niet meegeteld), het advies gaat hier nooit onder')
   ) as x(sleutel, waarde, omschrijving)
  where exists (select 1 from public.vestigingen v where v.code = 'MCR')
    and not exists (select 1 from public.vestiging_instellingen i
                     where i.vestiging = 'MCR' and i.sleutel = x.sleutel);
+-- Stond de eerste versie (min_bezetting 2) er al, dan naar 0: de bakkers staan er altijd.
+update public.vestiging_instellingen
+   set waarde = '0', omschrijving = 'Minimaal aantal mensen aan de kassa (bakkers niet meegeteld), het advies gaat hier nooit onder'
+ where vestiging = 'MCR' and sleutel = 'min_bezetting' and waarde = '2'
+   and omschrijving like 'Minimaal aantal mensen in een open kraam%';
 
 -- ── 2. De rekenregel ──────────────────────────────────────────────────────
--- nodig = grootste van min_bezetting en (betalingen / per_persoon, naar boven).
--- +n als betalingen/mensen boven "erbij" komt (of als er niemand staat terwijl
--- er betalingen zijn), −n als het onder "af" zakt en er meer dan het minimum
--- staat. Nooit onder het minimum.
+-- De bakkers staan er altijd: met niemand aan de kassa vangen zij tot "erbij"
+-- betalingen per uur op. Capaciteit = max(mensen,1) × erbij.
+-- +n zolang verwacht boven de capaciteit zit: n = verwacht / per_persoon naar
+-- boven − mensen, minstens 1. −1 alleen als er meer dan min_bezetting staan
+-- en verwacht < mensen × af (bij 1 persoon: < af, dan nemen de bakkers het over).
 create or replace function public.mcr_drukte_advies(p_verwacht numeric, p_mensen integer,
                                                      p_per_persoon numeric, p_erbij numeric,
                                                      p_af numeric, p_min integer)
@@ -51,15 +71,9 @@ language sql immutable set search_path to 'public'
 as $function$
   select case
     when p_verwacht is null or p_mensen is null then 0
-    when p_mensen <= 0 then
-      case when p_verwacht > 0
-           then greatest(coalesce(p_min,0), ceil(p_verwacht / nullif(p_per_persoon,0))::int, 1)
-           else 0 end
-    when p_verwacht / p_mensen > p_erbij then
-      greatest(1, greatest(coalesce(p_min,0), ceil(p_verwacht / nullif(p_per_persoon,0))::int) - p_mensen)
-    when p_verwacht / p_mensen < p_af and p_mensen > coalesce(p_min,0) then
-      - least(p_mensen - coalesce(p_min,0),
-              greatest(1, p_mensen - greatest(coalesce(p_min,0), ceil(p_verwacht / nullif(p_per_persoon,0))::int)))
+    when p_verwacht > greatest(p_mensen,1) * p_erbij then
+      greatest(1, ceil(p_verwacht / nullif(p_per_persoon,0))::int - p_mensen)
+    when p_mensen > coalesce(p_min,0) and p_verwacht < p_mensen * p_af then -1
     else 0
   end
 $function$;
@@ -69,17 +83,19 @@ $function$;
 -- uur ervoor als er toen al betalingen waren (dan zonder advies).
 -- echt     = betalingen in dat uur; null als het nog moet komen of als er die
 --            (afgelopen) dag geen pindata is.
--- verwacht = gemiddelde van dezelfde weekdag, de laatste (max) 4 met data
---            vóór die dag; geen zelfde weekdag → zelfde soort dag (ma–do / vr /
---            za / zo); anders de laatste (max) 7 dagen met data.
---            basis = {dagen, soort: weekdag|dagtype|alles|geen, data}.
+-- verwacht = pin vorig jaar ÷ gemiddelde bon × groei, verdeeld over de uren
+--            (zie boven); zonder cijfer van vorig jaar het gemiddelde van
+--            dezelfde weekdag (max 4), anders zelfde soort dag, anders de
+--            laatste 7 dagen met data.
+--            basis = {soort: vorig_jaar|weekdag|dagtype|alles|geen, dagen,
+--            data, en bij vorig_jaar: vj_datum, vj_pin, bon, factor,
+--            factor_dagen, dagtotaal, verdeling {soort, dagen, data}}.
 -- gepland  = mensen ingedeeld voor minstens 30 minuten van dat uur
 --            (eind leeg = sluiting + opruimtijd).
 -- geklokt  = mensen ingeklokt voor minstens 30 minuten van dat uur; in het
 --            lopende uur ook wie nu binnen is. Alleen verleden/nu.
 -- advies   = rekenregel op verwacht en gepland (alleen binnen openingstijd).
--- achteraf = rekenregel op echt en geklokt, voor uren die al voorbij zijn
---            (leeg als er niemand ingeklokt was: dan weten we het niet).
+-- achteraf = rekenregel op echt en geklokt, voor uren die al voorbij zijn.
 create or replace function public.mcr_drukte(p_van date, p_tot date)
 returns jsonb
 language plpgsql stable security definer set search_path to 'public'
@@ -101,7 +117,7 @@ begin
   select coalesce(max(case when i.sleutel='drukte_per_persoon' then nullif(replace(i.waarde,',','.'),'')::numeric end), 30),
          coalesce(max(case when i.sleutel='drukte_erbij'       then nullif(replace(i.waarde,',','.'),'')::numeric end), 35),
          coalesce(max(case when i.sleutel='drukte_af'          then nullif(replace(i.waarde,',','.'),'')::numeric end), 15),
-         coalesce(max(case when i.sleutel='min_bezetting'      then nullif(replace(i.waarde,',','.'),'')::numeric end), 2)::int
+         coalesce(max(case when i.sleutel='min_bezetting'      then nullif(replace(i.waarde,',','.'),'')::numeric end), 0)::int
     into v_pp, v_erbij, v_af, v_min
     from public.vestiging_instellingen i
    where i.vestiging = v_vest and i.sleutel in ('drukte_per_persoon','drukte_erbij','drukte_af','min_bezetting');
@@ -133,7 +149,10 @@ begin
     -- Afgelopen dagen met betalingen (vandaag loopt nog en telt niet mee).
     select kid, datum, extract(dow from datum)::int wd from uurdata
      where datum < v_vandaag group by kid, datum having sum(tr) > 0
-  ), basis as (
+  ), oud as (
+    -- Terugval zonder cijfer van vorig jaar: gemiddelde van dezelfde weekdag
+    -- (max 4), anders zelfde soort dag (ma–do / vr / za / zo), anders de
+    -- laatste 7 dagen met data.
     select d.kid, d.datum,
            coalesce(w.arr, t.arr, a.arr, '{}'::date[]) dagen,
            case when w.arr is not null then 'weekdag' when t.arr is not null then 'dagtype'
@@ -152,6 +171,58 @@ begin
           select h.datum from hdag h where h.kid = d.kid and h.datum < least(d.datum, v_vandaag)
            order by h.datum desc limit 7) x having count(*) > 0) a on true
      where not d.dicht
+  ), pdag as (
+    -- Pin per kraam per afgelopen dag (omzet en aantal betalingen).
+    select pd.kraam_id kid, pd.datum, sum(pd.omzet) omzet, sum(pd.transacties) tr
+      from public.pin_dag pd
+     where pd.vestiging = v_vest and pd.datum between p_van - 70 and least(p_tot, v_vandaag)
+       and pd.kraam_id in (select id from k)
+     group by pd.kraam_id, pd.datum having sum(pd.transacties) > 0
+  ), vj as (
+    -- Vorig jaar: zelfde weekdag (datum − 364), zelfde kraam (of op naam).
+    select d.kid, d.datum, d.datum - 364 vj_datum,
+           (select sum(h.pin) from public.mcr_omzet_historie h
+             where h.datum = d.datum - 364
+               and (h.kraam_id = d.kid or (h.kraam_id is null and lower(h.kraam_naam) = lower(kk.naam)))) vj_pin,
+           b.bon, f.nu_pin, f.toen_pin, f.n factor_dagen,
+           coalesce(v1.arr, v2.arr, '{}'::date[]) vdagen,
+           case when v1.arr is not null then 'dagtype' when v2.arr is not null then 'alles' end vsoort
+      from dag d
+      join k kk on kk.id = d.kid
+      -- gemiddelde bon: afgelopen 14 dagen met data
+      left join lateral (select sum(x.omzet) / nullif(sum(x.tr),0) bon from (
+          select p.omzet, p.tr from pdag p where p.kid = d.kid and p.datum < least(d.datum, v_vandaag)
+           order by p.datum desc limit 14) x) b on true
+      -- groei: afgelopen 7 dagen met data tegen dezelfde dagen vorig jaar
+      left join lateral (select sum(x.omzet) nu_pin, sum(x.vj) toen_pin, count(*) n from (
+          select p.omzet, (select sum(h.pin) from public.mcr_omzet_historie h
+                            where h.datum = p.datum - 364
+                              and (h.kraam_id = d.kid or (h.kraam_id is null and lower(h.kraam_naam) = lower(kk.naam)))) vj
+            from pdag p where p.kid = d.kid and p.datum < least(d.datum, v_vandaag)
+           order by p.datum desc limit 7) x where x.vj > 0) f on true
+      -- verdeling over de uren: zelfde soort dag in de laatste 4 weken, anders de laatste 14 dagen
+      left join lateral (select array_agg(h.datum order by h.datum) arr from hdag h
+          where h.kid = d.kid and h.datum < least(d.datum, v_vandaag) and h.datum >= least(d.datum, v_vandaag) - 28
+            and (case when h.wd between 1 and 4 then 1 else h.wd end)
+              = (case when extract(dow from d.datum)::int between 1 and 4 then 1 else extract(dow from d.datum)::int end)
+          having count(*) > 0) v1 on true
+      left join lateral (select array_agg(h.datum order by h.datum) arr from hdag h
+          where h.kid = d.kid and h.datum < least(d.datum, v_vandaag) and h.datum >= least(d.datum, v_vandaag) - 14
+          having count(*) > 0) v2 on true
+     where not d.dicht
+  ), basis as (
+    select o.kid, o.datum, o.dagen, o.soort,
+           v.vj_datum, v.vj_pin, v.bon, v.factor_dagen, v.vdagen, v.vsoort,
+           case when coalesce(v.factor_dagen,0) >= 2 and v.toen_pin > 0
+                then least(2, greatest(0.5, v.nu_pin / v.toen_pin)) else 1 end factor,
+           (v.vj_pin > 0 and v.bon > 0 and cardinality(v.vdagen) > 0) met_vj
+      from oud o join vj v on v.kid = o.kid and v.datum = o.datum
+  ), verdeling as (
+    -- aandeel per uur in de verdeeldagen (alle uren samen = 1)
+    select b.kid, b.datum, x.uur, sum(x.tr)::numeric / nullif(sum(sum(x.tr)) over (partition by b.kid, b.datum),0) aandeel
+      from basis b join uurdata x on x.kid = b.kid and x.datum = any(b.vdagen)
+     where b.met_vj
+     group by b.kid, b.datum, x.uur
   ), uren as (
     select d.kid, d.datum, h.uur,
            h.uur < extract(hour from d.open_van)::int buiten
@@ -171,12 +242,15 @@ begin
       left join metdata md on md.kid = u.kid and md.datum = u.datum
   ), verw as (
     select u.kid, u.datum, u.uur,
-           case when cardinality(b.dagen) > 0 then
-             round(coalesce(sum(x.tr),0)::numeric / cardinality(b.dagen))::int end verwacht
+           case when b.met_vj then
+                  round(b.vj_pin / b.bon * b.factor * coalesce((select vd.aandeel from verdeling vd
+                          where vd.kid = u.kid and vd.datum = u.datum and vd.uur = u.uur),0))::int
+                when cardinality(b.dagen) > 0 then
+                  round(coalesce(sum(x.tr),0)::numeric / cardinality(b.dagen))::int end verwacht
       from uren u
       join basis b on b.kid = u.kid and b.datum = u.datum
-      left join uurdata x on x.kid = u.kid and x.uur = u.uur and x.datum = any(b.dagen)
-     group by u.kid, u.datum, u.uur, b.dagen
+      left join uurdata x on not b.met_vj and x.kid = u.kid and x.uur = u.uur and x.datum = any(b.dagen)
+     group by u.kid, u.datum, u.uur, b.met_vj, b.vj_pin, b.bon, b.factor, b.dagen
   ), plan as (
     select kl.kraam_id kid, kl.datum, kg.gebruiker_id,
            (extract(epoch from s.start_tijd)/60)::int st,
@@ -213,7 +287,7 @@ begin
     select u.kid, u.datum, u.uur, u.buiten, e.echt, vw.verwacht, g.gepland, gk.geklokt,
            case when u.buiten then 0
                 else public.mcr_drukte_advies(vw.verwacht, g.gepland, v_pp, v_erbij, v_af, v_min) end advies,
-           case when u.buiten or e.echt is null or coalesce(gk.geklokt,0) = 0
+           case when u.buiten or e.echt is null or gk.geklokt is null
                      or (u.datum = v_vandaag and u.uur >= v_nu_uur) then null
                 else public.mcr_drukte_advies(e.echt, gk.geklokt, v_pp, v_erbij, v_af, v_min) end achteraf
       from uren u
@@ -241,8 +315,14 @@ begin
     'dagen', coalesce((select jsonb_agg(jsonb_build_object(
         'kraam', d.kid, 'datum', d.datum, 'dicht', d.dicht,
         'open', to_char(d.open_van, 'HH24:MI'), 'sluit', to_char(d.open_tot, 'HH24:MI'),
-        'basis', case when b.kid is null then null else
-                   jsonb_build_object('dagen', cardinality(b.dagen), 'soort', b.soort, 'data', to_jsonb(b.dagen)) end,
+        'basis', case when b.kid is null then null
+                      when b.met_vj then jsonb_build_object('soort', 'vorig_jaar',
+                        'dagen', cardinality(b.vdagen), 'data', to_jsonb(b.vdagen),
+                        'vj_datum', b.vj_datum, 'vj_pin', round(b.vj_pin), 'bon', round(b.bon,2),
+                        'factor', round(b.factor,2), 'factor_dagen', coalesce(b.factor_dagen,0),
+                        'dagtotaal', round(b.vj_pin / b.bon * b.factor),
+                        'verdeling', jsonb_build_object('soort', b.vsoort, 'dagen', cardinality(b.vdagen), 'data', to_jsonb(b.vdagen)))
+                      else jsonb_build_object('dagen', cardinality(b.dagen), 'soort', b.soort, 'data', to_jsonb(b.dagen)) end,
         'nu_binnen', case when d.datum = v_vandaag then coalesce(bn.n, 0) end,
         'uren', coalesce(pd.uren, '[]'::jsonb))
         order by d.datum, kk.volgorde, kk.naam)
