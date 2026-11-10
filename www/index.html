@@ -5613,7 +5613,7 @@ async function mdrOvStil(){
 // Instellingen › Drukte per uur
 const MDR_SLEUTELS=['drukte_per_persoon','drukte_erbij','drukte_af','min_bezetting','max_bezetting'];
 async function mdrInstellingen(){
-  const{data,error}=await sb.from('vestiging_instellingen').select('sleutel,waarde').eq('vestiging','MCR').in('sleutel',MDR_SLEUTELS);
+  const{data,error}=await sb.from('vestiging_instellingen').select('sleutel,waarde').eq('vestiging',dezeMarkt()).in('sleutel',MDR_SLEUTELS);
   if(error)throw error;
   const w={drukte_per_persoon:'30',drukte_erbij:'35',drukte_af:'15',min_bezetting:'0',max_bezetting:'6'};
   (data||[]).forEach(r=>{ if(r.waarde!=null&&r.waarde!=='')w[r.sleutel]=r.waarde; });
@@ -5666,7 +5666,7 @@ async function mdrInstOpslaan(){
   try{
     const nu=new Date().toISOString();
     const rijen=[['drukte_per_persoon',I.pp],['drukte_erbij',I.erbij],['drukte_af',I.af],['min_bezetting',I.min],['max_bezetting',I.max]]
-      .map(([sleutel,w])=>({vestiging:'MCR',sleutel,waarde:String(w),bijgewerkt_op:nu}));
+      .map(([sleutel,w])=>({vestiging:dezeMarkt(),sleutel,waarde:String(w),bijgewerkt_op:nu}));
     const{error}=await sb.from('vestiging_instellingen').upsert(rijen,{onConflict:'vestiging,sleutel'});
     if(error)throw error;
     MDR_PB=null; MDR_OV=null;
