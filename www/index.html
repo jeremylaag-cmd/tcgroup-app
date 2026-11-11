@@ -3608,9 +3608,10 @@ const I18N_EN_DELEN={'vertrek':'departure',
 // onderaan het inlogscherm), dan vertaalt deze laag alles wat op het scherm
 // verschijnt: vaste zinnen uit I18N_EN, zinnen met getallen via I18N_EN_REGELS
 // en losse zinsdelen via I18N_EN_DELEN. Datums gaan dan als en-GB.
-// Het Manchester-beheer (#page-mcrbeheer) en de Engelse crew-app blijven zoals ze zijn.
+// Het Manchester-beheer (#page-mcrbeheer) en de Engelse crew-app blijven zoals ze zijn,
+// behalve voor een planner: die krijgt het beheer in het Engels (mbEnAan).
 let TAAL=(()=>{ try{ return localStorage.getItem('tc_taal')==='en'?'en':'nl'; }catch(e){ return 'nl'; } })();
-const I18N_UIT='#page-mcrbeheer,#mcrApp,script,style,textarea,[contenteditable="true"],.notr';
+let I18N_UIT='#page-mcrbeheer,#mcrApp,script,style,textarea,[contenteditable="true"],.notr';
 let I18N_DELEN_RE=null;
 function i18nDelenRe(){
   if(I18N_DELEN_RE)return I18N_DELEN_RE;
@@ -3691,6 +3692,403 @@ async function kiesTaal(t){
   try{ if(typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&CURRENT_USER.id)await sb.from('gebruikers').update({taal:t}).eq('id',CURRENT_USER.id); }catch(e){}
   location.reload();
 }
+// ── Engels beheerscherm (planner, bv. Andras in Liverpool) ─────────────
+// Het Manchester-beheer is in het Nederlands geschreven. Voor een planner die
+// geen Nederlands leest zet mbEnAan() de vertaalmotor aan op dit scherm, met
+// de woorden en zinnen hieronder. Zinnen met meer dan één woord werken ook
+// als zinsdeel midden in een langere tekst.
+const MB_EN_T={
+// Tabbladen en algemene knoppen
+'Overzicht':'Overview','Omzet':'Revenue','Shifts':'Shifts','Agenda':'Calendar','Uren':'Hours','Dagrapport':'Day report','Inlezen':'Import',
+'Cijfers':'Figures','Kosten':'Costs','Bezetting':'Staffing','Mensen':'People','Huisregels':'House rules','Instellingen':'Settings',
+'Er ging iets mis.':'Something went wrong.','Bezig…':'Working…','Dit scherm kon niet geladen worden.':'This screen could not be loaded.',
+'Meer':'More','Sluiten':'Close','Opslaan':'Save','Annuleren':'Cancel','Wijzigen':'Edit','Weghalen':'Remove','Verwijderen':'Delete','Toevoegen':'Add',
+'Klaar':'Done','Doen':'Do it','Laat maar':'Never mind','Opgeslagen':'Saved','Opslaan…':'Saving…','Akkoord':'Approve','Vraag':'Ask','Nieuw':'New',
+'vorige':'previous','volgende':'next','Vandaag':'Today','vandaag':'today','sluit':'close','dicht':'closed','Dicht':'Closed','Naam':'Name','Telefoon':'Phone',
+'Datum':'Date','Kraam':'Stall','Kraam:':'Stall:','Soort':'Type','Van':'From','Tot en met':'Up to and including','Wie':'Who','Wat':'What','Wanneer':'When','Door':'By',
+'Reden':'Reason','Bedrag':'Amount','Pauze':'Break','pauze':'break','Factuur':'Invoice','Geklokt':'Clocked','Dag':'Day','Week':'Week','Maand':'Month','Lijst':'List',
+'Dagen':'Days','Plekken':'Places','Overgeslagen':'Skipped','Starttijd':'Start time','Eindtijd':'End time','Tijd of aantal':'Time or number',
+'Ingedeeld':'Scheduled','ingedeeld':'scheduled','Afgewezen':'Rejected','Goedgekeurd':'Approved','Onbekend':'Unknown','onbekend':'unknown','Anders':'Other',
+'NIEUW':'NEW','nieuw':'new','sinds':'since','alleen':'only','Vanaf':'From','vanaf':'from','tot':'until','en':'and','van':'of','Akkoord op deze versie':'Agreed to this version',
+
+// Overzicht
+'Shifts plannen':'Plan shifts','Uren accorderen':'Approve hours','Gepland':'Scheduled','Deze dag is de kraam dicht.':'The stall is closed on this day.',
+'Nog geen diensten.':'No shifts yet.','Bel':'Call','Er staan nog geen kramen.':'There are no stalls yet.','Wacht op jou':'Waiting for you',
+'Bezetting de komende weken':'Staffing for the coming weeks','Er staan nog geen diensten klaar.':'No shifts have been set up yet.','bijna vol':'almost full',
+'nog niets ingedeeld':'nobody scheduled yet','mensen actief':'people active','uren goedgekeurd':'hours approved','loonkosten goedgekeurd':'labour costs approved',
+'Alleen uren waar jij akkoord op gaf. Bij Cijfers en Dagrapport telt alles wat geklokt is, ook wat nog wacht.':'Only hours you approved. Figures and Day report count everything that was clocked, including what is still waiting.',
+'Bekijk zoals het personeel':'View as staff','nog niet':'not yet','nog niet vrijgegeven':'not yet released',
+'Bij een nieuwe versie krijgt iedereen hem te zien zodra hij de app opent, en kan pas verder na':'When there is a new version, everyone sees it as soon as they open the app, and can only continue after',
+'te laat':'late','niet te laat':'not late','niet gekomen':'did not show up','naar huis gestuurd':'sent home','Topper':'Star','Goed':'Good','Prima':'Fine',
+'minder dan verwacht':'below expectations','Minder dan verwacht':'Below expectations','niet meer':'not again','Niet meer':'Not again',
+'Dagafsluiting door de kraammanagers':'End-of-day close by the stall managers','Checklist':'Checklist','Voorraad':'Stock','niets nodig':'nothing needed',
+'Beoordeling':'Rating','Kleding':'Uniform','Heropenen':'Reopen','schoonmaaklijst':'cleaning list','ingevuld':'filled in','niet gedaan':'not done','gas dicht':'gas off','door':'by',
+'voor niet komen opdagen. Die wordt bij de volgende betaalronde ingehouden.':'for not showing up. It will be deducted in the next pay run.',
+'krijgt':'gets','Er komt':'There will be','een boete van':'a fine of','Boete vastleggen?':'Record fine?',
+'Ja, boete vastleggen':'Yes, record fine','Boete vastgelegd':'Fine recorded','Deze dag weer openzetten? De kraammanager kan dan opnieuw controleren en afsluiten.':'Reopen this day? The stall manager can then check and close it again.',
+'Dag staat weer open':'Day is open again','urenregistratie':'time entry','urenregistraties':'time entries',
+'persoon is':'person is','mensen zijn':'people are','nog niet binnen':'not in yet','Meer dan 10 minuten na de start en niet ingeklokt':'More than 10 minutes after the start and not clocked in',
+'Britse tijd':'UK time','plek open':'place open','plekken open':'places open','nu ingeklokt':'clocked in now','nu binnen':'in now',
+
+// Agenda
+'Influencer':'Influencer','Levering':'Delivery','Bezoek / controle':'Visit / inspection','Overig':'Other','Hele dag':'All day','Alles':'Everything',
+'Vanaf vandaag':'From today','Alles weer tonen':'Show everything','Alle kramen':'All stalls','alle kramen':'all stalls','Niets gepland vanaf vandaag.':'Nothing planned from today.',
+'Er staan filters aan; misschien is iets verborgen.':'Some filters are on, so things may be hidden.','Zet hier influencers, leveringen en bezoeken neer.':'Add visits, deliveries and other things here.',
+'gezet door':'added by','Gezet door':'Added by','kraammanager':'stall manager','(Engelse tijd)':'(UK time)','Alleen wie het erin zette kan het wijzigen.':'Only the person who added this can change it.',
+'Naar deze dag':'Go to day','Van (Engelse tijd)':'From (UK time)','Tot (optioneel)':'Until (optional)','Titel — in het Engels, de managers lezen dit':'Title — in English, the managers read this',
+'Contact (optioneel)':'Contact (optional)','Notitie voor de manager (optioneel, Engels)':'Note for the manager (optional, English)',
+'Leeg bij ‘Van’ = hele dag. De kraammanagers zien dit meteen in hun app.':'Empty ‘From’ = all day. The stall managers see this straight away in their app.',
+'Kies een datum.':'Choose a date.','Vul een titel in.':'Enter a title.','Vul ook een begintijd in.':'Enter a start time as well.','De eindtijd moet na de begintijd liggen.':'The end time must be after the start time.',
+'Opgeslagen in de agenda':'Saved in the calendar','Agenda deze dag':'Calendar for this day',
+'Er wordt gezocht in titel, contact, notitie, kraam, soort en wie het erin zette — ook in wat al voorbij is.':'Searches title, contact, note, stall, type and who added it — including things in the past.',
+
+// Shifts (dagbord, week per persoon, voorstel, diensten beheren)
+'Dagbord':'Day board','Week per persoon':'Week per person','Voorstel invullen':'Fill in a proposal','Diensten beheren':'Manage shifts','de hele dag':'all day',
+'beschikbaarheid niet ingevuld':'availability not filled in','kan niet':'unavailable','kan':'available','(past deels)':'(partly fits)','(past niet)':'(does not fit)',
+'nog geen dienst deze week':'no shift this week yet','deze week':'this week','Deze week':'This week','wil max':'wants max','geen oordeel ·':'no rating ·',
+'Shifts · week van':'Shifts · week of','week van':'week of',
+'vraagt personeel niet meer zelf om diensten; ze geven alleen hun beschikbaarheid op.':'staff no longer request shifts themselves; they only give their availability.',
+'Deze week heeft':'This week','mensen beschikbaarheid ingevuld.':'people have filled in their availability.',
+'tegen forecast':'against forecast','· forecast':'· forecast','· loon':'· wages','Gepland loon':'Planned wages','+ dienst':'+ shift','Deze kraam is dicht op deze dag.':'This stall is closed on this day.',
+'Geen diensten op deze dag.':'No shifts on this day.','nog niemand':'nobody yet','Kies een dienst':'Choose a shift',
+'Tik links op een balk. Hier zie je dan wie erom vroeg, wie die dag kan en wie al veel heeft, en deel je iemand in met één tik.':'Tap a bar on the left. Here you will see who asked for it, who is available that day and who already has a lot, and you can schedule someone with one tap.',
+'Nog niemand.':'Nobody yet.','Eraf':'Remove','Vroegen om deze dienst':'Asked for this shift','Staat die dag al op':'Already on that day',
+'Heeft deze dag als “kan niet” opgegeven.':'Marked this day as “unavailable”.','Gaf op:':'Said:','gaf op:':'said:','Wil max':'Wants max',
+'dagen per week en zit daar al aan.':'days a week and has already reached that.','Beoordeling: niet meer.':'Rating: not again.',
+'Nog geen beoordeling en al':'No rating yet and already','nog geen beoordeling en al':'no rating yet and already','diensten. Geef eerst een beoordeling.':'shifts. Give a rating first.',
+'Indelen':'Schedule','Afwijzen':'Reject','zit al aan max':'already at max','werkt die dag al een andere dienst':'already works another shift that day',
+'wil het liefst niet voor':'prefers not to start before','Gaven op dat ze kunnen':'Said they are available','Niemand heeft deze dag als beschikbaar opgegeven.':'Nobody marked this day as available.',
+'Nog niets opgegeven voor deze dag':'Nothing given for this day yet','Niemand anders vrij.':'Nobody else free.',
+'Deze dienst is vol. Wil je wisselen, haal dan eerst iemand eraf.':'This shift is full. To swap, remove someone first.','Dienst wijzigen of weghalen':'Edit or remove shift',
+'heeft nog geen beoordeling en staat al op':'has no rating yet and is already on',
+'Geef eerst een beoordeling (het dagrapport vraagt daar na de eerste dienst om, of via Mensen).':'Give a rating first (the day report asks for one after the first shift, or via People).',
+'Past maar deels':'Only partly fits','past maar deels':'only partly fits','Past niet bij de beschikbaarheid':'Does not fit the availability','Ja, overlegd – indelen':'Yes, agreed – schedule',
+'Meer dagen dan gewenst':'More days than wanted','Ja, toch indelen':'Yes, schedule anyway','Ja, eraf halen':'Yes, remove','Van de dienst gehaald':'Removed from the shift',
+'Ja, afwijzen':'Yes, reject','plekken gevuld deze week':'places filled this week','plekken nog open':'places still open','aanvragen wachten op jou':'requests waiting for you',
+'mensen nog zonder dienst':'people still without a shift','Volgorde:':'Order:','Verberg wie deze week niets heeft':'Hide people with nothing this week',
+'Niemand met diensten, aanvragen of beschikbaarheid deze week.':'Nobody with shifts, requests or availability this week.',
+'ingedeeld (kleur = kraam)':'scheduled (colour = stall)','vroeg erom · tik om in te delen':'asked for it · tap to schedule','opgegeven beschikbaar':'said available',
+'Naar het dagbord':'To the day board','Hoe de app kiest.':'How the app chooses.','plekken die de app invult':'places the app fills','mensen die een dienst krijgen':'people who get a shift',
+'plekken blijven open':'places stay open','Tik op een regel om hem uit of weer aan te vinken.':'Tap a line to untick or tick it again.','geen oordeel (proef)':'no rating (trial)',
+'1e dienst deze week':'1st shift this week','e dienst deze week':'th shift this week','vroeg erom':'asked for it','Vroegen ook:':'Also asked:',
+'Blijft open · niemand vroeg erom of gaf op dat ze kunnen':'Stays open · nobody asked for it or said they are available','zelf kiezen':'choose myself',
+'Ja, in het rooster':'Yes, put in the rota','Opnieuw proberen':'Try again','Voorstel in het rooster zetten?':'Put the proposal in the rota?',
+'Iedereen krijgt meteen een melding dat ze ingedeeld zijn. Wie erom vroeg en het niet kreeg, blijft gewoon in de lijst staan tot jij antwoordt.':'Everyone is notified straight away that they are scheduled. Anyone who asked and did not get it simply stays on the list until you answer.',
+'in het rooster gezet. Iedereen krijgt een melding.':'put in the rota. Everyone gets a notification.','lukte niet:':'did not work:',
+'Per dienst op volgorde van beoordeling, dan hoe lang iemand al bij ons werkt, dan het aantal gewerkte shifts.':'Per shift in order of rating, then how long someone has worked with us, then the number of shifts worked.',
+'Diensten met een start- en een eindtijd. Laat je de eindtijd leeg, dan loopt hij tot sluit.':'Shifts with a start and an end time. If you leave the end time empty, it runs until close.',
+'Deze week kopiëren naar volgende':'Copy this week to next','+ Diensten toevoegen':'+ Add shifts','iemand heeft':'person has','mensen hebben':'people have',
+'= ingedeeld van het aantal dat je nodig hebt ·':'= scheduled out of the number you need ·',
+'= zoveel mensen hebben zich aangemeld en wachten op jouw antwoord · tik op een dag om te zien wie er die dag werkt':'= this many people have signed up and are waiting for your answer · tap a day to see who works that day',
+'Managers ·':'Managers ·','· week van':'· week of','Er zijn nog geen kraammanagers. Alleen mensen met het vinkje':'There are no stall managers yet. Only people with the tick',
+'kunnen hier manager worden. Zet dat aan bij':'can be a manager here. Turn that on under',
+'Maandag t/m zondag, alleen kraammanagers. Je kunt er meer dan één kiezen; tik nog eens om weg te halen.':'Monday to Sunday, stall managers only. You can pick more than one; tap again to remove.',
+'✓ manager':'✓ manager','+ kiezen':'+ choose','Niemand gevonden.':'Nobody found.','Weekendmanager ·':'Weekend manager ·','✓ ingedeeld':'✓ scheduled',
+'De lijst is nog leeg. Voeg hieronder een naam toe.':'The list is still empty. Add a name below.','Nieuwe naam toevoegen':'Add a new name','Vul een naam in.':'Enter a name.',
+'Weekendmanagers':'Weekend managers','Nieuwe naam':'New name',
+'De diensten van deze week kopiëren naar de week erna? Wat er al staat blijft staan.':'Copy this week’s shifts to the following week? Anything already there stays.',
+'diensten toegevoegd aan de week erna.':'shifts added to the following week.','Naam (mag leeg)':'Name (optional)','de sluitingstijd van elke kraam':'the closing time of each stall',
+'Kies minstens één kraam.':'Choose at least one stall.','Kies minstens één dag van de week.':'Choose at least one day of the week.','Er is niets aangemaakt —':'Nothing was created —',
+'op die dagen staat al een dienst op die tijd, of ze vallen buiten het seizoen.':'on those days there is already a shift at that time, or they fall outside the season.',
+'De eindtijd moet na de starttijd liggen.':'The end time must be after the start time.','Nog niemand ingedeeld.':'Nobody scheduled yet.','Hebben zich aangemeld':'Have signed up',
+'Wie kan er nog':'Who else is available','Op volgorde van beschikbaarheid. Wie die dag al ergens staat, staat grijs. Rood = kan niet op deze tijd.':'In order of availability. Anyone already working somewhere that day is grey. Red = not available at this time.',
+'andere tijd':'other time','· past niet':'· does not fit','· deels':'· partly','niet beschikbaar':'not available','niet ingevuld':'not filled in','Meteen eraf':'Remove now',
+'Shift ruilen':'Swap shift','Iemand kan zijn shift niet doen.':'Someone cannot do their shift.','Openzetten':'Open up','Staat open':'Is open','Van de shift gehaald en opengezet':'Removed from the shift and opened up',
+'nog geen shift gewerkt':'no shifts worked yet','1 shift gewerkt':'1 shift worked','shifts gewerkt':'shifts worked','werkt sinds':'works since','sinds ? (vul in bij Mensen)':'since ? (fill in under People)',
+'past bij de hele shift':'fits the whole shift','begint pas om':'only starts at','(shift begint':'(shift starts','moet om':'has to leave at','weg (shift tot':'(shift until',
+'heeft zich voor deze dag afgemeld':'has cancelled for this day','geen beschikbaarheid ingevuld voor deze dag':'no availability filled in for this day',
+'Wacht op antwoord deze week':'Waiting for an answer this week','Niemand deze week.':'Nobody this week.','Dienst is al vol':'Shift is already full','Ja, erbij zetten':'Yes, add',
+'die dag':'that day','heeft doorgegeven op':'said that on','niet te kunnen':'they are not available','kan op':'is available on',
+'Dat past maar deels bij deze dienst':'That only partly fits this shift','Dat past niet bij deze dienst':'That does not fit this shift',
+'Weet je het zeker? Is dit met':'Are you sure? Have you agreed this with','De dienst is':'The shift is','Is dit met':'Have you agreed this with',
+'Dienst toevoegen':'Add shift','Diensten toevoegen':'Add shifts','Je maakt één dienst aan op deze dag.':'You are creating one shift on this day.',
+'Staat al ingedeeld':'Already scheduled','(vol)':'(full)','aanvraag':'request','aanvragen':'requests','Kan':'Available',
+'ruil: neemt de shift van':'swap: takes over the shift of','in andere weken:':'in other weeks:',
+'De plek komt open en iedereen die die dag kan krijgt een melding.':'The place opens up and everyone available that day gets a notification.',
+'Iedereen die die dag kan krijgt een melding en kan zich aanmelden.':'Everyone available that day gets a notification and can sign up.',
+'blijft ingedeeld tot jij iemand anders indeelt.':'stays scheduled until you schedule someone else.','blijft ingedeeld en krijgt daar bericht van.':'stays scheduled and will be told.',
+'Nog niemand aangemeld.':'Nobody has signed up yet.','blijft ingedeeld tot iemand het overneemt.':'stays scheduled until someone takes it over.',
+'meteen van deze shift halen?':'remove from this shift now?','De shift van':'Open up the shift of','Het verzoek van':'Reject the request of',
+'deel iemand in, dan gaat':'schedule someone and','er vanzelf af.':'is removed automatically.',
+'Laat je de eindtijd leeg, dan loopt de dienst tot':'If you leave the end time empty, the shift runs until',
+'sluitingstijd plus de tijd om op te ruimen. Dat staat bij Instellingen.':'closing time plus time to tidy up. That is set under Settings.',
+'krijgt daar een melding van.':'will be notified.',
+
+// Uren
+'Te accorderen':'To approve','Betaalrondes':'Pay runs','Aandacht nodig':'Needs attention','Managerwijzigingen':'Manager changes',
+'· tijden in Britse tijd · stuk voor stuk, er is bewust geen knop die alles tegelijk goedkeurt':'· times in UK time · one by one, there is deliberately no button that approves everything at once',
+'Zodra jij akkoord geeft, kan die persoon de uren op een factuur zetten. Pas je in een rij de tijden aan, dan slaat':'As soon as you approve, that person can put the hours on an invoice. If you change the times in a row,',
+'eerst die tijden op. Met':'saves those times first. With',
+'zet je de registratie apart (bij “Uitgezocht”) en ziet die persoon jouw vraag in de app — er verandert niets aan de tijden zonder dat jij het doet.':'you set the entry aside (under “Being checked”) and that person sees your question in the app — nothing changes in the times unless you do it.',
+'Er wacht niets op akkoord.':'Nothing is waiting for approval.','Geklokt (Britse tijd)':'Clocked (UK time)','niet uitgeklokt — vul de eindtijd in':'not clocked out — fill in the end time',
+'minuten later begonnen dan ingeroosterd':'minutes later than scheduled','Automatisch uitgeklokt — de eindtijd is een schatting.':'Automatically clocked out — the end time is an estimate.',
+'na uitklokken te accorderen':'to approve after clocking out','Bijstellen':'Adjust','Tijden aangepast: Akkoord slaat ze eerst op.':'Times changed: Approve saves them first.',
+'Vul eerst de eindtijd in.':'Fill in the end time first.','Vul een begin- en eindtijd in.':'Fill in a start and end time.','Begin- en eindtijd zijn hetzelfde (':'Start and end time are the same (',
+'Eindtijd ligt vóór de begintijd':'End time is before the start time','Ja, volgende dag':'Yes, next day','Tijden opgeslagen en akkoord':'Times saved and approved','Tijden aangepast':'Times changed',
+'Je hebt in deze rij tijden aangepast. Sla die eerst op met Bijstellen (of zet ze terug); daarna kun je een vraag stellen.':'You changed times in this row. Save them first with Adjust (or change them back); then you can ask a question.',
+'Wat wil je vragen of waarom klopt dit niet? Die persoon ziet dit in de app.':'What do you want to ask, or why is this not right? That person sees this in the app.',
+'Vraag gesteld · staat nu bij Uitgezocht':'Question asked · now under Being checked','Uitgezocht · wacht op antwoord':'Being checked · waiting for an answer',
+'Hier stelde jij een vraag over. Ze tellen in de betaalronde als':'You asked a question about these. In the pay run they count as','open':'open',
+'en komen pas op een factuur als je ze weer accordeert.':'and only go on an invoice once you approve them again.','Jouw vraag:':'Your question:',
+'Terug naar te accorderen':'Back to approve','Staat weer bij Te accorderen':'Back under To approve','Goedgekeurde uren':'Approved hours',
+'Terugdraaien zet ze terug bij Te accorderen; verwijderen haalt ze uit de administratie. Alleen jij als administrator kunt dit, en nooit bij een factuur die al is ontvangen.':'Undo puts them back under To approve; deleting removes them from the records. Only an administrator can do this, and never for an invoice that has already been received.',
+'Geen goedgekeurde uren in deze periode.':'No approved hours in this period.','Waarom draai je deze goedkeuring terug? Dit komt bij de registratie te staan.':'Why are you undoing this approval? This is added to the entry.',
+'Wat de kraammanagers veranderden':'What the stall managers changed','Elke uitkloktijd, pauze en beoordeling die een manager aanpast, met naam en tijdstip · laatste 90 dagen':'Every clock-out time, break and rating a manager changes, with name and time · last 90 days',
+'Nog niets aangepast door een manager.':'Nothing changed by a manager yet.','Van → naar':'From → to','niet uitgeklokt':'not clocked out',
+'Open gebleven diensten en wie later begon dan ingeroosterd · tijden in Britse tijd':'Shifts left open and who started later than scheduled · times in UK time',
+'Open gebleven diensten':'Shifts left open','Niets open.':'Nothing open.','Vastzetten':'Fix','Elke regel heeft zijn eigen knop; er komt geen knop die alles in een keer afhandelt. Na vastzetten staat de registratie bij Te accorderen.':'Each line has its own button; there is no button that handles everything at once. After fixing, the entry is under To approve.',
+'Later begonnen dan ingeroosterd':'Started later than scheduled','Hier hoef je niets te doen: de uren lopen vanaf het inklokmoment, dus dit is al verrekend.':'Nothing to do here: hours run from the clock-in time, so this is already accounted for.',
+'Iedereen was op tijd.':'Everyone was on time.','Vul een eindtijd in.':'Fill in an end time.','aan het werk sinds':'working since','ingeroosterd':'scheduled','ingeklokt':'clocked in',
+'min later':'min late','Vastgezet tot':'Fixed until','geen pauze':'no break','staat nu bij Te accorderen':'now under To approve',
+
+
+// Mensen
+'Terugzetten':'Reset','Alles opslaan':'Save all','Lft':'Age','Tarief':'Rate','Verdiend':'Earned','Misgegaan':'Went wrong','Werkt sinds':'Works since',
+'Nog niemand vrijgegeven.':'Nobody released yet.','Uit dienst':'Left','uit dienst':'left','Deze mensen kunnen niet meer inloggen en staan nergens meer tussen. Hun uren en':'These people can no longer sign in and no longer appear anywhere. Their hours and',
+'facturen zijn bewaard gebleven.':'invoices have been kept.','Terughalen':'Bring back','Nieuwe aanmelding':'New sign-up','E-mail':'Email','Tarief £/uur':'Rate £/hour',
+'Werkt bij ons sinds':'Works with us since','Vrijgeven':'Release','Waar mensen vandaan komen':'Where people come from','Nog niemand heeft ingevuld hoe hij hier kwam.':'Nobody has filled in how they found us yet.',
+'Je wierf vorig jaar vooral via je eigen mensen. De app houdt dat nu bij, zodat je ziet wie je goede krachten aanlevert.':'Last year you mostly recruited through your own people. The app now keeps track of that, so you can see who brings in good staff.',
+'Onder het minimumloon':'Below minimum wage','bv. Kirsty, Indeed, flyer':'e.g. Kirsty, Indeed, flyer','Opgeslagen: via':'Saved: via','alleen beschikbaarheid':'availability only',
+'geen bankrekening':'no bank account','Dit account kan niet worden weggehaald.':'This account cannot be removed.',
+'Het account, de inlog en de aanmeldingen gaan definitief weg. Hij kan zich daarna opnieuw aanmelden.':'The account, the login and the sign-ups are removed permanently. They can sign up again afterwards.',
+'Account verwijderd':'Account deleted','Die blijven bewaard — dat moet, zeven jaar lang. Hij kan niet meer inloggen, verdwijnt uit je lijsten':'They are kept — that is required, for seven years. They can no longer sign in, disappear from your lists',
+'en gaat van alle diensten vanaf vandaag af.':'and are removed from all shifts from today.','Reden (mag leeg):':'Reason (optional):','Reden (mag leeg)':'Reason (optional)',
+'Dit account terughalen? Daarna moet je het nog wel opnieuw vrijgeven.':'Bring this account back? You will then need to release it again.','Teruggehaald. Geef het account hierboven weer vrij.':'Brought back. Release the account again above.',
+'kan hele dag':'available all day','Rooster en aanvragen':'Rota and requests','Niets ingepland, niets aangevraagd en geen beschikbaarheid doorgegeven.':'Nothing scheduled, nothing requested and no availability given.',
+'Afgelopen 30 dagen':'Last 30 days','Niet ingedeeld geweest.':'Not scheduled.','niet geklokt':'not clocked','Kleding, borg en voorvallen':'Uniform, deposit and incidents',
+'Die persoon staat er niet meer.':'That person is no longer there.','Niet komen opdagen':'No-show','Afgemeld':'Cancelled','Te laat':'Late','Compliment':'Compliment','Kraammanager':'Stall manager',
+'Kleding en borg':'Uniform and deposit','Borg':'Deposit','Hoe vaak ging het mis':'How often it went wrong','aan boetes':'in fines','Iets vastleggen':'Record something','Boete':'Fine',
+'Toelichting':'Explanation','Vastleggen':'Record','Nog niets vastgelegd.':'Nothing recorded yet.','vanzelf uit je instellingen':'automatically from your settings','geen':'none',
+'Dat bedrag begrijp ik niet. Typ bv. 12,50 of laat het leeg.':'I don’t understand that amount. Type e.g. 12.50 or leave it empty.','Vastgelegd · boete':'Recorded · fine','Vastgelegd':'Recorded',
+'persoon gewijzigd, nog niet opgeslagen':'person changed, not saved yet','mensen gewijzigd, nog niet opgeslagen':'people changed, not saved yet','Alles opslaan (':'Save all (',
+'Het tarief van':'The rate of','deze persoon':'this person','klopt niet.':'is not right.','Niet alles is opgeslagen:':'Not everything was saved:',
+'actief':'active','wachten':'waiting','niet meer uitnodigen':'do not invite again','uit dienst sinds':'left since','uur bewaard':'hours kept','bracht':'brought in','iemand':'person',
+'gewerkt':'worked','staat op het rooster':'is on the rota','heeft zich aangemeld':'has signed up','doorgegeven':'given','ingedeeld':'scheduled','aangevraagd':'requested',
+'Deze persoon heeft nog nooit uren geklokt, dus er is niets te bewaren.':'This person has never clocked any hours, so there is nothing to keep.',
+'op naam van deze persoon.':'in this person’s name.','facturen':'invoices',
+'Zoek op naam':'Search by name','Zoek een naam…':'Search for a name…','Niemand gevonden met deze naam.':'Nobody found with this name.',
+
+// Huisregels
+'Akkoord op deze versie':'Agreed to this version','Versie':'Version','I agree':'I agree',
+
+// Instellingen (bezetting, afwijkende dagen, gegevens)
+'Afwijkende dagen':'Exceptional days','Een dag die dicht is, of andere openingstijden heeft dan normaal. Nieuwe diensten op zo\'n dag krijgen vanzelf de juiste eindtijd. Diensten die er al stonden pas je aan met “diensten gelijktrekken”.':'A day that is closed or has different opening hours than normal. New shifts on such a day automatically get the right end time. Shifts that were already there you adjust with “align shifts”.',
+'Open van':'Open from','Open tot':'Open until','open van':'open from','open tot':'open until','Nog geen afwijkende dagen: elke kraam is open volgens zijn gewone tijden.':'No exceptional days yet: every stall is open at its normal hours.',
+'dienst loopt':'shift runs','diensten lopen':'shifts run','Gewone tijden':'Normal hours','Alle diensten gelijktrekken':'Align all shifts',
+'Alleen diensten waar nog niemand op staat; de rest wordt overgeslagen en geteld.':'Only shifts nobody is on yet; the rest is skipped and counted.',
+'Vink “dicht” aan, of vul de openingstijden van die dag in.':'Tick “closed”, or fill in the opening hours for that day.','Er hoeft niets te veranderen.':'Nothing needs to change.',
+'Bedrijfsnaam':'Company name','Adres':'Address','Facturen binnen op':'Invoices due on','Pauze vanaf (uren)':'Break from (hours)','Pauze (minuten)':'Break (minutes)',
+'Prijs portie (£)':'Price per portion (£)','Prijs topping (£)':'Price per topping (£)','Inklokken mag x minuten voor de start':'Clock-in allowed x minutes before the start',
+'Afzegtermijn (uren)':'Cancellation notice (hours)','Boete niet opdagen (£)':'No-show fine (£)','Loonkosten rood boven (% van omzet)':'Labour costs red above (% of revenue)',
+'Borg per long sleeve polo (£)':'Deposit per long sleeve polo (£)','Borg per schort (£)':'Deposit per apron (£)','Noodnummer 1':'Emergency number 1','Noodnummer 2':'Emergency number 2',
+'Personeel vraagt zelf om diensten t/m (leeg = altijd)':'Staff request shifts themselves until (empty = always)',
+'Deze tag intrekken? Inklokken ermee kan daarna meteen niet meer.':'Revoke this tag? Clocking in with it will stop working immediately.',
+'krijgt een vroegere eindtijd':'gets an earlier end time','krijgen een vroegere eindtijd':'get an earlier end time','dienst op een dichte dag gaat':'shift on a closed day is','diensten op dichte dagen gaan':'shifts on closed days are',
+'weg':'removed','dienst blijft':'shift stays','diensten blijven':'shifts stay','staan omdat er al iemand op staat':'because someone is already on it',
+
+// Dagrapport / kosten / inlezen (niet voor planners, maar volledig)
+'Delen mislukt:':'Sharing failed:','Verwijderen mislukt:':'Deleting failed:','Bezig met lezen…':'Reading…','Bezig met wegschrijven…':'Writing…','Kies eerst een bestand.':'Choose a file first.',
+'Kies eerst een of meer bestanden.':'Choose one or more files first.','Bestand':'File','Terminal':'Terminal','In het dagrapport zetten':'Put in the day report','Niets te doen.':'Nothing to do.',
+'Geen btw':'No VAT','Vul een datum in.':'Enter a date.','Vul een omschrijving in.':'Enter a description.','Vul een geldig bedrag in, bv. 245,50.':'Enter a valid amount, e.g. 245.50.',
+'Kostenpost bijgewerkt':'Cost item updated','Kostenpost toegevoegd':'Cost item added','Kostenpost verwijderd':'Cost item deleted','Vul het TID in zoals het op de bon staat.':'Enter the TID as shown on the receipt.',
+
+// Losse woorden die in langere zinnen staan
+'dienst':'shift','diensten':'shifts','persoon':'person','plek':'place','plekken':'places','gevuld':'filled','dag':'day','dagen':'days','uur':'hours',
+'met':'with','zonder':'without','btw':'VAT','bedrag is':'amount is','kosten':'costs','ingelezen':'imported','al bekend':'already known','nog toewijzen:':'still to assign:',
+'bestanden gelezen':'files read','transacties':'transactions','hebben je aandacht nodig':'need your attention','Geen transacties gevonden.':'No transactions found.',
+'Wacht op':'Waiting for','op jou':'on you','Toon alle':'Show all',
+// Aanvulling (tweede ronde)
+'Urenregistraties op akkoord':'Time entries to approve','Shiftaanvragen te beoordelen':'Shift requests to review','Iemand kan zijn shift niet doen (ruilen)':'Someone cannot do their shift (swap)',
+'Shifts zonder genoeg mensen, komende 7 dagen':'Shifts without enough people, next 7 days','geen forecast':'no forecast','forecast':'forecast','loon':'wages','(boven':'(above',
+'nog niet afgesloten':'not closed yet','afgesloten':'closed','Geen kraammanager voor deze kraam deze week.':'No stall manager for this stall this week.',
+'geen diensten':'no shifts','Rij onder de betalingen':'Row below the payments','Bovenste rij per kraam':'Top row per stall',
+': hoeveel mensen er per uur staan tegen hoeveel er gepland zijn.':': how many people are working per hour against how many are planned.','deels':'partly',
+'Geen gaten.':'No gaps.','Gaten:':'Gaps:','Shift staat open om te ruilen':'Shift is open for a swap','Wil deze shift ruilen':'Wants to swap this shift',
+'Van de dienst halen?':'Remove from the shift?','Aanmelding afwijzen?':'Reject sign-up?','Aanvraag afwijzen?':'Reject request?',
+'Tik om in te delen:':'Tap to schedule:','Deze dienst is al vol':'This shift is already full','vol':'full','botst':'clash',
+'Beste eerst':'Best first','Minste diensten eerst':'Fewest shifts first','drukte per kraam: zet er iemand bij / er kan iemand af (uren in het dagbord)':'busyness per stall: add someone / someone can go (hours on the day board)',
+'Vink je iemand uit, dan schuift de volgende door. Er verandert niets tot je op de zwarte knop drukt.':'If you untick someone, the next person moves up. Nothing changes until you press the black button.',
+'Er is niemand die erom vroeg of beschikbaar is voor de open plekken van deze week.':'There is nobody who asked for or is available for this week’s open places.',
+'Alle diensten van deze week zijn al gevuld.':'All shifts this week are already filled.','in het rooster':'in the rota','blijft open':'stays open',
+'Namen uit je eigen lijst (geen account). Meer dan één mag.':'Names from your own list (no account). More than one is allowed.',
+'De lijst beheer je bij Instellingen › Weekendmanagers.':'You manage the list under Settings › Weekend managers.','+ manager (ma–zo)':'+ manager (Mon–Sun)',
+'Kies de kramen, de periode en de dagen van de week. Kijk eerst met de proefronde wat er zou gebeuren.':'Choose the stalls, the period and the days of the week. Check first with the trial run what would happen.',
+'alle':'all','Nu aanmaken':'Create now','Proefronde':'Trial run','Dit is alleen een proefronde — er is nog niets aangemaakt.':'This is only a trial run — nothing has been created yet.',
+'Op deze dienst':'On this shift','staat vandaag al ergens':'is already somewhere today','Deze dienst verwijderen?':'Delete this shift?',
+'staat open':'is open','wil ruilen':'wants to swap','Iedereen kan zich aanmelden;':'Anyone can sign up;','blijft ingedeeld tot iemand het overneemt':'stays scheduled until someone takes it over','Toch niet':'Never mind',
+': anderen kunnen zich aanmelden en krijgen een melding; hij blijft ingedeeld tot jij iemand anders indeelt.':': others can sign up and get a notification; they stay scheduled until you schedule someone else.',
+': hij gaat er nu af en de plek komt open.':': they are removed now and the place opens up.','· past niet bij deze shift':'· does not fit this shift',
+'Meldt zich aan voor':'Signs up for','Ook aangemeld voor':'Also signed up for','Pas eerst een van de twee aan.':'Change one of the two first.',
+': is dit een nachtdienst die de volgende dag eindigt?':': is this a night shift that ends the next day?',': eindigde deze dienst de volgende dag?':': did this shift end the next day?','geen tekst':'no text',
+'zonder eindtijd':'without end time','nu aan het werk':'working now','registratie wacht':'entry waiting','registraties wachten':'entries waiting',
+'Alleen':'Only','Kraam-app':'Stall app','Planning':'Planning','Engels':'English','zij maken zelf een PDF en mailen die naar je; hier vink je af wat binnen is, zie je wat je overmaakt en zet je de ronde vast':'they make a PDF themselves and email it to you; here you tick off what has come in, see what you transfer and close the run',
+'komt nog':'still to come','uren open':'hours open','In deze periode heeft nog niemand in':'In this period nobody has worked in','Kan pas als de ronde voorbij is en alle uren zijn afgehandeld':'Only possible once the run is over and all hours are dealt with',
+'boetes en borg':'fines and deposit','Deze ronde loopt nog: de bedragen kunnen nog veranderen.':'This run is still going: the amounts can still change.','registratie staat':'entry is','nog open':'still open',
+'(te accorderen of bij Uitgezocht). Die tellen hier nog niet mee; vastzetten kan pas als ze zijn afgehandeld.':'(to approve or under Being checked). They do not count here yet; closing is only possible once they are dealt with.',
+'Geen sort code of rekeningnummer:':'No sort code or account number:','Let op het minimumloon.':'Mind the minimum wage.',
+'komt het uurloon in deze ronde onder het minimum. In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. De borg wordt al over twee rondes gespreid; overweeg de boete te verlagen of later in te houden.':'the hourly wage in this run falls below the minimum. In the UK you may only deduct what was agreed in writing beforehand, and not below the minimum wage. The deposit is already spread over two runs; consider lowering the fine or deducting it later.',
+'ligt vast wat is ingehouden — zo wordt niets twee keer ingehouden.':'records what has been deducted — so nothing is deducted twice.','nog niets binnen':'nothing in yet','geen bank':'no bank','niet ontv.':'not recv.','niet betaald':'not paid',
+'Hiermee leg je vast wat je overmaakt:':'This records what you transfer:','aan boetes en borg ingehouden. Volgende rondes rekenen hiermee verder, zodat niets twee keer wordt ingehouden.':'deducted in fines and deposit. Next runs continue from this, so nothing is deducted twice.',
+'De bedragen worden weer opnieuw berekend. Doe dit alleen als je nog niet hebt overgemaakt.':'The amounts will be recalculated. Only do this if you have not transferred yet.',
+'Ronde vastgezet':'Run closed','Vastzetten ongedaan gemaakt':'Closing undone','Ronde':'Run','binnen':'in','ontvangen':'received','betaald':'paid','Netto':'Net','Bruto':'Gross','Ingehouden':'Deducted',
+'(wacht ook)':'(also waiting)','· heeft bankrekening':'· has bank account','Heeft nog geen bankrekening ingevuld.':'Has not filled in a bank account yet.',
+'Deze persoon zit':'This person is','eronder. Nieuwe uren rekenen met het tarief dat hier staat.':'below it. New hours are calculated with the rate shown here.',
+'+ via wie?':'+ via whom?','"Via wie" leeggemaakt':'"Via whom" cleared','Gegevens, rooster en aanvragen bekijken':'View details, rota and requests',
+'nog niet ingevuld':'not filled in yet','Wil werken':'Wants to work','dagen per week':'days a week','× niet gekomen ·':'× no-show ·','gelezen op':'read on','nog niet gelezen':'not read yet',
+'Nog niets ingevuld.':'Nothing filled in yet.','Persoon':'Person','Geboortedatum':'Date of birth','Uurloon (£)':'Hourly rate (£)','Shirtmaat':'Shirt size','Wat hij of zij zelf aangaf':'What they said themselves',
+'Liefst niet voor':'Preferably not before','Opmerking':'Note','Gegevens opgeslagen':'Details saved','Gegevens':'Details','shift ingepland':'shift scheduled','shifts ingepland':'shifts scheduled','uur ingepland':'hours scheduled',
+'aanvraag open':'request open','aanvragen open':'requests open','gewerkt (30 dagen)':'worked (30 days)',
+'Borg per stuk: zie Instellingen (standaard £ 25 per polo en £ 25 per schort).':'Deposit per item: see Settings (default £ 25 per polo and £ 25 per apron).',
+'Het eerste stuk kost de borg uit je instellingen, elk volgend stuk het bedrag daaronder.':'The first item costs the deposit from your settings, each further item the amount below it.',
+'Niet gekomen':'No-show','Zet het op 0 zodra je de kleding terug hebt.':'Set it to 0 once you have the uniform back.',
+'Is nu kraammanager':'Is now stall manager','van alle kramen':'of all stalls','. De app schakelt om zodra hij hem opnieuw opent.':'. The app switches as soon as they open it again.','Is geen kraammanager meer.':'Is no longer stall manager.',
+'Kan nu alleen beschikbaarheid opgeven.':'Can now only give availability.','Mag nu zelf om diensten vragen (tot de datum bij Gegevens).':'May now request shifts themselves (until the date under Details).',
+'Dit voorval weghalen?':'Remove this incident?','opgeslagen':'saved','Opgeslagen.':'Saved.','Uit dienst zetten mislukt:':'Marking as left failed:',
+'— werkt niet zelf mee, maar ziet het rooster van alle kramen met telefoonnummers en kloktijden, en mag op zijn eigen kraam de uitkloktijd en de pauze bijstellen zolang jij de uren nog niet hebt goedgekeurd. Mag ook beoordelen. Geen uurloon, geen facturen, niets aan het rooster.':'— does not work shifts, but sees the rota of all stalls with phone numbers and clock times, and may adjust the clock-out time and break at their own stall as long as you have not approved the hours. May also give ratings. No hourly rate, no invoices, nothing on the rota.',
+'Afgemeld':'Cancelled','afgemeld':'cancelled','Mag zelf om diensten vragen':'May request shifts','Alleen beschikbaarheid':'Availability only','Kraammanager van':'Stall manager of',
+
+};
+// Zinnen met een getal of naam erin (specifiek eerst).
+const MB_EN_REGELS=[
+[/^(\d+) (plek|plekken) open, (\d+) (aanvraag wacht|aanvragen wachten) op jou\.$/,(m,a,p,b,w)=>a+' '+(p==='plek'?'place':'places')+' open, '+b+' '+(w==='aanvraag wacht'?'request is':'requests are')+' waiting for you.'],
+[/^(.+) heeft op (.+) doorgegeven$/,'$1 said that on $2'],
+[/^(.+) gaf voor (.+) op:$/,'$1 said for $2:'],
+[/^⚠ (.+) heeft op (.+) doorgegeven$/,'⚠ $1 said that on $2'],
+[/^⚠ (.+) gaf voor (.+) op:$/,'⚠ $1 said for $2:'],
+[/^(.+) wil maximaal (\d+) dagen per week werken en staat deze week al op (\d+) dagen\. Toch indelen\?$/,'$1 wants to work at most $2 days a week and is already on $3 days this week. Schedule anyway?'],
+[/^Tik om in te delen: (.+)$/,'Tap to schedule: $1'],
+[/^Botst met een dienst waar (.+) al op staat$/,'Clashes with a shift $1 is already on'],
+[/^(.+) · vol$/,'$1 · full'],[/^(.+) · botst$/,'$1 · clash'],
+[/^Wie nog geen beoordeling heeft, krijgt in totaal hooguit (\d+) diensten\.(.*)$/,(m,a,r)=>'Anyone without a rating gets at most '+a+' shifts in total.'+i18nT(r)],
+[/^(\d+) (iemand heeft|mensen hebben) zich aangemeld en (wacht|wachten) op jouw antwoord$/,(m,a,p)=>a+' '+(p==='iemand heeft'?'person has':'people have')+' signed up and '+(p==='iemand heeft'?'is':'are')+' waiting for your answer'],
+[/^· (\d+) diensten in twee weken$/,'· $1 shifts in two weeks'],
+[/^(.+), (.+) heeft al (\d+) van de (\d+) mensen\. (.+) er toch bij zetten\?$/,'$1, $2 already has $3 of $4 people. Add $5 anyway?'],
+[/^"(.+)" \((.+)\) weghalen uit de agenda\?$/,'Remove "$1" ($2) from the calendar?'],
+[/^(\d+) (registratie wacht|registraties wachten)$/,(m,a,r)=>a+' '+(r==='registratie wacht'?'entry waiting':'entries waiting')],
+[/^(\d+) zonder eindtijd$/,'$1 without end time'],[/^(\d+) nu aan het werk$/,'$1 working now'],
+[/^Begin- en eindtijd zijn hetzelfde \((.+)\)\. Pas eerst een van de twee aan\.$/,'Start and end time are the same ($1). Change one of the two first.'],
+[/^(\d+) keer niet gekomen, (\d+) keer afgemeld, (\d+) keer te laat$/,'$1× no-show, $2× cancelled, $3× late'],
+[/^(.+) staat uit dienst(?: · (\d+) dienst\(en\) vrijgekomen)?$/,(m,n,d)=>n+' has been marked as left'+(d?' · '+d+' shift(s) freed up':'')],
+[/^Deze (\d+) mensen zitten$/,'These $1 people are'],
+[/^Sinds (.+) is het minimumloon in het VK £ 12,71 \(21\+\), £ 10,85 \(18–20\) en £ 8,00 \(16–17\)\. (Deze persoon zit|Deze (\d+) mensen zitten) eronder\. Nieuwe uren rekenen met het tarief dat hier staat\.$/,
+  (m,a,w,n)=>'Since '+i18nT(a)+' the UK minimum wage is £12.71 (21+), £10.85 (18–20) and £8.00 (16–17). '+(n?'These '+n+' people are':'This person is')+' below it. New hours are calculated with the rate shown here.'],
+[/^(\d+) van de (\d+)$/,'$1 of $2'],
+[/^Je hebt bij (\d+) (persoon|mensen) iets veranderd dat nog niet is opgeslagen\. Weggaan zonder opslaan\?$/,(m,a,p)=>'You changed something for '+a+' '+(p==='persoon'?'person':'people')+' that has not been saved. Leave without saving?'],
+[/^Is nu kraammanager van (.+)\. De app schakelt om zodra hij hem opnieuw opent\.(.*)$/,(m,a,r)=>'Is now stall manager of '+a+'. The app switches as soon as they open it again.'+i18nT(r)],
+[/^afgesloten (.+)$/,'closed $1'],
+[/^Alleen (.+)-uren · (.+)$/,(m,a,r)=>'Only '+a+' hours · '+i18nT(r)],
+[/^Mensen · (.+)$/,(m,a)=>'People · '+i18nT(a)],
+[/^(\d+) (shift|shifts) ingepland$/,'$1 $2 scheduled'],
+[/^(.+) loon \((.+) u\)$/,'$1 wages ($2 h)'],
+[/^loon (.+)$/,'wages $1'],
+[/^forecast (.+)$/,'forecast $1'],
+[/^\(boven (\d+)%\)$/,'(above $1%)'],
+
+[/^(\d+) (dienst|diensten) voor (\d+) (persoon|mensen)\. (.+)$/,(m,a,d,b,p,r)=>a+' '+(d==='dienst'?'shift':'shifts')+' for '+b+' '+(p==='persoon'?'person':'people')+'. '+i18nT(r)],
+[/^(\d+) (dienst|diensten) in het rooster gezet\. Iedereen krijgt een melding\.$/,(m,a,d)=>a+' '+(d==='dienst'?'shift':'shifts')+' put in the rota. Everyone gets a notification.'],
+[/^(\d+) (persoon|mensen) ingedeeld$/,(m,a,p)=>a+' '+(p==='persoon'?'person':'people')+' scheduled'],
+[/^(\d+) (persoon is|mensen zijn) nog niet binnen$/,(m,a,p)=>a+' '+(p==='persoon is'?'person is':'people are')+' not in yet'],
+[/^(\d+) van (\d+|\?) ingedeeld( \(vol\))?$/,(m,a,b,v)=>a+' of '+b+' scheduled'+(v?' (full)':'')],
+[/^· (\d+) van (\d+|\?) ingedeeld( \(vol\))?$/,(m,a,b,v)=>'· '+a+' of '+b+' scheduled'+(v?' (full)':'')],
+[/^(\d+) van (\d+) plekken gevuld(.*)$/,(m,a,b,r)=>a+' of '+b+' places filled'+r.replace(/(\d+) aanvragen/,'$1 requests').replace(/(\d+) aanvraag/,'$1 request')],
+[/^(\d+) plek(ken)? open$/,(m,a,k)=>a+' '+(k?'places':'place')+' open'],
+[/^(\d+) (iemand|mensen) aan$/,(m,a,p)=>a+' '+(p==='iemand'?'person':'people')],
+[/^(\d+) (dienst krijgt|diensten krijgen) een vroegere eindtijd(.*)$/,(m,a,d,r)=>a+' '+(d==='dienst krijgt'?'shift gets':'shifts get')+' an earlier end time'+i18nT(r)],
+[/^(\d+)× ingedeeld$/,'$1× scheduled'],
+[/^(\d+)e dienst deze week$/,(m,a)=>a+(a==='2'?'nd':a==='3'?'rd':'th')+' shift this week'],
+[/^Weet je het zeker\? Is dit met (.+) overlegd\?$/,'Are you sure? Have you agreed this with $1?'],
+[/^De dienst is (.+)\. Is dit met (.+) overlegd\?$/,'The shift is $1. Have you agreed this with $2?'],
+[/^Is dit met (.+) overlegd\?$/,'Have you agreed this with $1?'],
+[/^(.+) heeft nog geen beoordeling en staat al op (\d+) diensten\. (.+)$/,(m,n,a,r)=>n+' has no rating yet and is already on '+a+' shifts. '+i18nT(r)],
+[/^nog geen beoordeling en al (\d+) diensten$/,'no rating yet and already $1 shifts'],
+[/^zit al aan max (\d+) dagen$/,'already at max $1 days'],
+[/^wil het liefst niet voor (.+) beginnen$/,'prefers not to start before $1'],
+[/^begint pas om (.+) \(shift begint (.+)\)( en .*)?$/,(m,a,b,r)=>'only starts at '+a+' (shift starts '+b+')'+(r?' and '+i18nT(r.slice(4)):'')],
+[/^moet om (.+) weg \(shift tot (.+)\)$/,'has to leave at $1 (shift until $2)'],
+[/^(.+) van (.+) (.+) (.+) halen\? (.+) krijgt daar een melding van\.$/,'Remove $1 from $2 $3 $4? $5 will be notified.'],
+[/^(.+) meteen van deze shift halen\?\s*De plek komt open en iedereen die die dag kan krijgt een melding\.$/,'Remove $1 from this shift now?\n\nThe place opens up and everyone available that day gets a notification.'],
+[/^De shift van (.+) openzetten\?\s*Iedereen die die dag kan krijgt een melding en kan zich aanmelden\. (.+) blijft ingedeeld tot jij iemand anders indeelt\.$/,'Open up the shift of $1?\n\nEveryone available that day gets a notification and can sign up. $2 stays scheduled until you schedule someone else.'],
+[/^Het verzoek van (.+) afwijzen\?\s*(.+) blijft ingedeeld en krijgt daar bericht van\.$/,'Reject the request of $1?\n\n$2 stays scheduled and will be told.'],
+[/^Nog niemand aangemeld\. (.+) blijft ingedeeld tot iemand het overneemt\.$/,'Nobody has signed up yet. $1 stays scheduled until someone takes it over.'],
+[/^— deel iemand in, dan gaat (.+) er vanzelf af\.$/,'— schedule someone and $1 is removed automatically.'],
+[/^· ruil: neemt de shift van (.+) over$/,'· swap: takes over the shift of $1'],
+[/^Ook (.+) in andere weken:$/,'$1 also in other weeks:'],
+[/^Zet (\d+) (dienst|diensten) in het rooster$/,(m,a,d)=>'Put '+a+' '+(d==='dienst'?'shift':'shifts')+' in the rota'],
+[/^\((\d+) gevraagd, (\d+) uit beschikbaarheid\)$/,'($1 requested, $2 from availability)'],
+[/^(.+) voor (.+), (.+) (.+)\. In de app ziet (.+) dan [“"]Rejected[”"]\.$/,'$1 for $2, $3 $4. In the app $5 will then see “Rejected”.'],
+[/^Laat je de eindtijd leeg, dan loopt de dienst tot (.+) — sluitingstijd plus de tijd om op te ruimen\. Dat staat bij Instellingen\.$/,'If you leave the end time empty, the shift runs until $1 — closing time plus time to tidy up. That is set under Settings.'],
+[/^heeft doorgegeven op (.+)$/,'said that on $1'],
+[/^kan op (.+) alleen$/,'is only available on $1'],
+[/^Uitgezocht · wacht op antwoord \((\d+)\)$/,'Being checked · waiting for an answer ($1)'],
+[/^(.+) · (.+) · (.+)–(.+), pauze (\d+) min · (.+) u$/,'$1 · $2 · $3–$4, break $5 min · $6 h'],
+[/^(.+) · ingeroosterd (.+), ingeklokt (.+)$/,'$1 · scheduled $2, clocked in $3'],
+[/^aan het werk sinds (.+)$/,'working since $1'],
+[/^ingeroosterd (.+)$/,'scheduled $1'],
+[/^(\d+) min later$/,'$1 min late'],
+[/^(\d+) min$/,'$1 min'],
+[/^Vastgezet tot (.+?)( · pauze (\d+) min| · geen pauze) · staat nu bij Te accorderen$/,(m,t,p,n)=>'Fixed until '+t+(n?' · break '+n+' min':' · no break')+' · now under To approve'],
+[/^Akkoord op (\d+) (urenregistratie|urenregistraties)$/,(m,a,u)=>'Approved '+a+' '+(u==='urenregistratie'?'time entry':'time entries')],
+[/^(.+) krijgt een boete van$/,'$1 gets a fine of'],
+[/^Gezet door (.+)$/,'Added by $1'],
+[/^door (.+)$/,'by $1'],
+[/^Versie (\d+)(.*)$/,(m,a,r)=>'Version '+a+i18nT(r)],
+[/^schoonmaaklijst (.+) · gas dicht$/,(m,a)=>'cleaning list '+i18nT(a)+' · gas off'],
+[/^(\d+) actief · (\d+) wachten · (\d+) niet meer uitnodigen(?: · (\d+) uit dienst)?$/,(m,a,b,c,d)=>a+' active · '+b+' waiting · '+c+' do not invite again'+(d?' · '+d+' left':'')],
+[/^uit dienst sinds (.+?) · (.+) uur bewaard$/,'left since $1 · $2 hours kept'],
+[/^(.+) bracht$/,'$1 brought in'],
+[/^(\d+) (iemand|mensen) aan$/,(m,a,p)=>a+' '+(p==='iemand'?'person':'people')],
+[/^(.+) gewerkt$/,'$1 worked'],
+[/^(.+) verwijderen\?\s*Deze persoon heeft nog nooit uren geklokt, dus er is niets te bewaren\.$/,'Delete $1?\n\nThis person has never clocked any hours, so there is nothing to keep.'],
+[/^(.+) uit dienst zetten\?\s*Er staan (\d+) urenregistraties(?: en (\d+) facturen)? op naam van deze persoon\. Die blijven bewaard — dat moet, zeven jaar lang\. Hij kan niet meer inloggen, verdwijnt uit je lijsten en gaat van alle diensten vanaf vandaag af\.\s*Reden \(mag leeg\):$/,
+  (m,n,u,f)=>n+' — mark as left?\n\nThere are '+u+' time entries'+(f?' and '+f+' invoices':'')+' in this person’s name. They are kept — that is required, for seven years. They can no longer sign in, disappear from your lists and are removed from all shifts from today.\n\nReason (optional):'],
+[/^Het tarief van (.+) klopt niet\.$/,'The rate of $1 is not right.'],
+[/^(\d+) (persoon|mensen) gewijzigd, nog niet opgeslagen$/,(m,a,p)=>a+' '+(p==='persoon'?'person':'people')+' changed, not saved yet'],
+[/^Alles opslaan \((\d+)\)$/,'Save all ($1)'],
+[/^kan (\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})$/,'available $1–$2'],
+[/^kan (\d{1,2}:\d{2})\+$/,'available $1+'],
+[/^kan vanaf (.+)$/,'available from $1'],
+[/^kan tot (.+)$/,'available until $1'],
+[/^(\d+) (dienst loopt|diensten lopen)(.*)$/,(m,a,d,r)=>a+' '+(d==='dienst loopt'?'shift runs':'shifts run')+i18nT(r)],
+[/^(\d+) (dienst op een dichte dag gaat|diensten op dichte dagen gaan) weg$/,(m,a,d)=>a+' '+(d.startsWith('dienst op')?'shift on a closed day is':'shifts on closed days are')+' removed'],
+[/^(\d+) (dienst blijft|diensten blijven) staan omdat er al iemand op staat$/,(m,a,d)=>a+' '+(d==='dienst blijft'?'shift stays':'shifts stay')+' because someone is already on it'],
+[/^(\d+) (diensten|dienst) toegevoegd aan de week erna\.$/,'$1 shifts added to the following week.'],
+[/^(\d+) (iemand heeft|mensen hebben)$/,(m,a,p)=>a+' '+(p==='iemand heeft'?'person has':'people have')],
+[/^(\d+) (aanvraag|aanvragen)$/,(m,a,p)=>a+' '+(p==='aanvraag'?'request':'requests')],
+[/^(\d+) (dienst|diensten)$/,(m,a,p)=>a+' '+(p==='dienst'?'shift':'shifts')],
+[/^(\d+) (persoon|mensen)$/,(m,a,p)=>a+' '+(p==='persoon'?'person':'people')],
+[/^(\d+) (dag|dagen)$/,(m,a,p)=>a+' '+(p==='dag'?'day':'days')],
+[/^(\d+) nieuw$/,'$1 new'],
+[/^(\d+)% btw · bedrag is (zonder|met) btw$/,(m,a,z)=>a+'% VAT · amount is '+(z==='zonder'?'excluding':'including')+' VAT'],
+[/^Geen btw: (.+)$/,'No VAT: $1'],
+[/^TID (.+)$/,'TID $1'],
+[/^(.+) \(nieuw\)$/,'$1 (new)'],
+[/^Toon alle (.+)$/,(m,a)=>'Show all '+i18nT(a)],
+];
+// Woorden en korte zinsdelen die ook midden in een zin vertaald mogen worden
+// (langere zinnen van drie woorden of meer gaan daar vanzelf in mee).
+const MB_EN_DEEL=['week van','Shifts · week van','· week van','tegen forecast','plekken nog open','bijna vol','Britse tijd','aan boetes','al bekend','nog toewijzen:',
+  'dienst','diensten','plekken','aanvraag','aanvragen','sluit','ingedeeld','gevuld','ingeklokt','ingeroosterd','urenregistratie','urenregistraties','kraammanager',
+  'deze week','Deze week','persoon is','mensen zijn','Gaf op:','gaf op:','Vroegen ook:','Kraam:','min later','geen pauze','uur bewaard','uit dienst','werkt sinds',
+  'vroeg erom','andere tijd','· deels','· past niet','Jouw vraag:','Hele dag','de hele dag','alle kramen','Alle kramen','Wil max','wil max','zit al aan max','iemand heeft','mensen hebben'];
+function mbEnWoorden(){
+  for(const [k,v] of Object.entries(MB_EN_T)){ I18N_EN[k]=v; if(k.trim().split(/\s+/).length>=3||MB_EN_DEEL.includes(k)) I18N_EN_DELEN[k]=v; }
+  I18N_EN_REGELS.unshift(...MB_EN_REGELS); I18N_DELEN_RE=null;
+}
+
+// Zet het beheerscherm in het Engels: voor een planner altijd, voor Bram als
+// hij met de knop "English" bovenin wil zien wat Andras ziet.
+let MB_EN=false;
+function mbEnAan(){
+  if(MB_EN)return; MB_EN=true;
+  mbEnWoorden();
+  I18N_UIT='#mcrApp,script,style,textarea,[contenteditable="true"],.notr';
+  if(TAAL!=='en'){ TAAL='en'; i18nStart(); } else i18nKnoop(document.body);
+}
+function mbEnVoorbeeld(aan){
+  try{ localStorage.setItem('tc_mb_en',aan?'1':'0'); }catch(e){}
+  location.reload();
+}
+function mbLoc(){ return MB_EN?'en-GB':'nl-NL'; }
 i18nStart();
 
 // ── MELDINGEN ──────────────────────────────────────────────────────
@@ -4027,10 +4425,10 @@ function mbKraamContant(kid){ const i=MB_KRAAM_INFO&&MB_KRAAM_INFO[kid]; return 
 function mbDatum(d){ return d?new Date(String(d)+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}):''; }
 function mbKort(d){ return d?new Date(String(d)+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):''; }
 function mbLang(d){ return d?new Date(String(d)+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'}):''; }
-function mbPond(n){ return '£ '+(Number(n)||0).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function mbPondKort(n){ return '£ '+Math.round(Number(n)||0).toLocaleString('nl-NL'); }
+function mbPond(n){ return '£ '+(Number(n)||0).toLocaleString(mbLoc(),{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function mbPondKort(n){ return '£ '+Math.round(Number(n)||0).toLocaleString(mbLoc()); }
 // Nederlandse notatie: 8,55 en niet 8.55. toFixed geeft altijd een punt.
-function mbNum(n,d){ return (Number(n)||0).toLocaleString('nl-NL',{minimumFractionDigits:d==null?1:d,maximumFractionDigits:d==null?1:d}); }
+function mbNum(n,d){ return (Number(n)||0).toLocaleString(mbLoc(),{minimumFractionDigits:d==null?1:d,maximumFractionDigits:d==null?1:d}); }
 function mbProcent(n,d){ return mbNum(n,d==null?1:d)+'%'; }
 function mbUur(t){ return t?String(t).slice(0,5):''; }
 // Alle tijden in Brits tijd, ook als Brams telefoon op Nederlandse tijd staat.
@@ -4845,7 +5243,7 @@ async function mbAgenda(){
   const [res]=await Promise.all([sb.rpc('mcr_agenda_lijst',{p_van:null,p_tot:null}), mbKramenLijst(), mbPeil()]);
   if(res.error)throw res.error;
   MB_AG_RIJEN=res.data||[];
-  const A=agkMaak('mb',{en:false,sleutel:'tc_mb_agenda',el:()=>document.getElementById('mbAgKal'),vandaag:mbVandaagStr,
+  const A=agkMaak('mb',{en:MB_EN,sleutel:'tc_mb_agenda',el:()=>document.getElementById('mbAgKal'),vandaag:mbVandaagStr,
     kramen:()=>(MB_KRAMEN||[]).filter(k=>k.actief!==false),magWijzigen:()=>true,
     nieuw:(d,v,t)=>{ MB_AG_NIEUW={datum:d,tijd_van:v,tijd_tot:t}; mbAgOpen('nieuw'); },
     wijzig:id=>mbAgOpen(id),weg:id=>mbAgWeg(id),formOpen:()=>!!MB_AG_OPEN,formSluit:()=>mbAgSluit(),
@@ -12321,7 +12719,10 @@ function zetVestigingSwitch(){
     return `<button type="button" class="${k.klasse}${aan?' active':''}" onclick="wisselVestiging('${k.code}')">${veiligTekst(k.label)}</button>`;
   }).join('')
   // Planner: naar de app van de kraammanager (inklokken, dagafsluiting).
-  +(PLANNER_MODUS?`<button type="button" onclick="planModus('app')" title="Open the stall manager app">Kraam-app</button>`:'');
+  +(PLANNER_MODUS?`<button type="button" onclick="planModus('app')" title="Open the stall manager app">Kraam-app</button>`:'')
+  // Bram: het marktbeheer bekijken zoals de planner het ziet (Engels).
+  +(CURRENT_ROL==='beheerder'&&isMarkt(ACTIEVE_VESTIGING)
+     ?`<button type="button" class="notr" onclick="mbEnVoorbeeld(${MB_EN?'false':'true'})" title="${MB_EN?'Terug naar Nederlands':'Bekijk het beheer zoals de planner het ziet'}">${MB_EN?'Nederlands':'English'}</button>`:'');
   el.style.display='flex';
 }
 // Tussen welke vestigingen mag deze gebruiker wisselen?
@@ -13134,6 +13535,11 @@ async function initApp(user){
   PLANNER_MODUS = !WACHT_OP_GOEDKEURING && rol!=='beheerder' && !!PLANT_VESTIGING
     && ACTIEVE_VESTIGING===PLANT_VESTIGING
     && (function(){ try{ return localStorage.getItem('tc_planmodus')!=='app'; }catch(e){ return true; } })();
+  // Een planner (Andras) leest geen Nederlands: zijn beheerscherm is Engels.
+  // Bram kan op een markt hetzelfde zien met de knop "English" bovenin.
+  if(PLANNER_MODUS || (rol==='beheerder' && isMarkt(ACTIEVE_VESTIGING)
+     && (function(){ try{ return localStorage.getItem('tc_mb_en')==='1'; }catch(e){ return false; } })()))
+    mbEnAan();
   zetVestigingSwitch();
   if(isMarkt(MIJN_VESTIGING) && rol!=='beheerder' && !PLANNER_MODUS){
     return mcrStart();
