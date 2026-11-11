@@ -602,3 +602,9 @@ begin
   return p_vestiging;
 end $$;
 grant execute on function public.mcr_persoon_verplaatsen(uuid, text) to authenticated;
+
+-- ════════ bij het live zetten toegevoegd ════════
+-- is_kraammanager: ook kraammanager in de tweede vestiging (Andras t/m 21 nov in Manchester).
+--   exists (select 1 from public.kramen k where k.vestiging = g.vestiging)
+--   → exists (select 1 from public.kramen k where k.vestiging in (g.vestiging, public.tweede_vestiging_nu()))
+-- Live gezet als migratie lpl_liverpool_vestiging (alles hierboven in één keer).
