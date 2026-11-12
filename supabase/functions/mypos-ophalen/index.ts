@@ -59,7 +59,9 @@ type Tx = {
   transaction_amount: number; original_currency: string; original_amount: number;
   date: string; sign: string; terminal_id: string; serial_number?: string;
 };
-type Rij = { ref: string; tid: string; dag: string; uur: number; bedrag: number; kosten: number; fooi: number; merk: string };
+type Rij = { ref: string; tid: string; dag: string; uur: number; bedrag: number | null; kosten: number; fooi: number; merk: string;
+  // Voor de verdeling over markten (Parijs in euro's op dezelfde rekening):
+  ts?: string; oc?: string; oa?: number; tc?: string; ta?: number; kt?: number };
 type Urls = typeof PROD;
 
 const wacht = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -261,15 +263,21 @@ function naarRijen(lijst: Tx[], valuta: string) {
     const sleutel = tid + "|" + x.date;
     const isKosten = x.sign === "D" && x.transaction_type === "001";
     if (isKosten) { kostenPer.set(sleutel, (kostenPer.get(sleutel) || 0) + Math.abs(Number(x.transaction_amount) || 0)); continue; }
+    // Andere munt dan de rekening: niet meer overslaan. De database zet zo'n
+    // betaling bij de markt van die munt (Parijs, euro) of van de terminal.
     const b = bedragVan(x);
-    if (b === null) { andereMunt++; continue; }
+    if (b === null) andereMunt++;
     const teken = x.sign === "D" ? -1 : 1; // D met terminal = terugbetaling
     if (teken < 0) terug++;
     const { dag, uur } = dagUur(x.date);
     const ta = Math.abs(Number(x.transaction_amount) || 0);
+    const oa = Math.abs(Number(x.original_amount ?? x.transaction_amount) || 0);
+    const utc = /[zZ]|[+-]\d\d:?\d\d$/.test(x.date) ? x.date : x.date + "Z";
     betalingen.push({
-      ref: x.payment_reference, tid, dag, uur, bedrag: Math.round(teken * b * 100) / 100, kosten: 0, fooi: 0, merk: "",
-      _sleutel: sleutel, _koers: ta ? b / ta : 1,
+      ref: x.payment_reference, tid, dag, uur, bedrag: b === null ? null : Math.round(teken * b * 100) / 100, kosten: 0, fooi: 0, merk: "",
+      ts: utc, oc: (x.original_currency || x.transaction_currency || "").toUpperCase(), oa: Math.round(teken * oa * 100) / 100,
+      tc: (x.transaction_currency || "").toUpperCase(), ta: Math.round(teken * ta * 100) / 100, kt: 0,
+      _sleutel: sleutel, _koers: ta && b !== null ? b / ta : 1,
     });
   }
   // Kosten bij de betaling van hetzelfde moment zetten (omgerekend als de rekening in een andere munt is).
@@ -278,7 +286,7 @@ function naarRijen(lijst: Tx[], valuta: string) {
   for (const b of betalingen) if (!perSleutel.has(b._sleutel)) perSleutel.set(b._sleutel, b);
   for (const [s, k] of kostenPer) {
     const b = perSleutel.get(s);
-    if (b) b.kosten = Math.round((b.kosten + k * b._koers) * 100) / 100;
+    if (b) { b.kosten = Math.round((b.kosten + k * b._koers) * 100) / 100; b.kt = Math.round(((b.kt || 0) + k) * 100) / 100; }
     else kostenLos += k;
   }
   const rijen: Rij[] = betalingen.map(({ _sleutel, _koers, ...r }) => r);
@@ -290,7 +298,7 @@ function samenvatting(rijen: Rij[]) {
   for (const r of rijen) {
     const k = `${r.tid} ${r.dag}`;
     per[k] = per[k] || { omzet: 0, aantal: 0, kosten: 0 };
-    per[k].omzet = Math.round((per[k].omzet + r.bedrag) * 100) / 100;
+    per[k].omzet = Math.round((per[k].omzet + (r.bedrag ?? 0)) * 100) / 100;
     per[k].aantal++;
     per[k].kosten = Math.round((per[k].kosten + r.kosten) * 100) / 100;
   }
@@ -367,7 +375,7 @@ Deno.serve(async (req) => {
         nieuw += x.opgeslagen || 0; door += x.doorgezet || 0;
       }
       const status = `${nieuw} nieuwe betalingen · ${door} in het dagrapport gezet`
-        + (r.andereMunt ? ` · ${r.andereMunt} in een andere munt overgeslagen` : "");
+        + (r.andereMunt ? ` · ${r.andereMunt} in een andere munt (naar de markt van die munt)` : "");
       const klaar = h.compleet !== false;
       await db.from("mypos_accounts").update({
         laatst_gedraaid: start.toISOString(), laatste_status: status, laatst_nieuw: nieuw,

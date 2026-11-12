@@ -27,6 +27,9 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .ingang{display:flex;gap:0;margin-bottom:1.25rem;background:var(--bg);border-radius:9px;padding:3px}
 .ingang button{flex:1;padding:8px;font-size:13px;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;border-radius:7px;font-family:var(--font);transition:.15s}
 .ingang button.active{background:var(--card,#fff);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.06)}
+.reg-plek{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1.1rem}
+.reg-plek button{padding:13px 10px;font-size:14px;font-weight:600;color:var(--text);background:var(--card,#fff);border:1px solid var(--border);border-radius:10px;cursor:pointer;font-family:var(--font);min-height:46px}
+.reg-plek button.active{background:var(--text);color:#fff;border-color:var(--text)}
 .vest-switch{display:flex;gap:0;background:var(--bg);border-radius:8px;padding:2px;margin-right:6px}
 .vest-switch button{padding:5px 11px;font-size:12px;font-weight:600;color:var(--muted);background:none;border:none;cursor:pointer;border-radius:6px;font-family:var(--font)}
 .vest-switch button.active{background:#B4472B;color:#fff}
@@ -1543,11 +1546,7 @@ textarea.crm-in{resize:vertical;line-height:1.5}
 <!-- AUTH -->
 <div class="auth-wrap" id="authWrap">
   <div class="auth-box">
-    <div class="ingang" id="ingangKeuze">
-      <button type="button" data-ingang="NL" onclick="kiesIngang('NL')">Nederland</button>
-      <button type="button" data-ingang="MCR" onclick="kiesIngang('MCR')">Manchester</button>
-      <button type="button" data-ingang="LPL" onclick="kiesIngang('LPL')">Liverpool</button>
-    </div>
+
     <div class="auth-logo" id="authLogo">TC Group <span>/ Planning</span></div>
     <div class="notr" id="authTaal" style="text-align:right;margin:-6px 0 6px;font-size:12px"><button type="button" onclick="kiesTaal(TAAL==='en'?'nl':'en')" style="background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font-family:var(--font);font-size:12px;padding:0"></button></div>
     <div class="auth-sub" id="authSub">Log in of maak een account aan</div>
@@ -1591,6 +1590,16 @@ textarea.crm-in{resize:vertical;line-height:1.5}
         <input type="password" id="nieuwPw2" placeholder="Herhaal je wachtwoord" autocomplete="new-password">
       </div>
       <button class="auth-btn" id="btnNieuwPw" onclick="bewaarNieuwWachtwoord()">Wachtwoord opslaan</button>
+    </div>
+    <!-- Registreren, stap 1: waar ga je werken? -->
+    <div id="regPlek" style="display:none">
+      <div class="auth-label" id="regPlekKop" style="margin-bottom:8px">Waar ga je werken?</div>
+      <div class="reg-plek" id="ingangKeuze">
+        <button type="button" data-ingang="NL" onclick="kiesIngang('NL')">Nederland</button>
+        <button type="button" data-ingang="MCR" onclick="kiesIngang('MCR')">Manchester</button>
+        <button type="button" data-ingang="LPL" onclick="kiesIngang('LPL')">Liverpool</button>
+        <button type="button" data-ingang="PAR" onclick="kiesIngang('PAR')">Parijs</button>
+      </div>
     </div>
     <div id="registerForm" style="display:none">
       <div class="auth-field"><label class="auth-label">Volledige naam <span style="color:#DC2626">*</span></label><input type="text" id="regNaam" placeholder="Voornaam Achternaam"></div>
@@ -3610,7 +3619,13 @@ const I18N_EN_DELEN={'vertrek':'departure',
 // en losse zinsdelen via I18N_EN_DELEN. Datums gaan dan als en-GB.
 // Het Manchester-beheer (#page-mcrbeheer) en de Engelse crew-app blijven zoals ze zijn,
 // behalve voor een planner: die krijgt het beheer in het Engels (mbEnAan).
-let TAAL=(()=>{ try{ return localStorage.getItem('tc_taal')==='en'?'en':'nl'; }catch(e){ return 'nl'; } })();
+// Taal: wat iemand koos (profiel of inlogscherm). Nog niets gekozen op dit
+// toestel: Engels bij een markt-ingang of een niet-Nederlandse telefoon.
+let TAAL=(()=>{ try{
+  const t=localStorage.getItem('tc_taal'); if(t==='en'||t==='nl')return t;
+  const g=localStorage.getItem('tc_ingang'); if(g&&g!=='NL')return 'en';
+  return String(navigator.language||'nl').toLowerCase().startsWith('nl')?'nl':'en';
+}catch(e){ return 'nl'; } })();
 let I18N_UIT='#page-mcrbeheer,#mcrApp,script,style,textarea,[contenteditable="true"],.notr';
 let I18N_DELEN_RE=null;
 function i18nDelenRe(){
@@ -3674,10 +3689,18 @@ function i18nStart(){
 }
 // Na het inloggen: de keuze uit het account wint, en een keuze die op het
 // inlogscherm is gemaakt wordt bij het account bewaard.
-async function i18nNaInloggen(serverTaal,uid){
+async function i18nNaInloggen(serverTaal,uid,markt){
   try{
-    if(serverTaal&&serverTaal!==TAAL){ localStorage.setItem('tc_taal',serverTaal); location.reload(); return; }
-    if(!serverTaal&&TAAL==='en'&&uid)await sb.from('gebruikers').update({taal:'en'}).eq('id',uid);
+    let taal=serverTaal;
+    if(taal!=='nl'&&taal!=='en'){
+      // Nog niets bewaard: wat op het inlogscherm gekozen is, anders Engels op
+      // een markt en Nederlands in Nederland. Daarna bewaren bij het account.
+      let lok=null; try{ lok=localStorage.getItem('tc_taal'); }catch(e){}
+      taal=(lok==='nl'||lok==='en')?lok:(markt?'en':'nl');
+      if(uid){ const{error}=await sb.rpc('mijn_taal_zetten',{p_taal:taal});
+        if(error)await sb.from('gebruikers').update({taal}).eq('id',uid); }
+    }
+    if(taal!==TAAL){ localStorage.setItem('tc_taal',taal); location.reload(); }
   }catch(e){}
 }
 async function zetKlusMeldingen(w){
@@ -3689,7 +3712,9 @@ async function zetKlusMeldingen(w){
 async function kiesTaal(t){
   t=t==='en'?'en':'nl';
   try{ localStorage.setItem('tc_taal',t); }catch(e){}
-  try{ if(typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&CURRENT_USER.id)await sb.from('gebruikers').update({taal:t}).eq('id',CURRENT_USER.id); }catch(e){}
+  try{ if(typeof CURRENT_USER!=='undefined'&&CURRENT_USER&&CURRENT_USER.id){
+    const{error}=await sb.rpc('mijn_taal_zetten',{p_taal:t});
+    if(error)await sb.from('gebruikers').update({taal:t}).eq('id',CURRENT_USER.id); } }catch(e){}
   location.reload();
 }
 // ── Engels beheerscherm (planner, bv. Andras in Liverpool) ─────────────
@@ -3947,9 +3972,41 @@ const MB_EN_T={
 '— werkt niet zelf mee, maar ziet het rooster van alle kramen met telefoonnummers en kloktijden, en mag op zijn eigen kraam de uitkloktijd en de pauze bijstellen zolang jij de uren nog niet hebt goedgekeurd. Mag ook beoordelen. Geen uurloon, geen facturen, niets aan het rooster.':'— does not work shifts, but sees the rota of all stalls with phone numbers and clock times, and may adjust the clock-out time and break at their own stall as long as you have not approved the hours. May also give ratings. No hourly rate, no invoices, nothing on the rota.',
 'Afgemeld':'Cancelled','afgemeld':'cancelled','Mag zelf om diensten vragen':'May request shifts','Alleen beschikbaarheid':'Availability only','Kraammanager van':'Stall manager of',
 
+// Aanvulling: voorraad, kassa en kosten (planner)
+'Voorraad nodig':'Stock needed','alles geregeld':'all sorted','Uit de dagafsluiting · blijft staan tot je op Geregeld tikt':'From the day close · stays here until you tap Sorted',
+'Geregeld':'Sorted','Notitie':'Note','Notitie:':'Note:','afgesloten door':'closed by','terugzetten':'undo','Staat weer open':'Open again','Notitie opgeslagen':'Note saved',
+'Notitie voor de kraammanager (bv. "komt om 11:00"). De kraammanager ziet dit in zijn app.':'Note for the stall manager (e.g. "arrives at 11:00"). The stall manager sees this in their app.',
+'Je kunt deze aanvraag niet wijzigen.':'You cannot change this request.','✓ geregeld':'✓ sorted',
+'Kassa':'Cash','Contante omzet per dag · vul na sluiting het geteld bedrag in':'Cash takings per day · fill in the counted amount after closing',
+'Laatste drie weken · totaal':'Last three weeks · total','Contant':'Cash','Ingevuld door':'Filled in by','Nog geen marktdagen.':'No market days yet.',
+'Dat bedrag klopt niet.':'That amount is not right.','Je kunt de contante omzet van deze kraam niet invullen.':'You cannot fill in the cash takings of this stall.',
+'Kies vandaag of een eerdere dag.':'Choose today or an earlier day.',
+'Uitgaven tijdens de':'Spending during the','-periode, per kraam of algemeen':' period, per stall or general','Kostenpost bewerken':'Edit cost item','Nieuwe kostenpost':'New cost item',
+'Algemeen (alle kramen)':'General (all stalls)','Categorie':'Category','Omschrijving':'Description','Valuta':'Currency','Btw':'VAT','Betaald via':'Paid via',
+'Wijziging opslaan':'Save change','(mag leeg)':'(optional)','Totaal in ponden':'Total in pounds','· waarvan btw':'· of which VAT','· incl. btw':'· incl. VAT',
+"Totaal in euro's":'Total in euros','· incl. btw, niet omgerekend':'· incl. VAT, not converted',"nog niets in euro's":'nothing in euros yet','Algemeen':'General',
+'niet aan één kraam toe te wijzen':'not tied to one stall','Per categorie':'Per category','Per kraam':'Per stall','algemeen':'general','Alle posten':'All items',
+'geen btw':'no VAT','Niets gevonden. Pas je zoekwoord aan of kies bij de kraam “Alles”.':'Nothing found. Change your search or choose “Everything” for the stall.',
+'Nog geen kosten in deze periode. Vul hierboven de eerste in.':'No costs in this period yet. Add the first one above.','Kostenpost verwijderen?':'Delete cost item?',
+'bv. Beslag en boter, Booker':'e.g. Batter and butter, Booker','bv. myPOS TC Group':'e.g. myPOS TC Group','Zoek op omschrijving, kraam, bedrag…':'Search by description, stall, amount…',
+'Inkoop ingrediënten':'Ingredients','Verpakking & disposables':'Packaging & disposables','Standplaats & huur':'Pitch & rent','Vervoer & brandstof':'Transport & fuel',
+'Reizen (vlucht, ferry)':'Travel (flight, ferry)','Verblijf':'Accommodation','Materiaal & onderhoud':'Equipment & maintenance','Gas & energie':'Gas & energy','Lonen':'Wages',
+'Je hebt geen toegang tot deze kosten.':'You do not have access to these costs.','Je kunt alleen je eigen kostenposten wijzigen.':'You can only change your own cost items.',
+'Vul een bedrag groter dan 0 in.':'Enter an amount greater than 0.','Onbekend btw-tarief.':'Unknown VAT rate.','Deze kostenpost bestaat niet (meer).':'This cost item no longer exists.',
+'Franse tijd':'Paris time',
+
 };
 // Zinnen met een getal of naam erin (specifiek eerst).
 const MB_EN_REGELS=[
+[/^(\d+) dagen open$/,'$1 days open'],
+[/^(\d+) open$/,'$1 open'],
+[/^(\d+) gasfles(sen)?$/,(m,a)=>a+' gas bottle'+(a==='1'?'':'s')],
+[/^(\d+) (?:doos|dozen) aardbeien$/,(m,a)=>a+' box'+(a==='1'?'':'es')+' of strawberries'],
+[/^(\d+) (?:doos|dozen) bananen$/,(m,a)=>a+' box'+(a==='1'?'':'es')+' of bananas'],
+[/^Afgehandeld · laatste 7 dagen \((\d+)\)$/,'Sorted · last 7 days ($1)'],
+[/^✓ Geregeld door (.+?) · (.+)$/,'✓ Sorted by $1 · $2'],
+[/^(\d+) posten$/,'$1 items'],[/^1 post$/,'1 item'],
+
 [/^(\d+) (plek|plekken) open, (\d+) (aanvraag wacht|aanvragen wachten) op jou\.$/,(m,a,p,b,w)=>a+' '+(p==='plek'?'place':'places')+' open, '+b+' '+(w==='aanvraag wacht'?'request is':'requests are')+' waiting for you.'],
 [/^(.+) heeft op (.+) doorgegeven$/,'$1 said that on $2'],
 [/^(.+) gaf voor (.+) op:$/,'$1 said for $2:'],
@@ -4075,8 +4132,7 @@ function mbEnWoorden(){
   I18N_EN_REGELS.unshift(...MB_EN_REGELS); I18N_DELEN_RE=null;
 }
 
-// Zet het beheerscherm in het Engels: voor een planner altijd, voor Bram als
-// hij met de knop "English" bovenin wil zien wat Andras ziet.
+// Zet het marktbeheer in het Engels, voor iedereen die Engels als taal koos.
 let MB_EN=false;
 function mbEnAan(){
   if(MB_EN)return; MB_EN=true;
@@ -4084,12 +4140,288 @@ function mbEnAan(){
   I18N_UIT='#mcrApp,script,style,textarea,[contenteditable="true"],.notr';
   if(TAAL!=='en'){ TAAL='en'; i18nStart(); } else i18nKnoop(document.body);
 }
-function mbEnVoorbeeld(aan){
-  try{ localStorage.setItem('tc_mb_en',aan?'1':'0'); }catch(e){}
-  location.reload();
-}
 function mbLoc(){ return MB_EN?'en-GB':'nl-NL'; }
+// ── Personeelsapp in het Nederlands ──────────────────────────────────
+// De app voor het personeel en de kraammanagers op de markten is in het
+// Engels geschreven. Kiest iemand Nederlands (profiel of bij het registreren),
+// dan zet crewNlStart() die schermen om met de woorden en zinnen hieronder.
+// Zinnen van drie woorden of meer werken ook als stuk van een langere zin.
+const CREW_NL={
+// Navigatie en algemeen
+'My shifts':'Mijn diensten','Shifts':'Diensten','Rota':'Rooster','Calendar':'Agenda','Close day':'Dag afsluiten','Team':'Team','Me':'Ik',
+'Clock in':'Inklokken','Clock out':'Uitklokken','Hours':'Uren','Invoice':'Factuur','My details':'Mijn gegevens','Loading…':'Laden…',
+'Could not load this screen. Check your connection and try again.':'Dit scherm kon niet geladen worden. Controleer je verbinding en probeer het opnieuw.',
+'Offline':'Offline','– last updated':'– laatst bijgewerkt','Something went wrong.':'Er ging iets mis.',
+'You have been signed out. Please sign in again.':'Je bent uitgelogd. Log opnieuw in.',
+'No connection to the server. Check your internet and try again.':'Geen verbinding met de server. Controleer je internet en probeer het opnieuw.',
+"You're already clocked in.":'Je bent al ingeklokt.','No connection':'Geen verbinding','Trying…':'Bezig…',
+"We couldn't reach the server. Check your internet and try again.":'De server is niet bereikbaar. Controleer je internet en probeer het opnieuw.',
+'Retry':'Opnieuw','Saving…':'Opslaan…','I agree':'Ik ga akkoord','Could not save:':'Opslaan mislukt:',
+'Thanks! You agreed to the new house rules.':'Bedankt! Je bent akkoord met de nieuwe huisregels.',
+'Approved':'Goedgekeurd','Rejected':'Afgewezen','Running':'Loopt','Waiting for approval':'Wacht op goedkeuring',
+'This account is closed':'Dit account is afgesloten','Sign out':'Uitloggen',
+'You can no longer sign in. Your hours and invoices are kept, because we have to keep those records. If you think this is a mistake, please contact Bram.':'Je kunt niet meer inloggen. Je uren en facturen blijven bewaard, omdat we die moeten bewaren. Denk je dat dit niet klopt, neem dan contact op met Bram.',
+'Cancel':'Annuleren','Save':'Opslaan','Back':'Terug','Next':'Volgende','Close':'Sluiten','Edit':'Wijzigen','Yes':'Ja','No':'Nee','Call':'Bellen',
+'today':'vandaag','Today':'Vandaag','Done':'Klaar','done':'klaar','later':'later','Later today':'Later vandaag','Starts':'Begint','Finished':'Klaar',
+'Name':'Naam','Number':'Nummer','Stall':'Kraam','Type':'Soort','Title':'Titel','Date':'Datum','To':'Aan','Total':'Totaal','Total hours':'Totaal uren',
+'Week':'Week','Earlier':'Eerder','Paid':'Betaald','Received':'Ontvangen','Downloaded':'Gedownload','Again':'Opnieuw','Ready':'Klaar','Payment':'Betaling',
+'Waiting':'Wacht','Earned':'Verdiend','Break':'Pauze','None':'Geen','People':'Mensen','Ratings':'Beoordelingen','Rating':'Beoordeling','Deposit':'Borg',
+'Uniform':'Kleding','Apron':'Schort','Long sleeve polo':'Polo met lange mouw','polo':'polo','size':'maat','edit':'wijzigen','change':'wijzigen',
+'you':'jij','this person':'deze persoon','the stall':'de kraam','the office':'het kantoor','Language':'Taal','English':'English','Nederlands':'Nederlands',
+
+// Diensten
+'Swap asked · waiting for Bram':'Ruil gevraagd · wacht op Bram','Open for swap':'Open om te ruilen',
+"You stay on the rota until someone takes over. We'll let you know.":'Je blijft ingeroosterd tot iemand het overneemt. We laten het je weten.',
+'I can work after all':'Ik kan toch werken','Swap not approved':'Ruil niet goedgekeurd',"Can't make it?":'Kun je niet?',
+'Weekend manager:':'Weekendmanager:','weekend manager':'weekendmanager','stall manager':'kraammanager',
+'No shifts yet. Fill in your availability below; Bram puts the rota together from that and you get a message for every shift.':'Nog geen diensten. Vul hieronder je beschikbaarheid in; Bram maakt daar het rooster van en je krijgt bericht voor elke dienst.',
+'No shifts yet. Tap "Find more shifts" below to put your name down.':'Nog geen diensten. Tik hieronder op "Meer diensten zoeken" om je aan te melden.',
+'Clocked in':'Ingeklokt','Details ›':'Details ›','My availability':'Mijn beschikbaarheid','Find more shifts':'Meer diensten zoeken',
+'Read the house rules':'Lees de huisregels','‹ Back to my shifts':'‹ Terug naar mijn diensten','Your shift':'Je dienst',
+'Dutch Mini Pancakes':'Dutch Mini Pancakes','(until about':'(tot ongeveer','Clocked':'Geklokt','Clocked in at':'Ingeklokt om',
+'The stall is closed this day':'De kraam is deze dag dicht',"The stall manager for this day isn't known yet.":'De kraammanager voor deze dag is nog niet bekend.',
+'Your size:':'Je maat:','Wear your long sleeve polo and apron, clean.':'Draag je polo met lange mouw en je schort, schoon.',
+'Wear your long sleeve polo. Ask the stall manager for your apron (£25 deposit).':'Draag je polo met lange mouw. Vraag de kraammanager om je schort (£25 borg).',
+'Wear your apron. Ask the stall manager for your long sleeve polo (£25 deposit).':'Draag je schort. Vraag de kraammanager om je polo met lange mouw (£25 borg).',
+"You don't have your work clothing yet. Ask the stall manager when you arrive: you get a long sleeve polo and an apron (£25 deposit each).":'Je hebt je werkkleding nog niet. Vraag de kraammanager als je aankomt: je krijgt een polo met lange mouw en een schort (elk £25 borg).',
+'Before your shift':'Voor je dienst','Hair in a ponytail or braid, no jewellery on hands or neck.':'Haar in een staart of vlecht, geen sieraden aan handen of hals.',
+'In case of emergency: Bram':'In geval van nood: Bram','Add to my calendar':'Zet in mijn agenda',
+"Adding to your calendar isn't available yet. Please try again later.":'Toevoegen aan je agenda kan nog niet. Probeer het later opnieuw.',
+'No connection. Please try again.':'Geen verbinding. Probeer het opnieuw.','Call Bram':'Bel Bram',"The stall manager isn't known yet. Call Bram":'De kraammanager is nog niet bekend. Bel Bram',
+'– these are the numbers we saved':'– dit zijn de nummers die we bewaarden','Call your stall manager first':'Bel eerst je kraammanager',
+"Can't make this shift? Call the stall manager now, so the stall isn't left short.":'Kun je deze dienst niet? Bel nu de kraammanager, zodat de kraam niet onderbezet raakt.',
+'Then let Bram know':'Laat het daarna Bram weten','Bram can open your shift for someone else. You stay on the rota until someone takes it over.':'Bram kan je dienst openzetten voor iemand anders. Je blijft ingeroosterd tot iemand het overneemt.',
+'I called · tell Bram':'Gebeld · laat Bram het weten','Never mind':'Laat maar','Sending…':'Versturen…',
+"Sent to Bram. You'll get a message when he decides.":'Verstuurd naar Bram. Je krijgt bericht als hij beslist.',
+'Cancel your swap request? You stay on this shift.':'Je ruilverzoek intrekken? Je blijft op deze dienst.',
+'Open shifts':'Open diensten','Put your name down; Bram confirms.':'Meld je aan; Bram bevestigt.',"You don't need to ask for shifts":'Je hoeft niet om diensten te vragen',
+'Just fill in the days and times you can work. Bram puts the rota together from that and you get a message for every shift he puts you on.':'Vul gewoon de dagen en tijden in dat je kunt werken. Bram maakt daar het rooster van en je krijgt bericht voor elke dienst waarop hij je zet.',
+'Fill in my availability':'Mijn beschikbaarheid invullen','Asking for shifts has closed':'Om diensten vragen kan niet meer','From':'Vanaf',
+': availability only':': alleen beschikbaarheid',
+'Fill in the days and times you can work. Bram puts the rota together from that and you get a message for every shift.':'Vul de dagen en tijden in dat je kunt werken. Bram maakt daar het rooster van en je krijgt bericht voor elke dienst.',
+'You can ask for shifts up to':'Je kunt om diensten vragen tot',
+'. After that, just fill in the days and times you can work. Bram puts the rota together from that and you get a message for every shift.':'. Daarna vul je alleen de dagen en tijden in dat je kunt werken. Bram maakt daar het rooster van en je krijgt bericht voor elke dienst.',
+'Shifts someone wants to swap still show up here.':'Diensten die iemand wil ruilen staan hier wel.','No swaps open at the moment.':'Er staan nu geen ruilingen open.',
+'Nothing open at the moment. Check again in a day or two.':'Er staat nu niets open. Kijk over een dag of twee nog eens.','till close':'tot sluiting',
+'swap':'ruil','· someone can\'t make it':'· iemand kan niet','place':'plek','left':'over',
+'Asking is not a booking. Bram puts the rota together and you get a message for every shift he puts you on.':'Vragen is nog geen indeling. Bram maakt het rooster en je krijgt bericht voor elke dienst waarop hij je zet.',
+'Tap a day to set it. You can give a time as well.':'Tik op een dag om hem in te stellen. Je kunt ook een tijd opgeven.',
+'Available':'Beschikbaar','Part of the day':'Deel van de dag','Not available':'Niet beschikbaar','not available':'niet beschikbaar',
+'Most days a week':'Maximaal dagen per week','Earliest I can start':'Vroegst mogelijke begintijd','Anything Bram should know':'Iets dat Bram moet weten',
+'Clear this day':'Deze dag leegmaken','This is not a booking — it tells Bram when he can ask you.':'Dit is geen indeling — het vertelt Bram wanneer hij je kan vragen.',
+'The end time has to be after the start time.':'De eindtijd moet na de begintijd liggen.','from':'vanaf','until':'tot','all day':'hele dag',
+
+// Klokken
+'For a shift this long the standard break is':'Voor een dienst van deze lengte is de standaardpauze','min':'min',
+'. Took more or less? Change it here.':'. Meer of minder genomen? Pas het hier aan.','No break is taken off shifts under':'Er gaat geen pauze af bij diensten korter dan',
+'hours. Did you take one anyway? Pick it here.':'uur. Toch pauze genomen? Kies hem hier.','Clocking out of':'Uitklokken van','m since':'m sinds',
+'Anything Bram should know?':'Iets dat Bram moet weten?','Hold your phone against the sticker…':'Houd je telefoon tegen de sticker…',
+'Hold your phone against the sticker in the stall':'Houd je telefoon tegen de sticker in de kraam','Clocking you out…':'Bezig met uitklokken…',
+'. Your shift ended at':'. Je dienst eindigde om','the end of your shift (':'het einde van je dienst (','Still clocked in':'Nog ingeklokt',
+"You're still clocked in from":'Je bent nog ingeklokt sinds','at':'om','Forgot to clock out? Clock out now and your hours stop at':'Vergeten uit te klokken? Klok nu uit en je uren stoppen om',
+'. Your stall manager and Bram see a note with it.':'. Je kraammanager en Bram zien er een notitie bij.','Clock out at':'Uitklokken om',
+'Finished at a different time? Ask your stall manager to set your finish time.':'Op een andere tijd gestopt? Vraag je kraammanager je eindtijd aan te passen.',
+"You're early – thanks! Your hours count from":'Je bent vroeg – bedankt! Je uren tellen vanaf',', when your shift starts.':', als je dienst begint.',
+'· from':'· vanaf','No shift today':'Vandaag geen dienst',
+'Hold your phone against the sticker in the stall. No sticker to hand? Type the code from the card.':'Houd je telefoon tegen de sticker in de kraam. Geen sticker bij de hand? Typ de code van de kaart.',
+'Type the code from the card in the stall.':'Typ de code van de kaart in de kraam.','Your next shift is':'Je volgende dienst is',
+'You are not on the rota at the moment.':'Je staat op dit moment niet op het rooster.','Tap the tag':'Tik de tag aan','or type the code':'of typ de code',
+'Please type the six character code from the stall.':'Typ de code van zes tekens uit de kraam.','Clocking in…':'Bezig met inklokken…',
+"You're clocked in.":'Je bent ingeklokt.','min break off':'min pauze eraf','· no break':'· geen pauze',
+'These hours go to Bram for approval. Once approved they land on your invoice.':'Deze uren gaan naar Bram voor akkoord. Daarna komen ze op je factuur.',
+'See my hours':'Mijn uren bekijken','To clock out, tap the tag or type the code from the card in the stall.':'Om uit te klokken tik je de tag aan of typ je de code van de kaart in de kraam.',
+'Clocking out…':'Bezig met uitklokken…',"You're already clocked out.":'Je bent al uitgeklokt.',
+'Nothing here yet. Your hours appear as soon as you clock out.':'Nog niets. Je uren verschijnen zodra je uitklokt.','h approved ·':'u goedgekeurd ·','min break':'min pauze',
+
+// Factuur
+'Download as PDF':'Downloaden als PDF','Then email it yourself to':'Mail hem daarna zelf naar','Nothing to invoice yet.':'Nog niets te factureren.',
+'Your invoice covers one payment period. Hours that are approved late move to the next one by themselves.':'Je factuur gaat over één betaalperiode. Uren die later worden goedgekeurd, schuiven vanzelf door naar de volgende.',
+'No invoice could be made.':'Er kon geen factuur gemaakt worden.','Your invoice':'Je factuur','‹ Back':'‹ Terug','hours ×':'uur ×','Save as PDF':'Opslaan als PDF',
+'Email the PDF yourself to':'Mail de PDF zelf naar','. Your invoice is not sent from the app — it is your invoice, so it comes from you.':'. Je factuur wordt niet vanuit de app verstuurd — het is jouw factuur, dus hij komt van jou.',
+'Saving the PDF did not work. Try again, or ask Bram.':'De PDF opslaan lukte niet. Probeer het opnieuw of vraag het Bram.',
+'Add your IBAN and account number first, under Me. Without them an invoice cannot be paid.':'Vul eerst je IBAN en rekeningnummer in, onder Ik. Zonder kan een factuur niet betaald worden.',
+'There are no approved hours waiting for an invoice.':'Er wachten geen goedgekeurde uren op een factuur.','This period is not finished yet.':'Deze periode is nog niet afgelopen.',
+
+// Oordelen
+'Top':'Top','Good':'Goed','Below expectations':'Minder dan verwacht','Not again':'Niet meer','no rating':'geen oordeel','— no rating —':'— geen oordeel —',
+
+// Rooster en vandaag (kraammanager)
+'‹ Previous':'‹ Vorige','Next ›':'Volgende ›','is not closed':'is niet afgesloten','After closing: hours, ratings, cleaning, gas and stock.':'Na sluiting: uren, beoordelingen, schoonmaak, gas en voorraad.',
+'Go through Close day for this day.':'Loop Dag afsluiten door voor deze dag.','Nothing planned.':'Niets gepland.','· closed':'· dicht','No shifts yet':'Nog geen diensten',
+'nobody yet':'nog niemand','Clock-in code':'Inklokcode',"Changes every day. Show it to crew who can't tap the tag.":'Verandert elke dag. Laat hem zien aan wie de tag niet kan aantikken.',
+'Today ·':'Vandaag ·','not on the rota':'niet ingeroosterd','Clock in now':'Nu inklokken','not in yet':'nog niet binnen','· closed ✓':'· afgesloten ✓',
+'Nobody on the rota today.':'Vandaag niemand ingeroosterd.','Not clocked in':'Niet ingeklokt','Shift is over and never clocked in. Check under Close day.':'De dienst is voorbij en er is nooit ingeklokt. Kijk bij Dag afsluiten.',
+'Not in yet ·':'Nog niet binnen ·','since the start':'sinds de start','· clocked in by':'· ingeklokt door','In since':'Binnen sinds',
+')? Only do this when':')? Doe dit alleen als','is at the stall and ready to work.':'bij de kraam is en klaar om te werken.','is clocked in':'is ingeklokt',
+'All stalls':'Alle kramen','· added by':'· toegevoegd door','Visits, deliveries and other things':'Bezoeken, leveringen en andere dingen','Added by':'Toegevoegd door',
+'Your stall':'Je kraam','Add to the calendar':'In de agenda zetten','For your stall.':'Voor je kraam.','Until (optional)':'Tot (optioneel)',
+'Bram sees everything you add.':'Bram ziet alles wat je toevoegt.','Contact (optional)':'Contact (optioneel)','Note (optional)':'Notitie (optioneel)',
+'Choose a date.':'Kies een datum.','Enter a title.':'Vul een titel in.','Enter a start time too.':'Vul ook een begintijd in.',
+'The end time must be after the start time.':'De eindtijd moet na de begintijd liggen.','Added to the calendar':'In de agenda gezet','Changes saved':'Wijzigingen opgeslagen',
+'Who is on, and when they clocked':'Wie er werkt, en wanneer ze klokten','‹ Back to the week':'‹ Terug naar de week','No shifts.':'Geen diensten.',
+'Nobody on this shift.':'Niemand op deze dienst.','not clocked in':'niet ingeklokt','in since':'binnen sinds','· approved by Bram':'· goedgekeurd door Bram',
+'Finish times, breaks, late and no-shows are checked under':'Eindtijden, pauzes, te laat en niet gekomen controleer je bij','Hours ·':'Uren ·',
+'Hours · all stalls':'Uren · alle kramen','‹ Back to Close day':'‹ Terug naar Dag afsluiten','Nobody clocked in at your stall this week.':'Deze week heeft niemand ingeklokt bij je kraam.',
+'Queried':'Uitgezocht','Waiting for Bram':'Wacht op Bram',
+'You can change the finish time and the break until Bram approves the hours. Every change is recorded with your name and shown to Bram.':'Je kunt de eindtijd en de pauze wijzigen tot Bram de uren goedkeurt. Elke wijziging wordt met je naam vastgelegd en aan Bram getoond.',
+'Enter the break in minutes.':'Vul de pauze in minuten in.','Rate people':'Mensen beoordelen','Bram sees who rated whom, and when':'Bram ziet wie wie beoordeelde, en wanneer',
+'‹ Back to the rota':'‹ Terug naar het rooster','Nobody to rate yet.':'Nog niemand om te beoordelen.','· last':'· laatste','shift':'dienst',
+
+// Voorraadlijst
+'Batter mix':'Beslagmix','Sugar':'Suiker','Butter':'Boter','White chocolate':'Witte chocolade','Pistachio':'Pistache','Whipped cream':'Slagroom',
+'Maple syrup':'Ahornsiroop','Caramel':'Karamel','Sugar waffles':'Suikerwafels','Trays':'Bakjes','Forks':'Vorkjes','Napkins':'Servetten','Gloves':'Handschoenen',
+'Checked':'Gecontroleerd','Late':'Te laat','Not late':'Niet te laat','No-show':'Niet gekomen','Cancelled in advance':'Vooraf afgemeld','Sent home':'Naar huis gestuurd',
+
+// Dag afsluiten
+'Stock you asked for':'Voorraad die je vroeg','✓ Sorted':'✓ Geregeld','by':'door',
+'Nothing to close: no stall had people on the rota in the last week.':'Niets af te sluiten: de afgelopen week stond bij geen kraam iemand ingeroosterd.',
+'All hours this week ›':'Alle uren deze week ›','Not on the rota':'Niet ingeroosterd','to check':'te controleren','Finished at':'Gestopt om','Break (min)':'Pauze (min)',
+'Still clocked in. Fill in when they finished.':'Nog ingeklokt. Vul in wanneer diegene stopte.','min after the shift started.':'min na de start van de dienst.',
+'Looks right':'Klopt','Change break or time':'Pauze of tijd wijzigen','Never clocked in.':'Nooit ingeklokt.','Sent home / not needed':'Naar huis gestuurd / niet nodig',
+'Worked – add hours':'Gewerkt – uren toevoegen','No uniform registered yet · hand out ›':'Nog geen kleding geregistreerd · uitdelen ›','Close the day':'Dag afsluiten',
+'not done':'niet gedaan','nothing needed':'niets nodig','· ✓ sorted by':'· ✓ geregeld door','· waiting':'· wacht','is closed':'is afgesloten','Checklist':'Checklist',
+'Cleaning list:':'Schoonmaaklijst:','Gas: off':'Gas: dicht','Need to change something? Ask Bram to reopen the day.':'Moet er iets anders? Vraag Bram de dag te heropenen.',
+'You can close this day once it has started.':'Je kunt deze dag afsluiten zodra hij begonnen is.','Nobody worked at this stall that day.':'Die dag werkte niemand bij deze kraam.',
+'Who worked today ·':'Wie werkte er vandaag ·','of':'van','checked':'gecontroleerd',
+'Clocking in 1 minute after the shift starts counts as late. Bram still approves and pays the hours; your check shows up next to them.':'1 minuut na de start inklokken telt als te laat. Bram keurt de uren nog goed en betaalt ze; jouw controle staat ernaast.',
+'No rating yet · required':'Nog geen oordeel · verplicht','first shift':'eerste dienst','Anything Bram should know? (optional)':'Iets dat Bram moet weten? (optioneel)',
+'Everyone who worked today already has a rating.':'Iedereen die vandaag werkte heeft al een oordeel.','Change a rating · optional':'Oordeel wijzigen · optioneel',
+'Cleaning list filled in':'Schoonmaaklijst ingevuld',"You can still close, but Bram will see the cleaning list wasn't done.":'Je kunt toch afsluiten, maar Bram ziet dat de schoonmaaklijst niet gedaan is.',
+'Gas turned off':'Gas dichtgedraaid','Turn the gas off before you close the day.':'Draai het gas dicht voordat je de dag afsluit.','Stock needed?':'Voorraad nodig?',
+'How much, or anything else':'Hoeveel, of iets anders','· 0 = none':'· 0 = niets','Gas bottles needed':'Gasflessen nodig','bottles':'flessen',
+'Strawberries needed':'Aardbeien nodig','boxes':'dozen','Bananas needed':'Bananen nodig','For tomorrow':'Voor morgen','Card payments today':'Pinbetalingen vandaag',
+'The total on the end-of-day receipt of each card machine.':'Het totaal op de dagafsluitbon van elk pinapparaat.','Machine name or number':'Naam of nummer van het apparaat',
+'another card machine':'nog een pinapparaat','add a card machine':'pinapparaat toevoegen','Check and close':'Controleren en afsluiten','Nothing needed':'Niets nodig',
+'Cleaning list':'Schoonmaaklijst','· Gas off':'· Gas dicht','Stock':'Voorraad','Card payments':'Pinbetalingen','All hours this week':'Alle uren deze week',
+'Fill in the time they finished.':'Vul in hoe laat diegene stopte.','Add the hours':'Uren toevoegen','worked':'gewerkt','Started':'Begonnen',
+"Why didn't they clock in? (Bram sees this)":'Waarom niet ingeklokt? (Bram ziet dit)','Save hours':'Uren opslaan','Fill in when they started and finished.':'Vul in wanneer diegene begon en stopte.',
+'Say why they did not clock in.':'Zeg waarom diegene niet inklokte.','Hours added. Bram still approves them.':'Uren toegevoegd. Bram keurt ze nog goed.',
+'Say why you change the rating.':'Zeg waarom je het oordeel wijzigt.','Rating saved':'Oordeel opgeslagen','Check everyone first:':'Controleer eerst iedereen:',
+'Choose a rating for':'Kies een oordeel voor','Answer all three.':'Beantwoord alle drie.','Tell us which stock you need.':'Laat weten welke voorraad je nodig hebt.',
+'Use whole numbers for gas, strawberries and bananas.':'Gebruik hele getallen voor gas, aardbeien en bananen.','Add the card payment total of each card machine.':'Vul het pintotaal van elk pinapparaat in.',
+'Fill in the card total for:':'Vul het pintotaal in voor:','. Use 0 if a machine was not used.':'. Vul 0 in als een apparaat niet gebruikt is.','Closing…':'Afsluiten…',
+'Day closed. Bram has been notified.':'Dag afgesloten. Bram heeft bericht gekregen.',
+'You can only close your own stall.':'Je kunt alleen je eigen kraam afsluiten.','You can only close today or earlier.':'Je kunt alleen vandaag of eerder afsluiten.',
+'This day is already closed.':'Deze dag is al afgesloten.','Answer all three: cleaning list, gas and stock.':'Beantwoord alle drie: schoonmaaklijst, gas en voorraad.',
+'A number cannot be negative.':'Een getal kan niet negatief zijn.','That number is too high. Check it again.':'Dat getal is te hoog. Controleer het nog eens.',
+'Fill in the card payment total of each terminal.':'Vul het pintotaal van elk pinapparaat in.',
+
+// Team en kleding
+'Uniform is a deposit:':'Kleding is borg:','per polo and':'per polo en','per apron. Set it to 0 when it comes back. Bram sees who handed out what, and when.':'per schort. Zet het op 0 zodra het terug is. Bram ziet wie wat uitdeelde, en wanneer.',
+'Polo ×':'Polo ×','Apron ×':'Schort ×','· deposit':'· borg','No uniform':'Geen kleding','Nobody with that name.':'Niemand met die naam.','Nobody in the team yet.':'Nog niemand in het team.',
+'(required)':'(verplicht)','(optional)':'(optioneel)','size not filled in':'maat niet ingevuld','Save uniform':'Kleding opslaan','Uniform saved':'Kleding opgeslagen',
+
+// Profiel
+'Add your IBAN and account number.':'Vul je IBAN en rekeningnummer in.','Without both your invoice cannot be paid, and it moves to the next payment round.':'Zonder beide kan je factuur niet betaald worden en schuift hij door naar de volgende betaalronde.',
+'Add your IBAN.':'Vul je IBAN in.','Without it your invoice cannot be paid, and it moves to the next payment round.':'Zonder IBAN kan je factuur niet betaald worden en schuift hij door naar de volgende betaalronde.',
+'You':'Jij','Mobile':'Mobiel','Address':'Adres','Postcode':'Postcode','Town':'Plaats','Polo size':'Polomaat','Your long sleeve work polo: S, M, L, XL …':'Je werkpolo met lange mouw: S, M, L, XL …',
+'Required. Both the IBAN and the account number are needed before you can be paid.':'Verplicht. Zowel het IBAN als het rekeningnummer zijn nodig voordat je betaald kunt worden.',
+'Required.':'Verplicht.','Account number':'Rekeningnummer','Sort code —':'Sort code —','optional':'optioneel','UTR number —':'UTR-nummer —',
+'Your own tax affairs. Add it if you want it on your invoice.':'Je eigen belastingzaken. Vul het in als je het op je factuur wilt.',
+'Getting paid':'Betaald worden','In case of emergency':'In geval van nood','House rules':'Huisregels','Not agreed yet.':'Nog niet akkoord.','Read them again':'Nog eens lezen',
+'Your data':'Je gegevens',"The app records when you work, your hours and where you clocked in — by the tag at the stall, never by your phone's location. What we keep, for how long, and your rights:":'De app legt vast wanneer je werkt, je uren en waar je inklokte — via de tag bij de kraam, nooit via de locatie van je telefoon. Wat we bewaren, hoe lang, en je rechten:',
+'Read the privacy policy':'Lees het privacybeleid',
+
+// Registreren (markten)
+'First name and surname':'Voornaam en achternaam','At least 12 characters':'Minimaal 12 tekens','A name, Instagram, a poster…':'Een naam, Instagram, een poster…',
+'Full name':'Volledige naam','Email':'E-mail','Date of birth':'Geboortedatum','Password':'Wachtwoord','Who told you about us?':'Hoe heb je van ons gehoord?','— optional':'— optioneel',
+'I have read and agree to the':'Ik heb gelezen en ga akkoord met de','house rules':'huisregels','— pay dates, cancelling a shift, uniform deposit.':'— betaaldata, een dienst afzeggen, borg voor kleding.',
+'Create account':'Account aanmaken','We will ask for your bank details once your account is open.':'We vragen je bankgegevens zodra je account open is.',
+'How we handle your data (privacy policy)':'Hoe we met je gegevens omgaan (privacybeleid)','Agree and continue':'Akkoord en verder',
+'Please fill in your full name.':'Vul je volledige naam in.','Please give your first name and surname.':'Geef je voornaam en achternaam.',
+'Please fill in your mobile number.':'Vul je mobiele nummer in.','Please fill in your email address.':'Vul je e-mailadres in.','Please fill in your date of birth.':'Vul je geboortedatum in.',
+'Your password needs at least 12 characters. Three random words works well.':'Je wachtwoord moet minstens 12 tekens hebben. Drie willekeurige woorden werkt goed.',
+'Please read and agree to the house rules first.':'Lees eerst de huisregels en ga ermee akkoord.','Account created. You can sign in now.':'Account aangemaakt. Je kunt nu inloggen.',
+'The house rules have been updated':'De huisregels zijn bijgewerkt','The house rules could not be loaded. Check your connection and try again.':'De huisregels konden niet geladen worden. Controleer je verbinding en probeer het opnieuw.',
+'Scroll down to read everything':'Scroll naar beneden om alles te lezen','Loading':'Laden',
+};
+const CREW_NL_REGELS=[
+[/^(\d+) (shift|shifts)$/,(m,a,b)=>a+' '+(b==='shift'?'dienst':'diensten')],
+[/^(\d+) (place|places) left$/,(m,a,b)=>a+' '+(b==='place'?'plek':'plekken')+' over'],
+[/^Stock: (.*)$/,(m,a)=>'Voorraad: '+crewT(a)],
+[/^(\d+) gas bottles?$/,(m,a)=>a+' gasfles'+(a==='1'?'':'sen')],
+[/^(\d+) box(?:es)? of strawberries$/,(m,a)=>a+(a==='1'?' doos':' dozen')+' aardbeien'],
+[/^(\d+) box(?:es)? of bananas$/,(m,a)=>a+(a==='1'?' doos':' dozen')+' bananen'],
+[/^Still clocked in: (.+)\. Fill in their finish time first\.$/,'Nog ingeklokt: $1. Vul eerst hun eindtijd in.'],
+[/^Check the hours of (.+) first\.$/,'Controleer eerst de uren van $1.'],
+[/^Give (.+) a rating first\.$/,'Geef $1 eerst een oordeel.'],
+[/^Terminal "(.+)" is in the list twice\.$/,'Pinapparaat "$1" staat er twee keer in.'],
+[/^Fill in the total for terminal (.+)\.$/,'Vul het totaal in voor pinapparaat $1.'],
+[/^Remove "(.+)" from the calendar\?$/,'"$1" uit de agenda halen?'],
+[/^Clock in (.+) now \((.+)\)\? Only do this when (.+) is at the stall and ready to work\.$/,'$1 nu inklokken ($2)? Doe dit alleen als $3 bij de kraam is en klaar om te werken.'],
+];
+// Korte stukjes die ook midden in een zin mogen (langere zinnen gaan vanzelf mee)
+const CREW_NL_DEEL=['today','Today','shift','shifts','by','at','from','until','min break','min','Late','Sorted','Waiting','Stock','Close day','Clock in','Clock out',
+  'stall manager','weekend manager','till close','not clocked in','nothing needed','gas bottles','gas bottle'];
+function crewNlWoorden(){
+  const d={}; for(const [k,v] of Object.entries(CREW_NL)) if(k.trim().split(/\s+/).length>=3||CREW_NL_DEEL.includes(k)) d[k]=v;
+  return d;
+}
+let CREW_NL_DEEL_RE=null, CREW_NL_D=null;
+function crewT(s){
+  if(TAAL!=='nl'||s==null)return s;
+  const ruw=String(s); const kern0=ruw.trim(); if(!kern0||!/[A-Za-z]/.test(kern0))return ruw;
+  const voor=ruw.slice(0,ruw.indexOf(kern0)), na=ruw.slice(ruw.indexOf(kern0)+kern0.length);
+  const kern=kern0.replace(/\s+/g,' ');
+  let uit=CREW_NL[kern];
+  if(uit===undefined){ for(const [re,v] of CREW_NL_REGELS){ if(re.test(kern)){ uit=kern.replace(re,v); break; } } }
+  if(uit===undefined&&kern.length<600){
+    if(!CREW_NL_D){ CREW_NL_D=crewNlWoorden();
+      const k=Object.keys(CREW_NL_D).sort((a,b)=>b.length-a.length).map(x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'));
+      CREW_NL_DEEL_RE=new RegExp('(^|[^A-Za-zÀ-ÿ])('+k.join('|')+')(?=$|[^A-Za-zÀ-ÿ])','g'); }
+    const r=kern.replace(CREW_NL_DEEL_RE,(m,a,b)=>a+CREW_NL_D[b]);
+    if(r!==kern)uit=r;
+  }
+  return uit===undefined?ruw:voor+uit+na;
+}
+// Alleen de schermen van de markt-app (en het Engelse registratieformulier)
+const CREW_NL_IN='#mcrApp,#registerFormMCR,#huisregelsOverlay,#authErr,#authMsg,#appToast';
+const CREW_NL_UIT='script,style,textarea,[contenteditable="true"],.notr,#huisregelsTekst';
+function crewBinnen(el){ try{ return !!(el&&el.closest&&el.closest(CREW_NL_IN)&&!el.closest(CREW_NL_UIT)); }catch(e){ return false; } }
+function crewKnoop(n){
+  if(TAAL!=='nl'||!n)return;
+  if(n.nodeType===3){ const p=n.parentNode; if(!p||!crewBinnen(p))return; const v=n.nodeValue,t=crewT(v); if(t!==v)n.nodeValue=t; return; }
+  if(n.nodeType!==1)return;
+  const doe=el=>{
+    ['placeholder','title','aria-label'].forEach(a=>{ const v=el.getAttribute&&el.getAttribute(a); if(v){ const t=crewT(v); if(t!==v)el.setAttribute(a,t); } });
+  };
+  const binnen=crewBinnen(n);
+  if(binnen)doe(n);
+  // Een knoop buiten de markt-app kan er wel een bevatten (bv. body)
+  const wortels=binnen?[n]:[...(n.querySelectorAll?n.querySelectorAll(CREW_NL_IN):[])];
+  wortels.forEach(w0=>{
+    const w=document.createTreeWalker(w0,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT,{acceptNode:x=>
+      (x.nodeType===1&&x.matches&&x.matches(CREW_NL_UIT))?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});
+    let x; while((x=w.nextNode())){
+      if(x.nodeType===3){ const v=x.nodeValue,t=crewT(v); if(t!==v)x.nodeValue=t; }
+      else doe(x);
+    }
+  });
+}
+let CREW_NL_AAN=false, CREW_NL_DATUM=false;
+function crewNlStart(datums){
+  if(TAAL!=='nl')return;
+  // Datums in het Nederlands (de markt-app schrijft en-GB); alleen voor wie de markt-app gebruikt
+  if(datums&&!CREW_NL_DATUM){ CREW_NL_DATUM=true;
+    ['toLocaleDateString','toLocaleTimeString','toLocaleString'].forEach(f=>{
+      const org=Date.prototype[f];
+      Date.prototype[f]=function(loc,opt){ return org.call(this,(loc==='en-GB'||loc==='en')?'nl-NL':loc,opt); };
+    }); }
+  if(CREW_NL_AAN)return; CREW_NL_AAN=true;
+  ['alert','confirm','prompt'].forEach(f=>{ const org=window[f]; if(!org)return;
+    window[f]=function(msg,...rest){ return org.call(window,typeof msg==='string'?crewT(msg):msg,...rest); }; });
+  const loop=()=>{ crewKnoop(document.body);
+    new MutationObserver(l=>{ for(const m of l){
+      if(m.type==='characterData')crewKnoop(m.target);
+      else if(m.type==='attributes'){ const el=m.target; if(crewBinnen(el)){ const v=el.getAttribute(m.attributeName); if(v){ const t=crewT(v); if(t!==v)el.setAttribute(m.attributeName,t); } } }
+      else m.addedNodes.forEach(crewKnoop);
+    } }).observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['placeholder','title']});
+  };
+  if(document.body)loop(); else document.addEventListener('DOMContentLoaded',loop);
+}
+
 i18nStart();
+crewNlStart(false);
 
 // ── MELDINGEN ──────────────────────────────────────────────────────
 // Eén plek voor korte meldingen onderin beeld. Wordt gebruikt door het
@@ -4120,10 +4452,7 @@ function toast(tekst,soort){
 // foutmelding.
 // Wie via de Manchester-ingang binnenkomt of bij Manchester hoort, krijgt
 // Engelse meldingen. Anders stond er ineens Nederlands op een Engels scherm.
-function engelsScherm(){
-  try{ if(typeof MIJN_VESTIGING!=='undefined' && isMarkt(MIJN_VESTIGING))return true; }catch(e){}
-  try{ return isMarkt(localStorage.getItem('tc_ingang')); }catch(e){ return false; }
-}
+function engelsScherm(){ return TAAL==='en'; }
 async function sbFetch(input,init){
   const url=typeof input==='string'?input:(input&&input.url)||'';
   try{
@@ -4395,7 +4724,7 @@ let MB_WEEKRIJEN=null;   // de diensten van de week die nu op het scherm staat
 let MB_DAG_KRAAM=null, MB_KRAMEN=null, MB_INST_DATA=null, MB_DAG_BEOORDEEL=[];
 const MB_WEEKDAGEN=['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
 const MB_TABS=[['overzicht','Overzicht'],['omzet','Omzet'],['shifts','Shifts'],['agenda','Agenda'],['uren','Uren'],['dagrapport','Dagrapport'],
-               ['inlezen','Inlezen'],['cijfers','Cijfers'],['kosten','Kosten'],['bezetting','Bezetting'],
+               ['kas','Kassa'],['inlezen','Inlezen'],['cijfers','Cijfers'],['kosten','Kosten'],['bezetting','Bezetting'],
                ['mensen','Mensen'],['huisregels','Huisregels'],['instellingen','Instellingen']];
 // Omzet en alles wat geld binnen laat zien: alleen Bram's account (zie
 // supabase/mcr_omzet_alleen_bram.sql, daar dwingt de database het af).
@@ -4403,10 +4732,12 @@ const MB_OMZET_EIGENAAR='adb8bd40-f0b6-4aa2-a16d-a67932202c02';
 const MB_OMZET_TABS=['omzet','dagrapport','inlezen','cijfers','kosten','bezetting'];
 function mbMagOmzet(){ return typeof isAdmin==='function'&&isAdmin()&&!!CURRENT_USER&&CURRENT_USER.id===MB_OMZET_EIGENAAR; }
 // Een planner (geen beheerder) ziet alleen plannen, uren, mensen en huisregels.
-const MB_PLANNER_TABS=['overzicht','shifts','agenda','uren','mensen','huisregels'];
+// Daarbij Kosten (eigen markt) en, waar contant betaald wordt, Kassa: de
+// contante omzet per dag invullen en terugzien. Geen pin- of myPOS-omzet.
+const MB_PLANNER_TABS=['overzicht','shifts','agenda','uren','kas','kosten','mensen','huisregels'];
 function mbTabs(){
-  if(PLANNER_MODUS)return MB_TABS.filter(([k])=>MB_PLANNER_TABS.includes(k));
-  return mbMagOmzet()?MB_TABS:MB_TABS.filter(([k])=>!MB_OMZET_TABS.includes(k)); }
+  if(PLANNER_MODUS)return MB_TABS.filter(([k])=>MB_PLANNER_TABS.includes(k)&&(k!=='kas'||MARKT_CONTANT[dezeMarkt()]));
+  return (mbMagOmzet()?MB_TABS:MB_TABS.filter(([k])=>!MB_OMZET_TABS.includes(k))).filter(([k])=>k!=='kas'); }
 
 // Per kraam: contant ja/nee, waar de pin vandaan komt (myPOS of met de hand
 // van de bon) en welk percentage naar de markt gaat. Liverpool: geen contant,
@@ -4425,14 +4756,14 @@ function mbKraamContant(kid){ const i=MB_KRAAM_INFO&&MB_KRAAM_INFO[kid]; return 
 function mbDatum(d){ return d?new Date(String(d)+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}):''; }
 function mbKort(d){ return d?new Date(String(d)+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short'}):''; }
 function mbLang(d){ return d?new Date(String(d)+'T00:00:00').toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'}):''; }
-function mbPond(n){ return '£ '+(Number(n)||0).toLocaleString(mbLoc(),{minimumFractionDigits:2,maximumFractionDigits:2}); }
-function mbPondKort(n){ return '£ '+Math.round(Number(n)||0).toLocaleString(mbLoc()); }
+function mbPond(n){ return valSym()+' '+(Number(n)||0).toLocaleString(mbLoc(),{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function mbPondKort(n){ return valSym()+' '+Math.round(Number(n)||0).toLocaleString(mbLoc()); }
 // Nederlandse notatie: 8,55 en niet 8.55. toFixed geeft altijd een punt.
 function mbNum(n,d){ return (Number(n)||0).toLocaleString(mbLoc(),{minimumFractionDigits:d==null?1:d,maximumFractionDigits:d==null?1:d}); }
 function mbProcent(n,d){ return mbNum(n,d==null?1:d)+'%'; }
 function mbUur(t){ return t?String(t).slice(0,5):''; }
 // Alle tijden in Brits tijd, ook als Brams telefoon op Nederlandse tijd staat.
-const MB_TZ='Europe/London';
+let MB_TZ='Europe/London';   // bij het opstarten: de tijdzone van de markt (Parijs een uur later)
 function mbKlokT(ts){ return ts?new Date(ts).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:MB_TZ}):''; }
 // Minuten sinds middernacht, Britse tijd (voor "nog niet binnen" en "aan het werk").
 function mbNuMin(){ const p=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:MB_TZ}).format(new Date()).split(':'); return (+p[0]%24)*60+(+p[1]); }
@@ -4478,8 +4809,9 @@ async function mbKramenLijst(){
 function loadMcrBeheer(){ mbNaar(MB_TAB||'overzicht'); }
 function mbNaar(tab, knop){
   if(!mbMensenMagWeg())return;
-  if(MB_OMZET_TABS.includes(tab)&&!mbMagOmzet()){ tab='overzicht'; knop=null; }
+  if(MB_OMZET_TABS.includes(tab)&&!mbMagOmzet()&&!(PLANNER_MODUS&&tab==='kosten')){ tab='overzicht'; knop=null; }
   if(PLANNER_MODUS&&!MB_PLANNER_TABS.includes(tab)){ tab='overzicht'; knop=null; }
+  if(tab==='kas'&&!PLANNER_MODUS){ tab='dagrapport'; knop=null; }
   MB_TAB=tab; MB_OMZ_KIJK=false; meldingenStraks();
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.getElementById('page-mcrbeheer').classList.add('active');
@@ -4492,7 +4824,7 @@ function mbNaar(tab, knop){
   el.innerHTML='<div class="mb-kaart" style="text-align:center;color:var(--muted)">Bezig&hellip;</div>';
   window.scrollTo(0,0);
   const f={overzicht:mbOverzicht,omzet:mbOmzet,shifts:mbShiftsPlannen,agenda:mbAgenda,uren:mbUren,dagrapport:mbDagrapport,
-           inlezen:mbInlezen,cijfers:mbCijfers,kosten:mbKosten,bezetting:mbBezetting,mensen:mbMensen,
+           inlezen:mbInlezen,cijfers:mbCijfers,kosten:mbKosten,bezetting:mbBezetting,mensen:mbMensen,kas:mbKas,
            huisregels:mbHuisregels,instellingen:mbInstellingen}[tab];
   if(f)f().catch(e=>{console.error(e);el.innerHTML=
     `<div class="mb-kaart">Dit scherm kon niet geladen worden.<br><span style="color:var(--muted);font-size:12.5px">${veiligTekst(mbFout(e))}</span></div>`;});
@@ -4587,6 +4919,7 @@ async function mbOverzicht(){
      <button class="mb-mini" onclick="mbNaar('shifts')">Shifts plannen</button>
      <button class="mb-mini zwart" onclick="mbNaar('uren')">Uren accorderen</button>`);
 
+  uit+='<div id="mbVoorraad"></div>';
   uit+='<div class="mb-rij3">';
   lijst.forEach(o=>{
     const k=o.k;
@@ -4674,6 +5007,7 @@ async function mbOverzicht(){
   uit+=druk.blok;
   if(MDR_OV)mdrOvTimerStart();
   uit+=mbAfsluitHtml();
+  setTimeout(mbVoorraadLaden,0);
   uit+=mbAgendaVandaagHtml(agd&&!agd.error?agd.data:[]);
 
   const regel=(n,t,kleur,tab)=>`<button class="mb-link" onclick="mbNaar('${tab}')">
@@ -4750,6 +5084,79 @@ async function mbHuisregels(){
   document.getElementById('mbInhoud').innerHTML=uit;
 }
 
+// ── Voorraad nodig (uit de dagafsluiting) ─────────────────────────
+// Blijft bovenaan Overzicht staan, ongeacht de datum, tot iemand op Geregeld
+// tikt. Zo zie je 's ochtends wat er gisteravond gevraagd is.
+let MB_VR={open:[],klaar:[]};
+function mbVrRegel(x){
+  const d=[...(x.voorraad||[])];
+  if(x.gas_flessen)d.push(x.gas_flessen+' gasfles'+(x.gas_flessen>1?'sen':''));
+  if(x.aardbeien)d.push(x.aardbeien+(x.aardbeien>1?' dozen':' doos')+' aardbeien');
+  if(x.bananen)d.push(x.bananen+(x.bananen>1?' dozen':' doos')+' bananen');
+  return d;
+}
+async function mbVoorraadLaden(){
+  const el=document.getElementById('mbVoorraad'); if(!el)return;
+  const{data,error}=await sb.rpc('mcr_voorraad_lijst');
+  if(error){ console.error('Voorraad ophalen mislukt:',error); return; }
+  MB_VR=data||{open:[],klaar:[]};
+  mbVoorraadTeken();
+}
+function mbVoorraadTeken(){
+  const el=document.getElementById('mbVoorraad'); if(!el)return;
+  const open=MB_VR.open||[], klaar=MB_VR.klaar||[];
+  if(!open.length&&!klaar.length){ el.innerHTML=''; return; }
+  const vandaag=mbVandaagStr();
+  const dagen=d=>Math.round((new Date(vandaag+'T12:00:00')-new Date(d+'T12:00:00'))/864e5);
+  let uit=`<div class="mb-kaart" style="border-color:${open.length?'#E8C9A0':'var(--border)'}">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      <div class="mb-kop" style="margin:0">Voorraad nodig</div>
+      ${open.length?mbChip(open.length+' open','#8A5307','#FEF3DF'):mbChip('alles geregeld','#0F7A52','#F2FBF6')}
+      <span style="margin-left:auto;font-size:12px;color:var(--muted)">Uit de dagafsluiting &middot; blijft staan tot je op Geregeld tikt</span></div>`;
+  open.forEach(x=>{
+    const oud=dagen(x.datum);
+    uit+=`<div style="display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;padding:12px 0;border-top:1px solid var(--border);margin-top:8px">
+      <div style="flex:1 1 380px;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">${mbStip(x.kleur)}<b style="font-size:14.5px">${veiligTekst(x.kraam)}</b>
+          ${oud>=2?mbChip(oud+' dagen open','#9A2B1C','#FBE9E5'):''}</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px">${veiligTekst(mbLang(x.datum))}${x.afgesloten_op?' '+veiligTekst(mbKlokT(x.afgesloten_op)):''} &middot; afgesloten door ${veiligTekst(x.door||'?')}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:7px">${mbVrRegel(x).map(t=>`<span style="font-size:13px;font-weight:600;background:#F2F1EC;border-radius:99px;padding:4px 10px">${veiligTekst(t)}</span>`).join('')}</div>
+        ${x.tekst?`<div style="font-size:13px;margin-top:6px">&ldquo;${veiligTekst(x.tekst)}&rdquo;</div>`:''}
+        ${x.notitie?`<div style="font-size:12.5px;margin-top:6px;color:var(--muted);background:var(--bg);border-radius:8px;padding:6px 9px">Notitie: &ldquo;${veiligTekst(x.notitie)}&rdquo;</div>`:''}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="mb-mini" style="min-height:40px" onclick="mbVrNotitie('${veiligJs(x.id)}')">Notitie</button>
+        <button class="mb-mini zwart" style="min-height:40px;background:#0F7A52;border-color:#0F7A52" onclick="mbVrGeregeld('${veiligJs(x.id)}',true)">Geregeld</button>
+      </div></div>`;
+  });
+  if(klaar.length){
+    uit+=`<details style="border-top:1px solid var(--border);padding-top:10px;margin-top:8px"><summary style="font-size:13px;font-weight:600;color:var(--muted);cursor:pointer">Afgehandeld &middot; laatste 7 dagen (${klaar.length})</summary>`;
+    klaar.forEach(x=>{
+      uit+=`<div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-size:12.5px;padding:7px 0;border-bottom:1px solid var(--border)">
+        <span><b>${veiligTekst(x.kraam)}</b> &middot; ${veiligTekst(mbVrRegel(x).concat(x.tekst?[x.tekst]:[]).join(', '))}</span>
+        <span style="color:#0F7A52;font-weight:600">&#10003; Geregeld door ${veiligTekst(x.geregeld_door||'?')} &middot; ${veiligTekst(mbKlokDatum(x.geregeld_op))}
+          <button class="mb-linktekst" onclick="mbVrGeregeld('${veiligJs(x.id)}',false)">terugzetten</button></span></div>`;
+    });
+    uit+='</details>';
+  }
+  el.innerHTML=uit+'</div>';
+}
+async function mbVrGeregeld(id,aan){
+  const{error}=await sb.rpc('mcr_voorraad_zetten',{p_id:id,p_geregeld:aan,p_notitie:null});
+  if(error){ toast(mbFout(error),'fout'); return; }
+  toast(aan?'Geregeld':'Staat weer open');
+  mbVoorraadLaden();
+}
+async function mbVrNotitie(id){
+  const x=(MB_VR.open||[]).find(r=>r.id===id);
+  const t=prompt('Notitie voor de kraammanager (bv. "komt om 11:00"). De kraammanager ziet dit in zijn app.',(x&&x.notitie)||'');
+  if(t===null)return;
+  const{error}=await sb.rpc('mcr_voorraad_zetten',{p_id:id,p_geregeld:null,p_notitie:t});
+  if(error){ toast(mbFout(error),'fout'); return; }
+  toast('Notitie opgeslagen');
+  mbVoorraadLaden();
+}
+
 // ── Dagafsluiting door de kraammanagers (Overzicht) ───────────────
 // Per kraam: afgesloten door wie en wanneer, schoonmaaklijst, gas, voorraad,
 // beoordelingen en kleding die de manager die dag invulde, en per persoon de
@@ -4774,7 +5181,8 @@ function mbAfsluitHtml(){
       const rg=(l,t)=>`<div style="font-size:12.5px;line-height:1.5;padding:5px 0;border-top:1px solid var(--border)"><span style="color:var(--muted)">${l}</span> ${t}</div>`;
       uit+=`<div style="font-size:12px;color:var(--muted);margin:3px 0 6px">door ${veiligTekst(a.door||'?')}</div>`;
       uit+=rg('Checklist',`schoonmaaklijst ${a.schoonmaak?'<b style="color:#0F7A52">ingevuld</b>':'<b style="color:#B4472B">niet gedaan</b>'} &middot; gas dicht`);
-      uit+=rg('Voorraad',a.voorraad_nodig?'<b>'+veiligTekst([...(a.voorraad||[]),a.voorraad_tekst||''].filter(Boolean).join(', '))+'</b>':'niets nodig');
+      uit+=rg('Voorraad',a.voorraad_nodig?'<b>'+veiligTekst(mbVrRegel(a).concat(a.voorraad_tekst?[a.voorraad_tekst]:[]).join(', '))+'</b>'
+        +(a.geregeld_op?' <span style="color:#0F7A52">&#10003; geregeld</span>':''):'niets nodig');
       const beo=a.beoordelingen||[];
       if(beo.length)uit+=rg('Beoordeling',beo.map(b=>`${mbNaamLink(null,b.naam)} ${b.van?veiligTekst(MB_OORDEEL_NL[b.van]||b.van)+' &rarr; ':''}<b>${veiligTekst(MB_OORDEEL_NL[b.naar]||b.naar||'geen')}</b>${b.van?'':' <span style="color:var(--muted)">(nieuw)</span>'}${b.reden?` <span style="color:var(--muted)">&ldquo;${veiligTekst(b.reden)}&rdquo;</span>`:''}`).join('<br>'));
       const kl=a.kleding||[];
@@ -7374,6 +7782,7 @@ async function mbRondes(){
 }
 // Wat er na inhouding per uur overblijft, tegen het minimumloon bij die leeftijd.
 function mbRondeMinWaarschuwing(r){
+  if(!marktUK())return null;
   const inh=Number(r.boetes||0)+Number(r.borg_in||0), u=Number(r.uren||0);
   if(!inh||!u)return null;
   const b=mbMinLoon(r.leeftijd); if(!b)return null;
@@ -7391,7 +7800,7 @@ async function mbRondeDetail(id){
     if(!m.length){ el.innerHTML='<div class="mb-kaart">In deze periode heeft nog niemand in '+veiligTekst(marktNaam(dezeMarkt()))+' gewerkt.</div>'; return; }
     const som=k=>m.reduce((a,r)=>a+Number(r[k]||0),0);
     const vast=m.some(r=>r.vastgezet_op), open=m.reduce((a,r)=>a+Number(r.open_n||0),0);
-    const minW=m.filter(mbRondeMinWaarschuwing), geenBank=m.filter(r=>Number(r.netto)>0&&!(r.sort_code&&r.bank_account));
+    const minW=m.filter(mbRondeMinWaarschuwing), geenBank=m.filter(r=>Number(r.netto)>0&&(marktUK()?!(r.sort_code&&r.bank_account):!r.iban));
     let t=`<div class="mb-kaart">
       <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
         <div style="flex:1 1 220px"><div style="font-size:15px;font-weight:700">Ronde ${veiligTekst(R.nummer||'')} &middot; uitbetaling</div>
@@ -7412,7 +7821,7 @@ async function mbRondeDetail(id){
     const meld=[];
     if(!R.afgelopen)meld.push('Deze ronde loopt nog: de bedragen kunnen nog veranderen.');
     if(open)meld.push(`<b>${open} ${open===1?'registratie staat':'registraties staan'} nog open</b> (te accorderen of bij Uitgezocht). Die tellen hier nog niet mee; vastzetten kan pas als ze zijn afgehandeld.`);
-    if(geenBank.length)meld.push(`Geen sort code of rekeningnummer: ${geenBank.map(r=>veiligTekst(r.naam)).join(', ')}.`);
+    if(geenBank.length)meld.push(`${marktUK()?'Geen sort code of rekeningnummer':'Geen IBAN'}: ${geenBank.map(r=>veiligTekst(r.naam)).join(', ')}.`);
     if(minW.length)meld.push(`<b>Let op het minimumloon.</b> Bij ${minW.map(r=>{const w=mbRondeMinWaarschuwing(r);return `${veiligTekst(r.naam)} (na inhouding &pound; ${mbPondTxt(w.per)}/u, minimaal &pound; ${mbPondTxt(w.min)})`;}).join(', ')} komt het uurloon in deze ronde onder het minimum.
       In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. De borg wordt al over twee rondes gespreid; overweeg de boete te verlagen of later in te houden.`);
     if(meld.length)t+=`<div style="font-size:12.5px;line-height:1.6;margin-top:12px;padding:9px 11px;border-radius:10px;background:#FEF6E7;color:#5B3A07">${meld.join('<br>')}</div>`;
@@ -8565,6 +8974,39 @@ function mbKostZoek(w){
   const wis=document.getElementById('mbKostWis'); if(wis)wis.style.display=MB_KOST_ZOEK?'':'none';
 }
 
+// ── Kassa: contante omzet per dag (planner van een markt met contant geld) ──
+let MB_KAS_RIJEN=[];
+async function mbKas(){
+  const tot=mbVandaagStr();
+  const van=(()=>{ const d=new Date(tot+'T12:00:00'); d.setDate(d.getDate()-20); return fmt(d); })();
+  const{data,error}=await sb.rpc('mcr_kas_lijst',{p_van:van,p_tot:tot});
+  if(error)throw error;
+  MB_KAS_RIJEN=data||[];
+  const som=MB_KAS_RIJEN.reduce((a,r)=>a+Number(r.contant||0),0);
+  let uit=mbKop('Kassa','Contante omzet per dag &middot; vul na sluiting het geteld bedrag in','');
+  uit+=`<div class="mb-kaart"><div style="font-size:13px;color:var(--muted);margin-bottom:8px">Laatste drie weken &middot; totaal <b style="color:var(--text)">${veiligTekst(mbPond(som))}</b></div>
+    <table class="mb-tabel2"><thead><tr><th style="text-align:left">Dag</th><th style="text-align:left">Kraam</th><th style="text-align:right">Contant</th><th></th><th style="text-align:left">Ingevuld door</th></tr></thead><tbody>`;
+  if(!MB_KAS_RIJEN.length)uit+=`<tr><td colspan="5" style="color:var(--muted)">Nog geen marktdagen.</td></tr>`;
+  MB_KAS_RIJEN.forEach((r,i)=>{
+    uit+=`<tr><td>${veiligTekst(mbLang(r.datum))}</td><td>${mbStip(r.kleur)} ${veiligTekst(r.kraam)}</td>
+      <td style="text-align:right"><input class="mb-getal" id="mbKas${i}" inputmode="decimal" style="width:120px;text-align:right" value="${r.contant!=null?veiligTekst(mbNum(r.contant,2)):''}" placeholder="0,00"></td>
+      <td><button class="mb-mini zwart" onclick="mbKasOpslaan(${i})">Opslaan</button></td>
+      <td style="font-size:12px;color:var(--muted)">${r.door?veiligTekst(r.door)+' &middot; '+veiligTekst(mbKlokDatum(r.op)):''}</td></tr>`;
+  });
+  uit+='</tbody></table></div>';
+  document.getElementById('mbInhoud').innerHTML=uit;
+}
+async function mbKasOpslaan(i){
+  const r=MB_KAS_RIJEN[i]; if(!r)return;
+  const ruw=(document.getElementById('mbKas'+i)||{}).value||'';
+  const b=ruw.trim()===''?null:mbBedragLees(ruw.replace(/,(?=\d{3}\b)/g,''));
+  if(b!=null&&(Number.isNaN(b)||b<0)){ toast('Dat bedrag klopt niet.','fout'); return; }
+  const{error}=await sb.rpc('mcr_kas_zetten',{p_kraam:r.kraam_id,p_datum:r.datum,p_bedrag:b});
+  if(error){ toast(mbFout(error),'fout'); return; }
+  toast('Opgeslagen');
+  mbNaar('kas');
+}
+
 async function mbKosten(){
   let [kramen,res]=await Promise.all([mbKramenLijst(), sb.rpc('mcr_kosten_lijst2',{p_van:MB_KOST_VAN,p_tot:MB_KOST_TOT})]);
   if(res.error)res=await sb.rpc('mcr_kosten_lijst',{p_van:MB_KOST_VAN,p_tot:MB_KOST_TOT});
@@ -8605,7 +9047,7 @@ async function mbKosten(){
                oninput="mbKostBtwUitleg()" onkeydown="if(event.key==='Enter')mbKostOpslaan()"></div>
       <div style="flex:0 0 auto"><label class="mb-lab">Valuta</label>
         <div style="display:flex;gap:4px" id="mbKval">
-          <button class="mb-mini${MB_KOST_VAL==='GBP'?' zwart':''}" style="padding:9px 14px" onclick="mbKostVal('GBP')">£</button>
+          <button class="mb-mini notr${MB_KOST_VAL==='GBP'?' zwart':''}" style="padding:9px 14px" onclick="mbKostVal('GBP')">£</button>
           <button class="mb-mini${MB_KOST_VAL==='EUR'?' zwart':''}" style="padding:9px 14px" onclick="mbKostVal('EUR')">€</button>
         </div></div>
     </div>
@@ -9017,7 +9459,7 @@ async function mbMensen(){
   uit+='<div id="mbPersoonPaneel"></div>';
   document.getElementById('mbInhoud').innerHTML=uit;
   const bovenEl=document.getElementById('mbMensenBoven');
-  const onder=actief.filter(mbOnderMin);
+  const onder=marktUK()?actief.filter(mbOnderMin):[];   // Brits minimumloon: alleen in Groot-Brittannië
   let minBlok='';
   if(onder.length){
     minBlok=`<div class="mb-kaart" style="border:1.5px solid #B4472B;background:#FBEDE9">
@@ -9926,7 +10368,7 @@ async function mbGegevens(){
       <input class="mb-veld" ${sl==='aanmelden_tot'?'type="date" ':''}id="mbI_${veiligTekst(sl)}" value="${veiligTekst((k[sl]||{}).waarde||'')}"></div>`;
   });
   uit+=`</div><div class="mb-veldrij" style="margin-top:10px">
-    <div style="flex:1 1 170px"><label class="mb-lab">Tijdzone</label><div class="mb-veld vast">Europe/London</div></div>
+    <div style="flex:1 1 170px"><label class="mb-lab">Tijdzone</label><div class="mb-veld vast">${veiligTekst(mktTz())}</div></div>
     <div style="flex:1 1 170px"><label class="mb-lab">Valuta</label><div class="mb-veld vast">GBP (&pound;)</div></div></div>
     <div style="margin-top:12px"><button class="mb-mini zwart" onclick="mbInstellingenOpslaan()">Opslaan</button>
     <span id="mbInstOk" style="display:none;color:#0F7A52;font-size:12.5px;margin-left:10px">Opgeslagen.</span></div></div>`;
@@ -10055,7 +10497,7 @@ function mcrLeeg(t){ return `<div class="mcr-leeg">${veiligTekst(t)}</div>`; }
 // Het scherm voor een account dat uit dienst is gezet. Hetzelfde kader als de
 // wachtkamer, maar met een eerlijk verhaal: hier komt niemand meer langs.
 function toonAfgesloten(naam){
-  const en = isMarkt(MIJN_VESTIGING) || (function(){try{return isMarkt(localStorage.getItem('tc_ingang'));}catch(e){return false;}})();
+  const en = TAAL==='en';
   document.getElementById('authWrap').style.display='none';
   document.getElementById('appWrap').style.display='none';
   const mcrApp=document.getElementById('mcrApp'); if(mcrApp)mcrApp.style.display='none';
@@ -10912,7 +11354,7 @@ async function mcrKlok0(){
   mcrKlokTeken();
 }
 // De Londense kalenderdag van een tijdstip ("2026-11-09"), los van de telefoon.
-function mcrLondenDag(ts){ try{ return new Date(ts).toLocaleDateString('en-CA',{timeZone:'Europe/London'}); }catch(e){ return new Date(ts).toISOString().slice(0,10); } }
+function mcrLondenDag(ts){ try{ return new Date(ts).toLocaleDateString('en-CA',{timeZone:mktTz()}); }catch(e){ return new Date(ts).toISOString().slice(0,10); } }
 // "10:00" als het vandaag was, anders "Monday 10:00".
 function mcrSinds(ts,lang){
   if(!ts)return '';
@@ -11320,7 +11762,7 @@ async function mcrFactuurMaken(ronde){
 // Eén pagina, Helvetica, WinAnsi zodat het pond-teken klopt. Zo hoeft de app
 // niets van buiten te laden en werkt het ook zonder internet.
 function pdfTekens(t){
-  const kaart={'’':"'",'‘':"'",'“':'"','”':'"','–':'-','—':'-',' ':' '};
+  const kaart={'’':"'",'‘':"'",'“':'"','”':'"','–':'-','—':'-','€':'\x80',' ':' '};
   let uit='';
   for(const ch of String(t==null?'':t)){
     const v=kaart[ch]!==undefined?kaart[ch]:ch;
@@ -11391,8 +11833,8 @@ function mcrFactuurRegels(f, inst, mij){
     zet(120,(r.kraam||'')+'  '+(r.van||'')+'-'+(r.tot||''),{groot:9});
     zet(300,Number(r.uren||0).toFixed(2),{groot:9});
     zet(370,(r.pauze||0)+' min',{groot:9,grijs:true});
-    zet(440,'£ '+Number(f.tarief||0).toFixed(2),{groot:9,grijs:true});
-    zet(505,'£ '+Number(r.bedrag||0).toFixed(2),{groot:9});
+    zet(440,valSym()+' '+Number(f.tarief||0).toFixed(2),{groot:9,grijs:true});
+    zet(505,valSym()+' '+Number(r.bedrag||0).toFixed(2),{groot:9});
     y-=15;
     if(y<140){ y=140; }
   });
@@ -11401,12 +11843,12 @@ function mcrFactuurRegels(f, inst, mij){
   R.push({x:56,y:y+5,tekst:'',lijn:540});
   y-=14;
   zet(370,'Total hours',{groot:9,grijs:true}); zet(480,Number(f.uren||0).toFixed(2),{groot:9}); y-=16;
-  zet(370,'Total',{groot:11,vet:true});        zet(480,'£ '+Number(f.bedrag||0).toFixed(2),{groot:13,vet:true}); y-=34;
+  zet(370,'Total',{groot:11,vet:true});        zet(480,valSym()+' '+Number(f.bedrag||0).toFixed(2),{groot:13,vet:true}); y-=34;
 
   zet(56,'Bank details',{groot:8,grijs:true}); y-=12;
   const sc=(mij.sort_code||'').replace(/(\d{2})(?=\d)/g,'$1-');
   zet(56, 'IBAN '+(mij.iban ? mij.iban.replace(/(.{4})/g,'$1 ').trim() : '[add your IBAN in the app]'), {groot:9}); y-=12;
-  zet(56, 'Account number '+(mij.bank_account || '[add your account number in the app]')+(sc?'   Sort code '+sc:''), {groot:9}); y-=26;
+  if(marktUK()){ zet(56, 'Account number '+(mij.bank_account || '[add your account number in the app]')+(sc?'   Sort code '+sc:''), {groot:9}); } y-=26;
   return R;
 }
 
@@ -11949,12 +12391,14 @@ async function mgrBeoordeel(id){
 // eventueel aanpassen), schoonmaaklijst, gas dicht, voorraad. Vier stappen.
 // De manager controleert; Bram geeft daarna nog steeds akkoord op de uren.
 // 1 minuut na de start van de dienst inklokken is al te laat.
-let MGR_CL={kraam:null,datum:null,stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{},toevoeg:{}};
+let MGR_CL={kraam:null,datum:null,stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{},toevoeg:{},
+  gasN:'',aard:'',ban:'',pin:{},pinNieuw:[]};
+let MGR_VR_STATUS=[];
 let MGR_CL_OPTIES=[], MGR_CL_D=null, MGR_CL_CODES=[];
 const MGR_VOORRAAD=['Batter mix','Sugar','Butter','Nutella','Lotus','White chocolate','Pistachio','Bueno','Whipped cream',
-  'Maple syrup','Caramel','Fruit','Sugar waffles','Trays','Forks','Napkins','Gloves','Gas bottle'];
+  'Maple syrup','Caramel','Sugar waffles','Trays','Forks','Napkins','Gloves'];
 const MGR_UITKOMST={ok:'Checked',te_laat:'Late',niet_te_laat:'Not late',niet_gekomen:'No-show',afgemeld:'Cancelled in advance',naar_huis:'Sent home'};
-function mgrVandaag(){ return new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'}); }
+function mgrVandaag(){ return new Date().toLocaleDateString('en-CA',{timeZone:mktTz()}); }
 function mgrDagNaam(ds,lang){ const d=new Date(ds+'T00:00:00');
   return d.toLocaleDateString('en-GB',lang?{weekday:'long',day:'numeric',month:'long'}:{weekday:'short',day:'numeric',month:'short'}); }
 function mgrKn(label,onclick,zwart,extra){
@@ -11969,7 +12413,47 @@ function mgrClBezig(){
   if(MCR_TAB==='rota')return !MGR_DAG&&MGR_VANDAAG_TOON;
   return false;
 }
-function mgrClReset(){ Object.assign(MGR_CL,{stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{},toevoeg:{}}); }
+function mgrClReset(){ Object.assign(MGR_CL,{stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{},toevoeg:{},
+  gasN:'',aard:'',ban:'',pin:{},pinNieuw:[]}); }
+// Wat er naast de vinkjes nodig is: gas, aardbeien, bananen (aantallen).
+function mgrClAantal(v){ const n=parseInt(String(v||'').trim(),10); return Number.isFinite(n)&&n>0?n:0; }
+function mgrClExtra(){
+  const d=[]; const g=mgrClAantal(MGR_CL.gasN), a=mgrClAantal(MGR_CL.aard), b=mgrClAantal(MGR_CL.ban);
+  if(g)d.push(g+' gas bottle'+(g>1?'s':'')); if(a)d.push(a+' box'+(a>1?'es':'')+' of strawberries'); if(b)d.push(b+' box'+(b>1?'es':'')+' of bananas');
+  return d;
+}
+function mgrVrTekst(a){
+  const d=[...(a.voorraad||[])];
+  if(a.gas_flessen)d.push(a.gas_flessen+' gas bottle'+(a.gas_flessen>1?'s':''));
+  if(a.aardbeien)d.push(a.aardbeien+' box'+(a.aardbeien>1?'es':'')+' of strawberries');
+  if(a.bananen)d.push(a.bananen+' box'+(a.bananen>1?'es':'')+' of bananas');
+  const t=a.voorraad_tekst||a.tekst; if(t)d.push(t);
+  return d.join(', ');
+}
+// De pin per terminal (markten zonder myPOS-koppeling, zoals Liverpool)
+function mgrClPinRegels(){
+  const D=MGR_CL_D||{}; const r=[];
+  (D.terminals||[]).forEach(t=>{ const v=MGR_CL.pin[t]; r.push({tid:t,omzet:v==null?'':String(v)}); });
+  MGR_CL.pinNieuw.forEach(x=>{ if((x.tid||'').trim())r.push({tid:x.tid.trim(),omzet:String(x.omzet||'')}); });
+  return r;
+}
+function mgrClPinGetal(v){ const t=String(v==null?'':v).trim().replace(/[£€\s]/g,''); if(t==='')return null;
+  const n=Number(/^\d+,\d{1,2}$/.test(t)?t.replace(',','.'):t.replace(/,/g,'')); return Number.isFinite(n)?n:NaN; }
+// Status van de eigen voorraadaanvragen (Waiting / Sorted)
+function mgrVrStatusHtml(){
+  if(!MGR_VR_STATUS.length)return '';
+  return `<div class="mcr-kaart"><div class="mcr-kop">Stock you asked for</div>${MGR_VR_STATUS.map(x=>`
+    <div style="padding:9px 0;border-top:1px solid #EFEDE7">
+      <div style="font-size:13px;font-weight:600">${veiligTekst(mgrDagNaam(x.datum))} &middot; ${veiligTekst(x.kraam)}</div>
+      <div style="font-size:13px;margin-top:2px">${veiligTekst(mgrVrTekst(x))}</div>
+      ${x.geregeld_op
+        ?`<div style="font-size:12.5px;color:#0B5E3E;background:#E6F4EE;border-radius:8px;padding:6px 9px;margin-top:5px"><b>&#10003; Sorted</b> by ${veiligTekst(x.geregeld_door||'?')} &middot; ${veiligTekst(mgrKlok(x.geregeld_op))}${x.notitie?'<br>&ldquo;'+veiligTekst(x.notitie)+'&rdquo;':''}</div>`
+        :`<div style="font-size:12.5px;color:#6B4105;background:#FEF3DF;border-radius:8px;padding:6px 9px;margin-top:5px"><b>Waiting</b>${x.notitie?' &middot; &ldquo;'+veiligTekst(x.notitie)+'&rdquo;':''}</div>`}
+    </div>`).join('')}</div>`;
+}
+async function mgrVrStatusLaden(){
+  try{ const{data}=await sb.rpc('mgr_voorraad_status'); MGR_VR_STATUS=Array.isArray(data)?data:[]; }catch(e){ MGR_VR_STATUS=[]; }
+}
 function mgrClKies(kraam,datum){
   if(MGR_CL.kraam!==kraam||MGR_CL.datum!==datum)mgrClReset();
   MGR_CL.kraam=kraam; MGR_CL.datum=datum; mcrGa('close');
@@ -11996,7 +12480,7 @@ async function mcrSluitDag(){
       +`<div style="text-align:center">${mgrKn('All hours this week ›',"mcrGa('stall')")}</div>`;
     return;
   }
-  const{data,error}=await sb.rpc('mgr_afsluiting',{p_kraam:MGR_CL.kraam,p_datum:MGR_CL.datum});
+  const[{data,error}]=await Promise.all([sb.rpc('mgr_afsluiting',{p_kraam:MGR_CL.kraam,p_datum:MGR_CL.datum}),mgrVrStatusLaden()]);
   if(error)throw error;
   MGR_CL_D=data||{};
   mgrClTeken();
@@ -12084,10 +12568,11 @@ function mgrClTeken(){
       <div style="font-size:12.5px;color:#6B6A66;margin-top:3px">${veiligTekst(mgrDagNaam(D.datum,true))} &middot; ${veiligTekst(mgrKlok(a.op))} by ${veiligTekst(a.door||'?')}</div></div>
       <div class="mcr-kaart"><div class="mcr-kop">Checklist</div>
       <div style="font-size:13px;line-height:1.8">Cleaning list: ${a.schoonmaak?'done':'<span style="color:#B45309">not done</span>'}<br>Gas: off<br>
-        Stock: ${a.voorraad_nodig?veiligTekst([...(a.voorraad||[]),a.voorraad_tekst||''].filter(Boolean).join(', ')):'nothing needed'}</div></div>
+        Stock: ${a.voorraad_nodig?veiligTekst(mgrVrTekst(a)):'nothing needed'}${a.voorraad_nodig?(a.geregeld_op?' <span style="color:#0F7A52">&middot; &#10003; sorted by '+veiligTekst(a.geregeld_door||'?')+'</span>':' <span style="color:#B45309">&middot; waiting</span>'):''}
+        ${a.notitie?'<br><span style="color:#6B6A66">&ldquo;'+veiligTekst(a.notitie)+'&rdquo;</span>':''}</div></div>
       <div class="mcr-kaart" style="padding:2px 15px"><div class="mcr-kop" style="margin-top:12px">Hours</div>${mensen.map(mgrClPersoon).join('')}</div>
       <div style="font-size:12.5px;color:#6B6A66;text-align:center;margin:4px 0 14px">Need to change something? Ask Bram to reopen the day.</div>`;
-    document.getElementById('mcrMain').innerHTML=uit; return;
+    document.getElementById('mcrMain').innerHTML=uit+mgrVrStatusHtml(); return;
   }
   if(D.toekomst||!mensen.length){
     uit+=mcrLeeg(D.toekomst?'You can close this day once it has started.':'Nobody worked at this stall that day.');
@@ -12140,6 +12625,27 @@ function mgrClTeken(){
       ${MGR_CL.voorraad?`<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">${MGR_VOORRAAD.map(s=>{const aan=!!MGR_CL.items[s];
         return `<button onclick="MGR_CL.items['${veiligJs(s)}']=!MGR_CL.items['${veiligJs(s)}'];mgrClTeken()" style="font-family:var(--font);font-size:12.5px;padding:6px 10px;border-radius:18px;cursor:pointer;border:1px solid ${aan?'#1A1917':'#D9D7D0'};background:${aan?'#1A1917':'#fff'};color:${aan?'#fff':'#1A1917'}">${veiligTekst(s)}</button>`;}).join('')}</div>
         <input class="mcr-veld" maxlength="300" placeholder="How much, or anything else" value="${veiligTekst(MGR_CL.tekst)}" oninput="MGR_CL.tekst=this.value" style="margin-top:8px;padding:10px 12px;font-size:14px">`:''}</div>`;
+    // Gas, en waar fruit verkocht wordt aardbeien en bananen: hoeveel is er nodig? (0 = niets)
+    const aantal=(k,l,eenheid)=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 0;border-top:1px solid #EFEDE7">
+      <span style="font-size:14px">${l}<br><span style="font-size:12px;color:#6B6A66">${eenheid} &middot; 0 = none</span></span>
+      <input class="mcr-veld" type="number" inputmode="numeric" min="0" max="99" step="1" placeholder="0" value="${veiligTekst(MGR_CL[k])}"
+        oninput="MGR_CL.${k}=this.value" style="width:82px;text-align:center;padding:10px;font-size:16px"></div>`;
+    uit+=`<div class="mcr-kaart" style="padding:2px 15px 12px"><div class="mcr-kop" style="margin-top:12px">For tomorrow</div>
+      ${aantal('gasN','Gas bottles needed','bottles')}
+      ${D.vraag_fruit?aantal('aard','Strawberries needed','boxes')+aantal('ban','Bananas needed','boxes'):''}</div>`;
+    if(D.pin_handmatig){
+      const rg=mgrClPinRegels();
+      uit+=`<div class="mcr-kaart" style="padding:2px 15px 12px"><div class="mcr-kop" style="margin-top:12px">Card payments today</div>
+        <div style="font-size:12.5px;color:#6B6A66;margin-bottom:4px">The total on the end-of-day receipt of each card machine.</div>
+        ${(D.terminals||[]).map(t=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 0;border-top:1px solid #EFEDE7">
+          <span style="font-size:14px">${veiligTekst(t)}</span>
+          <input class="mcr-veld" inputmode="decimal" placeholder="0.00" value="${veiligTekst(MGR_CL.pin[t]==null?'':MGR_CL.pin[t])}"
+            oninput="MGR_CL.pin['${veiligJs(t)}']=this.value" style="width:120px;text-align:right;padding:10px;font-size:16px"></div>`).join('')}
+        ${MGR_CL.pinNieuw.map((x,i)=>`<div style="display:flex;gap:8px;align-items:center;padding:9px 0;border-top:1px solid #EFEDE7">
+          <input class="mcr-veld" maxlength="40" placeholder="Machine name or number" value="${veiligTekst(x.tid||'')}" oninput="MGR_CL.pinNieuw[${i}].tid=this.value" style="flex:1;padding:10px;font-size:14px">
+          <input class="mcr-veld" inputmode="decimal" placeholder="0.00" value="${veiligTekst(x.omzet||'')}" oninput="MGR_CL.pinNieuw[${i}].omzet=this.value" style="width:110px;text-align:right;padding:10px;font-size:16px"></div>`).join('')}
+        <button class="mcr-linkje" style="margin-top:8px" onclick="MGR_CL.pinNieuw.push({tid:'',omzet:''});mgrClTeken()">+ ${rg.length?'another card machine':'add a card machine'}</button></div>`;
+    }
   }
   if(MGR_CL.stap===4){
     const items=Object.keys(MGR_CL.items).filter(k=>MGR_CL.items[k]);
@@ -12148,7 +12654,8 @@ function mgrClTeken(){
         <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Hours</b><br>${mensen.map(p=>`${veiligTekst(p.naam.split(' ')[0])} <span style="color:#6B6A66">${veiligTekst(MGR_UITKOMST[p.controle]+(p.controle==='te_laat'?' '+p.controle_min+' min':''))}</span>`).join(' &middot; ')}</div>
         <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Ratings</b><br>${mensen.map(p=>`${veiligTekst(p.naam.split(' ')[0])} <span style="color:#6B6A66">${veiligTekst(mgrOordeel(p.beoordeling))}</span>`).join(' &middot; ')}</div>
         <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Stall</b><br>Cleaning list ${MGR_CL.schoon?'done':'<span style="color:#B45309">not done</span>'} &middot; Gas off</div>
-        <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Stock</b><br>${MGR_CL.voorraad?veiligTekst([...items,MGR_CL.tekst.trim()].filter(Boolean).join(', ')):'Nothing needed'}</div>
+        <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Stock</b><br>${(MGR_CL.voorraad||mgrClExtra().length)?veiligTekst([...(MGR_CL.voorraad?items:[]),...mgrClExtra(),MGR_CL.voorraad?MGR_CL.tekst.trim():''].filter(Boolean).join(', ')):'Nothing needed'}</div>
+        ${(MGR_CL_D||{}).pin_handmatig?`<div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Card payments</b><br>${mgrClPinRegels().map(r=>veiligTekst(r.tid)+' <b>'+veiligTekst(valSym()+' '+(mgrClPinGetal(r.omzet)||0).toFixed(2))+'</b>').join(' &middot; ')}</div>`:''}
       </div></div>`;
   }
   uit+=fout+`<div style="display:flex;gap:8px;margin:10px 0 6px">${MGR_CL.stap>1?`<button class="mcr-knop licht" style="flex:1" onclick="MGR_CL.stap--;MGR_CL.fout='';mgrClTeken()">Back</button>`:''}
@@ -12265,15 +12772,25 @@ async function mgrClVerder(){
   if(MGR_CL.stap===3){
     if(MGR_CL.schoon===null||MGR_CL.gas===null||MGR_CL.voorraad===null){ MGR_CL.fout='Answer all three.'; return mgrClTeken(); }
     if(MGR_CL.gas===false){ MGR_CL.fout='Turn the gas off before you close the day.'; return mgrClTeken(); }
-    if(MGR_CL.voorraad&&!Object.values(MGR_CL.items).some(Boolean)&&!MGR_CL.tekst.trim()){ MGR_CL.fout='Tell Bram which stock you need.'; return mgrClTeken(); }
+    if(MGR_CL.voorraad&&!Object.values(MGR_CL.items).some(Boolean)&&!MGR_CL.tekst.trim()){ MGR_CL.fout='Tell us which stock you need.'; return mgrClTeken(); }
+    for(const k of ['gasN','aard','ban']){ const v=String(MGR_CL[k]||'').trim(); if(v!==''&&!/^\d{1,2}$/.test(v)){ MGR_CL.fout='Use whole numbers for gas, strawberries and bananas.'; return mgrClTeken(); } }
+    if(D.pin_handmatig){
+      const rg=mgrClPinRegels();
+      if(!rg.length){ MGR_CL.fout='Add the card payment total of each card machine.'; return mgrClTeken(); }
+      const leeg=rg.filter(r=>{ const n=mgrClPinGetal(r.omzet); return n==null||Number.isNaN(n)||n<0; });
+      if(leeg.length){ MGR_CL.fout='Fill in the card total for: '+leeg.map(r=>r.tid).join(', ')+'. Use 0 if a machine was not used.'; return mgrClTeken(); }
+    }
     MGR_CL.stap=4; return mgrClTeken();
   }
   if(MGR_CL.stap===4){
     if(kn){kn.disabled=true;kn.textContent='Closing…';}
     try{
       const items=Object.keys(MGR_CL.items).filter(k=>MGR_CL.items[k]);
+      const D=MGR_CL_D||{};
       const{error}=await sb.rpc('mgr_dag_afsluiten',{p_kraam:MGR_CL.kraam,p_datum:MGR_CL.datum,p_schoonmaak:MGR_CL.schoon,
-        p_gas:MGR_CL.gas,p_voorraad:MGR_CL.voorraad,p_items:MGR_CL.voorraad?items:[],p_tekst:MGR_CL.voorraad?MGR_CL.tekst:null});
+        p_gas:MGR_CL.gas,p_voorraad:MGR_CL.voorraad,p_items:MGR_CL.voorraad?items:[],p_tekst:MGR_CL.voorraad?MGR_CL.tekst:null,
+        p_gas_flessen:mgrClAantal(MGR_CL.gasN),p_aardbeien:D.vraag_fruit?mgrClAantal(MGR_CL.aard):0,p_bananen:D.vraag_fruit?mgrClAantal(MGR_CL.ban):0,
+        p_pin:D.pin_handmatig?mgrClPinRegels().map(r=>({tid:r.tid,omzet:mgrClPinGetal(r.omzet)})):null});
       if(error)throw error;
       mgrClReset(); toast('Day closed. Bram has been notified.');
       await mcrSluitDag();
@@ -12383,10 +12900,11 @@ async function mcrProfiel(){
     <input class="mcr-veld" id="${id}" type="${type||'text'}" value="${veiligTekst(waarde||'')}" placeholder="${veiligTekst(ph||'')}">
     ${hint?`<div style="font-size:11.5px;color:#8A8984;margin-top:4px;line-height:1.45">${hint}</div>`:''}`;
 
-  const bank = (g.iban||'').trim() && (g.bank_account||'').trim();
+  const uk = marktUK();
+  const bank = (g.iban||'').trim() && (!uk || (g.bank_account||'').trim());
   document.getElementById('mcrMain').innerHTML=`
     ${!bank?`<div class="mcr-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
-      <div style="font-size:12.5px;color:#8A5307;line-height:1.6"><b>Add your IBAN and account number.</b> Without both your invoice cannot be paid, and it moves to the next payment round.</div>
+      <div style="font-size:12.5px;color:#8A5307;line-height:1.6">${uk?'<b>Add your IBAN and account number.</b> Without both your invoice cannot be paid, and it moves to the next payment round.':'<b>Add your IBAN.</b> Without it your invoice cannot be paid, and it moves to the next payment round.'}</div>
     </div>`:''}
     ${g.goedgekeurd===false?`<div class="mcr-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
       <div style="font-size:14px;font-weight:700;color:#8A5307">Waiting for approval</div>
@@ -12410,9 +12928,9 @@ async function mcrProfiel(){
     <div class="mcr-kaart">
       <div class="mcr-kop">Getting paid</div>
       ${veld('mcrPIban','IBAN',g.iban,'text','GB29 NWBK 6016 1331 9268 19','Required.')}
-      ${veld('mcrPBank','Account number',g.bank_account,'text','31926819','Required. Both the IBAN and the account number are needed before you can be paid.')}
-      ${veld('mcrPSort','Sort code &mdash; <span style="font-weight:500;color:#8A8984">optional</span>',g.sort_code,'text','60-16-13')}
-      ${veld('mcrPUtr','UTR number &mdash; <span style="font-weight:500;color:#8A8984">optional</span>',g.utr,'text','1234567890','Your own tax affairs. Add it if you want it on your invoice.')}
+      ${uk?veld('mcrPBank','Account number',g.bank_account,'text','31926819','Required. Both the IBAN and the account number are needed before you can be paid.'):''}
+      ${uk?veld('mcrPSort','Sort code &mdash; <span style="font-weight:500;color:#8A8984">optional</span>',g.sort_code,'text','60-16-13'):''}
+      ${uk?veld('mcrPUtr','UTR number &mdash; <span style="font-weight:500;color:#8A8984">optional</span>',g.utr,'text','1234567890','Your own tax affairs. Add it if you want it on your invoice.'):''}
     </div>
 
     <div class="mcr-kaart">
@@ -12436,6 +12954,14 @@ async function mcrProfiel(){
       <div class="mcr-kop">Your data</div>
       <div style="font-size:12.5px;color:#6B6A66;line-height:1.6">The app records when you work, your hours and where you clocked in — by the tag at the stall, never by your phone's location. What we keep, for how long, and your rights:</div>
       <button class="mcr-knop licht" style="margin-top:10px" onclick="openPrivacy('en')">Read the privacy policy</button>
+    </div>
+
+    <div class="mcr-kaart" style="margin-top:14px">
+      <div class="mcr-kop">Language</div>
+      <div class="notr" style="display:flex;gap:8px;margin-top:6px">
+        <button class="mcr-knop${TAAL==='en'?'':' licht'}" style="flex:1" onclick="kiesTaal('en')">English</button>
+        <button class="mcr-knop${TAAL==='nl'?'':' licht'}" style="flex:1" onclick="kiesTaal('nl')">Nederlands</button>
+      </div>
     </div>
 
     <button class="mcr-knop licht" style="margin-top:12px" onclick="doLogout()">Sign out</button>`;
@@ -12473,20 +12999,59 @@ let TWEEDE_VESTIGING = null;
 let PLANT_VESTIGING = null;
 let PLANNER_MODUS = false;
 // De markten: alles behalve Nederland. Zelfde app, eigen personeel, eigen kramen.
-const MARKT_NAMEN = {MCR:'Manchester', LPL:'Liverpool'};
-const MARKT_TITELS = {MCR:'Manchester Christmas Markets', LPL:'Liverpool Christmas Market'};
+const MARKT_NAMEN = {MCR:'Manchester', LPL:'Liverpool', PAR:'Paris'};
+const MARKT_TITELS = {MCR:'Manchester Christmas Markets', LPL:'Liverpool Christmas Market', PAR:'Paris Christmas Market'};
+// Per markt: munt, tijdzone, contant geld, Britse bankgegevens.
+const MARKT_VALUTA = {MCR:'GBP', LPL:'GBP', PAR:'EUR'};
+const MARKT_TZ = {MCR:'Europe/London', LPL:'Europe/London', PAR:'Europe/Paris'};
+const MARKT_CONTANT = {MCR:true, LPL:false, PAR:true};
+function marktValuta(v){ return MARKT_VALUTA[v||dezeMarkt()]||'GBP'; }
+function valSym(v){ return marktValuta(v)==='EUR'?'€':'£'; }
+function mktTz(v){ return MARKT_TZ[v||dezeMarkt()]||'Europe/London'; }
+function marktUK(v){ return marktValuta(v)==='GBP'; }
 function isMarkt(v){ return !!v && v!=='NL' && v!=='*'; }
+// In Parijs: alle bedragen in euro's en tijden in Franse tijd. De schermen zijn
+// voor Manchester geschreven (£, "Britse tijd"); dit zet ze om, ook wat later
+// verschijnt. Knoppen die bewust £ tonen hebben de klasse notr.
+const PAR_VERVANG=[[/£/g,'€'],[/Britse tijd/g,'Franse tijd'],[/\bUK time\b/g,'Paris time'],[/\bBritish time\b/g,'Paris time'],
+                   [/\bLondon time\b/g,'Paris time']];
+function parT(v){ let t=v; for(const [re,n] of PAR_VERVANG)t=t.replace(re,n); return t; }
+function parKnoop(n){
+  if(!n)return;
+  if(n.nodeType===3){ const p=n.parentNode; if(p&&p.closest&&p.closest('.notr,script,style,textarea'))return;
+    const t=parT(n.nodeValue); if(t!==n.nodeValue)n.nodeValue=t; return; }
+  if(n.nodeType!==1||(n.closest&&n.closest('.notr,script,style,textarea')))return;
+  ['placeholder','title'].forEach(a=>{ const v=n.getAttribute(a); if(v){ const t=parT(v); if(t!==v)n.setAttribute(a,t); } });
+  const w=document.createTreeWalker(n,NodeFilter.SHOW_TEXT|NodeFilter.SHOW_ELEMENT,{acceptNode:x=>
+    (x.nodeType===1&&x.matches&&x.matches('.notr,script,style,textarea'))?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT});
+  let x; while((x=w.nextNode())){
+    if(x.nodeType===3){ const t=parT(x.nodeValue); if(t!==x.nodeValue)x.nodeValue=t; }
+    else ['placeholder','title'].forEach(a=>{ const v=x.getAttribute(a); if(v){ const t=parT(v); if(t!==v)x.setAttribute(a,t); } });
+  }
+}
+let PAR_AAN=false;
+function parStart(){
+  if(PAR_AAN)return; PAR_AAN=true;
+  ['alert','confirm','prompt'].forEach(f=>{ const org=window[f]; if(!org)return;
+    window[f]=function(msg,...rest){ return org.call(window,typeof msg==='string'?parT(msg):msg,...rest); }; });
+  parKnoop(document.body);
+  new MutationObserver(l=>{ for(const m of l){
+    if(m.type==='characterData')parKnoop(m.target);
+    else if(m.type==='attributes')parKnoop(m.target);
+    else m.addedNodes.forEach(parKnoop);
+  } }).observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:['placeholder','title']});
+}
 function marktNaam(v){ return MARKT_NAMEN[v]||v||''; }
 function marktTitel(v){ return MARKT_TITELS[v]||((MARKT_NAMEN[v]||v||'')+' Christmas Market'); }
 // De markt waar dit scherm nu over gaat (crew en beheer).
 function dezeMarkt(){ return isMarkt(ACTIEVE_VESTIGING)?ACTIEVE_VESTIGING:(isMarkt(MIJN_VESTIGING)?MIJN_VESTIGING:'MCR'); }
-function londenVandaag(){ return new Date().toLocaleDateString('en-CA',{timeZone:'Europe/London'}); }
+function londenVandaag(){ return new Date().toLocaleDateString('en-CA',{timeZone:mktTz()}); }
 let VESTIGINGEN = [];
 let HUISREGELS = null;
 let HUISREGELS_AKKOORD = false;
 
 const AUTH_EN = {
-  authLogo:      {html:'TC Group <span>/ Manchester</span>'},
+  authLogo:      {html:'TC Group <span>/ Planning</span>'},
   authSub:       {tekst:'Sign in or create an account'},
   tabLogin:      {tekst:'Sign in'},
   tabRegister:   {tekst:'Create account'},
@@ -12498,7 +13063,7 @@ const AUTH_EN = {
   lblForgotEmail:{tekst:'Email'},
   btnForgot:     {tekst:'Send me a reset link'},
   lnkTerugLogin: {tekst:'Back to sign in'},
-  wachtLogo:     {html:'TC Group <span>/ Manchester</span>'},
+  wachtLogo:     {html:'TC Group <span>/ Planning</span>'},
   wachtKop:      {tekst:'Waiting for approval'},
   wachtUitleg:   {tekst:'Your account is in. Bram still has to set your stall and your rate; after that everything opens up. It usually takes less than a day.'},
   wachtHerlaad:  {tekst:'Check again'},
@@ -12522,33 +13087,38 @@ function bewaarNederlandseTeksten(){
   });
 }
 
+// Registreren begint met de plek: Nederland, Manchester, Liverpool of Parijs.
+// Daarna het formulier dat daarbij hoort (bank en contract verschillen).
+let REG_PLEK_GEKOZEN=false;
 function kiesIngang(code){
   INGANG = isMarkt(code) ? code : 'NL';
+  REG_PLEK_GEKOZEN=true;
   try{ localStorage.setItem('tc_ingang', INGANG); }catch(e){}
   pasIngangToe();
-  switchAuthTab('login');
+  switchAuthTab('register');
 }
 
 function pasIngangToe(){
   bewaarNederlandseTeksten();
-  const eng = isMarkt(INGANG);
-  const tk=document.querySelector('#authTaal'); if(tk){ tk.style.display=eng?'none':''; const b=tk.querySelector('button'); if(b)b.textContent=TAAL==='en'?'Nederlands':'English'; }
+  const eng = TAAL==='en';
+  const tk=document.querySelector('#authTaal'); if(tk){ tk.style.display=''; const b=tk.querySelector('button'); if(b)b.textContent=TAAL==='en'?'Nederlands':'English'; }
   document.querySelectorAll('#ingangKeuze button').forEach(b=>{
-    b.classList.toggle('active', b.getAttribute('data-ingang')===INGANG);
+    b.classList.toggle('active', REG_PLEK_GEKOZEN && b.getAttribute('data-ingang')===INGANG);
+    if(b.getAttribute('data-ingang')==='NL')b.textContent=eng?'Netherlands':'Nederland';
+    if(b.getAttribute('data-ingang')==='PAR')b.textContent=eng?'Paris':'Parijs';
   });
+  const pk=document.getElementById('regPlekKop'); if(pk)pk.textContent=eng?'Where will you work?':'Waar ga je werken?';
   const bron = eng ? AUTH_EN : AUTH_NL_ORIGINEEL;
   Object.keys(AUTH_EN).forEach(id=>{
     const el=document.getElementById(id); if(!el||!bron[id])return;
-    if(bron[id].html!==undefined) el.innerHTML=eng?bron[id].html.replace('Manchester',marktNaam(INGANG)):bron[id].html;
-    else el.textContent=eng?String(bron[id].tekst).replace('Manchester',marktNaam(INGANG)):bron[id].tekst;
+    if(bron[id].html!==undefined) el.innerHTML=bron[id].html;
+    else el.textContent=bron[id].tekst;
   });
   Object.keys(AUTH_PLAATS_EN).forEach(id=>{
     const el=document.getElementById(id); if(!el)return;
     el.setAttribute('placeholder', eng?AUTH_PLAATS_EN[id]:(AUTH_NL_ORIGINEEL._plaats[id]||''));
   });
-  // Inloggen met Apple zet geen vestiging, dus die ingang laten we hier weg.
-  const ap=document.getElementById('appleLoginKnop'); if(ap)ap.style.display=eng?'none':'';
-  const sch=document.getElementById('appleScheiding'); if(sch&&eng)sch.style.display='none';
+  const ap=document.getElementById('appleLoginKnop'); if(ap)ap.style.display='';
 }
 
 // ─── Huisregels ────────────────────────────────────────────────────
@@ -12676,7 +13246,7 @@ async function doRegisterMCR(){
   if(data.user){
     // Geen contractvorm meesturen: die mag alleen een beheerder zetten, en de
     // database vult 'zzp' zelf in zodra de vestiging op Manchester staat.
-    const extra={telefoon,geboortedatum:geb,vestiging:(isMarkt(INGANG)?INGANG:'MCR'),aangebracht_door:via||null};
+    const extra={telefoon,geboortedatum:geb,vestiging:(isMarkt(INGANG)?INGANG:'MCR'),aangebracht_door:via||null,taal:TAAL};
     let gelukt=false, zetFout=null;
     for(let poging=0;poging<5&&!gelukt;poging++){
       const{data:rij}=await sb.from('gebruikers').select('id').eq('id',data.user.id);
@@ -12720,9 +13290,7 @@ function zetVestigingSwitch(){
   }).join('')
   // Planner: naar de app van de kraammanager (inklokken, dagafsluiting).
   +(PLANNER_MODUS?`<button type="button" onclick="planModus('app')" title="Open the stall manager app">Kraam-app</button>`:'')
-  // Bram: het marktbeheer bekijken zoals de planner het ziet (Engels).
-  +(CURRENT_ROL==='beheerder'&&isMarkt(ACTIEVE_VESTIGING)
-     ?`<button type="button" class="notr" onclick="mbEnVoorbeeld(${MB_EN?'false':'true'})" title="${MB_EN?'Terug naar Nederlands':'Bekijk het beheer zoals de planner het ziet'}">${MB_EN?'Nederlands':'English'}</button>`:'');
+  ;
   el.style.display='flex';
 }
 // Tussen welke vestigingen mag deze gebruiker wisselen?
@@ -12771,7 +13339,7 @@ async function wisselVestiging(code){
 // Het scherm zelf zet pasIngangToe() om; dit zijn de meldingen die er
 // onderweg bij komen (fout in het rood, bevestiging in het groen).
 let AUTH_EN_GEFORCEERD=false;   // nieuw-wachtwoordscherm van een Manchester-account
-function authEn(){ return AUTH_EN_GEFORCEERD || isMarkt(INGANG) || TAAL==='en'; }
+function authEn(){ return AUTH_EN_GEFORCEERD || TAAL==='en'; }
 function authTekst(nl,en){ return authEn()?en:nl; }
 // Supabase geeft Engelse vaktaal terug ("Invalid login credentials"). Hier
 // maken we er een gewone zin van, in de taal van het scherm.
@@ -12812,8 +13380,9 @@ function switchAuthTab(tab){
   const nl=document.getElementById('registerForm');
   const en=document.getElementById('registerFormMCR');
   const toonReg=(tab==='register');
-  if(nl)nl.style.display=(toonReg&&!isMarkt(INGANG))?'':'none';
-  if(en)en.style.display=(toonReg&&isMarkt(INGANG))?'':'none';
+  const plek=document.getElementById('regPlek'); if(plek)plek.style.display=toonReg?'':'none';
+  if(nl)nl.style.display=(toonReg&&REG_PLEK_GEKOZEN&&!isMarkt(INGANG))?'':'none';
+  if(en)en.style.display=(toonReg&&REG_PLEK_GEKOZEN&&isMarkt(INGANG))?'':'none';
   document.getElementById('authErr').style.display='none';
   document.getElementById('authMsg').style.display='none';
 }
@@ -13046,7 +13615,7 @@ async function doRegister(){
     // De database-trigger maakt de gebruikers-rij al aan (id, naam, email, rol).
     // Wij vullen hier de extra registratievelden aan. Korte retry omdat de
     // trigger soms net iets later klaar is dan deze code.
-    const extra={telefoon,shirtmaat:maat,rijbewijs,personeel_id};
+    const extra={telefoon,shirtmaat:maat,rijbewijs,personeel_id,taal:TAAL};
     let gelukt=false;
     for(let poging=0;poging<5&&!gelukt;poging++){
       const{data:rij}=await sb.from('gebruikers').select('id').eq('id',data.user.id);
@@ -13483,7 +14052,7 @@ async function initApp(user){
       rol=r.rol||'part-timer';naam=r.naam||user.email;goedgekeurd=r.goedgekeurd;beheerRol=r.beheer_rol||null;
       gearchiveerd=r.gearchiveerd_op||null;
       MIJN_VESTIGING=r.vestiging||'NL';
-      if(!isMarkt(MIJN_VESTIGING))i18nNaInloggen(r.taal||null,user.id);
+      i18nNaInloggen(r.taal||null,user.id,isMarkt(MIJN_VESTIGING));
       MAG_ALLE_VESTIGINGEN=!!r.alle_vestigingen;
       // Tweede vestiging telt alleen tot en met tweede_tot (Britse datum).
       TWEEDE_VESTIGING=(r.tweede_vestiging&&(!r.tweede_tot||londenVandaag()<=r.tweede_tot))?r.tweede_vestiging:null;
@@ -13535,11 +14104,14 @@ async function initApp(user){
   PLANNER_MODUS = !WACHT_OP_GOEDKEURING && rol!=='beheerder' && !!PLANT_VESTIGING
     && ACTIEVE_VESTIGING===PLANT_VESTIGING
     && (function(){ try{ return localStorage.getItem('tc_planmodus')!=='app'; }catch(e){ return true; } })();
-  // Een planner (Andras) leest geen Nederlands: zijn beheerscherm is Engels.
-  // Bram kan op een markt hetzelfde zien met de knop "English" bovenin.
-  if(PLANNER_MODUS || (rol==='beheerder' && isMarkt(ACTIEVE_VESTIGING)
-     && (function(){ try{ return localStorage.getItem('tc_mb_en')==='1'; }catch(e){ return false; } })()))
-    mbEnAan();
+  // Taal: iedereen kiest zelf (profiel of bij het registreren). Engels op een
+  // markt: ook het marktbeheer in het Engels. Nederlands op een markt: de
+  // personeelsapp in het Nederlands.
+  if(TAAL==='en' && (PLANNER_MODUS || isMarkt(ACTIEVE_VESTIGING))) mbEnAan();
+  if(TAAL==='nl' && (isMarkt(MIJN_VESTIGING) || isMarkt(ACTIEVE_VESTIGING))) crewNlStart(true);
+  // Markt: tijdzone en munt; Parijs in euro's en Franse tijd.
+  if(isMarkt(dezeMarkt())){ MB_TZ=mktTz(); MB_KOST_VAL=marktValuta(); }
+  if(dezeMarkt()==='PAR' && (isMarkt(MIJN_VESTIGING)||isMarkt(ACTIEVE_VESTIGING))) parStart();
   zetVestigingSwitch();
   if(isMarkt(MIJN_VESTIGING) && rol!=='beheerder' && !PLANNER_MODUS){
     return mcrStart();
