@@ -4277,7 +4277,7 @@ const CREW_NL={
 'Nothing to close: no stall had people on the rota in the last week.':'Niets af te sluiten: de afgelopen week stond bij geen kraam iemand ingeroosterd.',
 'All hours this week ›':'Alle uren deze week ›','Not on the rota':'Niet ingeroosterd','to check':'te controleren','Finished at':'Gestopt om','Break (min)':'Pauze (min)',
 'Still clocked in. Fill in when they finished.':'Nog ingeklokt. Vul in wanneer diegene stopte.','min after the shift started.':'min na de start van de dienst.',
-'Looks right':'Klopt','Change break or time':'Pauze of tijd wijzigen','Never clocked in.':'Nooit ingeklokt.','Sent home / not needed':'Naar huis gestuurd / niet nodig',
+'Looks right':'Klopt','Change break or time':'Pauze of tijd wijzigen','change break or time':'pauze of tijd wijzigen','Never clocked in.':'Nooit ingeklokt.','Sent home / not needed':'Naar huis gestuurd / niet nodig',
 'Worked – add hours':'Gewerkt – uren toevoegen','No uniform registered yet · hand out ›':'Nog geen kleding geregistreerd · uitdelen ›','Close the day':'Dag afsluiten',
 'not done':'niet gedaan','nothing needed':'niets nodig','· ✓ sorted by':'· ✓ geregeld door','· waiting':'· wacht','is closed':'is afgesloten','Checklist':'Checklist',
 'Cleaning list:':'Schoonmaaklijst:','Gas: off':'Gas: dicht','Need to change something? Ask Bram to reopen the day.':'Moet er iets anders? Vraag Bram de dag te heropenen.',
@@ -12533,11 +12533,17 @@ function mgrClPersoon(p){
   if(p.uren_id&&!p.uit){
     uit+=`<div style="font-size:12.5px;color:#B45309;margin-top:5px">Still clocked in. Fill in when they finished.</div>`+editor();
   }else if(klaar){
-    uit+=`<button class="mcr-linkje" style="margin-top:5px" onclick="MGR_CL.wijzig['${veiligJs(p.id)}']=true;mgrClTeken()">change</button>`;
+    // Ook na "te laat" of "klopt" kunnen eindtijd en pauze nog worden aangepast
+    // (tot Bram de uren goedkeurt); de controle blijft dan gewoon staan.
+    uit+=`<div style="display:flex;gap:14px;margin-top:5px;flex-wrap:wrap">
+      <button class="mcr-linkje" onclick="MGR_CL.wijzig['${veiligJs(p.id)}']=true;mgrClTeken()">change</button>
+      ${p.uren_id&&!MGR_CL.open[p.id]?`<button class="mcr-linkje" onclick="MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()">change break or time</button>`:''}</div>`;
+    if(p.uren_id&&MGR_CL.open[p.id])uit+=editor();
   }else if(p.uren_id){
     if(p.te_laat>0){
       uit+=`<div style="font-size:12.5px;color:#B45309;margin-top:5px">Clocked in ${p.te_laat} min after the shift started.</div>
-        <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${mgrKn(`Mark as late`,`mgrClZet('${veiligJs(p.id)}','te_laat')`)}${mgrKn('Not late',`mgrClZet('${veiligJs(p.id)}','niet_te_laat')`)}</div>`;
+        <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${mgrKn(`Mark as late`,`mgrClZet('${veiligJs(p.id)}','te_laat')`)}${mgrKn('Not late',`mgrClZet('${veiligJs(p.id)}','niet_te_laat')`)}
+          ${MGR_CL.open[p.id]?'':mgrKn('Change break or time',`MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()`)}</div>`;
     }else{
       uit+=`<div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${mgrKn('Looks right',`mgrClZet('${veiligJs(p.id)}','ok')`,true)}
         ${MGR_CL.open[p.id]?'':mgrKn('Change break or time',`MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()`)}</div>`;
