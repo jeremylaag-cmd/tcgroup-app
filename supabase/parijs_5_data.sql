@@ -41,7 +41,8 @@ insert into public.vestiging_instellingen (vestiging, sleutel, waarde, omschrijv
   ('PAR', 'contant',      'ja',     'Wordt er contant betaald? nee = geen kasvelden in dagrapport en omzet', now()),
   ('PAR', 'pin_bron',     'mypos',  'myPOS = automatisch ophalen; handmatig = dagtotalen per terminal van de bon invullen', now()),
   ('PAR', 'afdracht_pct', '0',      'Percentage van de omzet dat naar de markt gaat', now()),
-  ('PAR', 'vraag_fruit',  'nee',    'Bij het afsluiten vragen hoeveel aardbeien en bananen er nodig zijn', now()),
+  ('PAR', 'vraag_fruit',  'ja',     'Bij het afsluiten vragen hoeveel aardbeien en bananen er nodig zijn', now()),
+  ('PAR', 'prijs_portie', '8.00',   null, now()),
   ('PAR', 'factuur_naam', 'The Creperie Group B.V.', null, now()),
   ('PAR', 'factuur_adres','Het Steenland 39, 3751 LA Bunschoten, Netherlands', null, now())
 on conflict (vestiging, sleutel) do update set waarde = excluded.waarde, bijgewerkt_op = now();
