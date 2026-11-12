@@ -12540,14 +12540,11 @@ function mgrClPersoon(p){
       ${p.uren_id&&!MGR_CL.open[p.id]?`<button class="mcr-linkje" onclick="MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()">change break or time</button>`:''}</div>`;
     if(p.uren_id&&MGR_CL.open[p.id])uit+=editor();
   }else if(p.uren_id){
-    if(p.te_laat>0){
-      uit+=`<div style="font-size:12.5px;color:#B45309;margin-top:5px">Clocked in ${p.te_laat} min after the shift started.</div>
-        <div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${mgrKn(`Mark as late`,`mgrClZet('${veiligJs(p.id)}','te_laat')`)}${mgrKn('Not late',`mgrClZet('${veiligJs(p.id)}','niet_te_laat')`)}
-          ${MGR_CL.open[p.id]?'':mgrKn('Change break or time',`MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()`)}</div>`;
-    }else{
-      uit+=`<div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${mgrKn('Looks right',`mgrClZet('${veiligJs(p.id)}','ok')`,true)}
-        ${MGR_CL.open[p.id]?'':mgrKn('Change break or time',`MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()`)}</div>`;
-    }
+    // Te laat ingeklokt: alleen ter info. De manager hoeft niets te kiezen,
+    // de uren tellen vanaf het inklokken en zijn gewoon aan te passen.
+    if(p.te_laat>0)uit+=`<div style="font-size:12.5px;color:#B45309;margin-top:5px">Clocked in ${p.te_laat} min after the shift started.</div>`;
+    uit+=`<div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${mgrKn('Looks right',`mgrClZet('${veiligJs(p.id)}','ok')`,true)}
+      ${MGR_CL.open[p.id]?'':mgrKn('Change break or time',`MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()`)}</div>`;
     if(MGR_CL.open[p.id])uit+=editor();
   }else{
     uit+=`<div style="font-size:12.5px;color:#B4472B;margin-top:5px">Never clocked in.</div>
