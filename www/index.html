@@ -1680,6 +1680,23 @@ textarea.crm-in{resize:vertical;line-height:1.5}
   </div>
 </div>
 
+<!-- Algemeen bericht van de beheerder. Geen kruisje: je kunt pas verder als je
+     het hebt gelezen (naar beneden gescrold en even gewacht). -->
+<div id="berichtOverlay" class="notr" style="display:none;position:fixed;inset:0;background:rgba(20,20,18,.72);z-index:9600;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:16px;max-width:560px;width:100%;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.3)">
+    <div style="padding:18px 20px 13px;border-bottom:1px solid #EFEDE7">
+      <div id="berichtLabel" style="font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#B45309"></div>
+      <div id="berichtTitel" style="font-size:19px;font-weight:700;margin-top:5px;color:#1A1917;line-height:1.3"></div>
+      <div id="berichtVan" style="font-size:12px;color:#8A8984;margin-top:4px"></div>
+    </div>
+    <div id="berichtTekst" style="padding:16px 20px;overflow:auto;font-size:15px;line-height:1.65;color:#1A1917"></div>
+    <div style="padding:12px 20px 16px;border-top:1px solid #EFEDE7">
+      <button class="auth-btn" style="margin:0" id="berichtKnop" onclick="berichtGelezen()"></button>
+      <div id="berichtUitleg" style="font-size:11.5px;color:#8A8984;text-align:center;margin-top:8px;line-height:1.5"></div>
+    </div>
+  </div>
+</div>
+
 <div class="auth-wrap" id="wachtWrap" style="display:none">
   <div class="auth-box">
     <div class="auth-logo" id="wachtLogo">TC Group <span>/ Planning</span></div>
@@ -3700,8 +3717,9 @@ async function i18nNaInloggen(serverTaal,uid,markt){
       if(uid){ const{error}=await sb.rpc('mijn_taal_zetten',{p_taal:taal});
         if(error)await sb.from('gebruikers').update({taal}).eq('id',uid); }
     }
-    if(taal!==TAAL){ localStorage.setItem('tc_taal',taal); location.reload(); }
+    if(taal!==TAAL){ localStorage.setItem('tc_taal',taal); location.reload(); return; }
   }catch(e){}
+  setTimeout(()=>berichtenCheck(true),1500);
 }
 async function zetKlusMeldingen(w){
   const{error}=await sb.from('gebruikers').update({meldingen_klussen:w}).eq('id',CURRENT_USER.id);
@@ -4340,6 +4358,8 @@ const CREW_NL_REGELS=[
 [/^(\d+) (shift|shifts)$/,(m,a,b)=>a+' '+(b==='shift'?'dienst':'diensten')],
 [/^(\d+) (place|places) left$/,(m,a,b)=>a+' '+(b==='place'?'plek':'plekken')+' over'],
 [/^Stock: (.*)$/,(m,a)=>'Voorraad: '+crewT(a)],
+[/^Your invoice for week (\d+) will be ready on (.+)\. Payment (.+)\.$/,(m,a,b,c)=>`Je factuur voor week ${a} staat klaar op ${b}. Uitbetaling ${c}.`],
+[/^Your invoice will be ready on (.+)\.$/,(m,a)=>`Je factuur staat klaar op ${a}.`],
 [/^(\d+) gas bottles?$/,(m,a)=>a+' gasfles'+(a==='1'?'':'sen')],
 [/^(\d+) box(?:es)? of strawberries$/,(m,a)=>a+(a==='1'?' doos':' dozen')+' aardbeien'],
 [/^(\d+) box(?:es)? of bananas$/,(m,a)=>a+(a==='1'?' doos':' dozen')+' bananen'],
@@ -4726,7 +4746,7 @@ let MB_DAG_KRAAM=null, MB_KRAMEN=null, MB_INST_DATA=null, MB_DAG_BEOORDEEL=[];
 const MB_WEEKDAGEN=['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
 const MB_TABS=[['overzicht','Overzicht'],['omzet','Omzet'],['shifts','Shifts'],['agenda','Agenda'],['uren','Uren'],['dagrapport','Dagrapport'],
                ['kas','Kassa'],['inlezen','Inlezen'],['cijfers','Cijfers'],['kosten','Kosten'],['bezetting','Bezetting'],
-               ['mensen','Mensen'],['huisregels','Huisregels'],['instellingen','Instellingen']];
+               ['mensen','Mensen'],['huisregels','Huisregels'],['berichten','Berichten'],['instellingen','Instellingen']];
 // Omzet en alles wat geld binnen laat zien: alleen Bram's account (zie
 // supabase/mcr_omzet_alleen_bram.sql, daar dwingt de database het af).
 const MB_OMZET_EIGENAAR='adb8bd40-f0b6-4aa2-a16d-a67932202c02';
@@ -4826,7 +4846,7 @@ function mbNaar(tab, knop){
   window.scrollTo(0,0);
   const f={overzicht:mbOverzicht,omzet:mbOmzet,shifts:mbShiftsPlannen,agenda:mbAgenda,uren:mbUren,dagrapport:mbDagrapport,
            inlezen:mbInlezen,cijfers:mbCijfers,kosten:mbKosten,bezetting:mbBezetting,mensen:mbMensen,kas:mbKas,
-           huisregels:mbHuisregels,instellingen:mbInstellingen}[tab];
+           huisregels:mbHuisregels,berichten:mbBerichten,instellingen:mbInstellingen}[tab];
   if(f)f().catch(e=>{console.error(e);el.innerHTML=
     `<div class="mb-kaart">Dit scherm kon niet geladen worden.<br><span style="color:var(--muted);font-size:12.5px">${veiligTekst(mbFout(e))}</span></div>`;});
 }
@@ -5056,6 +5076,120 @@ async function mbOverzicht(){
 // ── Huisregels (Bram) ─────────────────────────────────────────────
 // Bram: "ik zelf kan ze volgens mij niet snel erbij pakken". De actieve versie,
 // wie er akkoord op gaf en wie nog niet, en de tekst zoals het personeel hem ziet.
+// ── BERICHTEN ─────────────────────────────────────────────────────
+// Een algemeen bericht aan iedereen in een of meer markten (alleen beheerder).
+// Zie berichtenCheck(): het bericht staat schermvullend in beeld tot het gelezen is.
+let MB_BER_OPEN=null;
+const MB_BER_MARKTEN=[['NL','Nederland'],['MCR','Manchester'],['LPL','Liverpool'],['PAR','Parijs']];
+async function mbBerichten(){
+  const{data,error}=await sb.rpc('berichten_overzicht');
+  if(error)throw error;
+  const lijst=data||[];
+  const mNaam=c=>(MB_BER_MARKTEN.find(x=>x[0]===c)||[c,c])[1];
+  let uit=mbKop('Berichten','Een bericht aan iedereen in een of meer markten');
+  uit+=`<div class="mb-kaart">
+    <div class="mb-kop">Nieuw bericht</div>
+    <div style="font-size:12.5px;color:var(--muted);line-height:1.6;margin:2px 0 12px">Iedereen krijgt een pushmelding. Bij het openen van de app staat het bericht
+      schermvullend in beeld, zonder kruisje: ze kunnen pas verder als ze helemaal naar beneden hebben gescrold, de leestijd voorbij is
+      en ze op <i>Ik heb het gelezen</i> tikken. Hieronder zie je per bericht wie het gelezen heeft.</div>
+    <label class="mb-lab">Naar</label>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;margin:5px 0 14px">${MB_BER_MARKTEN.map(([c,n])=>
+      `<label style="display:flex;gap:6px;align-items:center;font-size:14px;cursor:pointer"><input type="checkbox" class="mbBerV" value="${c}"${c===dezeMarkt()?' checked':''}> ${n}</label>`).join('')}</div>
+    <div class="mb-rij2">
+      <div style="flex:1;min-width:260px">
+        <label class="mb-lab">Nederlands &middot; titel</label>
+        <input class="mb-veld" id="mbBerTnl" maxlength="120" placeholder="Bijvoorbeeld: Nieuwe regels voor de pauze">
+        <label class="mb-lab" style="margin-top:8px;display:block">Tekst</label>
+        <textarea class="mb-veld" id="mbBerXnl" rows="8" maxlength="5000" placeholder="Wat wil je iedereen laten weten?"></textarea>
+      </div>
+      <div style="flex:1;min-width:260px">
+        <label class="mb-lab">English &middot; title</label>
+        <input class="mb-veld notr" id="mbBerTen" maxlength="120" placeholder="For example: New break rules">
+        <label class="mb-lab" style="margin-top:8px;display:block">Text</label>
+        <textarea class="mb-veld" id="mbBerXen" rows="8" maxlength="5000" placeholder="What do you want everyone to know?"></textarea>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:8px">Iedereen leest het in de taal die hij in de app heeft gekozen. Vul je maar één taal in,
+      dan krijgt iedereen die. Een opsomming maak je met regels die beginnen met &ldquo;- &rdquo;, een tussenkopje met &ldquo;## &rdquo;.</div>
+    <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap">
+      <button class="mb-mini zwart" style="padding:10px 18px" onclick="mbBerichtSturen(this)">Versturen</button>
+      <span id="mbBerUit" style="font-size:12.5px"></span></div>
+  </div>`;
+  if(!lijst.length){
+    uit+='<div class="mb-kaart" style="color:var(--muted);font-size:13px">Nog geen berichten verstuurd.</div>';
+  }else{
+    uit+='<div class="mb-kaart" style="padding:4px 16px"><div class="mb-kop" style="margin-top:10px">Verstuurd</div>';
+    lijst.forEach(b=>{
+      const titel=b.titel_nl||b.titel_en||'', open=MB_BER_OPEN===b.id, weg=!!b.ingetrokken_op;
+      const pct=b.ontvangers?Math.round(b.gelezen/b.ontvangers*100):0;
+      uit+=`<div style="padding:12px 0;border-top:1px solid var(--border)">
+        <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap">
+          <div style="min-width:0;flex:1">
+            <div style="font-size:14.5px;font-weight:600${weg?';text-decoration:line-through;color:var(--muted)':''}">${veiligTekst(titel)}</div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px">${veiligTekst(mbKlokDatum(b.verstuurd_op))} &middot; ${veiligTekst((b.vestigingen||[]).map(mNaam).join(', '))}${b.van?' &middot; '+veiligTekst(b.van):''}${weg?' &middot; ingetrokken':''}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:15px;font-weight:700;color:${b.gelezen===b.ontvangers?'#0F7A52':'inherit'}">${b.gelezen} / ${b.ontvangers} gelezen</div>
+            <div style="height:5px;width:120px;background:#EFEDE7;border-radius:3px;margin-top:5px;overflow:hidden;margin-left:auto"><div style="height:100%;width:${pct}%;background:#0F7A52"></div></div>
+          </div></div>
+        <div style="display:flex;gap:14px;margin-top:7px;flex-wrap:wrap">
+          <button class="mb-linktekst" onclick="mbBerichtOpen('${veiligJs(b.id)}')">${open?'Inklappen':'Bekijk bericht en wie het gelezen heeft'}</button>
+          ${!weg&&b.gelezen<b.ontvangers?`<button class="mb-linktekst" style="color:#B4472B" onclick="mbBerichtIntrekken('${veiligJs(b.id)}',this)">Intrekken</button>`:''}</div>
+        ${open?`<div id="mbBerL${veiligTekst(b.id)}" style="margin-top:10px"></div>`:''}
+      </div>`;
+    });
+    uit+='</div>';
+  }
+  // Een half getypt bericht niet kwijtraken als je een verstuurd bericht openklapt
+  const oud={}; ['mbBerTnl','mbBerXnl','mbBerTen','mbBerXen'].forEach(id=>{ const e=document.getElementById(id); if(e)oud[id]=e.value; });
+  const oudV=document.querySelector('.mbBerV')?[...document.querySelectorAll('.mbBerV:checked')].map(x=>x.value):null;
+  document.getElementById('mbInhoud').innerHTML=uit;
+  Object.keys(oud).forEach(id=>{ const e=document.getElementById(id); if(e)e.value=oud[id]; });
+  if(oudV)document.querySelectorAll('.mbBerV').forEach(x=>x.checked=oudV.includes(x.value));
+  if(MB_BER_OPEN){ const b=lijst.find(x=>x.id===MB_BER_OPEN); if(b)mbBerichtLezers(b); }
+}
+async function mbBerichtSturen(knop){
+  const v=[...document.querySelectorAll('.mbBerV:checked')].map(x=>x.value);
+  const w=id=>(document.getElementById(id)||{}).value||'';
+  const uit=document.getElementById('mbBerUit');
+  if(!v.length){ uit.innerHTML='<span style="color:#B4472B">Kies minstens één markt.</span>'; return; }
+  if(!(w('mbBerTnl').trim()&&w('mbBerXnl').trim())&&!(w('mbBerTen').trim()&&w('mbBerXen').trim())){
+    uit.innerHTML='<span style="color:#B4472B">Vul een titel en een tekst in.</span>'; return; }
+  if(!confirm(`Bericht versturen naar iedereen in ${v.map(c=>(MB_BER_MARKTEN.find(x=>x[0]===c)||[c,c])[1]).join(', ')}?`))return;
+  knop.disabled=true; uit.textContent='Versturen…';
+  try{
+    const{data,error}=await sb.rpc('bericht_versturen',{p_titel_nl:w('mbBerTnl'),p_tekst_nl:w('mbBerXnl'),p_titel_en:w('mbBerTen'),p_tekst_en:w('mbBerXen'),p_vestigingen:v});
+    if(error)throw error;
+    toast(`Verstuurd naar ${data} ${data===1?'persoon':'mensen'}`);
+    MB_BER_OPEN=null; mbNaar('berichten');
+  }catch(e){ knop.disabled=false; uit.innerHTML=`<span style="color:#B4472B">${veiligTekst(mbFout(e))}</span>`; }
+}
+function mbBerichtOpen(id){ MB_BER_OPEN=MB_BER_OPEN===id?null:id; mbBerichten().catch(e=>console.error(e)); }
+async function mbBerichtLezers(b){
+  const el=document.getElementById('mbBerL'+b.id); if(!el)return;
+  el.innerHTML='<div style="color:var(--muted);font-size:12.5px">Bezig&hellip;</div>';
+  const{data,error}=await sb.rpc('bericht_lezers',{p_bericht:b.id});
+  if(error){ el.innerHTML=`<div style="color:#B4472B;font-size:12.5px">${veiligTekst(mbFout(error))}</div>`; return; }
+  const niet=(data||[]).filter(r=>!r.gelezen_op), wel=(data||[]).filter(r=>r.gelezen_op);
+  const tekst=(t,x)=>t?`<div style="background:#F7F6F2;border-radius:10px;padding:10px 12px;margin-bottom:8px">
+      <div style="font-weight:600;font-size:13.5px">${veiligTekst(t)}</div><div style="font-size:13px;line-height:1.6;margin-top:4px">${huisregelsNaarHtml(x)}</div></div>`:'';
+  el.innerHTML=tekst(b.titel_nl,b.tekst_nl)+tekst(b.titel_en,b.tekst_en)+`
+    <div class="mb-rij2" style="margin-top:6px">
+      <div style="flex:1;min-width:220px"><div class="mb-kop" style="color:#B45309">Nog niet gelezen (${niet.length})</div>
+        <div style="font-size:13px;line-height:1.75">${niet.length?niet.map(r=>veiligTekst(r.naam)+` <span style="color:var(--muted);font-size:11.5px">${veiligTekst(r.vestiging||'')}</span>`).join('<br>'):'<span style="color:var(--muted)">Iedereen heeft het gelezen.</span>'}</div></div>
+      <div style="flex:1;min-width:220px"><div class="mb-kop" style="color:#0F7A52">Gelezen (${wel.length})</div>
+        <div style="font-size:13px;line-height:1.75">${wel.map(r=>veiligTekst(r.naam)+` <span style="color:var(--muted);font-size:11.5px">${veiligTekst(mbKlokDatum(r.gelezen_op))}</span>`).join('<br>')||'<span style="color:var(--muted)">Nog niemand.</span>'}</div></div>
+    </div>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:6px">Wie het nog niet gelezen heeft, ziet het de volgende keer dat hij de app opent.</div>`;
+}
+async function mbBerichtIntrekken(id,knop){
+  if(!confirm('Bericht intrekken? Wie het nog niet gelezen heeft, krijgt het dan niet meer te zien.'))return;
+  knop.disabled=true;
+  const{error}=await sb.rpc('bericht_intrekken',{p_bericht:id});
+  if(error){ knop.disabled=false; alert(mbFout(error)); return; }
+  mbNaar('berichten');
+}
+
 async function mbHuisregels(){
   const{data,error}=await sb.rpc('mcr_huisregels_overzicht');
   if(error)throw error;
@@ -11670,6 +11804,13 @@ async function mcrUren(){
 }
 
 // ─── Facturen ──────────────────────────────────────────────────────
+// Een factuur staat klaar vanaf 4 dagen voor de uitbetaling (en nooit voordat
+// de periode voorbij is). Zelfde regel als in de database (mcr_betaalrondes).
+function mcrFactuurKlaarOp(r){
+  const a=new Date(String(r.periode_tot)+'T00:00:00'); a.setDate(a.getDate()+1);
+  if(r.betaaldatum){ const b=new Date(String(r.betaaldatum)+'T00:00:00'); b.setDate(b.getDate()-4); if(b>a)return fmt(b); }
+  return fmt(a);
+}
 async function mcrFacturen(){
   const{data,error}=await sb.rpc('mcr_betaalrondes');
   if(error)throw error;
@@ -11701,7 +11842,7 @@ async function mcrFacturen(){
   }else{
     const eerst=komt[0];
     uit+=`<div class="mcr-kaart"><div style="font-size:13px;color:#6B6A66;line-height:1.6">
-      ${eerst?`Nothing to invoice yet. The next period ends ${veiligTekst(mcrDatum(eerst.periode_tot))} and is paid ${veiligTekst(mcrDatum(eerst.betaaldatum))}.`
+      ${eerst?`<div>Nothing to invoice yet.</div><div style="margin-top:4px">Your invoice for week ${veiligTekst(eerst.nummer)} will be ready on ${veiligTekst(mcrDatum(mcrFactuurKlaarOp(eerst)))}. Payment ${veiligTekst(mcrDatum(eerst.betaaldatum))}.</div>`
              :'Nothing to invoice yet.'}
     </div></div>`;
   }
@@ -13222,6 +13363,65 @@ function akkoordHuisregels(){
   const v=document.getElementById('mcrAkkoord'); if(v)v.checked=true;
   sluitHuisregels();
 }
+
+// ─── Algemene berichten ────────────────────────────────────────────
+// Bram stuurt een bericht naar een of meer markten (Planner → Berichten).
+// Iedereen krijgt een pushmelding, en bij het openen van de app staat het
+// bericht schermvullend in beeld. Wegklikken kan niet: de knop "Gelezen" werkt
+// pas als je helemaal naar beneden hebt gescrold én de leestijd voorbij is
+// (ongeveer 4 woorden per seconde, minimaal 6 en hoogstens 25 seconden).
+let BERICHTEN=[], BERICHT_LAATST=0, BERICHT_TIMER=null;
+async function berichtenCheck(direct){
+  try{
+    if(typeof CURRENT_USER==='undefined'||!CURRENT_USER||typeof sb==='undefined'||!sb)return;
+    const ov=document.getElementById('berichtOverlay');
+    if(!ov||ov.style.display==='flex')return;
+    if(!direct&&Date.now()-BERICHT_LAATST<60000)return;
+    BERICHT_LAATST=Date.now();
+    const{data,error}=await sb.rpc('mijn_berichten');
+    if(error||!data||!data.length)return;
+    BERICHTEN=data; berichtToon();
+  }catch(e){ console.warn('Berichten ophalen mislukt:',e); }
+}
+function berichtToon(){
+  const b=BERICHTEN[0], ov=document.getElementById('berichtOverlay'); if(!b||!ov)return;
+  const nl=TAAL==='nl';
+  const tk=document.getElementById('berichtTekst'), kn=document.getElementById('berichtKnop');
+  document.getElementById('berichtLabel').textContent=(nl?'Belangrijk bericht':'Important message')
+    +(BERICHTEN.length>1?` · 1 / ${BERICHTEN.length}`:'');
+  document.getElementById('berichtTitel').textContent=b.titel||'';
+  const op=b.verstuurd_op?new Date(b.verstuurd_op).toLocaleDateString(nl?'nl-NL':'en-GB',{day:'numeric',month:'long'}):'';
+  document.getElementById('berichtVan').textContent=[b.van?(nl?'Van ':'From ')+b.van:'',op].filter(Boolean).join(' · ');
+  tk.innerHTML=huisregelsNaarHtml(b.tekst||'');
+  document.getElementById('berichtUitleg').textContent=nl
+    ?'Lees het bericht goed. Je kunt pas verder als je het hebt gelezen.'
+    :'Please read this carefully. You can carry on once you have read it.';
+  ov.style.display='flex'; tk.scrollTop=0;
+  const woorden=String((b.titel||'')+' '+(b.tekst||'')).split(/\s+/).filter(Boolean).length;
+  let rest=Math.min(25,Math.max(6,Math.ceil(woorden/4)));
+  const onderaan=()=>tk.scrollTop+tk.clientHeight>=tk.scrollHeight-24;
+  const zet=()=>{
+    const beneden=onderaan(), ok=rest<=0&&beneden;
+    kn.disabled=!ok; kn.style.opacity=ok?'':'.45';
+    kn.textContent=ok?(nl?'Ik heb het gelezen':'I have read this')
+      :!beneden?(nl?'Scroll naar beneden om alles te lezen':'Scroll down to read everything')
+      :(nl?`Lees het bericht (${rest})`:`Read the message (${rest})`);
+  };
+  clearInterval(BERICHT_TIMER);
+  BERICHT_TIMER=setInterval(()=>{ if(document.hidden)return; rest--; zet(); if(rest<=0)clearInterval(BERICHT_TIMER); },1000);
+  tk.onscroll=zet; setTimeout(zet,60);
+}
+async function berichtGelezen(){
+  const b=BERICHTEN[0], kn=document.getElementById('berichtKnop'); if(!b||!kn||kn.disabled)return;
+  kn.disabled=true;
+  const{error}=await sb.rpc('bericht_gelezen',{p_bericht:b.id});
+  if(error){ kn.disabled=false; alert((TAAL==='nl'?'Opslaan mislukt: ':'Could not save: ')+(error.message||error)); return; }
+  BERICHTEN.shift(); clearInterval(BERICHT_TIMER);
+  if(BERICHTEN.length){ berichtToon(); return; }
+  document.getElementById('berichtOverlay').style.display='none';
+}
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible')berichtenCheck(); });
+try{ const A=window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.App; if(A&&A.addListener)A.addListener('resume',()=>berichtenCheck()); }catch(e){}
 
 // ─── Tikfout in het e-mailadres? ──────────────────────────────────
 // Mensen typten "icloud.clm" of "hitmail.com", kregen geen mail en maakten
@@ -26245,6 +26445,7 @@ async function initPushNotifications(){
       const t=(notification&&notification.title)||'Melding';
       const b=(notification&&notification.body)||'';
       toast(b?`${t} — ${b}`:t);
+      if(notification&&notification.data&&notification.data.pagina==='bericht')setTimeout(()=>berichtenCheck(true),400);
     });
 
     await Push.addListener('pushNotificationActionPerformed', actie=>{
@@ -26253,6 +26454,7 @@ async function initPushNotifications(){
         const d=(actie&&actie.notification&&actie.notification.data)||{};
         if(d.klus&&/^[0-9a-f-]{36}$/i.test(d.klus))OK_DEEPLINK=d.klus;
         const ga=()=>{
+          if(d.pagina==='bericht'){ berichtenCheck(true); return; }
           if(OK_DEEPLINK){ okDeeplinkOpen(); return; }
           if(d.pagina==='mcr-beheer'){ if(typeof mbNaar==='function')mbNaar('shifts'); return; }
           if(d.pagina==='mcr-agenda'){ if(typeof mbNaar==='function')mbNaar('agenda'); return; }
