@@ -3951,7 +3951,7 @@ const MB_EN_T={
 'boetes en borg':'fines and deposit','Deze ronde loopt nog: de bedragen kunnen nog veranderen.':'This run is still going: the amounts can still change.','registratie staat':'entry is','nog open':'still open',
 '(te accorderen of bij Uitgezocht). Die tellen hier nog niet mee; vastzetten kan pas als ze zijn afgehandeld.':'(to approve or under Being checked). They do not count here yet; closing is only possible once they are dealt with.',
 'Geen sort code of rekeningnummer:':'No sort code or account number:','Let op het minimumloon.':'Mind the minimum wage.',
-'komt het uurloon in deze ronde onder het minimum. In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. De borg wordt al over twee rondes gespreid; overweeg de boete te verlagen of later in te houden.':'the hourly wage in this run falls below the minimum. In the UK you may only deduct what was agreed in writing beforehand, and not below the minimum wage. The deposit is already spread over two runs; consider lowering the fine or deducting it later.',
+'komt het uurloon in deze ronde onder het minimum. In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. De kledingborg gaat er in één keer af bij de eerste betaling; overweeg de boete te verlagen of later in te houden.':'the hourly wage in this run falls below the minimum. In the UK you may only deduct what was agreed in writing beforehand, and not below the minimum wage. The uniform deposit is taken in one go from the first payment; consider lowering the fine or deducting it later.',
 'ligt vast wat is ingehouden — zo wordt niets twee keer ingehouden.':'records what has been deducted — so nothing is deducted twice.','nog niets binnen':'nothing in yet','geen bank':'no bank','niet ontv.':'not recv.','niet betaald':'not paid',
 'Hiermee leg je vast wat je overmaakt:':'This records what you transfer:','aan boetes en borg ingehouden. Volgende rondes rekenen hiermee verder, zodat niets twee keer wordt ingehouden.':'deducted in fines and deposit. Next runs continue from this, so nothing is deducted twice.',
 'De bedragen worden weer opnieuw berekend. Doe dit alleen als je nog niet hebt overgemaakt.':'The amounts will be recalculated. Only do this if you have not transferred yet.',
@@ -4147,6 +4147,7 @@ function mbLoc(){ return MB_EN?'en-GB':'nl-NL'; }
 // dan zet crewNlStart() die schermen om met de woorden en zinnen hieronder.
 // Zinnen van drie woorden of meer werken ook als stuk van een langere zin.
 const CREW_NL={
+'Total due':'Te betalen','Less: uniform deposit':'Min: borg kleding','Uniform deposit returned':'Borg kleding terug','Less: fines':'Min: boetes','You get the deposit back when you hand in your polo and apron.':'Je krijgt de borg terug als je je polo en schort inlevert.',
 // Navigatie en algemeen
 'My shifts':'Mijn diensten','Shifts':'Diensten','Rota':'Rooster','Calendar':'Agenda','Close day':'Dag afsluiten','Team':'Team','Me':'Ik',
 'Clock in':'Inklokken','Clock out':'Uitklokken','Hours':'Uren','Invoice':'Factuur','My details':'Mijn gegevens','Loading…':'Laden…',
@@ -7823,9 +7824,9 @@ async function mbRondeDetail(id){
     if(open)meld.push(`<b>${open} ${open===1?'registratie staat':'registraties staan'} nog open</b> (te accorderen of bij Uitgezocht). Die tellen hier nog niet mee; vastzetten kan pas als ze zijn afgehandeld.`);
     if(geenBank.length)meld.push(`${marktUK()?'Geen sort code of rekeningnummer':'Geen IBAN'}: ${geenBank.map(r=>veiligTekst(r.naam)).join(', ')}.`);
     if(minW.length)meld.push(`<b>Let op het minimumloon.</b> Bij ${minW.map(r=>{const w=mbRondeMinWaarschuwing(r);return `${veiligTekst(r.naam)} (na inhouding &pound; ${mbPondTxt(w.per)}/u, minimaal &pound; ${mbPondTxt(w.min)})`;}).join(', ')} komt het uurloon in deze ronde onder het minimum.
-      In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. De borg wordt al over twee rondes gespreid; overweeg de boete te verlagen of later in te houden.`);
+      In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. De kledingborg gaat er in één keer af bij de eerste betaling; overweeg de boete te verlagen of later in te houden.`);
     if(meld.length)t+=`<div style="font-size:12.5px;line-height:1.6;margin-top:12px;padding:9px 11px;border-radius:10px;background:#FEF6E7;color:#5B3A07">${meld.join('<br>')}</div>`;
-    t+=`<div style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:10px">Bruto = goedgekeurde uren &times; tarief. Boetes en kledingborg worden ingehouden zolang er genoeg is (borg verdeeld over twee rondes: per ronde hooguit de helft); netto komt nooit onder &pound; 0
+    t+=`<div style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:10px">Bruto = goedgekeurde uren &times; tarief. Boetes en kledingborg worden ingehouden zolang er genoeg is (de kledingborg in één keer bij de eerste betaling); netto komt nooit onder &pound; 0
       (wat overblijft schuift door naar de volgende ronde). Levert iemand kleding in, dan komt de borg terug. Pas na <b>Ronde vastzetten</b> ligt vast wat is ingehouden &mdash; zo wordt niets twee keer ingehouden.</div></div>`;
     t+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr><th>Naam</th>'
       +'<th style="text-align:right">Uren</th><th style="text-align:right">Tarief</th><th style="text-align:right">Bruto</th>'
@@ -11753,6 +11754,11 @@ async function mcrFactuurMaken(ronde){
     if(error)throw error;
     const f=(data&&data[0])||null;
     if(!f)throw new Error('No invoice could be made.');
+    // Wat er wordt ingehouden (kledingborg, boetes) of terugkomt, staat op de factuur zelf.
+    try{
+      const{data:inh}=await sb.from('facturen').select('boetes,borg_in,borg_terug,te_betalen').eq('id',f.factuur_id).maybeSingle();
+      if(inh)Object.assign(f,inh);
+    }catch(e){ console.warn('Inhouding niet opgehaald',e); }
     mcrFactuurTonen(f, inst, (mij||{}));
   }catch(e){ alert(mcrFout(e)); }
 }
@@ -11800,6 +11806,14 @@ function pdfMaken(regels){
   return bytes;
 }
 
+// Inhoudingen op de factuur: [omschrijving, bedrag (min = eraf)]
+function factuurInhoud(f){
+  const r=[];
+  if(Number(f.borg_in))r.push(['Less: uniform deposit',-Number(f.borg_in)]);
+  if(Number(f.borg_terug))r.push(['Uniform deposit returned',Number(f.borg_terug)]);
+  if(Number(f.boetes))r.push(['Less: fines',-Number(f.boetes)]);
+  return r;
+}
 function mcrFactuurRegels(f, inst, mij){
   const R=[]; let y=790;
   const zet=(x,t,o)=>{R.push(Object.assign({x,y,tekst:t},o||{}));};
@@ -11843,7 +11857,15 @@ function mcrFactuurRegels(f, inst, mij){
   R.push({x:56,y:y+5,tekst:'',lijn:540});
   y-=14;
   zet(370,'Total hours',{groot:9,grijs:true}); zet(480,Number(f.uren||0).toFixed(2),{groot:9}); y-=16;
-  zet(370,'Total',{groot:11,vet:true});        zet(480,valSym()+' '+Number(f.bedrag||0).toFixed(2),{groot:13,vet:true}); y-=34;
+  const inh=factuurInhoud(f);
+  if(inh.length){
+    zet(370,'Subtotal',{groot:9,grijs:true}); zet(480,valSym()+' '+Number(f.bedrag||0).toFixed(2),{groot:9}); y-=14;
+    inh.forEach(([t,b])=>{ zet(300,t,{groot:9,grijs:true}); zet(480,(b<0?'- ':'+ ')+valSym()+' '+Math.abs(b).toFixed(2),{groot:9}); y-=14; });
+    y-=2;
+    zet(370,'Total due',{groot:11,vet:true}); zet(480,valSym()+' '+Number(f.te_betalen||0).toFixed(2),{groot:13,vet:true}); y-=34;
+  }else{
+    zet(370,'Total',{groot:11,vet:true});        zet(480,valSym()+' '+Number(f.bedrag||0).toFixed(2),{groot:13,vet:true}); y-=34;
+  }
 
   zet(56,'Bank details',{groot:8,grijs:true}); y-=12;
   const sc=(mij.sort_code||'').replace(/(\d{2})(?=\d)/g,'$1-');
@@ -11891,8 +11913,14 @@ function mcrFactuurTonen(f, inst, mij){
     <div class="mcr-kaart" style="padding:2px 15px">${rijen}</div>
     <div class="mcr-kaart" style="display:flex;align-items:baseline;justify-content:space-between">
       <span style="font-size:12.5px;color:#6B6A66">${veiligTekst(Number(f.uren||0).toFixed(2))} hours &times; ${veiligTekst(mcrGeld(f.tarief))}</span>
-      <span style="font-size:23px;font-weight:700;color:#1A1917;letter-spacing:-.5px">${veiligTekst(mcrGeld(f.bedrag))}</span>
+      <span style="font-size:${factuurInhoud(f).length?'15px;font-weight:600':'23px;font-weight:700'};color:#1A1917;letter-spacing:-.5px">${veiligTekst(mcrGeld(f.bedrag))}</span>
     </div>
+    ${factuurInhoud(f).length?`<div class="mcr-kaart">${factuurInhoud(f).map(([t,b])=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0">
+        <span style="color:#6B6A66">${veiligTekst(t)}</span><span style="color:${b<0?'#B4472B':'#0F7A52'};font-weight:600">${b<0?'&minus;':'+'}${veiligTekst(mcrGeld(Math.abs(b)))}</span></div>`).join('')}
+      <div style="display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid #EFEDE7;margin-top:6px;padding-top:8px">
+        <span style="font-size:13px;font-weight:600">Total due</span>
+        <span style="font-size:23px;font-weight:700;color:#1A1917;letter-spacing:-.5px">${veiligTekst(mcrGeld(f.te_betalen))}</span></div>
+      <div style="font-size:11.5px;color:#8A8984;margin-top:4px">You get the deposit back when you hand in your polo and apron.</div></div>`:''}
     <button class="mcr-knop" onclick="mcrPdfNu()">Save as PDF</button>
     <div class="mcr-kaart" style="margin-top:12px"><div style="font-size:12.5px;color:#6B6A66;line-height:1.6">
       Email the PDF yourself to <b style="color:#1A1917">${veiligTekst(inst.factuur_email||'the office')}</b>.
