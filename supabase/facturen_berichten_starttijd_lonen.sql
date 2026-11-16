@@ -284,3 +284,16 @@ begin
 end $$;
 revoke all on function public.mcr_loon_overzicht() from public, anon;
 grant execute on function public.mcr_loon_overzicht() to authenticated;
+
+
+-- 5) Notitie bij vroeg inklokken in het Engels (de markten zijn Engelstalig;
+--    wie de app in het Nederlands heeft, krijgt hem vertaald in de app).
+select public._fn_vervang('public.mcr_inklok_starttijd()'::regprocedure,
+  $o$'Klokte in om ' || to_char(new.ingeklokt_op at time zone v_tz,'HH24:MI')
+      || ', telt vanaf de starttijd ' || to_char(v_start,'HH24:MI'))$o$,
+  $n$'Clocked in at ' || to_char(new.ingeklokt_op at time zone v_tz,'HH24:MI')
+      || ', counted from the start time ' || to_char(v_start,'HH24:MI'))$n$);
+update public.urenregistraties
+   set notitie_beh = regexp_replace(notitie_beh, 'Klokte in om (\d\d:\d\d), telt vanaf de starttijd (\d\d:\d\d)',
+                                    'Clocked in at \1, counted from the start time \2', 'g')
+ where notitie_beh like '%Klokte in om%';
