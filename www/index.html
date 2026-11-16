@@ -3909,6 +3909,7 @@ const MB_EN_T={
 'Hier stelde jij een vraag over. Ze tellen in de betaalronde als':'You asked a question about these. In the pay run they count as','open':'open',
 'en komen pas op een factuur als je ze weer accordeert.':'and only go on an invoice once you approve them again.','Jouw vraag:':'Your question:',
 'Terug naar te accorderen':'Back to approve','Staat weer bij Te accorderen':'Back under To approve','Goedgekeurde uren':'Approved hours',
+'Wijzigen past de tijden aan terwijl de uren goedgekeurd blijven; een factuur die nog niet is ontvangen wordt meteen herberekend. Terugdraaien zet ze terug bij Te accorderen; verwijderen haalt ze uit de administratie. Alleen jij als administrator kunt dit, en nooit bij een factuur die al is ontvangen.':'Edit changes the times while the hours stay approved; an invoice that has not been received yet is recalculated right away. Undo puts them back under To approve; delete removes them from the records. Only you as administrator can do this, and never for an invoice that has already been received.','Uren gewijzigd':'Hours changed','wordt herberekend':'will be recalculated','Reden (komt in het logboek)':'Reason (goes in the log)',
 'Terugdraaien zet ze terug bij Te accorderen; verwijderen haalt ze uit de administratie. Alleen jij als administrator kunt dit, en nooit bij een factuur die al is ontvangen.':'Undo puts them back under To approve; deleting removes them from the records. Only an administrator can do this, and never for an invoice that has already been received.',
 'Geen goedgekeurde uren in deze periode.':'No approved hours in this period.','Waarom draai je deze goedkeuring terug? Dit komt bij de registratie te staan.':'Why are you undoing this approval? This is added to the entry.',
 'Wat de kraammanagers veranderden':'What the stall managers changed','Elke uitkloktijd, pauze en beoordeling die een manager aanpast, met naam en tijdstip · laatste 90 dagen':'Every clock-out time, break and rating a manager changes, with name and time · last 90 days',
@@ -7597,6 +7598,7 @@ async function mbUren(){
 }
 async function mbUrenGa(k){
   MB_UREN_TAB=k;
+  if(k!=='goedgekeurd')MB_GK_BEWERK=null;
   document.querySelectorAll('#mbInhoud > div:nth-child(2) button').forEach(b=>
     b.classList.toggle('zwart', b.getAttribute('onclick').indexOf("'"+k+"'")>=0));
   const el=document.getElementById('mbInstInhoud');
@@ -7710,6 +7712,7 @@ function mbUurGewijzigd(id){
 function mbLiveRust(){
   if(MB_TAB==='mensen'&&MB_MENS_GEWIJZIGD.size)return true;
   if(MB_TAB==='uren'&&document.querySelector('#mbUrenTabel tr[data-gewijzigd="1"]'))return true;
+  if(MB_TAB==='uren'&&MB_UREN_TAB==='goedgekeurd'&&MB_GK_BEWERK)return true;
   return false;
 }
 function mbUurKnoppen(id,aan){ const tr=document.getElementById('mbUR'+id); if(tr)tr.querySelectorAll('button,input').forEach(b=>b.disabled=!aan); }
@@ -7803,7 +7806,8 @@ async function mbGoedgekeurd(){
   const rijen=data||[];
   const kop=document.getElementById('mbUrenKop');
   if(kop)kop.innerHTML=mbKop('Goedgekeurde uren',
-    'Terugdraaien zet ze terug bij Te accorderen; verwijderen haalt ze uit de administratie. Alleen jij als administrator kunt dit, en nooit bij een factuur die al is ontvangen.');
+    'Wijzigen past de tijden aan terwijl de uren goedgekeurd blijven; een factuur die nog niet is ontvangen wordt meteen herberekend. Terugdraaien zet ze terug bij Te accorderen; verwijderen haalt ze uit de administratie. Alleen jij als administrator kunt dit, en nooit bij een factuur die al is ontvangen.');
+  MB_GK_RIJEN=rijen;
   let uit=`<div class="mb-kaart"><div class="mb-veldrij">
     <div style="flex:0 1 150px"><label class="mb-lab">Van</label><input type="date" class="mb-veld" value="${veiligTekst(MB_GK_VAN)}" onchange="MB_GK_VAN=this.value;mbUrenGa('goedgekeurd')"></div>
     <div style="flex:0 1 150px"><label class="mb-lab">Tot en met</label><input type="date" class="mb-veld" value="${veiligTekst(MB_GK_TOT)}" onchange="MB_GK_TOT=this.value;mbUrenGa('goedgekeurd')"></div>
@@ -7813,6 +7817,7 @@ async function mbGoedgekeurd(){
     +'<thead><tr><th>Wie</th><th>Datum</th><th>Kraam</th><th>Geklokt</th><th>Pauze</th><th>Uren</th><th>Factuur</th><th></th></tr></thead><tbody>';
   rijen.forEach(r=>{
     const dicht=!!r.factuur_ontvangen;
+    if(MB_GK_BEWERK===r.uren_id&&!dicht){ uit+=mbGkBewerkRij(r); return; }
     uit+=`<tr>
       <td><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>${r.notitie_beh?`<div style="font-size:11px;color:var(--muted);max-width:260px;white-space:normal">${veiligTekst(r.notitie_beh)}</div>`:''}</td>
       <td style="white-space:nowrap">${veiligTekst(mbKort(r.datum))}</td>
@@ -7822,11 +7827,50 @@ async function mbGoedgekeurd(){
       <td style="font-variant-numeric:tabular-nums;font-weight:600">${veiligTekst(mbNum((r.minuten||0)/60,2))}</td>
       <td style="white-space:nowrap">${r.factuur_nummer?veiligTekst(r.factuur_nummer)+(dicht?' <span style="color:#B4472B">ontvangen</span>':''):'<span style="color:var(--muted)">&mdash;</span>'}</td>
       <td style="white-space:nowrap">${dicht?'<span style="font-size:12px;color:var(--muted)">dicht</span>':`
+        ${r.kraam?`<button class="mb-mini" onclick="mbGkBewerk('${veiligJs(r.uren_id)}')">Wijzigen</button>`:''}
         <button class="mb-mini" onclick="mbGkTerug('${veiligJs(r.uren_id)}')">Terugdraaien</button>
         <button class="mb-mini rood" onclick="mbGkWeg('${veiligJs(r.uren_id)}')">Verwijderen</button>`}</td></tr>`;
   });
   uit+='</tbody></table></div>';
   mbZet(uit);
+}
+// Goedgekeurde uren wijzigen zonder terugdraaien: de rij wordt een invulrij.
+let MB_GK_RIJEN=[], MB_GK_BEWERK=null;
+function mbGkBewerk(id){ MB_GK_BEWERK=id; mbUrenGa('goedgekeurd'); }
+function mbGkBewerkRij(r){
+  const id=veiligJs(r.uren_id), veld='font-size:13px;font-family:var(--font);padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:var(--surface,#fff);color:var(--text)';
+  return `<tr style="background:#FFFBEB">
+    <td><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
+      <input type="text" id="mbGkR${id}" maxlength="120" placeholder="Reden (komt in het logboek)" style="${veld};width:100%;max-width:260px;margin-top:6px"></td>
+    <td style="white-space:nowrap">${veiligTekst(mbKort(r.datum))}</td>
+    <td>${veiligTekst(r.kraam||r.klus||'')}</td>
+    <td style="white-space:nowrap"><input type="time" id="mbGkB${id}" value="${veiligTekst(mbKlokT(r.ingeklokt_op))}" style="${veld}"> &ndash; <input type="time" id="mbGkT${id}" value="${veiligTekst(mbKlokT(r.uitgeklokt_op))}" style="${veld}"></td>
+    <td style="white-space:nowrap"><input type="number" id="mbGkP${id}" value="${Number(r.pauze)||0}" min="0" max="240" step="5" inputmode="numeric" style="${veld};width:64px"> min</td>
+    <td style="font-size:12px;color:var(--muted)">was ${veiligTekst(mbNum((r.minuten||0)/60,2))}</td>
+    <td style="white-space:nowrap">${r.factuur_nummer?veiligTekst(r.factuur_nummer)+'<div style="font-size:11px;color:var(--muted)">wordt herberekend</div>':'<span style="color:var(--muted)">&mdash;</span>'}</td>
+    <td style="white-space:nowrap">
+      <button class="mb-mini zwart" onclick="mbGkOpslaan('${id}')">Opslaan</button>
+      <button class="mb-mini" onclick="mbGkBewerk(null)">Annuleren</button></td></tr>`;
+}
+async function mbGkOpslaan(id){
+  const r=MB_GK_RIJEN.find(x=>x.uren_id===id); if(!r)return;
+  const el=k=>document.getElementById('mbGk'+k+id);
+  const b=el('B')?el('B').value:'', t=el('T')?el('T').value:'', pa=el('P')?(parseInt(el('P').value,10)||0):0;
+  const reden=el('R')?el('R').value.trim():'';
+  if(!b||!t){ alert('Vul een begin- en eindtijd in.'); return; }
+  if(b===t){ alert('Begin- en eindtijd zijn hetzelfde ('+b+'). Pas eerst een van de twee aan.'); return; }
+  if(b===mbKlokT(r.ingeklokt_op)&&t===mbKlokT(r.uitgeklokt_op)&&pa===(Number(r.pauze)||0)){ mbGkBewerk(null); return; }
+  let volgende=false;
+  if(t<b){
+    const ok=await vraagBevestiging('Eindtijd ligt vóór de begintijd',
+      `${veiligTekst(b)} tot ${veiligTekst(t)}: is dit een nachtdienst die de volgende dag eindigt?`,'Ja, volgende dag');
+    if(!ok)return; volgende=true;
+  }
+  try{
+    const{error}=await sb.rpc('uur_goedgekeurd_wijzigen',{p_uren:id,p_in:b,p_uit:t,p_pauze:pa,p_volgende_dag:volgende,p_reden:reden||null});
+    if(error)throw error;
+    MB_GK_BEWERK=null; toast('Uren gewijzigd'); mbUrenGa('goedgekeurd');
+  }catch(e){ alert(mbFout(e)); }
 }
 async function mbGkTerug(id){
   const reden=prompt('Waarom draai je deze goedkeuring terug? Dit komt bij de registratie te staan.');
