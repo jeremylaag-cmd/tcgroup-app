@@ -1,19 +1,19 @@
--- 1) Facturen pas maken vanaf 4 dagen voor de uitbetaaldatum
---    (en nooit voordat de periode voorbij is). Een factuur die al bestaat,
+-- 1) Facturen staan klaar op de dag vóór de uitbetaling vanaf 15:00 (tijd van de
+--    markt), en nooit voordat de periode voorbij is. Een factuur die al bestaat,
 --    kan altijd opnieuw worden gedownload.
 select public._fn_vervang('public.mcr_betaalrondes()'::regprocedure,
   '(b.periode_tot < (now() at time zone public.mijn_tijdzone())::date)',
-  '(greatest(b.periode_tot + 1, b.betaaldatum - 4) <= (now() at time zone public.mijn_tijdzone())::date)');
+  '(greatest((b.periode_tot + 1)::timestamp, (b.betaaldatum - 1) + time ''15:00'') <= (now() at time zone public.mijn_tijdzone()))');
 
 select public._fn_vervang('public.mcr_factuur_maken(uuid)'::regprocedure,
 $o$    raise exception 'This period is not finished yet.' using errcode='P0002';
   end if;$o$,
 $n$    raise exception 'This period is not finished yet.' using errcode='P0002';
   end if;
-  if greatest(v_b.periode_tot + 1, v_b.betaaldatum - 4) > (now() at time zone public.mijn_tijdzone())::date
+  if greatest((v_b.periode_tot + 1)::timestamp, (v_b.betaaldatum - 1) + time '15:00') > (now() at time zone public.mijn_tijdzone())
      and not exists (select 1 from public.facturen f0 where f0.gebruiker_id = v_uid and f0.ronde_id = p_ronde) then
     raise exception 'Your invoice will be ready on %.',
-      to_char(greatest(v_b.periode_tot + 1, v_b.betaaldatum - 4), 'FMDD FMMonth') using errcode='P0002';
+      to_char(greatest((v_b.periode_tot + 1)::timestamp, (v_b.betaaldatum - 1) + time '15:00'), 'FMDD FMMonth "at" HH24:MI') using errcode='P0002';
   end if;$n$);
 
 
@@ -177,3 +177,110 @@ select public._fn_vervang('public.push_wachtrij_bundels()'::regprocedure,
   $o$              else 'mcr-shifts' end$o$,
   $n$              when t.soort = 'bericht' then 'bericht'
               else 'mcr-shifts' end$n$);
+
+
+-- 3) Kraammanagers mogen ook de inkloktijd (starttijd) aanpassen, met dezelfde
+--    regels als de uitkloktijd: alleen op de eigen kraam, niet de eigen uren,
+--    en alleen zolang Bram de uren nog niet heeft goedgekeurd.
+alter table public.mcr_wijzigingen drop constraint mcr_wijzigingen_soort_check;
+alter table public.mcr_wijzigingen add constraint mcr_wijzigingen_soort_check
+  check (soort = any (array['pauze','beoordeling','uitkloktijd','inkloktijd']));
+
+create or replace function public.mgr_starttijd_zetten(p_uren uuid, p_in timestamptz, p_reden text default null)
+returns void language plpgsql security definer set search_path to 'public' as $$
+declare u record; v_mijn uuid;
+begin
+  if not public.is_kraammanager() then
+    raise exception 'Only a stall manager can change hours.' using errcode='P0002';
+  end if;
+  if p_in is null then raise exception 'Enter the time they started.' using errcode='P0002'; end if;
+  select g.manager_kraam_id into v_mijn from public.gebruikers g where g.id = public.huidige_gebruiker();
+  select ur.*, kl.kraam_id as kid into u
+    from public.urenregistraties ur
+    join public.gebruikers g on g.id = ur.gebruiker_id
+    join public.klussen kl on kl.id = ur.klus_id
+   where ur.id = p_uren and kl.kraam_id is not null
+     and public.vest_ok(g.vestiging) and public.in_actieve_vestiging(g.vestiging);
+  if not found then raise exception 'That clocking does not exist.' using errcode='P0002'; end if;
+  if v_mijn is not null and u.kid <> v_mijn then
+    raise exception 'This person worked at another stall; only that stall''s manager can change it.' using errcode='P0002';
+  end if;
+  if u.gebruiker_id = public.huidige_gebruiker() then
+    raise exception 'You cannot change your own hours. Ask Bram.' using errcode='P0002';
+  end if;
+  if u.status not in ('lopend','wacht') or u.factuur_id is not null then
+    raise exception 'These hours have already been approved; only Bram can change them now.' using errcode='P0002';
+  end if;
+  if p_in = u.ingeklokt_op then return; end if;
+  if p_in >= coalesce(u.uitgeklokt_op, now()) then
+    raise exception 'The start time must be before the finish time.' using errcode='P0002';
+  end if;
+  if coalesce(u.uitgeklokt_op, now()) - p_in > interval '18 hours' then
+    raise exception 'That is more than 18 hours before they finished. Check the time.' using errcode='P0002';
+  end if;
+  if abs(extract(epoch from (p_in - u.ingeklokt_op))) > 12*3600 then
+    raise exception 'That is more than 12 hours away from when they clocked in. Check the time.' using errcode='P0002';
+  end if;
+
+  update public.urenregistraties
+     set ingeklokt_op = p_in,
+         totaal_minuten = case when uitgeklokt_op is null then totaal_minuten
+                               else greatest(0, (extract(epoch from (uitgeklokt_op - p_in))/60)::int - coalesce(pauze_minuten,0)) end,
+         in_door = public.huidige_gebruiker(), in_op = now()
+   where id = p_uren;
+
+  insert into public.mcr_wijzigingen (door, gebruiker_id, uren_id, soort, van, naar, reden)
+  values (public.huidige_gebruiker(), u.gebruiker_id, p_uren, 'inkloktijd',
+          to_char(u.ingeklokt_op at time zone public.mijn_tijdzone(),'HH24:MI'),
+          to_char(p_in at time zone public.mijn_tijdzone(),'HH24:MI'), nullif(public.schoon_kort(p_reden),''));
+end $$;
+alter function public.mgr_starttijd_zetten(uuid,timestamptz,text) owner to app_rpc;
+revoke all on function public.mgr_starttijd_zetten(uuid,timestamptz,text) from public, anon;
+grant execute on function public.mgr_starttijd_zetten(uuid,timestamptz,text) to authenticated;
+
+
+-- 4) Lonen-overzicht voor Kosten: per betaalronde die nog niet betaald is,
+--    wat er overgemaakt moet worden. De kledingborg telt maar één keer mee,
+--    ook als eerdere rondes nog niet zijn vastgezet.
+create or replace function public.mcr_loon_overzicht()
+returns table(ronde_id uuid, nummer int, periode_van date, periode_tot date, betaaldatum date,
+              afgelopen boolean, vastgezet int, mensen int, bruto numeric, borg_in numeric,
+              borg_terug numeric, boetes numeric, netto numeric, open_uren numeric, open_bedrag numeric)
+language plpgsql stable security definer set search_path to 'public' as $$
+declare r record; x record; v_gepland jsonb := '{}'::jsonb; v_al numeric; v_borg numeric;
+begin
+  if not public.mag_kraambeheer() then return; end if;
+  for r in select b.* from public.betaalrondes b
+            where public.vest_ok(b.vestiging) and public.in_actieve_vestiging(b.vestiging)
+              and b.betaald_op is null
+              and b.periode_van <= (now() at time zone public.mijn_tijdzone())::date
+            order by b.nummer loop
+    ronde_id := r.id; nummer := r.nummer; periode_van := r.periode_van; periode_tot := r.periode_tot;
+    betaaldatum := r.betaaldatum; afgelopen := r.periode_tot < (now() at time zone public.mijn_tijdzone())::date;
+    vastgezet := 0; mensen := 0; bruto := 0; borg_in := 0; borg_terug := 0; boetes := 0; netto := 0;
+    open_uren := 0; open_bedrag := 0;
+    for x in select * from public.mcr_ronde_uitbetaling(r.id) loop
+      if x.vastgezet_op is not null then
+        vastgezet := vastgezet + 1;
+        v_borg := coalesce(x.borg_in,0);
+        netto := netto + coalesce(x.netto,0);
+      else
+        v_al := coalesce((v_gepland->>x.gebruiker_id::text)::numeric, 0);
+        v_borg := greatest(0, least(greatest(0, x.borg_nu - x.borg_al - v_al),
+                                    coalesce(x.bruto,0) + coalesce(x.borg_terug,0) - coalesce(x.boetes,0)));
+        netto := netto + greatest(0, coalesce(x.bruto,0) + coalesce(x.borg_terug,0) - coalesce(x.boetes,0) - v_borg);
+        v_gepland := jsonb_set(v_gepland, array[x.gebruiker_id::text], to_jsonb(v_al + v_borg));
+      end if;
+      bruto := bruto + coalesce(x.bruto,0);
+      borg_in := borg_in + v_borg;
+      borg_terug := borg_terug + coalesce(x.borg_terug,0);
+      boetes := boetes + coalesce(x.boetes,0);
+      open_uren := open_uren + coalesce(x.open_uren,0);
+      open_bedrag := open_bedrag + round(coalesce(x.open_uren,0) * coalesce(x.tarief,0), 2);
+      if coalesce(x.bruto,0) > 0 or coalesce(x.open_uren,0) > 0 then mensen := mensen + 1; end if;
+    end loop;
+    return next;
+  end loop;
+end $$;
+revoke all on function public.mcr_loon_overzicht() from public, anon;
+grant execute on function public.mcr_loon_overzicht() to authenticated;

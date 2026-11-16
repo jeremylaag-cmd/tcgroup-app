@@ -4294,7 +4294,7 @@ const CREW_NL={
 // Dag afsluiten
 'Stock you asked for':'Voorraad die je vroeg','✓ Sorted':'✓ Geregeld','by':'door',
 'Nothing to close: no stall had people on the rota in the last week.':'Niets af te sluiten: de afgelopen week stond bij geen kraam iemand ingeroosterd.',
-'All hours this week ›':'Alle uren deze week ›','Not on the rota':'Niet ingeroosterd','to check':'te controleren','Finished at':'Gestopt om','Break (min)':'Pauze (min)',
+'All hours this week ›':'Alle uren deze week ›','Not on the rota':'Niet ingeroosterd','to check':'te controleren','Finished at':'Gestopt om','Started at':'Begonnen om','change start, break or time':'start, pauze of tijd wijzigen','Change start, break or time':'Start, pauze of tijd wijzigen','Break (min)':'Pauze (min)',
 'Still clocked in. Fill in when they finished.':'Nog ingeklokt. Vul in wanneer diegene stopte.','min after the shift started.':'min na de start van de dienst.',
 'Looks right':'Klopt','Change break or time':'Pauze of tijd wijzigen','change break or time':'pauze of tijd wijzigen','Never clocked in.':'Nooit ingeklokt.','Sent home / not needed':'Naar huis gestuurd / niet nodig',
 'Worked – add hours':'Gewerkt – uren toevoegen','No uniform registered yet · hand out ›':'Nog geen kleding geregistreerd · uitdelen ›','Close the day':'Dag afsluiten',
@@ -4358,8 +4358,8 @@ const CREW_NL_REGELS=[
 [/^(\d+) (shift|shifts)$/,(m,a,b)=>a+' '+(b==='shift'?'dienst':'diensten')],
 [/^(\d+) (place|places) left$/,(m,a,b)=>a+' '+(b==='place'?'plek':'plekken')+' over'],
 [/^Stock: (.*)$/,(m,a)=>'Voorraad: '+crewT(a)],
-[/^Your invoice for week (\d+) will be ready on (.+)\. Payment (.+)\.$/,(m,a,b,c)=>`Je factuur voor week ${a} staat klaar op ${b}. Uitbetaling ${c}.`],
-[/^Your invoice will be ready on (.+)\.$/,(m,a)=>`Je factuur staat klaar op ${a}.`],
+[/^Your invoice for week (\d+) will be ready on (.+?)(?: at (\d\d:\d\d))?\. Payment (.+)\.$/,(m,a,b,t,c)=>`Je factuur voor week ${a} staat klaar op ${b}${t?' vanaf '+t:''}. Uitbetaling ${c}.`],
+[/^Your invoice will be ready on (.+?)(?: at (\d\d:\d\d))?\.$/,(m,a,t)=>`Je factuur staat klaar op ${a}${t?' vanaf '+t:''}.`],
 [/^(\d+) gas bottles?$/,(m,a)=>a+' gasfles'+(a==='1'?'':'sen')],
 [/^(\d+) box(?:es)? of strawberries$/,(m,a)=>a+(a==='1'?' doos':' dozen')+' aardbeien'],
 [/^(\d+) box(?:es)? of bananas$/,(m,a)=>a+(a==='1'?' doos':' dozen')+' bananen'],
@@ -7815,7 +7815,7 @@ async function mbWijzigingen(){
       <td style="white-space:nowrap;font-variant-numeric:tabular-nums">${veiligTekst(mbKlokDatum(r.op))}</td>
       <td style="font-weight:600">${veiligTekst(r.door)}</td>
       <td>${veiligTekst(r.naam)}${r.datum?`<div style="font-size:11.5px;color:var(--muted)">${veiligTekst(mbKort(r.datum))}${r.kraam?' &middot; '+veiligTekst(r.kraam):''}</div>`:''}</td>
-      <td>${pauze?'Pauze':r.soort==='uitkloktijd'?'Uitkloktijd':'Beoordeling'}</td>
+      <td>${pauze?'Pauze':r.soort==='uitkloktijd'?'Uitkloktijd':r.soort==='inkloktijd'?'Inkloktijd':'Beoordeling'}</td>
       <td style="white-space:nowrap">${pauze?`${veiligTekst(r.van||'0')} &rarr; <b>${veiligTekst(r.naar)}</b> min`:`${r.van?veiligTekst(r.van):(r.soort==='uitkloktijd'?'niet uitgeklokt':'&mdash;')} &rarr; <b>${r.naar?veiligTekst(r.naar):'&mdash;'}</b>`}</td>
       <td style="font-size:12.5px;color:var(--muted)">${veiligTekst(r.reden||'')}</td></tr>`;
   });
@@ -9142,8 +9142,39 @@ async function mbKasOpslaan(i){
   mbNaar('kas');
 }
 
+// Lonen: per betaalronde die nog niet betaald is, wat er overgemaakt moet worden
+// (na aftrek van de kledingborg), plus uren die nog goedgekeurd moeten worden.
+// Zo weet je welk bedrag er op de rekening moet staan.
+function mbLonenKaart(rijen){
+  const g=x=>valSym()+' '+Number(x||0).toLocaleString('nl-NL',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const nodig=rijen.reduce((a,r)=>a+Number(r.netto||0),0), open=rijen.reduce((a,r)=>a+Number(r.open_bedrag||0),0);
+  const dag=d=>d?new Date(d+'T12:00:00').toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}):'—';
+  return `<div class="mb-kaart">
+    <div class="mb-kop">Lonen &middot; wat er op de rekening moet staan</div>
+    <div style="display:flex;gap:28px;flex-wrap:wrap;margin:6px 0 12px">
+      <div><div class="mb-groot">${g(nodig)}</div><div class="mb-klein">over te maken (goedgekeurde uren, na borg)</div></div>
+      ${open>0?`<div><div class="mb-groot" style="color:#B45309">+ ${g(open)}</div><div class="mb-klein">nog niet goedgekeurde uren (schatting)</div></div>
+      <div><div class="mb-groot">${g(nodig+open)}</div><div class="mb-klein">totaal om aan te houden</div></div>`:''}
+    </div>
+    <div style="overflow-x:auto"><table class="mb-tabel2" style="width:100%;font-size:13px">
+      <tr><th style="text-align:left">Ronde</th><th style="text-align:left">Uitbetaling</th><th>Mensen</th><th>Lonen</th><th>Borg</th><th>Over te maken</th><th>Nog goed te keuren</th></tr>
+      ${rijen.map(r=>`<tr>
+        <td>Week ${veiligTekst(r.nummer)}<div style="font-size:11px;color:var(--muted)">${veiligTekst(mbKort(r.periode_van))} – ${veiligTekst(mbKort(r.periode_tot))}${r.afgelopen?'':' &middot; loopt nog'}</div></td>
+        <td style="white-space:nowrap">${veiligTekst(dag(r.betaaldatum))}</td>
+        <td style="text-align:right">${veiligTekst(r.mensen)}</td>
+        <td style="text-align:right;white-space:nowrap">${g(r.bruto)}</td>
+        <td style="text-align:right;white-space:nowrap;color:${Number(r.borg_in)?'#B4472B':'var(--muted)'}">${Number(r.borg_in)?'&minus; '+g(r.borg_in):'&mdash;'}${Number(r.borg_terug)?`<div style="color:#0F7A52">+ ${g(r.borg_terug)}</div>`:''}</td>
+        <td style="text-align:right;white-space:nowrap;font-weight:700">${g(r.netto)}</td>
+        <td style="text-align:right;white-space:nowrap;color:${Number(r.open_bedrag)?'#B45309':'var(--muted)'}">${Number(r.open_bedrag)?g(r.open_bedrag)+`<div style="font-size:11px">${Number(r.open_uren).toLocaleString('nl-NL',{maximumFractionDigits:1})} uur</div>`:'&mdash;'}</td>
+      </tr>`).join('')}
+    </table></div>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:8px;line-height:1.6">Alle rondes die nog niet als betaald staan. &ldquo;Nog goed te keuren&rdquo; is een schatting
+      (uren &times; uurloon) van uren die nog geaccordeerd moeten worden; de kledingborg gaat er dan nog vanaf bij nieuwe mensen.</div>
+  </div>`;
+}
 async function mbKosten(){
-  let [kramen,res]=await Promise.all([mbKramenLijst(), sb.rpc('mcr_kosten_lijst2',{p_van:MB_KOST_VAN,p_tot:MB_KOST_TOT})]);
+  let [kramen,res,loon]=await Promise.all([mbKramenLijst(), sb.rpc('mcr_kosten_lijst2',{p_van:MB_KOST_VAN,p_tot:MB_KOST_TOT}),
+    PLANNER_MODUS?Promise.resolve(null):sb.rpc('mcr_loon_overzicht').then(x=>x.error?null:(x.data||[]),()=>null)]);
   if(res.error)res=await sb.rpc('mcr_kosten_lijst',{p_van:MB_KOST_VAN,p_tot:MB_KOST_TOT});
   if(res.error)throw res.error;
   MB_KOST_RIJEN=res.data||[];
@@ -9155,6 +9186,8 @@ async function mbKosten(){
     `<input type="date" class="mb-getal" style="width:150px" title="Vanaf" value="${veiligTekst(MB_KOST_VAN||'')}" onchange="MB_KOST_VAN=this.value||null;mbNaar('kosten')">
      <input type="date" class="mb-getal" style="width:150px" title="Tot en met" value="${veiligTekst(MB_KOST_TOT||'')}" onchange="MB_KOST_TOT=this.value||null;mbNaar('kosten')">
      ${(MB_KOST_VAN||MB_KOST_TOT)?`<button class="mb-mini" onclick="MB_KOST_VAN=null;MB_KOST_TOT=null;mbNaar('kosten')">Alles tonen</button>`:''}`);
+
+  if(loon&&loon.length)uit+=mbLonenKaart(loon);
 
   // Invoer
   const b=MB_KOST_BEWERK?r.find(x=>x.id===MB_KOST_BEWERK):null;
@@ -11804,12 +11837,13 @@ async function mcrUren(){
 }
 
 // ─── Facturen ──────────────────────────────────────────────────────
-// Een factuur staat klaar vanaf 4 dagen voor de uitbetaling (en nooit voordat
-// de periode voorbij is). Zelfde regel als in de database (mcr_betaalrondes).
+// Een factuur staat klaar op de dag vóór de uitbetaling vanaf 15:00 (en nooit
+// voordat de periode voorbij is). Zelfde regel als in de database (mcr_betaalrondes).
+// Geeft {datum:'jjjj-mm-dd', tijd:'15:00'|null}.
 function mcrFactuurKlaarOp(r){
   const a=new Date(String(r.periode_tot)+'T00:00:00'); a.setDate(a.getDate()+1);
-  if(r.betaaldatum){ const b=new Date(String(r.betaaldatum)+'T00:00:00'); b.setDate(b.getDate()-4); if(b>a)return fmt(b); }
-  return fmt(a);
+  if(r.betaaldatum){ const b=new Date(String(r.betaaldatum)+'T15:00:00'); b.setDate(b.getDate()-1); if(b>a)return {datum:fmt(b),tijd:'15:00'}; }
+  return {datum:fmt(a),tijd:null};
 }
 async function mcrFacturen(){
   const{data,error}=await sb.rpc('mcr_betaalrondes');
@@ -11842,7 +11876,7 @@ async function mcrFacturen(){
   }else{
     const eerst=komt[0];
     uit+=`<div class="mcr-kaart"><div style="font-size:13px;color:#6B6A66;line-height:1.6">
-      ${eerst?`<div>Nothing to invoice yet.</div><div style="margin-top:4px">Your invoice for week ${veiligTekst(eerst.nummer)} will be ready on ${veiligTekst(mcrDatum(mcrFactuurKlaarOp(eerst)))}. Payment ${veiligTekst(mcrDatum(eerst.betaaldatum))}.</div>`
+      ${eerst?`<div>Nothing to invoice yet.</div><div style="margin-top:4px">Your invoice for week ${veiligTekst(eerst.nummer)} will be ready on ${(k=>veiligTekst(mcrDatum(k.datum))+(k.tijd?' at '+k.tijd:''))(mcrFactuurKlaarOp(eerst))}. Payment ${veiligTekst(mcrDatum(eerst.betaaldatum))}.</div>`
              :'Nothing to invoice yet.'}
     </div></div>`;
   }
@@ -12693,6 +12727,8 @@ function mgrClPersoon(p){
     <div style="font-size:12.5px;color:#6B6A66;margin-top:2px;font-variant-numeric:tabular-nums">${tijd}${klok?' &middot; '+klok:''}</div>
     ${p.in_door?`<div style="font-size:11.5px;color:#8A8984;margin-top:1px">Entered by ${veiligTekst(p.in_door)}, not clocked in by themselves</div>`:''}`;
   const editor=()=>`<div style="display:flex;gap:6px;margin-top:8px;align-items:flex-end;flex-wrap:wrap">
+      ${p.in?`<div><label class="mcr-label">Started at</label>
+        <input class="mcr-veld" type="time" id="mgrClS${id}" value="${veiligTekst(mgrKlok(p.in))}" data-oud="${veiligTekst(mgrKlok(p.in))}" style="width:118px;padding:8px 10px;font-size:14px"></div>`:''}
       <div><label class="mcr-label">Finished at</label>
         <input class="mcr-veld" type="time" id="mgrClT${id}" value="${p.uit?veiligTekst(mgrKlok(p.uit)):''}" style="width:118px;padding:8px 10px;font-size:14px"></div>
       <div><label class="mcr-label">Break (min)</label>
@@ -12706,14 +12742,14 @@ function mgrClPersoon(p){
     // (tot Bram de uren goedkeurt); de controle blijft dan gewoon staan.
     uit+=`<div style="display:flex;gap:14px;margin-top:5px;flex-wrap:wrap">
       <button class="mcr-linkje" onclick="MGR_CL.wijzig['${veiligJs(p.id)}']=true;mgrClTeken()">change</button>
-      ${p.uren_id&&!MGR_CL.open[p.id]?`<button class="mcr-linkje" onclick="MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()">change break or time</button>`:''}</div>`;
+      ${p.uren_id&&!MGR_CL.open[p.id]?`<button class="mcr-linkje" onclick="MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()">change start, break or time</button>`:''}</div>`;
     if(p.uren_id&&MGR_CL.open[p.id])uit+=editor();
   }else if(p.uren_id){
     // Te laat ingeklokt: alleen ter info. De manager hoeft niets te kiezen,
     // de uren tellen vanaf het inklokken en zijn gewoon aan te passen.
     if(p.te_laat>0)uit+=`<div style="font-size:12.5px;color:#B45309;margin-top:5px">Clocked in ${p.te_laat} min after the shift started.</div>`;
     uit+=`<div style="display:flex;gap:6px;margin-top:7px;flex-wrap:wrap">${mgrKn('Looks right',`mgrClZet('${veiligJs(p.id)}','ok')`,true)}
-      ${MGR_CL.open[p.id]?'':mgrKn('Change break or time',`MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()`)}</div>`;
+      ${MGR_CL.open[p.id]?'':mgrKn('Change start, break or time',`MGR_CL.open['${veiligJs(p.id)}']=true;mgrClTeken()`)}</div>`;
     if(MGR_CL.open[p.id])uit+=editor();
   }else{
     uit+=`<div style="font-size:12.5px;color:#B4472B;margin-top:5px">Never clocked in.</div>
@@ -12856,9 +12892,19 @@ async function mgrClUur(gid){
   const min=parseInt(pz&&pz.value,10);
   if(!t||!t.value){ if(u)u.innerHTML='<span style="color:#B4472B">Fill in the time they finished.</span>'; return; }
   if(isNaN(min)||min<0){ if(u)u.innerHTML='<span style="color:#B4472B">Enter the break in minutes.</span>'; return; }
+  // Starttijd aangepast? Eerst die opslaan (zelfde regels als de eindtijd).
+  const s=document.getElementById('mgrClS'+gid);
+  let inTijd=p.in?new Date(p.in):null;
+  try{
+    if(s&&s.value&&s.value!==s.dataset.oud){
+      inTijd=new Date(MGR_CL.datum+'T'+s.value+':00');
+      const{error}=await sb.rpc('mgr_starttijd_zetten',{p_uren:p.uren_id,p_in:inTijd.toISOString(),p_reden:'close day'});
+      if(error)throw error;
+    }
+  }catch(e){ if(u)u.innerHTML=`<span style="color:#B4472B">${veiligTekst(mcrFout(e))}</span>`; return; }
   // Na middernacht uitgeklokt (vóór de begintijd): dan is het de dag erna.
   let d=new Date(MGR_CL.datum+'T'+t.value+':00');
-  if(p.in&&d<=new Date(p.in))d=new Date(d.getTime()+86400000);
+  if(inTijd&&d<=inTijd)d=new Date(d.getTime()+86400000);
   try{
     const{error}=await sb.rpc('mgr_uur_zetten',{p_uren:p.uren_id,p_uit:d.toISOString(),p_pauze:min,p_reden:'close day'});
     if(error)throw error;
