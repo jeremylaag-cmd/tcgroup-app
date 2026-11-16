@@ -24225,9 +24225,16 @@ function pbGetShifts(k){
     // hem nergens terugzien.
     const zonder=(k.personeel||[]).filter(p=>!p.shift_id);
     const zonderLos=(k.losse||[]).filter(l=>!l.shift_id);
-    if(zonder.length||zonderLos.length){
+    // "Personeel nodig" op de klus is het totaal. Wat de shifts daarvan niet
+    // vragen, zijn de plekken voor "Hele klus". Zonder dit telde die regel
+    // alleen wie er al stond en leek de klus vol terwijl er nog plek was.
+    // Kramen (Manchester e.d.) hebben een eigen planbord en doen niet mee.
+    const shiftNodig=echt.reduce((s,sh)=>s+(sh.personeel_nodig||0),0);
+    const restNodig=k.kraam_id?0:Math.max(0,(k.personeel_nodig||0)-shiftNodig);
+    const zonderAantal=zonder.length+zonderLos.length;
+    if(zonderAantal||restNodig){
       rijen.push({id:'shift-'+k.id,tijd:'Hele klus',team,
-        bezet:zonder.length+zonderLos.length,totaal:zonder.length+zonderLos.length,
+        bezet:zonderAantal,totaal:Math.max(restNodig,zonderAantal),
         leden:zonder.map(p=>({soort:'pers',id:p.id,naam:p.naam}))
           .concat(zonderLos.map(l=>({soort:'los',id:l.id,naam:l.naam})))});
     }
