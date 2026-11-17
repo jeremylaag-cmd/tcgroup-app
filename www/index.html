@@ -35,6 +35,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .vest-switch button.active{background:#B4472B;color:#fff}
 .vest-switch button.nl.active{background:var(--text);color:#fff}
 @media(max-width:820px){.vest-switch button{padding:5px 8px;font-size:11px}}
+.vest-switch select{appearance:none;-webkit-appearance:none;padding:6px 28px 6px 12px;font-size:12px;font-weight:600;color:#fff;border:none;border-radius:6px;font-family:var(--font);cursor:pointer;max-width:150px;
+  background:#B4472B url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23fff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center}
+.vest-switch select.nl{background-color:var(--text)}
+.vest-switch select option{color:#111;background:#fff}
+/* Kopjes onder een markttabblad (Omzet > Dagrapport, Instellingen > Inlezen, ...) */
+.mb-sub{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+@media(max-width:700px){.mb-sub{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}.mb-sub::-webkit-scrollbar{display:none}.mb-sub .mb-mini{white-space:nowrap;flex-shrink:0}}
 /* ── Manchester: eigen app voor het Engelse personeel ────────────── */
 #mcrApp{position:fixed;inset:0;background:#F7F6F2;display:flex;flex-direction:column;z-index:500;font-family:var(--font)}
 .mcr-head{flex-shrink:0;padding:18px 20px 14px;background:#fff;border-bottom:1px solid #E6E4DE;display:flex;align-items:center;justify-content:space-between;gap:10px}
@@ -2305,6 +2312,7 @@ textarea.crm-in{resize:vertical;line-height:1.5}
   <div id="page-mcrbeheer" class="page">
     <div class="mob-topbar" id="mbMobTop"></div>
     <div class="mb-tabs" id="mbTabs" style="display:none"></div>
+    <div class="mb-sub" id="mbSubnav" style="display:none"></div>
     <div id="mbInhoud" style="padding-bottom:2rem"></div>
   </div>
 
@@ -4798,9 +4806,47 @@ function mbMagOmzet(){ return typeof isAdmin==='function'&&isAdmin()&&!!CURRENT_
 // Daarbij Kosten (eigen markt) en, waar contant betaald wordt, Kassa: de
 // contante omzet per dag invullen en terugzien. Geen pin- of myPOS-omzet.
 const MB_PLANNER_TABS=['overzicht','shifts','agenda','uren','kas','kosten','mensen','huisregels'];
-function mbTabs(){
+// Alles wat dit account mag openen (ook de schermen die als kopje onder een ander tabblad hangen).
+function mbTabsAlle(){
   if(PLANNER_MODUS)return MB_TABS.filter(([k])=>MB_PLANNER_TABS.includes(k)&&(k!=='kas'||MARKT_CONTANT[dezeMarkt()]));
   return (mbMagOmzet()?MB_TABS:MB_TABS.filter(([k])=>!MB_OMZET_TABS.includes(k))).filter(([k])=>k!=='kas'); }
+// Kopjes: deze schermen staan niet meer los in de bovenbalk maar als kopje
+// onder een ander tabblad. Mag je dat tabblad zelf niet zien (een planner
+// heeft geen Instellingen), dan blijft het scherm een eigen tabblad.
+const MB_GROEPEN={overzicht:['overzicht','bezetting'],
+                  omzet:['omzet','dagrapport','cijfers'],
+                  instellingen:['instellingen','inlezen','huisregels','berichten']};
+function mbOuder(tab){
+  const mag=mbTabsAlle().map(x=>x[0]);
+  for(const o in MB_GROEPEN){ if(o!==tab&&MB_GROEPEN[o].includes(tab)&&mag.includes(o))return o; }
+  return tab;
+}
+// De bovenbalk: alleen de hoofdtabbladen.
+function mbTabs(){ return mbTabsAlle().filter(([k])=>mbOuder(k)===k); }
+function mbInstOnder(){
+  const onder=[['kramen','Kramen & seizoen'],
+               ['gegevens','Factuurgegevens & bedragen'],['tags','NFC-tags'],['weekend','Weekendmanagers'],
+               ['verplaatsen','Personeel verplaatsen']];
+  if(mbMagOmzet())onder.push(['drukte','Drukte per uur']);
+  return onder;
+}
+// De rij kopjes boven het scherm. Bij Instellingen staan de eigen onderdelen
+// (Kramen, NFC-tags, ...) en de verhuisde schermen in dezelfde rij.
+function mbSubnavTeken(tab){
+  const el=document.getElementById('mbSubnav'); if(!el)return;
+  const mag=mbTabsAlle(), naam=k=>(mag.find(x=>x[0]===k)||[])[1];
+  const items=[];
+  (MB_GROEPEN[mbOuder(tab)]||[]).forEach(k=>{
+    if(!naam(k))return;
+    if(k==='instellingen')mbInstOnder().forEach(([o,l])=>items.push([l,tab==='instellingen'&&MB_INST===o,`mbInstKies('${o}')`]));
+    else items.push([naam(k),tab===k,`mbNaar('${k}')`]);
+  });
+  if(items.length<2){ el.innerHTML=''; el.style.display='none'; return; }
+  el.innerHTML=items.map(([l,aan,klik])=>`<button class="mb-mini${aan?' zwart':''}" onclick="${klik}">${veiligTekst(l)}</button>`).join('');
+  el.style.display='';
+  const actief=el.querySelector('.zwart'); if(actief&&el.scrollWidth>el.clientWidth)el.scrollLeft=Math.max(0,actief.offsetLeft-el.offsetLeft-16);
+}
+function mbInstKies(o){ if(MB_TAB==='instellingen')mbInstGa(o); else{ MB_INST=o; mbNaar('instellingen'); } }
 
 // Per kraam: contant ja/nee, waar de pin vandaan komt (myPOS of met de hand
 // van de bon) en welk percentage naar de markt gaat. Liverpool: geen contant,
@@ -4881,7 +4927,8 @@ function mbNaar(tab, knop){
   const alle=[...document.querySelectorAll('.htab')];
   alle.forEach(t=>t.classList.remove('active'));
   if(knop)knop.classList.add('active');
-  else{ const i=mbTabs().findIndex(x=>x[0]===tab); if(alle[i])alle[i].classList.add('active'); }
+  else{ const o=mbOuder(tab), i=mbTabs().findIndex(x=>x[0]===o); if(alle[i])alle[i].classList.add('active'); }
+  mbSubnavTeken(tab);
   mbOnderbalk(tab);
   const el=document.getElementById('mbInhoud');
   el.innerHTML='<div class="mb-kaart" style="text-align:center;color:var(--muted)">Bezig&hellip;</div>';
@@ -4907,7 +4954,8 @@ function mbOnderbalk(tab){
                           :[['overzicht','Overzicht'],['shifts','Shifts'],['uren','Uren'],['meer','Meer']];
   bn.classList.add('visible');
   bn.innerHTML=items.map(([k,l])=>{
-    const aan=(k===tab)||(k==='meer'&&!items.some(i=>i[0]===tab));
+    const hoofd=mbOuder(tab);
+    const aan=(k===hoofd)||(k==='meer'&&!items.some(i=>i[0]===hoofd));
     const kleur=aan?'var(--text)':'#94938E';
     return `<button class="bnav-item${aan?' active':''}" onclick="${k==='meer'?'mbMeer()':`mbNaar('${k}')`}">
       <div class="bnav-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="${kleur}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ico[k]}</svg></div>
@@ -10372,22 +10420,16 @@ async function mbMensenAllesOpslaan(stil){
 
 // ── INSTELLINGEN ──────────────────────────────────────────────────
 async function mbInstellingen(){
-  const onder=[['kramen','Kramen & seizoen'],
-               ['gegevens','Factuurgegevens & bedragen'],['tags','NFC-tags'],['weekend','Weekendmanagers'],
-               ['verplaatsen','Personeel verplaatsen']];
-  if(mbMagOmzet())onder.push(['drukte','Drukte per uur']);
-  else if(MB_INST==='drukte')MB_INST='kramen';
+  // De onderdelen staan als kopjes in de rij boven het scherm (mbSubnavTeken).
+  if(!mbInstOnder().some(([k])=>k===MB_INST))MB_INST='kramen';
   document.getElementById('mbInhoud').innerHTML=
     mbKop('Instellingen &middot; '+veiligTekst(marktNaam(dezeMarkt())),'Elke kraam heeft zijn eigen seizoen en eigen openingstijden')
-    +`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">${
-      onder.map(([k,l])=>`<button class="mb-mini${MB_INST===k?' zwart':''}" onclick="mbInstGa('${k}')">${l}</button>`).join('')
-    }</div><div id="mbInstInhoud"></div>`;
+    +`<div id="mbInstInhoud"></div>`;
   await mbInstGa(MB_INST);
 }
 async function mbInstGa(k){
   MB_INST=k;
-  document.querySelectorAll('#mbInhoud > div:nth-child(2) button').forEach(b=>
-    b.classList.toggle('zwart', b.getAttribute('onclick').indexOf("'"+k+"'")>=0));
+  mbSubnavTeken('instellingen');
   const el=document.getElementById('mbInstInhoud');
   if(el)el.innerHTML='<div class="mb-kaart" style="color:var(--muted)">Bezig&hellip;</div>';
   try{
@@ -13646,10 +13688,16 @@ function zetVestigingSwitch(){
   if(!el)return;
   const keuzes=vestigingKeuzes();
   if(keuzes.length<2&&!PLANNER_MODUS){ el.style.display='none'; el.innerHTML=''; return; }
-  el.innerHTML=keuzes.map(k=>{
+  // Drie of meer plekken: een keuzelijst in plaats van een rij knoppen.
+  const lijst=keuzes.length>2;
+  el.innerHTML=(lijst
+    ?`<select class="${ACTIEVE_VESTIGING==='NL'?'nl':''}" aria-label="Locatie kiezen" title="Locatie kiezen" onchange="wisselVestiging(this.value)">${
+        keuzes.some(k=>k.code===ACTIEVE_VESTIGING)?'':'<option value="" selected disabled>Kies locatie</option>'}${
+        keuzes.map(k=>`<option value="${k.code}"${ACTIEVE_VESTIGING===k.code?' selected':''}>${veiligTekst(k.label)}</option>`).join('')}</select>`
+    :keuzes.map(k=>{
     const aan=(ACTIEVE_VESTIGING===k.code);
     return `<button type="button" class="${k.klasse}${aan?' active':''}" onclick="wisselVestiging('${k.code}')">${veiligTekst(k.label)}</button>`;
-  }).join('')
+  }).join(''))
   // Planner: naar de app van de kraammanager (inklokken, dagafsluiting).
   +(PLANNER_MODUS?`<button type="button" onclick="planModus('app')" title="Open the stall manager app">Kraam-app</button>`:'')
   ;
@@ -13658,7 +13706,8 @@ function zetVestigingSwitch(){
 // Tussen welke vestigingen mag deze gebruiker wisselen?
 function vestigingKeuzes(){
   if(MAG_ALLE_VESTIGINGEN)
-    return [{code:'NL',label:'Nederland',klasse:'nl'},{code:'MCR',label:'Manchester',klasse:''},{code:'LPL',label:'Liverpool',klasse:''}];
+    return [{code:'NL',label:'Nederland',klasse:'nl'},{code:'MCR',label:'Manchester',klasse:''},{code:'LPL',label:'Liverpool',klasse:''},
+            {code:'PAR',label:'Parijs',klasse:''}];
   if(TWEEDE_VESTIGING)
     return [MIJN_VESTIGING,TWEEDE_VESTIGING].map(c=>({code:c,label:c==='NL'?'Nederland':marktNaam(c),klasse:c==='NL'?'nl':''}))
       .sort((a,b)=>a.label.localeCompare(b.label));
@@ -13681,7 +13730,7 @@ function zetMcrVestSwitch(){
 }
 
 async function wisselVestiging(code){
-  if(ACTIEVE_VESTIGING===code)return;
+  if(!code||ACTIEVE_VESTIGING===code)return;
   const el=document.getElementById('vestSwitch');
   if(el)el.style.opacity='.5';
   try{
@@ -13693,6 +13742,7 @@ async function wisselVestiging(code){
   }catch(e){
     console.error('Wisselen van vestiging mislukt:',e);
     if(el)el.style.opacity='1';
+    zetVestigingSwitch();   // de keuzelijst terug op waar je werkelijk staat
     alert('Wisselen van vestiging is niet gelukt. Probeer het nog een keer.');
   }
 }
