@@ -16337,6 +16337,21 @@ function truckMagZoneIn(t,z){
   return t.milieuzone_ok!==false;
 }
 
+// De server geeft per verzoek hooguit 1000 rijen terug. Zonder dit verdwenen
+// er stil mensen van klussen zodra een tabel daar overheen ging (je zag ze
+// niet, en opnieuw inplannen gaf dan "duplicate key"). Haalt alles op in
+// blokken; de query moet een vaste volgorde hebben, anders kunnen rijen
+// dubbel of juist niet meekomen.
+async function haalAlles(maak){
+  const stap=1000; let alle=[];
+  for(let van=0;;van+=stap){
+    const{data,error}=await maak().range(van,van+stap-1);
+    if(error)return{data:alle.length?alle:null,error};
+    alle=alle.concat(data||[]);
+    if(!data||data.length<stap)break;
+  }
+  return{data:alle,error:null};
+}
 async function loadAll(){
   const [
     {data:trucks},{data:personeel},{data:klussen},{data:klusTrucks},
@@ -16347,19 +16362,19 @@ async function loadAll(){
     sb.from('trucks').select('*').order('volgorde'),
     // Iedereen kan op een klus worden gezet — ook beheerders en hal-medewerkers.
     sb.from('personeel_publiek').select('id,naam,rol,geboortedag,geboortemaand').order('naam'),
-    sb.from('klussen').select('*').order('datum'),
-    sb.from('klus_trucks').select('*'),
-    sb.from('klus_gebruikers').select('*'),
+    haalAlles(()=>sb.from('klussen').select('*').order('datum').order('id')),
+    haalAlles(()=>sb.from('klus_trucks').select('*').order('klus_id').order('truck_id')),
+    haalAlles(()=>sb.from('klus_gebruikers').select('*').order('klus_id').order('gebruiker_id')),
     sb.from('klus_pdfs').select('*'),
     sb.from('soorten').select('*').order('volgorde'),
     sb.from('mededelingen').select('*').order('datum',{ascending:true}).order('aangemaakt_op',{ascending:true}),
-    sb.from('klus_soorten').select('*'),
-    sb.from('klus_truck_soorten').select('*'),
-    sb.from('beschikbaarheid').select('*').eq('status','goedgekeurd'),
-    sb.from('klus_aanmeldingen').select('*'),
+    haalAlles(()=>sb.from('klus_soorten').select('*').order('klus_id').order('soort_id')),
+    haalAlles(()=>sb.from('klus_truck_soorten').select('*').order('klus_id').order('truck_id').order('soort_id')),
+    haalAlles(()=>sb.from('beschikbaarheid').select('*').eq('status','goedgekeurd').order('id')),
+    haalAlles(()=>sb.from('klus_aanmeldingen').select('*').order('id')),
     sb.from('vaste_diensten').select('*').order('weekdag').order('volgorde'),
-    sb.from('klus_losse_personen').select('*').order('naam'),
-    sb.from('klus_shifts').select('*').order('volgorde'),
+    haalAlles(()=>sb.from('klus_losse_personen').select('*').order('naam').order('id')),
+    haalAlles(()=>sb.from('klus_shifts').select('*').order('volgorde').order('id')),
     sb.from('klus_ritten').select('*'),
     sb.from('klus_rit_personen').select('*'),
   ]);
@@ -20707,7 +20722,7 @@ async function loadUrenBeheer(){
   if(!accordEl||!maandEl)return;
 
   // Haal alle registraties op
-  const{data:regs}=await sb.from('urenregistraties').select('*').order('ingeklokt_op',{ascending:false});
+  const{data:regs}=await haalAlles(()=>sb.from('urenregistraties').select('*').order('ingeklokt_op',{ascending:false}).order('id'));
   const{data:gebruikers}=await sb.from('personeel_publiek').select('id,naam');
   const gMap=Object.fromEntries((gebruikers||[]).map(g=>[g.id,g.naam]));
 
@@ -22820,7 +22835,7 @@ async function loadAlleBeschikbaarheid(){
   const lijstEl=document.getElementById('alleBeschList');
   if(!agendaEl||!lijstEl)return;
 
-  const{data:beschData}=await sb.from('beschikbaarheid').select('*').order('datum_start',{ascending:true});
+  const{data:beschData}=await haalAlles(()=>sb.from('beschikbaarheid').select('*').order('datum_start',{ascending:true}).order('id'));
   ALLE_BESCH=beschData||[];
   vulVerlofExportJaren();
   await laadVerlofCijfers();
@@ -23444,7 +23459,7 @@ async function exportVerlof(jaar,gebruikerId,knopTekst){
   const[{data:cijfers},{data:pmAlles},{data:regels},{data:mensen},{data:muts}]=await Promise.all([
     sb.rpc('verlof_cijfers',{p_jaar:jaar}),
     sb.rpc('plusmin_cijfers',{p_jaar:jaar}),
-    sb.from('beschikbaarheid').select('*').neq('soort','beschikbaar').order('datum_start'),
+    haalAlles(()=>sb.from('beschikbaarheid').select('*').neq('soort','beschikbaar').order('datum_start').order('id')),
     sb.from('personeel_publiek').select('id,naam,rol'),
     sb.from('saldo_mutaties').select('*').eq('jaar',jaar).order('aangemaakt_op'),
   ]);
@@ -23869,7 +23884,7 @@ async function bewaarAfwezig(){
 
   // De planning kijkt naar BESCHIKBAARHEID; die moet dus meteen bij zijn,
   // anders kun je iemand die je net vrij hebt gegeven nog gewoon indelen.
-  const{data:vers}=await sb.from('beschikbaarheid').select('*').eq('status','goedgekeurd');
+  const{data:vers}=await haalAlles(()=>sb.from('beschikbaarheid').select('*').eq('status','goedgekeurd').order('id'));
   BESCHIKBAARHEID=vers||[];
 
   sluitAfwezig();
@@ -24133,7 +24148,7 @@ async function loadAanmeldingen(){
   if(!el)return;
   el.innerHTML='<div class="spin">Laden...</div>';
   const[{data:aanm,error},{data:mensen}]=await Promise.all([
-    sb.from('klus_aanmeldingen').select('*').order('aangemaakt_op',{ascending:true}),
+    haalAlles(()=>sb.from('klus_aanmeldingen').select('*').order('aangemaakt_op',{ascending:true}).order('id')),
     sb.from('personeel_publiek').select('id,naam'),
   ]);
   if(error){el.innerHTML='<div class="empty">Laden mislukt: '+error.message+'</div>';return;}
