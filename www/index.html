@@ -3925,7 +3925,7 @@ const MB_EN_T={
 'Open gebleven diensten en wie later begon dan ingeroosterd · tijden in Britse tijd':'Shifts left open and who started later than scheduled · times in UK time',
 'Open gebleven diensten':'Shifts left open','Niets open.':'Nothing open.','Vastzetten':'Fix','Elke regel heeft zijn eigen knop; er komt geen knop die alles in een keer afhandelt. Na vastzetten staat de registratie bij Te accorderen.':'Each line has its own button; there is no button that handles everything at once. After fixing, the entry is under To approve.',
 'Later begonnen dan ingeroosterd':'Started later than scheduled','Hier hoef je niets te doen: de uren lopen vanaf het inklokmoment, dus dit is al verrekend.':'Nothing to do here: hours run from the clock-in time, so this is already accounted for.',
-'Iedereen was op tijd.':'Everyone was on time.','Vul een eindtijd in.':'Fill in an end time.','aan het werk sinds':'working since','ingeroosterd':'scheduled','ingeklokt':'clocked in',
+'Iedereen was op tijd.':'Everyone was on time.','Vul een eindtijd in.':'Fill in an end time.','aan het werk sinds':'working since','telt vanaf':'paid from','echt ingeklokt':'actually clocked in','ingeroosterd':'scheduled','ingeklokt':'clocked in',
 'min later':'min late','Vastgezet tot':'Fixed until','geen pauze':'no break','staat nu bij Te accorderen':'now under To approve',
 
 
@@ -4875,6 +4875,21 @@ function mbUur(t){ return t?String(t).slice(0,5):''; }
 // Alle tijden in Brits tijd, ook als Brams telefoon op Nederlandse tijd staat.
 let MB_TZ='Europe/London';   // bij het opstarten: de tijdzone van de markt (Parijs een uur later)
 function mbKlokT(ts){ return ts?new Date(ts).toLocaleTimeString('nl-NL',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:MB_TZ}):''; }
+// Te laat ingeklokt: ingeklokt_op is dan het moment waarop de betaalde uren beginnen
+// (echte tijd + de vertraging). De echte inkloktijd komt los uit de database en staat
+// hier per registratie, en per persoon + betaalde starttijd voor lijsten zonder uren_id.
+let ECHT_IN={};
+async function echtInLaden(van,tot){
+  try{ const{data,error}=await sb.rpc('mcr_echte_inkloktijden',{p_van:van||null,p_tot:tot||null}); if(error)return;
+    (data||[]).forEach(r=>{ ECHT_IN[r.uren_id]=r.echt_ingeklokt_op;
+      ECHT_IN[r.gebruiker_id+'|'+new Date(r.ingeklokt_op).getTime()]=r.echt_ingeklokt_op; });
+  }catch(e){ console.error(e); }
+}
+function echtIn(r){ if(!r||!r.ingeklokt_op)return null;
+  return (r.uren_id&&ECHT_IN[r.uren_id])||ECHT_IN[r.gebruiker_id+'|'+new Date(r.ingeklokt_op).getTime()]||null; }
+// "17:10 (telt vanaf 17:20)", of gewoon de inkloktijd als iemand op tijd was.
+function mbInTekst(r){ const e=echtIn(r); return e?mbKlokT(e)+' (telt vanaf '+mbKlokT(r.ingeklokt_op)+')':mbKlokT(r.ingeklokt_op); }
+function mgrInTekst(r){ const e=echtIn(r); return e?mgrKlok(e)+' (paid from '+mgrKlok(r.ingeklokt_op)+')':mgrKlok(r.ingeklokt_op); }
 // Minuten sinds middernacht, Britse tijd (voor "nog niet binnen" en "aan het werk").
 function mbNuMin(){ const p=new Intl.DateTimeFormat('en-GB',{hour:'2-digit',minute:'2-digit',hour12:false,timeZone:MB_TZ}).format(new Date()).split(':'); return (+p[0]%24)*60+(+p[1]); }
 // Bedrag uit een invoerveld: "12,50", "12.50", "1.234,50" of "£ 12". NaN als het niet lukt.
@@ -4980,6 +4995,7 @@ function mbMeer(){
 // ── OVERZICHT ─────────────────────────────────────────────────────
 async function mbOverzicht(){
   await mbDatumVandaag();
+  const echtP=echtInLaden(MB_DATUM,MB_DATUM);
   const drP=mdrLaden(MB_DATUM,MB_DATUM);   // drukte per uur (alleen Bram), loopt parallel
   const [ovz, wacht, balk, , agd, dag, man, dr] = await Promise.all([
     sb.rpc('mcr_overzicht',{p_datum:MB_DATUM}),
@@ -5016,6 +5032,7 @@ async function mbOverzicht(){
   Object.values(MENSEN).forEach(l=>l.sort((a,b)=>String(a.naam||'').localeCompare(String(b.naam||''))));
   const MANDAG=((man&&!man.error&&man.data)||[]).filter(x=>x.soort==='manager'||x.datum===MB_DATUM);
   if(ovz.error)throw ovz.error;
+  await echtP;
   const w=(wacht.data&&wacht.data[0])||{};
   const perKraam={};
   (ovz.data||[]).forEach(r=>{ perKraam[r.kraam_id]=perKraam[r.kraam_id]||{k:r,shifts:[]};
@@ -5091,8 +5108,8 @@ async function mbOverzicht(){
           <span style="flex-grow:1;min-width:0">${mbNaamLink(m.gebruiker_id,m.naam,'font-size:13px')}</span>
           ${laat?`<span style="font-size:11.5px;color:#B4472B;font-weight:700;white-space:nowrap">nog niet binnen (${veiligTekst(mbUur(sh.start_tijd))})</span>
             ${m.telefoon?mbTel(m.telefoon,'font-size:11.5px;color:#fff;background:#B4472B;border-radius:12px;padding:2px 8px;text-decoration:none;white-space:nowrap').replace(/>[^<]*<\/a>$/,'>Bel</a>'):''}`
-          :binnen?`<span style="font-size:11.5px;color:#0F7A52;white-space:nowrap">in ${veiligTekst(mbKlokT(m.ingeklokt_op))}</span>`
-            :(m.uitgeklokt_op?`<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">${veiligTekst(mbKlokT(m.ingeklokt_op))}&ndash;${veiligTekst(mbKlokT(m.uitgeklokt_op))}</span>`:'')}
+          :binnen?`<span style="font-size:11.5px;color:${echtIn(m)?'#B4472B':'#0F7A52'};white-space:nowrap">in ${veiligTekst(mbInTekst(m))}</span>`
+            :(m.uitgeklokt_op?`<span style="font-size:11.5px;color:var(--muted);white-space:nowrap">${veiligTekst(mbInTekst(m))}&ndash;${veiligTekst(mbKlokT(m.uitgeklokt_op))}</span>`:'')}
         </div>`;
       });
       if(open)uit+=`<button class="mb-linktekst" style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:#B45309;text-decoration:none;padding:3px 0 0 2px"
@@ -7261,7 +7278,7 @@ async function mbDagOpen(datum){
   const sd=document.getElementById('mbShiftDetail'); if(sd)sd.innerHTML='';
   el.innerHTML='<div class="mb-kaart" style="margin-top:14px;color:var(--muted)">Bezig&hellip;</div>';
   try{
-    const{data,error}=await sb.rpc('mcr_dag',{p_datum:datum});
+    const[{data,error}]=await Promise.all([sb.rpc('mcr_dag',{p_datum:datum}),echtInLaden(datum,datum)]);
     if(error)throw error;
     el.innerHTML=mbDagHtml(datum, data||[]);
     el.scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -7326,7 +7343,7 @@ function mbDagHtml(datum, rijen){
             <div style="font-size:13px;font-weight:600">${mbNaamLink(m.gebruiker_id,m.naam,'font-size:13px')}</div>
             ${m.telefoon?`<a href="tel:${veiligTekst(String(m.telefoon).replace(/[^0-9+]/g,''))}" style="font-size:11.5px;color:var(--muted);text-decoration:none">${veiligTekst(m.telefoon)}</a>`:''}
           </div>
-          ${binnenNu?mbChip('ingeklokt '+veiligTekst(mbKlokT(m.ingeklokt_op)),'#0F7A52','#F2FBF6')
+          ${binnenNu?mbChip('ingeklokt '+mbInTekst(m),echtIn(m)?'#B4472B':'#0F7A52',echtIn(m)?'#FBEDE9':'#F2FBF6')
             :(klaar?mbChip('klaar','#6B6A66','#F3F2EE'):'')}
         </div>`;
       });
@@ -7679,7 +7696,7 @@ function mbUrenKopZet(){
 }
 async function mbUrenAkkoord(){
   const [o,v]=await Promise.all([sb.rpc('mcr_uren_open',{p_van:null,p_tot:null}),
-    sb.rpc('mcr_uren_vraag').then(x=>x,()=>({data:[]}))]);
+    sb.rpc('mcr_uren_vraag').then(x=>x,()=>({data:[]})),echtInLaden()]);
   if(o.error)throw o.error;
   MB_UREN_RIJEN=(o.data||[]).slice().sort((a,b)=>String(a.datum).localeCompare(String(b.datum))
     ||String(a.kraam||'').localeCompare(String(b.kraam||''))||String(a.naam||'').localeCompare(String(b.naam||'')));
@@ -7724,7 +7741,7 @@ function mbUurRijHtml(r){
         :r.notitie_beh?`<div style="font-size:11.5px;color:var(--muted);max-width:280px;white-space:normal">${veiligTekst(r.notitie_beh)}</div>`:''}</div></div>`;
   if(werkt){
     return `<tr id="mbUR${id}"><td>${naam}</td>
-      <td colspan="4"><span class="mb-chip" style="color:#0F7A52;background:#F2FBF6">aan het werk sinds ${veiligTekst(b)}</span>
+      <td colspan="4"><span class="mb-chip" style="color:#0F7A52;background:#F2FBF6">aan het werk sinds ${veiligTekst(r._b||mbInTekst(r))}</span>
         ${r.ingeroosterd?`<span style="font-size:11.5px;color:var(--muted);margin-left:6px">ingeroosterd ${veiligTekst(mbUur(r.ingeroosterd))}</span>`:''}</td>
       <td style="font-size:11.5px;color:var(--muted);white-space:nowrap">na uitklokken te accorderen</td></tr>`;
   }
@@ -7733,6 +7750,7 @@ function mbUurRijHtml(r){
     <td style="white-space:nowrap;font-variant-numeric:tabular-nums">
       <input type="time" class="mb-getal" style="width:86px" id="mbUI${id}" data-oud="${veiligTekst(b)}" value="${veiligTekst(b)}" title="Begintijd (Britse tijd)" oninput="mbUurGewijzigd('${jid}')"> &ndash;
       <input type="time" class="mb-getal" style="width:86px" id="mbUT${id}" data-oud="${veiligTekst(t)}" value="${veiligTekst(t)}" title="Eindtijd (Britse tijd)" oninput="mbUurGewijzigd('${jid}')">
+      ${echtIn(r)?`<div style="font-size:10.5px;color:#B4472B;margin-top:2px;white-space:nowrap">echt ingeklokt ${veiligTekst(mbKlokT(echtIn(r)))}, telt vanaf ${veiligTekst(mbKlokT(r.ingeklokt_op))}</div>`:''}
       ${r.uit_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.uit_op))}">eindtijd door ${veiligTekst(r.uit_door)}</div>`:''}</td>
     <td><input type="number" min="0" max="180" class="mb-getal" style="width:58px" id="mbUP${id}" data-oud="${veiligTekst(r.pauze)}" value="${veiligTekst(r.pauze)}" oninput="mbUurGewijzigd('${jid}')">
       ${r.pauze_door?`<div style="font-size:10.5px;color:#B45309;margin-top:2px;white-space:nowrap" title="${veiligTekst(mbKlokDatum(r.pauze_op))}">door ${veiligTekst(r.pauze_door)}</div>`:''}</td>
@@ -7850,7 +7868,7 @@ function mbKlokDatum(t){ return t?new Date(t).toLocaleString('nl-NL',{day:'numer
 let MB_GK_VAN=null, MB_GK_TOT=null;
 async function mbGoedgekeurd(){
   if(!MB_GK_VAN){ const d=new Date(mbVandaagStr()+'T00:00:00'); MB_GK_TOT=fmt(d); d.setDate(d.getDate()-30); MB_GK_VAN=fmt(d); }
-  const{data,error}=await sb.rpc('uren_goedgekeurd',{p_van:MB_GK_VAN,p_tot:MB_GK_TOT,p_gebruiker:null});
+  const[{data,error}]=await Promise.all([sb.rpc('uren_goedgekeurd',{p_van:MB_GK_VAN,p_tot:MB_GK_TOT,p_gebruiker:null}),echtInLaden(MB_GK_VAN,MB_GK_TOT)]);
   if(error)throw error;
   const rijen=data||[];
   const kop=document.getElementById('mbUrenKop');
@@ -7871,7 +7889,7 @@ async function mbGoedgekeurd(){
       <td><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>${r.notitie_beh?`<div style="font-size:11px;color:var(--muted);max-width:260px;white-space:normal">${veiligTekst(r.notitie_beh)}</div>`:''}</td>
       <td style="white-space:nowrap">${veiligTekst(mbKort(r.datum))}</td>
       <td>${veiligTekst(r.kraam||r.klus||'')}</td>
-      <td style="white-space:nowrap;font-variant-numeric:tabular-nums">${veiligTekst(mbKlokT(r.ingeklokt_op))} &ndash; ${veiligTekst(mbKlokT(r.uitgeklokt_op))}</td>
+      <td style="white-space:nowrap;font-variant-numeric:tabular-nums">${veiligTekst(mbKlokT(r.ingeklokt_op))} &ndash; ${veiligTekst(mbKlokT(r.uitgeklokt_op))}${echtIn(r)?`<div style="font-size:10.5px;color:#B4472B">echt ingeklokt ${veiligTekst(mbKlokT(echtIn(r)))}</div>`:''}</td>
       <td>${r.pauze} min</td>
       <td style="font-variant-numeric:tabular-nums;font-weight:600">${veiligTekst(mbNum((r.minuten||0)/60,2))}</td>
       <td style="white-space:nowrap">${r.factuur_nummer?veiligTekst(r.factuur_nummer)+(dicht?' <span style="color:#B4472B">ontvangen</span>':''):'<span style="color:var(--muted)">&mdash;</span>'}</td>
@@ -7957,7 +7975,7 @@ async function mbWijzigingen(){
   mbZet(uit);
 }
 async function mbAandacht(){
-  const{data,error}=await sb.rpc('mcr_aandacht');
+  const[{data,error}]=await Promise.all([sb.rpc('mcr_aandacht'),echtInLaden()]);
   if(error)throw error;
   const open=(data||[]).filter(r=>r.soort==='open');
   const laat=(data||[]).filter(r=>r.soort==='telaat');
@@ -7985,7 +8003,7 @@ async function mbAandacht(){
   laat.forEach(r=>{
     uit+=`<div class="mb-persoon">
       <div style="flex:1 1 150px;font-size:13.5px">${veiligTekst(r.naam)}</div>
-      <div style="flex:1 1 220px;font-size:12.5px;color:var(--muted)">${veiligTekst(mbDatum(r.datum))} &middot; ingeroosterd ${veiligTekst(mbUur(r.ingeroosterd))}, ingeklokt ${veiligTekst(mbKlokT(r.ingeklokt_op))}</div>
+      <div style="flex:1 1 220px;font-size:12.5px;color:var(--muted)">${veiligTekst(mbDatum(r.datum))} &middot; ingeroosterd ${veiligTekst(mbUur(r.ingeroosterd))}, ingeklokt ${veiligTekst(mbInTekst(r))}</div>
       ${mbChip(r.minuten+' min later','#B45309','#FEF6E7')}</div>`;
   });
   uit+='</div>';
@@ -12560,7 +12578,7 @@ function mgrAgRegel(r){
 async function mcrRotaDag(ds){
   MGR_DAG=ds;
   const [{data,error},ag]=await Promise.all([sb.rpc('mgr_dag',{p_datum:ds}),
-    sb.rpc('mgr_agenda',{p_van:ds,p_tot:ds}).then(x=>x,()=>({data:[]}))]);
+    sb.rpc('mgr_agenda',{p_van:ds,p_tot:ds}).then(x=>x,()=>({data:[]})),echtInLaden(ds,ds)]);
   if(error)throw error;
   const d=new Date(ds+'T00:00:00');
   document.getElementById('mcrTitel').textContent=d.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'});
@@ -12586,8 +12604,8 @@ async function mcrRotaDag(ds){
       s.mensen.forEach(m=>{
         const uid=veiligTekst(m.uren_id||'');
         const status=!m.ingeklokt_op?'<span style="color:#8A8984">not clocked in</span>'
-          :!m.uitgeklokt_op?`<span style="color:#0F7A52">in since ${veiligTekst(mgrKlok(m.ingeklokt_op))}</span>`
-          :`${veiligTekst(mgrKlok(m.ingeklokt_op))} → ${veiligTekst(mgrKlok(m.uitgeklokt_op))}`;
+          :!m.uitgeklokt_op?`<span style="color:${echtIn(m)?'#B4472B':'#0F7A52'}">in since ${veiligTekst(mgrInTekst(m))}</span>`
+          :`${veiligTekst(mgrInTekst(m))} → ${veiligTekst(mgrKlok(m.uitgeklokt_op))}`;
         uit+=`<div style="padding:9px 0;border-top:1px solid #EFEDE7">
           <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
             <span style="font-size:14px;font-weight:600">${veiligTekst(m.naam)}${m.beoordeling?` <span class="mcr-chip" style="background:#F3F2EE;color:#6B6A66">${veiligTekst(mgrOordeel(m.beoordeling))}</span>`:''}</span>
@@ -12615,7 +12633,7 @@ async function mcrStallUren(){
     MGR_UWEEK=mgrMaandag(pd?new Date(String(pd)+'T00:00:00'):new Date());
   }
   const tot=new Date(MGR_UWEEK); tot.setDate(tot.getDate()+6);
-  const{data,error}=await sb.rpc('mgr_uren',{p_van:fmt(MGR_UWEEK),p_tot:fmt(tot)});
+  const[{data,error}]=await Promise.all([sb.rpc('mgr_uren',{p_van:fmt(MGR_UWEEK),p_tot:fmt(tot)}),echtInLaden(fmt(MGR_UWEEK),fmt(tot))]);
   if(error)throw error;
   document.getElementById('mcrTitel').textContent=MGR_KRAAM&&MGR_KRAAM.naam?'Hours · '+MGR_KRAAM.naam:'Hours · all stalls';
   document.getElementById('mcrSub').textContent=
@@ -12642,7 +12660,7 @@ async function mcrStallUren(){
           <span style="font-size:14px;font-weight:600">${veiligTekst(r.naam)}${!MGR_KRAAM||!MGR_KRAAM.id?` <span style="font-size:12px;color:#6B6A66;font-weight:500">&middot; ${veiligTekst(r.kraam)}</span>`:''}</span>
           <span class="mcr-chip" style="background:${chip[2]};color:${chip[1]}">${chip[0]}</span></div>
         <div style="font-size:12.5px;color:#6B6A66;margin-top:3px;font-variant-numeric:tabular-nums">
-          ${veiligTekst(mgrKlok(r.ingeklokt_op))} &rarr; ${open?'&hellip;':veiligTekst(mgrKlok(r.uitgeklokt_op))}
+          ${veiligTekst(mgrInTekst(r))} &rarr; ${open?'&hellip;':veiligTekst(mgrKlok(r.uitgeklokt_op))}
           ${open?'':` &middot; ${r.pauze||0} min break &middot; <b style="color:#1A1917">${Number(r.uren||0).toFixed(2)} h</b>`}
           ${r.ingeroosterd?` &middot; rota ${veiligTekst(mcrTijd(r.ingeroosterd))}`:''}</div>
         ${r.notitie_pers?`<div style="font-size:12px;color:#6B6A66;margin-top:2px">&ldquo;${veiligTekst(r.notitie_pers)}&rdquo;</div>`:''}
