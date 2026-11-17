@@ -4290,6 +4290,7 @@ const CREW_NL={
 '. Your stall manager and Bram see a note with it.':'. Je kraammanager en Bram zien er een notitie bij.','Clock out at':'Uitklokken om',
 'Finished at a different time? Ask your stall manager to set your finish time.':'Op een andere tijd gestopt? Vraag je kraammanager je eindtijd aan te passen.',
 "You're early – thanks! Your hours count from":'Je bent vroeg – bedankt! Je uren tellen vanaf',', when your shift starts.':', als je dienst begint.',
+'You clocked in late at':'Je klokte te laat in om','. Late minutes count double, so your paid hours start at':'. Minuten die je te laat bent tellen dubbel, dus je betaalde uren beginnen om',
 '· from':'· vanaf','No shift today':'Vandaag geen dienst',
 'Hold your phone against the sticker in the stall. No sticker to hand? Type the code from the card.':'Houd je telefoon tegen de sticker in de kraam. Geen sticker bij de hand? Typ de code van de kaart.',
 'Type the code from the card in the stall.':'Typ de code van de kaart in de kraam.','Your next shift is':'Je volgende dienst is',
@@ -11779,7 +11780,8 @@ function mcrKlokTeken(){
         </div>
         <div id="mcrTeller" style="font-size:54px;font-weight:700;color:#1A1917;letter-spacing:-1.5px">${Math.floor(min/60)}:${String(min%60).padStart(2,'0')}</div>
         <div style="font-size:13px;color:#6B6A66;margin-top:2px">since ${veiligTekst(mcrSinds(st.ingeklokt_op,true))}</div>
-        ${new Date(st.ingeklokt_op).getTime()>Date.now()?`<div style="font-size:12.5px;color:#6B6A66;line-height:1.5;margin:10px auto 0;max-width:280px">You're early &ndash; thanks! Your hours count from ${veiligTekst(mcrKlok(st.ingeklokt_op))}, when your shift starts.</div>`:''}
+        ${st.echt_ingeklokt_op?`<div style="font-size:12.5px;color:#B4472B;line-height:1.5;margin:10px auto 0;max-width:290px">You clocked in late at ${veiligTekst(mcrKlok(st.echt_ingeklokt_op))}. Late minutes count double, so your paid hours start at ${veiligTekst(mcrKlok(st.ingeklokt_op))}.</div>`
+          :new Date(st.ingeklokt_op).getTime()>Date.now()?`<div style="font-size:12.5px;color:#6B6A66;line-height:1.5;margin:10px auto 0;max-width:280px">You're early &ndash; thanks! Your hours count from ${veiligTekst(mcrKlok(st.ingeklokt_op))}, when your shift starts.</div>`:''}
         <div class="mcr-cirkel uit" style="margin-top:26px" onclick="mcrUitklokVraag()">
           <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
           <span style="font-size:15px;font-weight:600">Clock out</span>
