@@ -4828,7 +4828,7 @@ function mbInstOnder(){
   const onder=[['kramen','Kramen & seizoen'],
                ['gegevens','Factuurgegevens & bedragen'],['tags','NFC-tags'],['weekend','Weekendmanagers'],
                ['verplaatsen','Personeel verplaatsen']];
-  if(mbMagOmzet())onder.push(['drukte','Drukte per uur']);
+  if(mbMagOmzet()&&mbMarktTeltBetalingen())onder.push(['drukte','Drukte per uur']);
   return onder;
 }
 // De rij kopjes boven het scherm. Bij Instellingen staan de eigen onderdelen
@@ -4852,15 +4852,25 @@ function mbInstKies(o){ if(MB_TAB==='instellingen')mbInstGa(o); else{ MB_INST=o;
 // Per kraam: contant ja/nee, waar de pin vandaan komt (myPOS of met de hand
 // van de bon) en welk percentage naar de markt gaat. Liverpool: geen contant,
 // terminals van de organisatie, 28% afdracht.
-let MB_KRAAM_INFO=null;
+let MB_KRAAM_INFO=null, MB_KRAAM_INFO_MARKT=null;
 async function mbKraamInfo(){
-  if(MB_KRAAM_INFO)return MB_KRAAM_INFO;
+  if(MB_KRAAM_INFO&&MB_KRAAM_INFO_MARKT===dezeMarkt())return MB_KRAAM_INFO;   // per markt: wissel je van markt, dan opnieuw
+  const markt=dezeMarkt();
   const{data,error}=await sb.rpc('markt_kraam_info');
-  MB_KRAAM_INFO={};
+  MB_KRAAM_INFO={}; MB_KRAAM_INFO_MARKT=error?null:markt;
   if(!error)(data||[]).forEach(r=>{ MB_KRAAM_INFO[r.kraam_id]={contant:r.contant!==false,pin:r.pin_bron||'mypos',afdracht:Number(r.afdracht_pct)||0,vestiging:r.vestiging}; });
   return MB_KRAAM_INFO;
 }
 function mbKraamContant(kid){ const i=MB_KRAAM_INFO&&MB_KRAAM_INFO[kid]; return !i||i.contant; }
+// Pin met de hand van de bon (Liverpool: de kassa's zijn van de organisatie, via Dines).
+// Daar zijn alleen dagtotalen bekend: geen losse betalingen, dus geen bonnen, gemiddelde
+// bon of drukte per uur.
+function mbKraamHand(kid){ const i=MB_KRAAM_INFO&&MB_KRAAM_INFO[kid]; return !!i&&i.pin==='handmatig'; }
+function mbMarktTeltBetalingen(){
+  if(!MB_KRAAM_INFO||MB_KRAAM_INFO_MARKT!==dezeMarkt())return true;
+  const k=Object.values(MB_KRAAM_INFO).filter(i=>!i.vestiging||i.vestiging===dezeMarkt());
+  return !k.length||k.some(i=>i.pin!=='handmatig');
+}
 
 // ── kleine hulpjes ────────────────────────────────────────────────
 function mbDatum(d){ return d?new Date(String(d)+'T00:00:00').toLocaleDateString('nl-NL',{day:'numeric',month:'short',year:'numeric'}):''; }
@@ -4945,6 +4955,8 @@ function mbNaar(tab, knop){
   if(knop)knop.classList.add('active');
   else{ const o=mbOuder(tab), i=mbTabs().findIndex(x=>x[0]===o); if(alle[i])alle[i].classList.add('active'); }
   mbSubnavTeken(tab);
+  // Welke kopjes er zijn hangt af van de markt (Liverpool heeft geen drukte per uur).
+  if(MB_KRAAM_INFO_MARKT!==dezeMarkt())mbKraamInfo().then(()=>{ if(MB_TAB===tab)mbSubnavTeken(tab); },()=>{});
   mbOnderbalk(tab);
   const el=document.getElementById('mbInhoud');
   el.innerHTML='<div class="mb-kaart" style="text-align:center;color:var(--muted)">Bezig&hellip;</div>';
@@ -5032,7 +5044,7 @@ async function mbOverzicht(){
   Object.values(MENSEN).forEach(l=>l.sort((a,b)=>String(a.naam||'').localeCompare(String(b.naam||''))));
   const MANDAG=((man&&!man.error&&man.data)||[]).filter(x=>x.soort==='manager'||x.datum===MB_DATUM);
   if(ovz.error)throw ovz.error;
-  await echtP;
+  await Promise.all([echtP,mbKraamInfo()]);
   const w=(wacht.data&&wacht.data[0])||{};
   const perKraam={};
   (ovz.data||[]).forEach(r=>{ perKraam[r.kraam_id]=perKraam[r.kraam_id]||{k:r,shifts:[]};
@@ -5064,7 +5076,7 @@ async function mbOverzicht(){
       const pct=Number(pin.forecast)>0?Math.round(Number(pin.omzet_totaal||pin.omzet_pin)/Number(pin.forecast)*100):null;
       uit+=`<div style="display:flex;gap:6px;align-items:baseline;flex-wrap:wrap;font-size:12.5px;margin:-2px 0 6px">
         <span style="font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(pin.omzet_pin))}</span>
-        <span style="color:var(--muted)">pin &middot; ${Number(pin.transacties)||0} bonnen${pct!==null?` &middot; ${pct}% van forecast`:''}</span></div>`;
+        <span style="color:var(--muted)">pin${mbKraamHand(k.kraam_id)?'':` &middot; ${Number(pin.transacties)||0} bonnen`}${pct!==null?` &middot; ${pct}% van forecast`:''}</span></div>`;
     }
     if(!k.dicht){
       const p=PLAN[k.kraam_id+'|'+MB_DATUM], g=PLAN[k.kraam_id+'|'+gisteren];
@@ -6428,6 +6440,8 @@ function mdrIndex(data){
 }
 async function mdrLaden(van,tot){
   if(!mbMagOmzet())return null;
+  await mbKraamInfo();
+  if(!mbMarktTeltBetalingen())return null;
   const{data,error}=await sb.rpc('mcr_drukte',{p_van:van,p_tot:tot}).then(x=>x,e=>({data:null,error:e}));
   if(error||!data)return null;
   return mdrIndex(data);
@@ -8317,8 +8331,8 @@ async function mbDagrapport(){
     <div class="mb-kop">Wat de app zelf invult</div>
     <div class="mb-veldrij">
       ${vast(MB_DAG_INFO&&MB_DAG_INFO.pin==='handmatig'?'Omzet pin, alle terminals (&pound;)':'Omzet pin (&pound;)', veiligTekst(mbPond(r.omzet_pin)))}
-      ${vast('Transacties', r.transacties||0)}
-      ${vast('Gem. bon (&pound;)', r.gem_bon?veiligTekst(mbPond(r.gem_bon)):'&mdash;')}
+      ${MB_DAG_INFO&&MB_DAG_INFO.pin==='handmatig'?'':vast('Transacties', r.transacties||0)}
+      ${MB_DAG_INFO&&MB_DAG_INFO.pin==='handmatig'?'':vast('Gem. bon (&pound;)', r.gem_bon?veiligTekst(mbPond(r.gem_bon)):'&mdash;')}
     </div>
     <div class="mb-veldrij">
       ${vast('Open van', veiligTekst(mbUur(r.open_van)))}
@@ -8343,21 +8357,20 @@ async function mbDagrapport(){
     </div>`:''}
     <div style="font-size:12px;color:var(--muted);line-height:1.6;margin-top:12px">
       Personeelsuren en bezetting komen uit de geklokte uren van die dag. ${MB_DAG_INFO&&MB_DAG_INFO.pin==='handmatig'
-        ?'Pinomzet en transacties zijn de dagtotalen die je hierboven per terminal van de bon overneemt. De uitbetaling van de organisatie moet gelijk zijn aan &ldquo;Netto voor jou&rdquo; over dezelfde periode.'
+        ?'Pinomzet is het dagtotaal dat je hierboven per terminal van de bon overneemt. Losse transacties houdt de app hier niet bij; die lopen via de organisatie. De uitbetaling van de organisatie moet gelijk zijn aan &ldquo;Netto voor jou&rdquo; over dezelfde periode.'
         :`Pinomzet, transacties, gemiddelde bon,
       porties en toppings komen uit de myPOS-bestanden die je <button class="mb-linktekst" onclick="mbNaar('inlezen')">hier inleest</button>.`}
     </div></div></div>`;
   document.getElementById('mbInhoud').innerHTML=uit;
 }
-// Liverpool: per terminal het dagtotaal en het aantal transacties van de bon.
+// Liverpool: per terminal het dagtotaal van de bon. Het aantal transacties vragen we niet
+// meer (Bram, 22 nov: de kassa's zijn van de organisatie); wat er al stond blijft bewaard.
 function mbDagTerminalsHtml(){
   const rij=(t,i)=>`<div class="mb-veldrij" style="align-items:flex-end">
       <div style="flex:1 1 150px"><label class="mb-lab">Terminal</label>
         <input class="mb-veld" id="mbTN${i}" maxlength="40" value="${veiligTekst(t.tid||'')}" placeholder="bv. Terminal 1"></div>
       <div style="flex:1 1 120px"><label class="mb-lab">Dagtotaal (&pound;)</label>
         <input class="mb-veld" id="mbTO${i}" inputmode="decimal" value="${t.omzet!=null?veiligTekst(t.omzet):''}" placeholder="0,00"></div>
-      <div style="flex:1 1 110px"><label class="mb-lab">Transacties</label>
-        <input class="mb-veld" id="mbTT${i}" type="number" min="0" value="${t.transacties!=null?veiligTekst(t.transacties):''}" placeholder="0"></div>
     </div>`;
   return `<div style="font-size:12.5px;color:var(--muted);margin:-2px 0 8px">Van de terminalbon (Z-rapport) van de organisatie, per terminal.</div>
     <div id="mbTermLijst">${MB_DAG_TERM.map(rij).join('')}</div>
@@ -8366,7 +8379,7 @@ function mbDagTerminalsHtml(){
 function mbDagTermLees(){
   return MB_DAG_TERM.map((t,i)=>{
     const g=id=>{const e=document.getElementById(id);return e?e.value:'';};
-    return {tid:g('mbTN'+i).trim(), omzet:g('mbTO'+i).trim(), transacties:g('mbTT'+i).trim()};
+    return {tid:g('mbTN'+i).trim(), omzet:g('mbTO'+i).trim(), transacties:t.transacties!=null?String(t.transacties):''};
   });
 }
 function mbDagTermErbij(){
@@ -8394,7 +8407,7 @@ async function mbDagOpslaan(){
   // Terminals (Liverpool): bedragen controleren vóór er iets wordt opgeslagen.
   let term=null;
   if(MB_DAG_INFO&&MB_DAG_INFO.pin==='handmatig'){
-    term=mbDagTermLees().filter(t=>t.tid||t.omzet||t.transacties);
+    term=mbDagTermLees().filter(t=>t.tid||t.omzet);
     for(const t of term){
       if(!t.tid){ alert('Geef elke terminal een naam.'); return; }
       const b=t.omzet===''?0:mbBedragLees(t.omzet);
@@ -9040,7 +9053,8 @@ async function mbOmzet(){
   const [rap,ter,vjr]=await Promise.all([
     sb.rpc('mcr_omzet_dagen',{p_van:ophVan,p_tot:ophTot}),
     doorklik?sb.rpc('mypos_terminals_gezien').then(x=>x,()=>({data:[]})):Promise.resolve({data:[]}),
-    sb.rpc('mcr_omzet_vorig_jaar',{p_van:ophVan,p_tot:ophTot}).then(x=>x,()=>({data:[]}))]);
+    // De cijfers van vorig jaar zijn die van Manchester; een andere markt heeft niets om mee te vergelijken.
+    (MB_OMZ_KIJK||dezeMarkt()==='MCR')?sb.rpc('mcr_omzet_vorig_jaar',{p_van:ophVan,p_tot:ophTot}).then(x=>x,()=>({data:[]})):Promise.resolve({data:[]})]);
   if(rap.error)throw rap.error;
   const alle=rap.data||[];
   const kramen=kramenAlle.filter(k=>alle.some(r=>r.kraam_id===k.id));
@@ -9061,7 +9075,12 @@ async function mbOmzet(){
   const contantMist=d=>d<vandaag&&alle.some(r=>r.datum===d&&!r.dicht&&r.omzet_contant==null&&mbKraamContant(r.kraam_id));
   // Vorig jaar: dezelfde weekdag 52 weken eerder (vr 6 nov 2026 ↔ vr 7 nov 2025).
   const VJ=(vjr&&!vjr.error&&Array.isArray(vjr.data))?vjr.data:[];
-  const heeftVJ=VJ.length>0;
+  // Alleen Manchester stond er vorig jaar. Een kraam van een nieuwe markt (Liverpool, Parijs)
+  // telt nergens mee in de vergelijking, ook niet in het totaal.
+  const vglKraam=kid=>{ const i=MB_KRAAM_INFO&&MB_KRAAM_INFO[kid]; return i&&i.vestiging?i.vestiging==='MCR':VJ.some(r=>r.kraam_id===kid); };
+  const heeftVJ=VJ.length>0&&kramen.some(k=>vglKraam(k.id));
+  const nieuweMarkt=heeftVJ&&kramen.some(k=>!vglKraam(k.id));
+  const dagTotV=d=>alle.filter(r=>r.datum===d&&vglKraam(r.kraam_id)).reduce((a,r)=>a+n(r.omzet_totaal),0);
   const vjRij=d=>VJ.filter(r=>r.datum===d);
   const vjDag=d=>vjRij(d).reduce((a,r)=>a+n(r.totaal),0);
   const vjDatum=d=>{ const r=VJ.find(x=>x.datum===d); return r?r.datum_vorig:plus(d,-364); };
@@ -9072,7 +9091,7 @@ async function mbOmzet(){
     return `<span style="display:inline-block;font-size:${klein?11:12}px;font-weight:700;padding:${klein?'0 5px':'1px 7px'};border-radius:9px;white-space:nowrap;color:${g?'#0F7A52':'#B4472B'};background:${g?'#EAF6EF':'#FBEDE9'}">${g?'+':'−'}${Math.abs(Math.round(p))}%</span>`; };
   // Vergelijken op afgesloten dagen (t/m gisteren): vandaag loopt nog.
   const klaarDagen=dagen.filter(d=>d<vandaag);
-  const nuKlaar=klaarDagen.reduce((a,d)=>a+dagTot(d),0);
+  const nuKlaar=klaarDagen.reduce((a,d)=>a+dagTotV(d),0);
   const vjKlaar=klaarDagen.reduce((a,d)=>a+vjDag(d),0);
 
   const knop=(m,l)=>`<button class="mb-mini${MB_OMZ===m?' zwart':''}" onclick="mbOmzKies('${m}')">${l}</button>`;
@@ -9105,14 +9124,14 @@ async function mbOmzet(){
           +(heeftVJ&&vjDag(vandaag)>0?`<br>vorig jaar (${veiligTekst(vjNaam(vandaag))}) hele dag: <b style="color:var(--text)">${veiligTekst(mbPondKort(vjDag(vandaag)))}</b>`:''):'geen marktdag')
     +tegel('Gisteren', inSeizoen(gist)?veiligTekst(mbPondKort(dagTot(gist))):'&mdash;',
         inSeizoen(gist)?kraamRegel(gist)+(contantMist(gist)?'<br><span style="color:#B45309">contant nog niet overal ingevuld</span>':'')
-          +(heeftVJ&&vjDag(gist)>0?`<br>${pctChip(dagTot(gist),vjDag(gist))} vorig jaar ${veiligTekst(mbPondKort(vjDag(gist)))}`:''):'geen marktdag')
+          +(heeftVJ&&vjDag(gist)>0?`<br>${pctChip(dagTotV(gist),vjDag(gist))} vorig jaar ${veiligTekst(mbPondKort(vjDag(gist)))}`:''):'geen marktdag')
     +tegel('Totaal periode', veiligTekst(mbPondKort(totaal)),
         `${veiligTekst(mbKort(van))} &ndash; ${veiligTekst(mbKort(tot))} &middot; ${dagen.length} ${dagen.length===1?'dag':'dagen'}`)
     +tegel('Gemiddeld per dag', klaar.length?veiligTekst(mbPondKort(gem)):'&mdash;',
         beste?`beste: ${veiligTekst(mbOmzDagNaam(beste))}, ${veiligTekst(mbPondKort(dagTot(beste)))}`:'over afgesloten dagen')
     +(heeftVJ?(()=>{ const p=vjKlaar>0?(nuKlaar/vjKlaar-1)*100:null;
         return tegel('Tegen vorig jaar', p==null?'&mdash;':`<span style="color:${p>=0?'#0F7A52':'#B4472B'}">${p>=0?'+':'−'}${Math.abs(Math.round(p))}%</span>`,
-          klaarDagen.length?`${veiligTekst(mbPondKort(nuKlaar))} nu &middot; ${veiligTekst(mbPondKort(vjKlaar))} vorig jaar<br>t/m gisteren, zelfde weekdagen`:'nog geen afgesloten dag'); })():'')
+          klaarDagen.length?`${veiligTekst(mbPondKort(nuKlaar))} nu &middot; ${veiligTekst(mbPondKort(vjKlaar))} vorig jaar<br>t/m gisteren, zelfde weekdagen${nieuweMarkt?' &middot; alleen Manchester':''}`:'nog geen afgesloten dag'); })():'')
     +'</div>';
 
   // Per kraam in de periode, met een balk naar verhouding.
@@ -9126,7 +9145,8 @@ async function mbOmzet(){
         <div style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(x.omzet))}</div>
         <div style="flex:0 0 34px;text-align:right;font-size:12px;color:var(--muted)">${pct}%</div></div>
       <div style="height:10px;background:#F1EFEA;border-radius:5px;overflow:hidden;margin-top:6px"><div style="height:100%;width:${Math.round(x.omzet/maxK*100)}%;background:${veiligTekst(x.k.kleur)}"></div></div>
-      ${heeftVJ?(()=>{ const nu=klaarDagen.reduce((a,d)=>{ const r=cel(d,x.k.id); return a+(r?n(r.omzet_totaal):0); },0);
+      ${heeftVJ&&!vglKraam(x.k.id)?'<div style="font-size:12px;color:var(--muted);margin-top:5px">nieuwe markt dit jaar: geen vergelijking met vorig jaar</div>':''}
+      ${heeftVJ&&vglKraam(x.k.id)?(()=>{ const nu=klaarDagen.reduce((a,d)=>{ const r=cel(d,x.k.id); return a+(r?n(r.omzet_totaal):0); },0);
           const vj=klaarDagen.reduce((a,d)=>a+(vjKraam(d,x.k.id)||0),0);
           return vj>0?`<div style="font-size:12px;color:var(--muted);margin-top:5px">t/m gisteren ${veiligTekst(mbPondKort(nu))} &middot; vorig jaar ${veiligTekst(mbPondKort(vj))} ${pctChip(nu,vj,true)}</div>`
                      :(klaarDagen.length?'<div style="font-size:12px;color:var(--muted);margin-top:5px">vorig jaar: geen omzet op deze dagen</div>':''); })():''}</div>`;
@@ -9177,7 +9197,7 @@ async function mbOmzet(){
       +`<td style="text-align:right"><div style="font-weight:800;font-size:15px;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(dagTot(d)))}</div>
         <div style="display:flex;justify-content:flex-end">${balk(d)}</div></td>`
       +(heeftVJ?(()=>{ const v=vjDag(d), o=vjOpm(d);
-          return `<td style="text-align:right"${o?` title="${veiligTekst(o)}"`:''}><div style="font-weight:600;font-variant-numeric:tabular-nums">${v>0?veiligTekst(mbPondKort(v)):'&ndash;'} ${!nu&&v>0?pctChip(dagTot(d),v,true):''}</div>
+          return `<td style="text-align:right"${o?` title="${veiligTekst(o)}"`:''}><div style="font-weight:600;font-variant-numeric:tabular-nums">${v>0?veiligTekst(mbPondKort(v)):'&ndash;'} ${!nu&&v>0?pctChip(dagTotV(d),v,true):''}</div>
             <div style="font-size:11px;color:var(--muted);white-space:nowrap">${veiligTekst(vjNaam(d))}${o?' &#9729;':''}</div></td>`; })():'')
       +'</tr>';
   });
@@ -9191,7 +9211,7 @@ async function mbOmzet(){
         <div style="font-size:15px;font-weight:700">${veiligTekst(mbOmzDagNaam(d))}${nu?' <span style="font-size:11.5px;color:#B45309">&middot; loopt nog</span>':''}</div>
         <div style="font-size:19px;font-weight:800;font-variant-numeric:tabular-nums">${veiligTekst(mbPondKort(dagTot(d)))}</div></div>
       ${balk(d)}
-      ${heeftVJ&&vjDag(d)>0?`<div style="font-size:12.5px;color:var(--muted);margin-top:7px">Vorig jaar (${veiligTekst(vjNaam(d))}): <b style="color:var(--text)">${veiligTekst(mbPondKort(vjDag(d)))}</b> ${nu?'':pctChip(dagTot(d),vjDag(d),true)}
+      ${heeftVJ&&vjDag(d)>0?`<div style="font-size:12.5px;color:var(--muted);margin-top:7px">Vorig jaar (${veiligTekst(vjNaam(d))}): <b style="color:var(--text)">${veiligTekst(mbPondKort(vjDag(d)))}</b> ${nu?'':pctChip(dagTotV(d),vjDag(d),true)}
         ${vjOpm(d)?`<div style="font-style:italic;margin-top:2px">&ldquo;${veiligTekst(vjOpm(d))}&rdquo;</div>`:''}</div>`:''}
       <div style="margin-top:8px">`
       +kramen.map(k=>{ const r=cel(d,k.id); if(!r)return '';
@@ -9212,7 +9232,7 @@ async function mbOmzet(){
     ${metContant?`Omzet = pin uit myPOS (komt elke 15 minuten vanzelf binnen) + contant zoals ingevuld in het dagrapport.
     Staat er <span style="color:#B45309">contant?</span>, dan is het contant van die dag nog niet ingevuld en is het bedrag alleen pin.`
     :`Omzet = de dagtotalen per terminal die je in het dagrapport van de bon overneemt. Geen contant.${afdracht>0?` &ldquo;Na afdracht&rdquo; is wat er overblijft nadat de markt ${afdracht}% heeft ingehouden.`:''}`}
-    ${heeftVJ?'Vorig jaar = dezelfde weekdag 52 weken eerder (vr 6 nov 2026 &harr; vr 7 nov 2025, beide marktdag 1); &ldquo;vj&rdquo; is die kraam vorig jaar. Het percentage telt alleen afgesloten dagen, want vandaag loopt nog. Houd de muis op een dag voor je opmerking van vorig jaar (&#9729;).':''}
+    ${heeftVJ?'Vorig jaar = dezelfde weekdag 52 weken eerder (vr 6 nov 2026 &harr; vr 7 nov 2025, beide marktdag 1); &ldquo;vj&rdquo; is die kraam vorig jaar. Het percentage telt alleen afgesloten dagen, want vandaag loopt nog. Houd de muis op een dag voor je opmerking van vorig jaar (&#9729;).'+(nieuweMarkt?' De vergelijking gaat alleen over Manchester; de andere markten zijn nieuw dit jaar en tellen daarin niet mee.':''):''}
     ${doorklik?'Tik op een bedrag om het dagrapport van die kraam en dag te openen.':''}</div>`;
   mbOmzDoel().innerHTML=uit;
 }
