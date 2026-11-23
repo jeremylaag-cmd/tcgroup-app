@@ -154,6 +154,13 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .mpb-dag-r2{font-size:11.5px;color:#2A4EA8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .mpb-dag-r3{font-size:11px;color:#55534E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;font-variant-numeric:tabular-nums}
 .mpb-dag-r3.rood{color:#B4472B;font-weight:700}
+/* Forecast van de dag, groot in de kop van de kraam: daar stem je het personeel op af */
+.mpb-fc{display:flex;flex-direction:column;align-items:flex-end;line-height:1.2;margin-left:auto;text-align:right;white-space:nowrap}
+.mpb-fc-l{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.mpb-fc b{font-size:22px;font-weight:700;font-variant-numeric:tabular-nums}
+.mpb-fc b.leeg{font-size:14px;font-weight:600;color:var(--muted)}
+.mpb-fc-s{font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.mpb-fc-s.rood{color:#B4472B;font-weight:700}
 .mpb-twee{display:flex;gap:14px;flex-wrap:wrap;align-items:flex-start}
 .mpb-links{flex:999 1 560px;min-width:0}
 .mpb-rechts{flex:1 1 320px;min-width:0;position:sticky;top:12px;max-height:calc(100vh - 24px);overflow-y:auto}
@@ -6174,9 +6181,12 @@ function mpbDagbordHtml(){
     sh.forEach(s=>{ nodig+=s.nodig; bezet+=Math.min(s.inn.length,s.nodig); vr+=s.aanv.filter(a=>!s.inn.includes(a.g)).length; });
     uit+=`<section class="mb-kaart mpb-kraam"><div class="mpb-kraamkop">${mbStip(k.kleur)}<h2>${veiligTekst(k.naam)}</h2>
       <span class="mpb-samen">${dg.dicht?'dicht':(sh.length?bezet+' van '+nodig+' plekken gevuld'+(vr?' · '+vr+(vr===1?' aanvraag':' aanvragen'):''):'')}
-        ${(()=>{ if(dg.dicht)return ''; const l=mpbLoon(dag,k.id); if(!l.loon&&!l.fc)return '';
-          return ` · <span style="${l.rood?'color:#B4472B;font-weight:700':''}">gepland ${veiligTekst(mbPondKort(l.loon))}${l.fc?' · forecast '+veiligTekst(mbPondKort(l.fc)):''}${l.pct!=null?' · loon '+Math.round(l.pct)+'%':''}</span>`; })()}</span>
-      <button class="mb-mini" style="margin-left:auto" onclick="mpbNieuweDienst('${veiligJs(k.id)}','${dag}')">+ dienst</button></div>`;
+</span>
+      ${(()=>{ if(dg.dicht)return ''; const l=mpbLoon(dag,k.id); if(!l.loon&&!l.fc)return '';
+          return `<span class="mpb-fc"><span class="mpb-fc-l">Forecast</span>
+            <b${l.fc?'':' class="leeg"'}>${l.fc?veiligTekst(mbPondKort(l.fc)):'niet ingevuld'}</b>
+            <span class="mpb-fc-s${l.rood?' rood':''}">gepland loon ${veiligTekst(mbPondKort(l.loon))}${l.pct!=null?' · '+Math.round(l.pct)+'%':''}</span></span>`; })()}
+      <button class="mb-mini" style="margin-left:${(()=>{ if(dg.dicht)return 'auto'; const l=mpbLoon(dag,k.id); return (l.loon||l.fc)?'14px':'auto'; })()}" onclick="mpbNieuweDienst('${veiligJs(k.id)}','${dag}')">+ dienst</button></div>`;
     if(!dg.dicht&&sh.length)uit+=mdrPbKopHtml(k.id,dag);
     if(dg.dicht){ uit+='<div class="mpb-leeg">Deze kraam is dicht op deze dag.</div></section>'; return; }
     if(!sh.length){ uit+='<div class="mpb-leeg">Geen diensten op deze dag.</div></section>'; return; }
