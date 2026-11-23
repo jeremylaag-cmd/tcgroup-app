@@ -6334,13 +6334,24 @@ async function mpbIndelen(sid,g){
     toast(m.naam+' ingedeeld'); await mpbHerlaad();
   }catch(e){ alert(mbFout(e)); }
 }
+// Iemand van een dienst halen omdat hij niet kan: dan gaat de beschikbaarheid van die dag
+// meteen op "niet beschikbaar", anders deel je hem een paar dagen later opnieuw in.
+function mbKanNietVak(vn){
+  return `<label style="display:flex;gap:9px;align-items:flex-start;margin-top:12px;padding:10px 12px;border:1px solid var(--border);border-radius:10px;font-size:13px;line-height:1.45;cursor:pointer;text-align:left">
+    <input type="checkbox" id="mbKanNietVak" checked style="margin-top:2px;flex-shrink:0">
+    <span><b>${veiligTekst(vn)} kan die dag niet</b><br><span style="color:var(--muted)">Zet die dag op niet beschikbaar, zodat je ${veiligTekst(vn)} niet per ongeluk opnieuw indeelt. Vink uit als je alleen aan het schuiven bent.</span></span></label>`;
+}
+function mbKanNietGekozen(){ const v=document.getElementById('mbKanNietVak'); return !!(v&&v.checked); }
 async function mpbEraf(sid,g){
   const s=MB_PB.S[sid]; if(!s)return;
+  const vn=mpbNaam(g).split(' ')[0];
   const ok=await vraagBevestiging('Van de dienst halen?',
-    `${veiligTekst(mpbNaam(g))} van ${veiligTekst(((MB_PB.K[s.kraam]||{}).naam)||'')} ${veiligTekst(mbLang(s.datum))} ${veiligTekst(mpbTijd(s))} halen? ${veiligTekst(mpbNaam(g).split(' ')[0])} krijgt daar een melding van.`,'Ja, eraf halen');
+    `${veiligTekst(mpbNaam(g))} van ${veiligTekst(((MB_PB.K[s.kraam]||{}).naam)||'')} ${veiligTekst(mbLang(s.datum))} ${veiligTekst(mpbTijd(s))} halen? ${veiligTekst(vn)} krijgt daar een melding van.`
+    +mbKanNietVak(vn),'Ja, eraf halen');
   if(!ok)return;
-  try{ const{error}=await sb.rpc('mcr_uitdelen',{p_shift:sid,p_gebruiker:g}); if(error)throw error;
-    toast('Van de dienst gehaald'); await mpbHerlaad(); }
+  const kanNiet=mbKanNietGekozen();
+  try{ const{error}=await sb.rpc(kanNiet?'mcr_eraf_kan_niet':'mcr_uitdelen',{p_shift:sid,p_gebruiker:g}); if(error)throw error;
+    toast(kanNiet?'Van de dienst gehaald en op niet beschikbaar gezet':'Van de dienst gehaald'); await mpbHerlaad(); }
   catch(e){ alert(mbFout(e)); }
 }
 async function mpbAfwijzen(aid){
@@ -7430,7 +7441,7 @@ async function mbShiftOpen(id){
       <div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
       <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${mbNaamLink(m.gebruiker_id,m.naam)}</div>
       <div style="font-size:11.5px;color:var(--muted)">${veiligTekst(m.telefoon||'')}${m.uurloon?' &middot; '+veiligTekst(mbPond(m.uurloon))+' p/u':''}</div></div>
-      <button class="mb-mini" onclick="mbUitdelen('${veiligJs(id)}','${veiligJs(m.gebruiker_id)}')">Eraf</button></div>`;
+      <button class="mb-mini" onclick="mbUitdelen('${veiligJs(id)}','${veiligJs(m.gebruiker_id)}','${veiligJs(m.naam||'')}')">Eraf</button></div>`;
   });
   if(aan.length){
     uit+='<div class="mb-kop" style="margin-top:14px">Hebben zich aangemeld</div>';
@@ -7516,7 +7527,7 @@ function mbRuilBlok(){
   };
   return `<div class="mb-kaart" style="border-left:4px solid #B45309">
     <div class="mb-kop" style="margin-bottom:2px">Shift ruilen <span style="color:#B45309">(${MB_RUIL.length})</span></div>
-    <div style="font-size:12px;color:var(--muted);line-height:1.55">Iemand kan zijn shift niet doen. <b>Openzetten</b>: anderen kunnen zich aanmelden en krijgen een melding; hij blijft ingedeeld tot jij iemand anders indeelt. <b>Meteen eraf</b>: hij gaat er nu af en de plek komt open.</div>
+    <div style="font-size:12px;color:var(--muted);line-height:1.55">Iemand kan zijn shift niet doen. <b>Openzetten</b>: anderen kunnen zich aanmelden en krijgen een melding; hij blijft ingedeeld tot jij iemand anders indeelt. <b>Meteen eraf</b>: hij gaat er nu af en de plek komt open. Gaat iemand er zo af, dan komt die dag bij hem op niet beschikbaar te staan.</div>
     ${gevraagd.map(regel).join('')}${open.map(regel).join('')}
   </div>`;
 }
@@ -7524,7 +7535,7 @@ async function mbRuilBeslis(id,actie){
   const r=MB_RUIL.find(x=>x.id===id); if(!r)return;
   const naam=r.naam||'', vn=naam.split(' ')[0];
   const vraag={open:`De shift van ${naam} openzetten?\n\nIedereen die die dag kan krijgt een melding en kan zich aanmelden. ${vn} blijft ingedeeld tot jij iemand anders indeelt.`,
-               eraf:`${naam} meteen van deze shift halen?\n\nDe plek komt open en iedereen die die dag kan krijgt een melding.`,
+               eraf:`${naam} meteen van deze shift halen?\n\nDe plek komt open en iedereen die die dag kan krijgt een melding. ${vn} komt die dag op niet beschikbaar te staan.`,
                afwijzen:`Het verzoek van ${naam} afwijzen?\n\n${vn} blijft ingedeeld en krijgt daar bericht van.`}[actie];
   if(!confirm(vraag))return;
   try{ const{error}=await sb.rpc('mcr_ruil_beslissen',{p_id:id,p_actie:actie}); if(error)throw error;
@@ -7688,8 +7699,14 @@ async function mbIndelen(shift,wie){
   try{ const{error}=await sb.rpc('mcr_indelen',{p_shift:shift,p_gebruiker:wie}); if(error)throw error; mbNaar('shifts'); }
   catch(e){ alert(mbFout(e)); }
 }
-async function mbUitdelen(shift,wie){
-  try{ const{error}=await sb.rpc('mcr_uitdelen',{p_shift:shift,p_gebruiker:wie}); if(error)throw error; mbNaar('shifts'); }
+async function mbUitdelen(shift,wie,naam){
+  const vn=String(naam||'Deze persoon').split(' ')[0];
+  const ok=await vraagBevestiging('Van de dienst halen?',
+    `${veiligTekst(naam||'Deze persoon')} van deze dienst halen?`+mbKanNietVak(vn),'Ja, eraf halen');
+  if(!ok)return;
+  const kanNiet=mbKanNietGekozen();
+  try{ const{error}=await sb.rpc(kanNiet?'mcr_eraf_kan_niet':'mcr_uitdelen',{p_shift:shift,p_gebruiker:wie}); if(error)throw error;
+    toast(kanNiet?'Van de dienst gehaald en op niet beschikbaar gezet':'Van de dienst gehaald'); mbNaar('shifts'); }
   catch(e){ alert(mbFout(e)); }
 }
 
