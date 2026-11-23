@@ -3984,7 +3984,7 @@ const MB_EN_T={
 'Delen mislukt:':'Sharing failed:','Verwijderen mislukt:':'Deleting failed:','Bezig met lezen…':'Reading…','Bezig met wegschrijven…':'Writing…','Kies eerst een bestand.':'Choose a file first.',
 'Kies eerst een of meer bestanden.':'Choose one or more files first.','Bestand':'File','Terminal':'Terminal','In het dagrapport zetten':'Put in the day report','Niets te doen.':'Nothing to do.',
 'Geen btw':'No VAT','Vul een datum in.':'Enter a date.','Vul een omschrijving in.':'Enter a description.','Vul een geldig bedrag in, bv. 245,50.':'Enter a valid amount, e.g. 245.50.',
-'Kostenpost bijgewerkt':'Cost item updated','Kostenpost toegevoegd':'Cost item added','Kostenpost verwijderd':'Cost item deleted','Vul het TID in zoals het op de bon staat.':'Enter the TID as shown on the receipt.',
+'Kostenpost bijgewerkt':'Cost item updated','Nog in te vullen':'Still to fill in','Bedrag invullen':'Enter amount','nog invullen':'to fill in','later invullen':'fill in later','(mag leeg)':'(may be empty)','Deze posten hebben nog geen bedrag en tellen nu voor 0 mee in de totalen.':'These items have no amount yet and count as 0 in the totals for now.','Opgeslagen zonder bedrag: staat bij Nog in te vullen':'Saved without amount: listed under Still to fill in','Vul een geldig bedrag in, bv. 245,50, of laat het leeg om het later in te vullen.':'Enter a valid amount, e.g. 245.50, or leave it empty to fill in later.','Kostenpost toegevoegd':'Cost item added','Kostenpost verwijderd':'Cost item deleted','Vul het TID in zoals het op de bon staat.':'Enter the TID as shown on the receipt.',
 
 // Losse woorden die in langere zinnen staan
 'dienst':'shift','diensten':'shifts','persoon':'person','plek':'place','plekken':'places','gevuld':'filled','dag':'day','dagen':'days','uur':'hours',
@@ -9510,9 +9510,9 @@ async function mbKosten(){
       <div style="flex:3 1 220px"><label class="mb-lab">Omschrijving</label>
         <input class="mb-veld" id="mbKoms" maxlength="200" placeholder="bv. Beslag en boter, Booker" value="${veiligTekst(b?b.omschrijving:'')}"
                onkeydown="if(event.key==='Enter')mbKostOpslaan()"></div>
-      <div style="flex:1 1 120px"><label class="mb-lab">Bedrag</label>
-        <input class="mb-veld" id="mbKbedrag" inputmode="decimal" autocomplete="off" placeholder="0,00"
-               value="${b?veiligTekst(Number(bBedrag).toLocaleString('nl-NL',{minimumFractionDigits:2})):''}" style="text-align:right"
+      <div style="flex:1 1 120px"><label class="mb-lab">Bedrag <span style="font-weight:400;text-transform:none;letter-spacing:0">(mag leeg)</span></label>
+        <input class="mb-veld" id="mbKbedrag" inputmode="decimal" autocomplete="off" placeholder="later invullen" title="Weet je het bedrag nog niet? Laat leeg; de post komt dan bij Nog in te vullen."
+               value="${b&&Number(bBedrag)>0?veiligTekst(Number(bBedrag).toLocaleString('nl-NL',{minimumFractionDigits:2})):''}" style="text-align:right"
                oninput="mbKostBtwUitleg()" onkeydown="if(event.key==='Enter')mbKostOpslaan()"></div>
       <div style="flex:0 0 auto"><label class="mb-lab">Valuta</label>
         <div style="display:flex;gap:4px" id="mbKval">
@@ -9539,6 +9539,19 @@ async function mbKosten(){
       <span id="mbKuit" style="font-size:12.5px;color:var(--muted)"></span>
     </div>
   </div>`;
+
+  // Posten zonder bedrag (bedrag 0): bovenaan, zodat ze niet vergeten worden.
+  const leeg=r.filter(x=>!(Number(x.bedrag)>0));
+  if(leeg.length){
+    uit+=`<div class="mb-kaart" style="border-left:4px solid #B45309">
+      <div style="font-size:15px;font-weight:700">Nog in te vullen <span style="color:#B45309">(${leeg.length})</span></div>
+      <div style="font-size:12px;color:var(--muted);margin:2px 0 6px">Deze posten hebben nog geen bedrag en tellen nu voor 0 mee in de totalen.</div>
+      ${leeg.map(x=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border);flex-wrap:wrap">
+        <span style="flex:1 1 200px;min-width:0"><span style="font-size:13.5px;font-weight:600">${veiligTekst(x.omschrijving)}</span>
+          <span style="display:block;font-size:11.5px;color:var(--muted)">${veiligTekst(mbKort(x.datum))} &middot; ${x.kraam_id?veiligTekst(x.kraam):'Algemeen'} &middot; ${veiligTekst(mbKostCat(x.categorie))}${x.opmerking?' &middot; '+veiligTekst(x.opmerking):''}</span></span>
+        <button class="mb-mini zwart" onclick="mbKostVulIn('${veiligJs(x.id)}')">Bedrag invullen</button></div>`).join('')}
+    </div>`;
+  }
 
   // Tegels
   const tegel=(l,v,sub)=>`<div class="mb-kaart" style="flex:1;min-width:170px"><div class="mb-kop" style="margin:0 0 4px">${l}</div>
@@ -9588,8 +9601,8 @@ async function mbKosten(){
           <div style="font-size:11px;color:var(--muted)">${[x.betaald_via?'via '+veiligTekst(x.betaald_via):'',x.door?'door '+veiligTekst(x.door):''].filter(Boolean).join(' &middot; ')}</div></td>
         <td style="white-space:nowrap">${x.kraam_id?`<div style="display:flex;align-items:center;gap:7px">${mbStip(x.kleur)}${veiligTekst(x.kraam)}</div>`:'<span style="color:var(--muted)">Algemeen</span>'}</td>
         <td style="white-space:nowrap;color:var(--muted)">${veiligTekst(mbKostCat(x.categorie))}</td>
-        <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">${veiligTekst(mbGeld(x.bedrag,x.valuta))}
-          ${x.btw_tarief!=null?`<div style="font-size:11px;font-weight:400;color:var(--muted)">${Number(x.btw_tarief)?'excl. '+veiligTekst(mbGeld(x.bedrag_ex,x.valuta))+' &middot; '+Number(x.btw_tarief)+'%':'geen btw'}</div>`:''}</td>
+        <td style="text-align:right;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap">${Number(x.bedrag)>0?veiligTekst(mbGeld(x.bedrag,x.valuta)):mbChip('nog invullen','#B45309','#FEF6E7')}
+          ${Number(x.bedrag)>0&&x.btw_tarief!=null?`<div style="font-size:11px;font-weight:400;color:var(--muted)">${Number(x.btw_tarief)?'excl. '+veiligTekst(mbGeld(x.bedrag_ex,x.valuta))+' &middot; '+Number(x.btw_tarief)+'%':'geen btw'}</div>`:''}</td>
         <td style="white-space:nowrap;text-align:right">
           <button class="mb-mini" onclick="MB_KOST_BEWERK='${veiligJs(x.id)}';mbNaar('kosten')">Bewerken</button>
           <button class="mb-mini rood" onclick="mbKostWeg('${veiligJs(x.id)}')">Weg</button></td></tr>`).join('')}
@@ -9618,12 +9631,14 @@ async function mbKostOpslaan(){
   const kraam=(document.getElementById('mbKkraam')||{}).value||null;
   const cat=(document.getElementById('mbKcat')||{}).value;
   const oms=((document.getElementById('mbKoms')||{}).value||'').trim();
-  const bedrag=mbBedragLees((document.getElementById('mbKbedrag')||{}).value);
+  // Leeg bedrag mag: de post wordt dan opgeslagen als "nog in te vullen" (bedrag 0).
+  const ruwBedrag=String((document.getElementById('mbKbedrag')||{}).value||'').trim();
+  const bedrag=ruwBedrag===''?0:mbBedragLees(ruwBedrag);
   const via=((document.getElementById('mbKvia')||{}).value||'').trim();
   const opm=((document.getElementById('mbKopm')||{}).value||'').trim();
   if(!datum){zeg('Vul een datum in.','#B4472B');return;}
   if(!oms){zeg('Vul een omschrijving in.','#B4472B');return;}
-  if(bedrag==null||Number.isNaN(bedrag)||bedrag<=0){zeg('Vul een geldig bedrag in, bv. 245,50.','#B4472B');return;}
+  if(bedrag==null||Number.isNaN(bedrag)||bedrag<0){zeg('Vul een geldig bedrag in, bv. 245,50, of laat het leeg om het later in te vullen.','#B4472B');return;}
   zeg('Opslaan…');
   MB_KOST_BEZIG=true; const knop=document.getElementById('mbKostKnop'); if(knop)knop.disabled=true;
   const{error}=await sb.rpc('mcr_kosten_zetten2',{p_id:MB_KOST_BEWERK,p_datum:datum,p_kraam:kraam,p_categorie:cat,
@@ -9633,9 +9648,14 @@ async function mbKostOpslaan(){
   if(error){zeg(mbFout(error),'#B4472B');return;}
   MB_KOST_LAATSTE_DATUM=datum; MB_KOST_LAATSTE_CAT=cat; MB_KOST_LAATSTE_VIA=via;
   const wasBewerk=!!MB_KOST_BEWERK; MB_KOST_BEWERK=null;
-  toast(wasBewerk?'Kostenpost bijgewerkt':'Kostenpost toegevoegd');
+  toast(bedrag>0?(wasBewerk?'Kostenpost bijgewerkt':'Kostenpost toegevoegd'):'Opgeslagen zonder bedrag: staat bij Nog in te vullen');
   await mbNaar('kosten');
   setTimeout(()=>{const o=document.getElementById('mbKoms'); if(o&&!wasBewerk)o.focus();},50);
+}
+// Vanuit "Nog in te vullen": de post openen in het formulier met de cursor in het bedrag.
+async function mbKostVulIn(id){
+  MB_KOST_BEWERK=id; await mbNaar('kosten');
+  setTimeout(()=>{ const v=document.getElementById('mbKbedrag'); if(v)v.focus(); },80);
 }
 async function mbKostWeg(id){
   const x=MB_KOST_RIJEN.find(r=>r.id===id); if(!x)return;
