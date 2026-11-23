@@ -8085,7 +8085,7 @@ async function mbAandachtVast(id,knop){
   const rij=document.getElementById('mbAR'+id); if(rij)rij.remove();
 }
 
-let MB_RONDE=null, MB_RONDE_RIJEN=[], MB_RONDE_INFO=null;
+let MB_RONDE=null, MB_RONDE_RIJEN=[], MB_RONDE_INFO=null, MB_RONDES_ALLE=[], MB_RONDE_OUD=[];
 async function mbRondes(){
   const [res,vast]=await Promise.all([sb.rpc('mcr_rondes'), sb.rpc('mcr_rondes_vast').then(x=>x,()=>({data:[]}))]);
   const{data,error}=res;
@@ -8122,7 +8122,7 @@ async function mbRondes(){
   });
   uit+='</div><div style="flex:3 1 480px;min-width:0" id="mbRondeDetail"></div></div>';
   mbZet(uit);
-  MB_RONDE_INFO=rondes.find(r=>r.ronde_id===MB_RONDE)||null;
+  MB_RONDE_INFO=rondes.find(r=>r.ronde_id===MB_RONDE)||null; MB_RONDES_ALLE=rondes;
   if(MB_RONDE)mbRondeDetail(MB_RONDE);
 }
 // Wat er na inhouding per uur overblijft, tegen het minimumloon bij die leeftijd.
@@ -8142,8 +8142,17 @@ async function mbRondeDetail(id){
     if(error)throw error;
     const m=MB_RONDE_RIJEN=(data||[]);
     const R=MB_RONDE_INFO||{};
-    if(!m.length){ el.innerHTML='<div class="mb-kaart">In deze periode heeft nog niemand in '+veiligTekst(marktNaam(dezeMarkt()))+' gewerkt.</div>'; return; }
+    // Wie uit een eerdere ronde nog niet betaald is (factuur vergeten): die schuift door
+    // naar deze betaling en blijft hier staan tot hij is afgevinkt.
+    const eerder=(MB_RONDES_ALLE||[]).filter(r=>r.afgelopen&&Number(r.nummer)<Number(R.nummer)&&r.mensen>0);
+    const oudR=await Promise.all(eerder.map(r=>sb.rpc('mcr_ronde_uitbetaling',{p_ronde:r.ronde_id})
+      .then(x=>({r,rijen:(x&&!x.error&&x.data)||[]}),()=>({r,rijen:[]}))));
+    if(id!==MB_RONDE)return;
+    const oud=MB_RONDE_OUD=[]; oudR.forEach(o=>o.rijen.forEach(x=>{ if(Number(x.netto)>0&&!x.betaald_op)oud.push(Object.assign({ronde:o.r},x)); }));
+    if(!m.length&&!oud.length){ el.innerHTML='<div class="mb-kaart">In deze periode heeft nog niemand in '+veiligTekst(marktNaam(dezeMarkt()))+' gewerkt.</div>'; return; }
     const som=k=>m.reduce((a,r)=>a+Number(r[k]||0),0);
+    const teBet=m.filter(r=>Number(r.netto)>0), isBet=teBet.filter(r=>r.betaald_op);
+    const nogHier=teBet.filter(r=>!r.betaald_op).reduce((a,r)=>a+Number(r.netto||0),0), nogOud=oud.reduce((a,r)=>a+Number(r.netto||0),0);
     const vast=m.some(r=>r.vastgezet_op), open=m.reduce((a,r)=>a+Number(r.open_n||0),0);
     const minW=m.filter(mbRondeMinWaarschuwing), geenBank=m.filter(r=>Number(r.netto)>0&&(marktUK()?!(r.sort_code&&r.bank_account):!r.iban));
     let t=`<div class="mb-kaart">
@@ -8162,6 +8171,8 @@ async function mbRondeDetail(id){
         <div><div class="mb-groot" style="color:${som('boetes')+som('borg_in')?'#B4472B':'inherit'}">&minus;${veiligTekst(mbPondKort(som('boetes')+som('borg_in')))}</div><div class="mb-klein">boetes en borg</div></div>
         ${som('borg_terug')?`<div><div class="mb-groot" style="color:#0F7A52">+${veiligTekst(mbPondKort(som('borg_terug')))}</div><div class="mb-klein">borg terug</div></div>`:''}
         <div><div class="mb-groot">${veiligTekst(mbPond(som('netto')))}</div><div class="mb-klein">over te maken</div></div>
+        <div><div class="mb-groot" style="color:${teBet.length&&isBet.length===teBet.length?'#0F7A52':'inherit'}">${isBet.length} van ${teBet.length}</div><div class="mb-klein">betaald${nogHier>0?' &middot; nog '+veiligTekst(mbPond(nogHier)):''}</div></div>
+        ${oud.length?`<div><div class="mb-groot" style="color:#B45309">${veiligTekst(mbPond(nogOud))}</div><div class="mb-klein">nog open uit eerdere rondes (${oud.length})</div></div>`:''}
       </div>`;
     const meld=[];
     if(!R.afgelopen)meld.push('Deze ronde loopt nog: de bedragen kunnen nog veranderen.');
@@ -8172,7 +8183,24 @@ async function mbRondeDetail(id){
     if(meld.length)t+=`<div style="font-size:12.5px;line-height:1.6;margin-top:12px;padding:9px 11px;border-radius:10px;background:#FEF6E7;color:#5B3A07">${meld.join('<br>')}</div>`;
     t+=`<div style="font-size:11.5px;color:var(--muted);line-height:1.6;margin-top:10px">Bruto = goedgekeurde uren &times; tarief. Boetes en kledingborg worden ingehouden zolang er genoeg is (de kledingborg in één keer bij de eerste betaling); netto komt nooit onder &pound; 0
       (wat overblijft schuift door naar de volgende ronde). Levert iemand kleding in, dan komt de borg terug. Pas na <b>Ronde vastzetten</b> ligt vast wat is ingehouden &mdash; zo wordt niets twee keer ingehouden.</div></div>`;
-    t+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr><th>Naam</th>'
+    if(oud.length){
+      t+=`<div class="mb-kaart" style="border-left:4px solid #B45309">
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><div style="font-size:15px;font-weight:700;flex:1 1 220px">Nog niet betaald uit eerdere rondes <span style="color:#B45309">(${oud.length})</span></div>
+          <div style="font-size:15px;font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(nogOud))}</div></div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.55;margin:2px 0 8px">Deze mensen schuiven door naar deze betaling. Vink af zodra je hebt overgemaakt; zonder factuur in de app kun je niet afvinken.</div>`;
+      oud.forEach(x=>{
+        const stt=x.ontvangen_op?mbChip('factuur ontvangen','#2A4EA8','#EEF4FF'):x.factuur_id?mbChip('factuur gemaakt','#6B6A66','#F3F2EE'):mbChip('geen factuur','#B4472B','#FBEDE9');
+        t+=`<label style="display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--border);cursor:${x.factuur_id?'pointer':'default'}">
+          <input type="checkbox" style="width:18px;height:18px;flex-shrink:0"${x.factuur_id?` onchange="mbBetaaldZet('${veiligJs(x.factuur_id)}',this)"`:' disabled title="Nog geen factuur in de app"'}>
+          <span style="flex:1 1 160px;min-width:0"><span style="font-size:13.5px;font-weight:600">${veiligTekst(x.naam)}</span>
+            <span style="display:block;font-size:11.5px;color:var(--muted)">ronde ${veiligTekst(x.ronde.nummer)} &middot; ${veiligTekst(mbKort(x.ronde.periode_van))} &ndash; ${veiligTekst(mbKort(x.ronde.periode_tot))}${x.factuur_nummer?' &middot; '+veiligTekst(x.factuur_nummer):''}</span></span>
+          ${stt}
+          <span style="font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;min-width:76px;text-align:right">${veiligTekst(mbPond(x.netto))}</span></label>`;
+      });
+      t+='</div>';
+    }
+    if(!m.length){ el.innerHTML=t+'<div class="mb-kaart">In deze periode heeft nog niemand in '+veiligTekst(marktNaam(dezeMarkt()))+' gewerkt.</div>'; return; }
+    t+='<div class="mb-kaart" style="padding:0;overflow-x:auto"><table class="mb-tabel2"><thead><tr><th style="text-align:center;width:1%">Betaald</th><th>Naam</th>'
       +'<th style="text-align:right">Uren</th><th style="text-align:right">Tarief</th><th style="text-align:right">Bruto</th>'
       +'<th style="text-align:right">Boete</th><th style="text-align:right">Borg</th><th style="text-align:right">Netto</th>'
       +'<th>Bank &amp; UTR</th><th style="text-align:right">Factuur</th></tr></thead><tbody>';
@@ -8187,7 +8215,10 @@ async function mbRondeDetail(id){
       const fAfw=r.factuur_bedrag!=null&&Math.abs(Number(r.factuur_bedrag)-Number(r.bruto))>0.01;
       const borg=Number(r.borg_in)?`<span style="color:#B4472B">&minus;${veiligTekst(mbPond(r.borg_in))}</span>`
         :Number(r.borg_terug)?`<span style="color:#0F7A52">+${veiligTekst(mbPond(r.borg_terug))}</span>`:'<span style="color:var(--muted)">&mdash;</span>';
-      t+=`<tr${w?' style="background:#FBEDE9"':''}><td><div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(r.naam))}</div>
+      t+=`<tr${w?' style="background:#FBEDE9"':''}><td style="text-align:center;white-space:nowrap">${r.factuur_id
+          ?`<input type="checkbox" style="width:20px;height:20px;cursor:pointer" aria-label="Betaald: ${veiligTekst(r.naam)}"${r.betaald_op?' checked':''} title="${r.betaald_op?'Betaald op '+veiligTekst(mbKlokDatum(r.betaald_op)):'Vink af als je hebt overgemaakt'}" onchange="mbBetaaldZet('${veiligJs(r.factuur_id)}',this)">`
+          :(Number(r.netto)>0?'<span style="font-size:10.5px;color:var(--muted);line-height:1.2;display:inline-block" title="Nog geen factuur in de app; schuift door naar de volgende betaling">geen<br>factuur</span>':'')}</td>
+        <td><div style="display:flex;align-items:center;gap:9px"><div class="mb-av">${veiligTekst(mbInit(r.naam))}</div>
           <div style="min-width:140px"><div style="font-size:13.5px;font-weight:600">${veiligTekst(r.naam)}</div>
           ${Number(r.borg_nu)?`<div style="font-size:11px;color:var(--muted)">kleding: borg ${veiligTekst(mbPond(r.borg_nu))}${Number(r.borg_al)?', al ingehouden '+veiligTekst(mbPond(r.borg_al)):''}</div>`:''}
           ${Number(r.boetes_open)>Number(r.boetes)?`<div style="font-size:11px;color:#B45309">nog ${veiligTekst(mbPond(Number(r.boetes_open)-Number(r.boetes)))} boete open</div>`:''}
@@ -8202,18 +8233,42 @@ async function mbRondeDetail(id){
           <div style="font-size:11px;color:var(--muted)">UTR ${r.utr?veiligTekst(r.utr):'&mdash;'}</div></td>
         <td style="text-align:right;white-space:nowrap">${st}
           ${r.factuur_nummer?`<div style="font-size:11px;color:${fAfw?'#B45309':'var(--muted)'};margin-top:3px">${veiligTekst(r.factuur_nummer)}${fAfw?' &middot; factuur '+veiligTekst(mbPond(r.factuur_bedrag)):''}</div>`:''}
-          ${r.factuur_id?`<div style="margin-top:5px;display:flex;gap:5px;justify-content:flex-end">
-            <button class="mb-mini" onclick="mbStempel('${veiligJs(r.factuur_id)}','ontvangen',this)">${r.ontvangen_op?'niet ontv.':'ontvangen'}</button>
-            <button class="mb-mini" onclick="mbStempel('${veiligJs(r.factuur_id)}','betaald',this)">${r.betaald_op?'niet betaald':'betaald'}</button></div>`:''}
+          ${r.factuur_id&&!r.betaald_op?`<div style="margin-top:5px;display:flex;gap:5px;justify-content:flex-end">
+            <button class="mb-mini" onclick="mbStempel('${veiligJs(r.factuur_id)}','ontvangen',this)">${r.ontvangen_op?'niet ontv.':'ontvangen'}</button></div>`:''}
         </td></tr>`;
     });
-    t+=`<tr style="border-top:2px solid var(--border)"><td><b>Totaal</b></td><td style="text-align:right">${veiligTekst(mbNum(som('uren'),2))}</td><td></td>
+    t+=`<tr style="border-top:2px solid var(--border)"><td style="text-align:center">${teBet.some(r=>r.factuur_id&&!r.betaald_op)?`<button class="mb-mini" onclick="mbRondeAllesBetaald(this)" title="Zet iedereen in deze ronde die een factuur heeft op betaald">alles</button>`:''}</td><td><b>Totaal</b></td><td style="text-align:right">${veiligTekst(mbNum(som('uren'),2))}</td><td></td>
       <td style="text-align:right;white-space:nowrap">${veiligTekst(mbPond(som('bruto')))}</td><td style="text-align:right;white-space:nowrap">${som('boetes')?'&minus;'+veiligTekst(mbPond(som('boetes'))):''}</td>
       <td style="text-align:right;white-space:nowrap">${som('borg_in')||som('borg_terug')?(som('borg_terug')-som('borg_in')<0?'&minus;':'+')+veiligTekst(mbPond(Math.abs(som('borg_terug')-som('borg_in')))):''}</td>
       <td style="text-align:right;white-space:nowrap;font-weight:700">${veiligTekst(mbPond(som('netto')))}</td><td colspan="2"></td></tr>`;
     t+='</tbody></table></div>';
     el.innerHTML=t;
   }catch(e){ el.innerHTML=`<div class="mb-kaart" style="color:#B4472B">${veiligTekst(mbFout(e))}</div>`; }
+}
+// Afvinken wie betaald is. De server wisselt de stand om, dus alleen aanroepen als het
+// vakje ook echt is omgezet.
+async function mbBetaaldZet(id,vak){
+  if(vak)vak.disabled=true;
+  try{ const{error}=await sb.rpc('mcr_factuur_stempel',{p_factuur:id,p_wat:'betaald'}); if(error)throw error;
+       toast(vak&&vak.checked?'Op betaald gezet':'Staat weer op niet betaald'); mbRondeDetail(MB_RONDE); }
+  catch(e){ if(vak){ vak.disabled=false; vak.checked=!vak.checked; } alert(mbFout(e)); }
+}
+async function mbRondeAllesBetaald(knop){
+  const R=MB_RONDE_INFO||{}, lijst=(MB_RONDE_RIJEN||[]).filter(r=>r.factuur_id&&!r.betaald_op&&Number(r.netto)>0);
+  if(!lijst.length)return;
+  const zonder=(MB_RONDE_RIJEN||[]).filter(r=>!r.factuur_id&&Number(r.netto)>0);
+  const ok=await vraagBevestiging('Ronde '+(R.nummer||'')+': iedereen met een factuur op betaald?',
+    `${lijst.length} ${lijst.length===1?'persoon':'mensen'}, samen <b>${veiligTekst(mbPond(lijst.reduce((a,r)=>a+Number(r.netto||0),0)))}</b>. Daarna kun je per persoon het vinkje weer weghalen.`
+    +(zonder.length?`<br><br>Blijft open (geen factuur): ${zonder.map(r=>veiligTekst(r.naam)).join(', ')}.`:''),'Ja, op betaald zetten');
+  if(!ok)return;
+  if(knop)knop.disabled=true;
+  let fout=null;
+  for(const r of lijst){
+    try{ const{error}=await sb.rpc('mcr_factuur_stempel',{p_factuur:r.factuur_id,p_wat:'betaald'}); if(error)throw error; }
+    catch(e){ fout=e; break; }
+  }
+  if(fout)alert(mbFout(fout)); else toast(lijst.length+' op betaald gezet');
+  mbRondeDetail(MB_RONDE);
 }
 async function mbStempel(id,wat,knop){
   if(knop)knop.disabled=true;
