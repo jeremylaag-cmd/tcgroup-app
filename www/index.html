@@ -4019,7 +4019,7 @@ const MB_EN_T={
 'komt nog':'still to come','uren open':'hours open','In deze periode heeft nog niemand in':'In this period nobody has worked in','Kan pas als de ronde voorbij is en alle uren zijn afgehandeld':'Only possible once the run is over and all hours are dealt with',
 'boetes en borg':'fines and deposit','Deze ronde loopt nog: de bedragen kunnen nog veranderen.':'This run is still going: the amounts can still change.','registratie staat':'entry is','nog open':'still open',
 '(te accorderen of bij Uitgezocht). Die tellen hier nog niet mee; vastzetten kan pas als ze zijn afgehandeld.':'(to approve or under Being checked). They do not count here yet; closing is only possible once they are dealt with.',
-'Geen sort code of rekeningnummer:':'No sort code or account number:','Let op het minimumloon.':'Mind the minimum wage.',
+'Geen sort code of rekeningnummer:':'No sort code or account number:','SIRET (14 cijfers)':'SIRET (14 digits)','Let op het minimumloon.':'Mind the minimum wage.',
 'komt het uurloon in deze ronde onder het minimum. In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. De kledingborg gaat er in één keer af bij de eerste betaling; overweeg de boete te verlagen of later in te houden.':'the hourly wage in this run falls below the minimum. In the UK you may only deduct what was agreed in writing beforehand, and not below the minimum wage. The uniform deposit is taken in one go from the first payment; consider lowering the fine or deducting it later.',
 'ligt vast wat is ingehouden — zo wordt niets twee keer ingehouden.':'records what has been deducted — so nothing is deducted twice.','nog niets binnen':'nothing in yet','geen bank':'no bank','niet ontv.':'not recv.','niet betaald':'not paid',
 'Hiermee leg je vast wat je overmaakt:':'This records what you transfer:','aan boetes en borg ingehouden. Volgende rondes rekenen hiermee verder, zodat niets twee keer wordt ingehouden.':'deducted in fines and deposit. Next runs continue from this, so nothing is deducted twice.',
@@ -4389,7 +4389,7 @@ const CREW_NL={
 
 // Profiel
 'Add your IBAN and account number.':'Vul je IBAN en rekeningnummer in.','Without both your invoice cannot be paid, and it moves to the next payment round.':'Zonder beide kan je factuur niet betaald worden en schuift hij door naar de volgende betaalronde.',
-'Add your IBAN.':'Vul je IBAN in.','Without it your invoice cannot be paid, and it moves to the next payment round.':'Zonder IBAN kan je factuur niet betaald worden en schuift hij door naar de volgende betaalronde.',
+'Add your IBAN.':'Vul je IBAN in.','Add your SIRET number.':'Vul je SIRET-nummer in.','In France you need one to send an invoice. Without it you cannot be paid.':'In Frankrijk heb je er een nodig om een factuur te sturen. Zonder kun je niet betaald worden.','SIRET number':'SIRET-nummer','Required. The 14 digits of your micro-entreprise. It is printed on your invoice.':'Verplicht. De 14 cijfers van je micro-entreprise. Het komt op je factuur te staan.','Add your SIRET number (14 digits) first, under Me. In France you need one to send an invoice.':'Vul eerst je SIRET-nummer (14 cijfers) in, onder Ik. In Frankrijk heb je er een nodig om een factuur te sturen.','Without it your invoice cannot be paid, and it moves to the next payment round.':'Zonder IBAN kan je factuur niet betaald worden en schuift hij door naar de volgende betaalronde.',
 'You':'Jij','Mobile':'Mobiel','Address':'Adres','Postcode':'Postcode','Town':'Plaats','Polo size':'Polomaat','Your long sleeve work polo: S, M, L, XL …':'Je werkpolo met lange mouw: S, M, L, XL …',
 'Required. Both the IBAN and the account number are needed before you can be paid.':'Verplicht. Zowel het IBAN als het rekeningnummer zijn nodig voordat je betaald kunt worden.',
 'Required.':'Verplicht.','Account number':'Rekeningnummer','Sort code —':'Sort code —','optional':'optioneel','UTR number —':'UTR-nummer —',
@@ -8154,7 +8154,8 @@ async function mbRondeDetail(id){
     const teBet=m.filter(r=>Number(r.netto)>0), isBet=teBet.filter(r=>r.betaald_op);
     const nogHier=teBet.filter(r=>!r.betaald_op).reduce((a,r)=>a+Number(r.netto||0),0), nogOud=oud.reduce((a,r)=>a+Number(r.netto||0),0);
     const vast=m.some(r=>r.vastgezet_op), open=m.reduce((a,r)=>a+Number(r.open_n||0),0);
-    const minW=m.filter(mbRondeMinWaarschuwing), geenBank=m.filter(r=>Number(r.netto)>0&&(marktUK()?!(r.sort_code&&r.bank_account):!r.iban));
+    const minW=m.filter(mbRondeMinWaarschuwing), geenBank=m.filter(r=>Number(r.netto)>0&&(marktUK()?!(r.sort_code&&r.bank_account):!r.iban)),
+      geenSiret=marktFR()?m.filter(r=>Number(r.netto)>0&&!siretGeldig(r.utr)):[];
     let t=`<div class="mb-kaart">
       <div style="display:flex;align-items:flex-start;gap:10px;flex-wrap:wrap">
         <div style="flex:1 1 220px"><div style="font-size:15px;font-weight:700">Ronde ${veiligTekst(R.nummer||'')} &middot; uitbetaling</div>
@@ -8179,6 +8180,7 @@ async function mbRondeDetail(id){
     if(!R.afgelopen)meld.push('Deze ronde loopt nog: de bedragen kunnen nog veranderen.');
     if(open)meld.push(`<b>${open} ${open===1?'registratie staat':'registraties staan'} nog open</b> (te accorderen of bij Uitgezocht). Die tellen hier nog niet mee; vastzetten kan pas als ze zijn afgehandeld.`);
     if(geenBank.length)meld.push(`${marktUK()?'Geen sort code of rekeningnummer':'Geen IBAN'}: ${geenBank.map(r=>veiligTekst(r.naam)).join(', ')}.`);
+    if(geenSiret.length)meld.push(`Geen SIRET-nummer: ${geenSiret.map(r=>veiligTekst(r.naam)).join(', ')}. Zonder kunnen zij geen factuur maken.`);
     if(minW.length)meld.push(`<b>Let op het minimumloon.</b> Bij ${minW.map(r=>{const w=mbRondeMinWaarschuwing(r);return `${veiligTekst(r.naam)} (na inhouding &pound; ${mbPondTxt(w.per)}/u, minimaal &pound; ${mbPondTxt(w.min)})`;}).join(', ')} komt het uurloon in deze ronde onder het minimum.
       In het VK mag je alleen inhouden wat vooraf schriftelijk is afgesproken, en niet onder het minimumloon. De kledingborg gaat er in één keer af bij de eerste betaling; overweeg de boete te verlagen of later in te houden.`);
     if(meld.length)t+=`<div style="font-size:12.5px;line-height:1.6;margin-top:12px;padding:9px 11px;border-radius:10px;background:#FEF6E7;color:#5B3A07">${meld.join('<br>')}</div>`;
@@ -8230,8 +8232,9 @@ async function mbRondeDetail(id){
         <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${Number(r.boetes)?`<span style="color:#B4472B">&minus;${veiligTekst(mbPond(r.boetes))}</span>`:'<span style="color:var(--muted)">&mdash;</span>'}</td>
         <td style="text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums">${borg}</td>
         <td style="text-align:right;white-space:nowrap;font-weight:700;font-variant-numeric:tabular-nums">${veiligTekst(mbPond(r.netto))}</td>
-        <td style="font-size:12px;white-space:nowrap">${r.sort_code||r.bank_account?`${veiligTekst(r.sort_code||'?')} &middot; ${veiligTekst(r.bank_account||'?')}`:'<span style="color:#B4472B">geen bank</span>'}
-          <div style="font-size:11px;color:var(--muted)">UTR ${r.utr?veiligTekst(r.utr):'&mdash;'}</div></td>
+        <td style="font-size:12px;white-space:nowrap">${marktFR()
+            ?(r.iban?veiligTekst(r.iban):'<span style="color:#B4472B">geen IBAN</span>')+`<div style="font-size:11px;color:${siretGeldig(r.utr)?'var(--muted)':'#B4472B'}">SIRET ${siretGeldig(r.utr)?veiligTekst(siretMooi(r.utr)):'ontbreekt'}</div>`
+            :(r.sort_code||r.bank_account?`${veiligTekst(r.sort_code||'?')} &middot; ${veiligTekst(r.bank_account||'?')}`:'<span style="color:#B4472B">geen bank</span>')+`<div style="font-size:11px;color:var(--muted)">UTR ${r.utr?veiligTekst(r.utr):'&mdash;'}</div>`}</td>
         <td style="text-align:right;white-space:nowrap">${st}
           ${r.factuur_nummer?`<div style="font-size:11px;color:${fAfw?'#B45309':'var(--muted)'};margin-top:3px">${veiligTekst(r.factuur_nummer)}${fAfw?' &middot; factuur '+veiligTekst(mbPond(r.factuur_bedrag)):''}</div>`:''}
           ${r.factuur_id&&!r.betaald_op?`<div style="margin-top:5px;display:flex;gap:5px;justify-content:flex-end">
@@ -9809,10 +9812,15 @@ function mbSindsSelect(id,waarde){
 }
 // Wettelijk minimumloon in het VK vanaf 1 april 2026 (gov.uk).
 // [band, minimum, voorstel bij nieuwe aanmelding]
-const MB_MINLOON_PER='1 april 2026';
+// Frankrijk: SMIC 12,31 euro bruto per uur sinds 1 juni 2026, voor iedereen van 18+
+// (geen jeugdloon zoals in het VK). Het SMIC geldt wettelijk voor loondienst; voor
+// wie factureert is het hier de ondergrens die Bram aanhoudt.
+const MB_MINLOON_FR=12.31;
+function mbMinLoonPer(){ return marktFR()?'1 juni 2026':'1 april 2026'; }
 function mbMinLoon(leeftijd){
   if(leeftijd==null||leeftijd==='')return null;
   const l=Number(leeftijd); if(!l)return null;
+  if(marktFR())return l<18?null:{band:'18+',min:MB_MINLOON_FR,voorstel:12.50};
   if(l<18)return {band:'16–17',min:8.00,voorstel:8.00};
   if(l<21)return {band:'18–20',min:10.85,voorstel:11.00};
   return {band:'21+',min:12.71,voorstel:12.75};
@@ -9930,7 +9938,7 @@ async function mbMensen(){
             <select class="mb-veld" id="mbPB${id}"><option value="">&mdash;</option>
               ${MB_OORDELEN.map(o=>`<option value="${o}"${m.beoordeling===o?' selected':''}>${o}</option>`).join('')}</select></div>
         </div>
-        ${band?`<div style="font-size:12px;color:var(--muted);margin-top:8px">Bij ${m.leeftijd} jaar hoort band ${band[0]}: minimaal &pound; ${band[1]} (minimumloon vanaf ${MB_MINLOON_PER}).</div>`:''}
+        ${band?`<div style="font-size:12px;color:var(--muted);margin-top:8px">Bij ${m.leeftijd} jaar hoort band ${band[0]}: minimaal &pound; ${band[1]} (minimumloon vanaf ${mbMinLoonPer()}).</div>`:''}
         ${!m.iban?'<div style="font-size:12px;color:#B45309;margin-top:4px">Heeft nog geen bankrekening ingevuld.</div>':''}
         <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
           <button class="mb-mini" onclick="mbPersoonOpslaan('${veiligJs(m.id)}',false)">Opslaan</button>
@@ -9948,13 +9956,13 @@ async function mbMensen(){
   uit+='<div id="mbPersoonPaneel"></div>';
   document.getElementById('mbInhoud').innerHTML=uit;
   const bovenEl=document.getElementById('mbMensenBoven');
-  const onder=marktUK()?actief.filter(mbOnderMin):[];   // Brits minimumloon: alleen in Groot-Brittannië
+  const onder=(marktUK()||marktFR())?actief.filter(mbOnderMin):[];   // Brits minimumloon, in Parijs het Franse SMIC
   let minBlok='';
   if(onder.length){
     minBlok=`<div class="mb-kaart" style="border:1.5px solid #B4472B;background:#FBEDE9">
       <div class="mb-kop" style="color:#B4472B">Onder het minimumloon</div>
-      <div style="font-size:12.5px;color:#5B2A1D;line-height:1.6;margin-bottom:8px">Sinds ${MB_MINLOON_PER} is het minimumloon in het VK
-        &pound; 12,71 (21+), &pound; 10,85 (18&ndash;20) en &pound; 8,00 (16&ndash;17). ${onder.length===1?'Deze persoon zit':'Deze '+onder.length+' mensen zitten'} eronder.
+      <div style="font-size:12.5px;color:#5B2A1D;line-height:1.6;margin-bottom:8px">${marktFR()?`Sinds ${mbMinLoonPer()} is het minimumloon in Frankrijk (SMIC) &euro; ${mbPondTxt(MB_MINLOON_FR)} bruto per uur voor iedereen van 18 jaar en ouder.`:`Sinds ${mbMinLoonPer()} is het minimumloon in het VK
+        &pound; 12,71 (21+), &pound; 10,85 (18&ndash;20) en &pound; 8,00 (16&ndash;17).`} ${onder.length===1?'Deze persoon zit':'Deze '+onder.length+' mensen zitten'} eronder.
         Nieuwe uren rekenen met het tarief dat hier staat.</div>
       ${onder.map(m=>{const b=mbMinLoon(m.leeftijd);return `<div class="mb-persoon" data-zoek="${veiligTekst(mbZoekSleutel(m))}"><div class="mb-av">${veiligTekst(mbInit(m.naam))}</div>
         <div style="flex-grow:1"><div style="font-size:13.5px;font-weight:600">${veiligTekst(m.naam)}</div>
@@ -10141,7 +10149,8 @@ function mbGegevensLeesHtml(m,info){
       ? veiligTekst(info.noodcontact_naam||'')+(info.noodcontact_tel?` &middot; <a href="tel:${veiligTekst(String(info.noodcontact_tel).replace(/[^0-9+]/g,''))}" style="color:inherit">${veiligTekst(info.noodcontact_tel)}</a>`:''):'');
   zet('Bank',[info.bank_account?'account '+info.bank_account:'',info.sort_code?'sort code '+info.sort_code:'',info.iban?'IBAN '+info.iban:''].filter(Boolean).map(veiligTekst).join(' &middot; ')
       ||'<span style="color:#B45309">nog niet ingevuld</span>');
-  zet('UTR',veiligTekst(info.utr||''));
+  if(marktFR())r.push(['SIRET',siretGeldig(info.utr)?veiligTekst(siretMooi(info.utr)):(info.utr?veiligTekst(info.utr)+' <span style="color:#B45309">(geen 14 cijfers)</span>':'<span style="color:#B45309">nog niet ingevuld</span>')]);
+  else zet('UTR',veiligTekst(info.utr||''));
   zet('Beoordeling',m.beoordeling?veiligTekst(m.beoordeling)+(m.beoordeling_door?` <span style="color:var(--muted)">door ${veiligTekst(m.beoordeling_door)}</span>`:''):'');
   zet('Via',veiligTekst(m.aangebracht_door||''));
   zet('Wil werken',[m.max_dagen?'max '+m.max_dagen+' dagen per week':'',m.vroegste_start?'vanaf '+mbUur(m.vroegste_start):''].filter(Boolean).map(veiligTekst).join(' &middot; '));
@@ -10180,8 +10189,8 @@ function mbGegevensBewerk(){
       veld('straat','Straat en huisnummer',i.straat,'',220)+veld('postcode','Postcode',i.postcode,'',110)+veld('plaats','Plaats',i.plaats,'',150))}
     ${groep('Noodcontact',veld('noodcontact_naam','Naam',i.noodcontact_naam)+veld('noodcontact_tel','Telefoon',i.noodcontact_tel,'type="tel"'))}
     ${groep('Uitbetaling',
-      veld('bank_account','Account number',i.bank_account,'inputmode="numeric"',140)+veld('sort_code','Sort code',i.sort_code,'inputmode="numeric"',110)
-      +veld('iban','IBAN',i.iban,'',200)+veld('utr','UTR',i.utr,'inputmode="numeric"',130))}
+      (marktFR()?'':veld('bank_account','Account number',i.bank_account,'inputmode="numeric"',140)+veld('sort_code','Sort code',i.sort_code,'inputmode="numeric"',110))
+      +veld('iban','IBAN',i.iban,'',200)+veld('utr',marktFR()?'SIRET (14 cijfers)':'UTR',i.utr,'inputmode="numeric"',marktFR()?170:130))}
     ${groep('Werk',
       `<div style="flex:1 1 180px;min-width:0"><label class="mb-lab" for="mbG_aangebracht_door">Aangedragen door</label>
         <input class="mb-veld" id="mbG_aangebracht_door" list="mbG_vialijst" value="${veiligTekst(m.aangebracht_door||'')}" placeholder="bv. Kirsty, Indeed, flyer">
@@ -12329,7 +12338,7 @@ function mcrFactuurRegels(f, inst, mij){
   zet(320, inst.factuur_kvk?('KvK '+inst.factuur_kvk):'', {groot:9,grijs:true}); y-=12;
   zet(56, mij.telefoon||'', {groot:9,grijs:true});
   zet(320, inst.factuur_btw||'', {groot:9,grijs:true}); y-=12;
-  zet(56, mij.utr?('UTR '+mij.utr):'', {groot:9,grijs:true}); y-=26;
+  zet(56, mij.utr?(marktFR()?'SIRET '+siretMooi(mij.utr):'UTR '+mij.utr):'', {groot:9,grijs:true}); y-=26;
 
   zet(56,'Date',{groot:8,grijs:true}); zet(320,'Self-employed',{groot:8,grijs:true}); y-=12;
   zet(56, new Date().toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}), {groot:9});
@@ -13445,10 +13454,14 @@ async function mcrProfiel(){
     ${hint?`<div style="font-size:11.5px;color:#8A8984;margin-top:4px;line-height:1.45">${hint}</div>`:''}`;
 
   const uk = marktUK();
+  const fr = marktFR();
   const bank = (g.iban||'').trim() && (!uk || (g.bank_account||'').trim());
   document.getElementById('mcrMain').innerHTML=`
     ${!bank?`<div class="mcr-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
       <div style="font-size:12.5px;color:#8A5307;line-height:1.6">${uk?'<b>Add your IBAN and account number.</b> Without both your invoice cannot be paid, and it moves to the next payment round.':'<b>Add your IBAN.</b> Without it your invoice cannot be paid, and it moves to the next payment round.'}</div>
+    </div>`:''}
+    ${fr&&!siretGeldig(g.utr)?`<div class="mcr-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
+      <div style="font-size:12.5px;color:#8A5307;line-height:1.6"><b>Add your SIRET number.</b> In France you need one to send an invoice. Without it you cannot be paid.</div>
     </div>`:''}
     ${g.goedgekeurd===false?`<div class="mcr-kaart" style="background:#FEF6E7;border-color:#F3D9A4">
       <div style="font-size:14px;font-weight:700;color:#8A5307">Waiting for approval</div>
@@ -13471,7 +13484,8 @@ async function mcrProfiel(){
 
     <div class="mcr-kaart">
       <div class="mcr-kop">Getting paid</div>
-      ${veld('mcrPIban','IBAN',g.iban,'text','GB29 NWBK 6016 1331 9268 19','Required.')}
+      ${veld('mcrPIban','IBAN',g.iban,'text',fr?'FR76 3000 6000 0112 3456 7890 189':'GB29 NWBK 6016 1331 9268 19','Required.')}
+      ${fr?veld('mcrPUtr','SIRET number',siretMooi(g.utr),'text','123 456 789 00012','Required. The 14 digits of your micro-entreprise. It is printed on your invoice.'):''}
       ${uk?veld('mcrPBank','Account number',g.bank_account,'text','31926819','Required. Both the IBAN and the account number are needed before you can be paid.'):''}
       ${uk?veld('mcrPSort','Sort code &mdash; <span style="font-weight:500;color:#8A8984">optional</span>',g.sort_code,'text','60-16-13'):''}
       ${uk?veld('mcrPUtr','UTR number &mdash; <span style="font-weight:500;color:#8A8984">optional</span>',g.utr,'text','1234567890','Your own tax affairs. Add it if you want it on your invoice.'):''}
@@ -13513,6 +13527,7 @@ async function mcrProfiel(){
 async function mcrProfielOpslaan(){
   const v=id=>{const e=document.getElementById(id);return e?e.value:null;};
   const kn=document.getElementById('mcrProfKnop'); if(kn&&kn.disabled)return;
+  if(marktFR()){ const s=String(v('mcrPUtr')||'').replace(/\D/g,''); if(s&&s.length!==14){ alert('A SIRET number has 14 digits. You entered '+s.length+'.'); return; } }
   if(kn){ kn.disabled=true; kn.style.opacity='.6'; kn.textContent='Saving\u2026'; }
   try{
     const{error}=await sb.rpc('mcr_profiel_opslaan',{
@@ -13553,6 +13568,11 @@ function marktValuta(v){ return MARKT_VALUTA[v||dezeMarkt()]||'GBP'; }
 function valSym(v){ return marktValuta(v)==='EUR'?'€':'£'; }
 function mktTz(v){ return MARKT_TZ[v||dezeMarkt()]||'Europe/London'; }
 function marktUK(v){ return marktValuta(v)==='GBP'; }
+// Parijs: wie factureert heeft een Frans SIRET-nummer nodig (14 cijfers). Dat staat
+// in hetzelfde veld als het Britse UTR (gebruikers.utr).
+function marktFR(v){ return (v||dezeMarkt())==='PAR'; }
+function siretGeldig(t){ return String(t||'').replace(/\D/g,'').length===14; }
+function siretMooi(t){ const c=String(t||'').replace(/\D/g,''); return c.length===14?c.replace(/^(\d{3})(\d{3})(\d{3})(\d{5})$/,'$1 $2 $3 $4'):String(t||''); }
 function isMarkt(v){ return !!v && v!=='NL' && v!=='*'; }
 // In Parijs: alle bedragen in euro's en tijden in Franse tijd. De schermen zijn
 // voor Manchester geschreven (£, "Britse tijd"); dit zet ze om, ook wat later
