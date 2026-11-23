@@ -8163,6 +8163,7 @@ async function mbRondeDetail(id){
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="mb-mini" onclick="mbRondeCsv('overzicht')">Download (Excel)</button>
           <button class="mb-mini" onclick="mbRondeCsv('bank')">Bankbestand</button>
+          ${marktUK()?`<button class="mb-mini" onclick="mbRondeCsv('revolut')" title="CSV voor Revolut Business: Transfers > New > Bulk">Revolut-bestand</button>`:''}
           ${vast?`<button class="mb-mini" onclick="mbRondeVastzetten(false,this)">Vastzetten ongedaan</button>`
                 :`<button class="mb-mini zwart" onclick="mbRondeVastzetten(true,this)"${!R.afgelopen||open?' disabled title="Kan pas als de ronde voorbij is en alle uren zijn afgehandeld"':''}>Ronde vastzetten</button>`}
         </div></div>
@@ -8311,6 +8312,35 @@ function mbRondeCsv(soort){
   const R=MB_RONDE_INFO||{}, m=MB_RONDE_RIJEN||[];
   if(!m.length){ alert('Er staat niemand in deze ronde.'); return; }
   const ref=('TCG R'+(R.nummer||'')+' '+String(R.periode_tot||'').slice(5)).slice(0,18);
+  // Revolut Business (Transfers > New > Bulk): eigen kolommen, de volledige naam (voor- en
+  // achternaam) en land en valuta per regel. Alleen Britse rekeningen (sort code + nummer).
+  if(soort==='revolut'){
+    const q=v=>{ const s=String(v==null?'':v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
+    const rijen=[['Name','Recipient type','Account number','Sort code','Recipient bank country','Currency','Amount','Payment reference']];
+    const zonder=[], eenNaam=[], geenFactuur=[];
+    // Wie nog betaald moet worden: deze ronde plus wie uit een eerdere ronde is doorgeschoven.
+    // Wie al op betaald staat gaat niet mee, en zonder factuur in de app ook niet.
+    const refVan=x=>('TCG R'+(x.nummer||'')+' '+String(x.periode_tot||'').slice(5)).slice(0,18);
+    const lijst=m.filter(r=>Number(r.netto)>0&&!r.betaald_op).map(r=>({r,ref}))
+      .concat((MB_RONDE_OUD||[]).map(r=>({r,ref:refVan(r.ronde||{})})));
+    lijst.forEach(({r,ref})=>{
+      const sc=String(r.sort_code||'').replace(/\D/g,''), ac=String(r.bank_account||'').replace(/\D/g,'');
+      const naam=String(r.naam||'').replace(/\s+/g,' ').trim().slice(0,80);
+      if(!r.factuur_id){ geenFactuur.push(r.naam); return; }
+      if(sc.length!==6||ac.length<6){ zonder.push(r.naam); return; }
+      if(naam.split(' ').length<2){ eenNaam.push(r.naam); return; }
+      rijen.push([naam,'INDIVIDUAL',ac.padStart(8,'0'),sc,'GB','GBP',Number(r.netto).toFixed(2),ref]);
+    });
+    if(rijen.length<2){ alert('Er is niemand meer te betalen met een factuur en volledige bankgegevens.'+(geenFactuur.length?'\n\nNog geen factuur: '+geenFactuur.join(', '):'')); return; }
+    mbBestandDelen(rijen.map(r=>r.map(q).join(',')).join('\r\n')+'\r\n',marktNaam(dezeMarkt())+' ronde '+(R.nummer||'')+' revolut.csv','text/csv;charset=utf-8');
+    const meld=[];
+    if(geenFactuur.length)meld.push('Nog geen factuur in de app: '+[...new Set(geenFactuur)].join(', '));
+    if(zonder.length)meld.push('Sort code of rekeningnummer ontbreekt of klopt niet: '+zonder.join(', '));
+    if(eenNaam.length)meld.push('Revolut wil een voor- en achternaam: '+eenNaam.join(', '));
+    toast((rijen.length-1)+' betalingen in het Revolut-bestand');
+    if(meld.length)alert('Niet in het Revolut-bestand:\n\n'+meld.join('\n'));
+    return;
+  }
   if(soort==='bank'){
     const q=v=>{ const s=String(v==null?'':v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
     const rijen=[['Name','Sort code','Account number','Amount','Reference']];
