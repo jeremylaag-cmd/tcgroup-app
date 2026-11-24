@@ -17939,7 +17939,8 @@ function openDetail(id){
     }).join('');
     const rest=k.personeel.filter(p=>!p.shift_id).map(p=>persNaamKnop(p))
       .concat((k.losse||[]).filter(l=>!l.shift_id).map(l=>losNaamKnop(l)));
-    persEl.innerHTML=blokken+(rest.length?`<div style="font-size:13px;padding-top:5px;border-top:1px solid var(--border)"><span style="color:var(--muted);font-size:11px">Hele klus:</span> ${rest.join(', ')}</div>`:'');
+    const restOpen=klusBezetting(k).rest.open;
+    persEl.innerHTML=blokken+((rest.length||restOpen)?`<div style="font-size:13px;padding-top:5px;border-top:1px solid var(--border)"><span style="color:var(--muted);font-size:11px">Hele klus:</span> ${rest.length?rest.join(', '):'<span style="color:var(--muted);font-style:italic">nog niemand</span>'}${restOpen?` <span style="color:#B45309;font-size:11px;font-weight:600">· nog ${restOpen} nodig</span>`:''}</div>`:'');
   }else{
     persEl.innerHTML=alleNamen.join(', ');
   }
@@ -17959,9 +17960,8 @@ function openDetail(id){
   }
   const vr=document.getElementById('detailVraagBtn');
   if(vr){
-    const bezet=(k.personeel||[]).length+(k.losse||[]).length;
     const toekomst=k.datum>=fmt(new Date());
-    vr.style.display=(CURRENT_ROL==='beheerder'&&!k.is_optie&&k.categorie!=='intern'&&toekomst&&(k.personeel_nodig||0)>bezet)?'':'none';
+    vr.style.display=(CURRENT_ROL==='beheerder'&&!k.is_optie&&k.categorie!=='intern'&&toekomst&&klusBezetting(k).open>0)?'':'none';
     vr.onclick=()=>vraagMensen(id);
   }
   const wa=document.getElementById('detailWhatsappBtn');
@@ -18635,8 +18635,10 @@ function tekenKlusPersoneel(){
         +(wie.length?wie.map(kpRij).join(''):'<div class="kp-leeg">nog niemand ingedeeld</div>');
     }).join('');
     const rest=iedereen.filter(r=>!r.shift_id).sort((a,b)=>String(a.naam).localeCompare(String(b.naam)));
-    lijst.innerHTML=blokken+(rest.length
-      ?`<div class="kp-groep">Hele klus</div>`+rest.map(kpRij).join('')
+    const restOpen=klusBezetting(k).rest.open;
+    lijst.innerHTML=blokken+((rest.length||restOpen)
+      ?`<div class="kp-groep">Hele klus`+(restOpen?` <span style="color:#B45309">nog ${restOpen} nodig</span>`:'')+`</div>`
+        +(rest.length?rest.map(kpRij).join(''):'<div class="kp-leeg">nog niemand ingedeeld</div>')
       :'');
   }else{
     lijst.innerHTML=iedereen.sort((a,b)=>String(a.naam).localeCompare(String(b.naam))).map(kpRij).join('');
@@ -24200,12 +24202,7 @@ function renderOpenKlussen(){
   // staan, anders zou je je eigen aanmelding niet meer terugvinden.
   const heeftPlek=k=>{
     if(k.ben_ingedeeld||k.mijn_status)return true;
-    const shifts=Array.isArray(k.shifts)?k.shifts:[];
-    if(shifts.length)return shifts.some(sh=>(sh.personeel_nodig||0)>0&&(sh.bezet||0)<(sh.personeel_nodig||0));
-    const nodig=k.personeel_nodig||0;
-    if(nodig<=0)return false;
-    const bezet=(k.bezet_aantal!=null)?k.bezet_aantal:(k.ingedeeld_aantal||0);
-    return bezet<nodig;
+    return openKlusBezetting(k).open>0;
   };
 
   const metPlek=OPEN_KLUSSEN.filter(heeftPlek);
@@ -24228,10 +24225,8 @@ function renderOpenKlussen(){
     const tijd=begin?(eind?begin+' – '+eind:'vanaf '+begin):'tijd volgt';
     const extra=[k.vertrek_tijd&&'vertrek '+tijdFromDb(k.vertrek_tijd)].filter(Boolean).join('');
     const nodig=k.personeel_nodig||0;
-    const bezet=(k.bezet_aantal!=null)?k.bezet_aantal:(k.ingedeeld_aantal||0);
-    const plekVrij=shifts.length
-      ?shifts.reduce((t,sh)=>t+Math.max(0,(sh.personeel_nodig||0)-(sh.bezet||0)),0)
-      :(nodig?Math.max(0,nodig-bezet):null);
+    const ob=openKlusBezetting(k);
+    const plekVrij=(shifts.length||nodig)?ob.open:null;
     // Wat je ongeveer verdient: geplande uren × je eigen uurloon. Alleen jij ziet dit.
     const min=klusMinuten(k);
     const uren=min?Math.round(min/30)/2:null;
@@ -24262,14 +24257,19 @@ function renderOpenKlussen(){
       knop=`<div style="margin-top:8px;display:flex;align-items:center;gap:8px"><span style="font-size:12.5px;color:var(--muted)">Je gaf aan dat je niet kunt</span>
         <button class="btn-ghost" style="font-size:11.5px;padding:5px 10px" onclick="okKanNiet('${k.id}',false)">Toch wel</button></div>`;
     }else if(shifts.length){
-      knop='<div style="margin-top:10px">'+shifts.map(sh=>{
+      knop='<div style="margin-top:10px">'+shifts.map((sh,i)=>{
         const t=[tijdFromDb(sh.start_tijd),tijdFromDb(sh.eind_tijd)].filter(Boolean).join(' – ');
-        const vol=(sh.personeel_nodig||0)>0&&(sh.bezet||0)>=(sh.personeel_nodig||0);
+        const vol=ob.shifts[i].open<=0;
         return`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
           <span style="font-size:13px">${veiligTekst(sh.naam||'Shift')}${t?` <b>${t}</b>`:''} <span style="color:var(--muted)">· ${sh.bezet||0}/${sh.personeel_nodig||0}</span></span>
           ${vol?'<span style="font-size:11px;color:var(--muted)">vol</span>'
                :`<button class="ok-ja" style="flex:0 0 auto;padding:8px 14px;font-size:13px" onclick="okIkKan('${k.id}','${sh.id}')">Ik kan ✓</button>`}</div>`;
-      }).join('')+`<button class="ok-nee" style="width:100%;margin-top:4px" onclick="okKanNiet('${k.id}',true)">Kan niet</button></div>`;
+      }).join('')
+        // Plekken die niet aan een shift hangen: aanmelden voor de hele klus.
+        +(ob.rest.open>0?`<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+          <span style="font-size:13px">Hele klus <span style="color:var(--muted)">· ${ob.rest.bezet}/${ob.rest.totaal}</span></span>
+          <button class="ok-ja" style="flex:0 0 auto;padding:8px 14px;font-size:13px" onclick="okIkKan('${k.id}')">Ik kan ✓</button></div>`:'')
+        +`<button class="ok-nee" style="width:100%;margin-top:4px" onclick="okKanNiet('${k.id}',true)">Kan niet</button></div>`;
     }else{
       knop=`<div class="ok-knoppen"><button class="ok-ja" onclick="okIkKan('${k.id}')">Ik kan ✓</button><button class="ok-nee" onclick="okKanNiet('${k.id}',true)">Kan niet</button></div>`;
     }
@@ -24348,7 +24348,7 @@ async function okNaBeschikbaarheid(dagen){
   const{data}=await sb.rpc('mijn_open_klussen'); if(!data)return;
   OPEN_KLUSSEN=data;
   const hits=data.filter(k=>k.categorie!=='franklins'&&dagen.includes(k.datum)&&!k.ben_ingedeeld&&!k.mijn_status&&!k.kan_niet
-    &&((Array.isArray(k.shifts)&&k.shifts.length)?k.shifts.some(sh=>(sh.personeel_nodig||0)>(sh.bezet||0)):(k.personeel_nodig||0)>(k.bezet_aantal||0)));
+    &&openKlusBezetting(k).open>0);
   if(!hits.length)return;
   const lijst=hits.slice(0,4).map(k=>`<div style="margin:4px 0">• <b>${veiligTekst(parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'short',day:'numeric',month:'short'}))}</b> — ${veiligTekst(k.naam||'Klus')}</div>`).join('');
   const zonderShift=hits.filter(k=>!(Array.isArray(k.shifts)&&k.shifts.length));
@@ -24375,7 +24375,7 @@ function deelKlusWhatsApp(id){
   const k=(KLUSSEN||[]).find(x=>x.id===id); if(!k)return;
   const d=parseDate(k.datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'});
   const b=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd)||tijdFromDb(k.start_opbouw), e=tijdFromDb(k.einde_klus)||tijdFromDb(k.einde_feest);
-  const bezet=(k.personeel||[]).length+(k.losse||[]).length, vrij=Math.max(0,(k.personeel_nodig||0)-bezet);
+  const vrij=klusBezetting(k).open;
   const plaats=(k.adres||'').split(',').slice(-1)[0].trim();
   // Persoonlijk, zoals je het zelf zou typen. De link opent de app (of de winkel als je hem nog niet hebt).
   const wie=vrij>1?`nog ${vrij} mensen die mee kunnen`:'nog iemand die mee kan';
@@ -24524,59 +24524,98 @@ function pbIsPast(d){const t=new Date();t.setHours(0,0,0,0);const x=new Date(d);
 function pbIsToday(d){const t=new Date();t.setHours(0,0,0,0);const x=new Date(d);x.setHours(0,0,0,0);return x.getTime()===t.getTime();}
 function pbFmt(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function pbGetKlussenVoorDag(d){const ds=pbFmt(d);return KLUSSEN.filter(k=>{if(k.categorie==='intern')return false;const start=k.datum;const end=k.datum_eind||k.datum;return ds>=start&&ds<=end;});}
+// BEZETTING-BEGIN ─────────────────────────────────────────────────────────
+// ÉÉN REKENREGEL voor "is deze klus vol?". Alles in de app (planbord,
+// klusvenster, Open klussen, Vraag mensen, WhatsApp) vraagt het hier, en de
+// database rekent precies hetzelfde in klus_open_plekken(). Reken dit NERGENS
+// anders opnieuw uit: zo kwam "vol terwijl er nog plek is" steeds terug.
+//
+//  • Klus zonder shifts: open = personeel nodig − wie erop staat.
+//  • Klus met shifts: "personeel nodig" op de klus is het TOTAAL.
+//      – elke shift: open = nodig van de shift − wie op die shift staat;
+//      – "Hele klus" (zonder shift): plek = totaal − wat de shifts innemen
+//        (een shift met meer mensen dan gevraagd neemt die extra plek mee).
+//  • Losse krachten tellen overal gewoon mee.
+//  • Kramen (markten) werken alleen met shifts; daar is geen "Hele klus".
+// De test .github/scripts/bezettingtest.js bewaakt dit bij elke publicatie.
+function klusPlekken(nodigKlus,shifts,bezetTotaal,isKraam){
+  const getal=v=>Math.max(0,parseInt(v,10)||0);
+  const rijen=(shifts||[]).map(sh=>{
+    const n=getal(sh.nodig),b=getal(sh.bezet);
+    return{id:sh.id,nodig:n,bezet:b,totaal:Math.max(n,b),open:Math.max(0,n-b)};
+  });
+  const nodig=getal(nodigKlus),bezet=getal(bezetTotaal);
+  let rest;
+  if(!rijen.length){
+    rest={bezet,totaal:Math.max(nodig,bezet),open:Math.max(0,nodig-bezet)};
+  }else{
+    const inShift=rijen.reduce((t,r)=>t+r.bezet,0);
+    const neemtIn=rijen.reduce((t,r)=>t+r.totaal,0);
+    const zonder=Math.max(0,bezet-inShift);
+    const restNodig=isKraam?0:Math.max(0,nodig-neemtIn);
+    rest={bezet:zonder,totaal:Math.max(restNodig,zonder),open:Math.max(0,restNodig-zonder)};
+  }
+  const alle=rijen.concat([rest]);
+  return{shifts:rijen,rest,
+    bezet:alle.reduce((t,r)=>t+r.bezet,0),
+    totaal:alle.reduce((t,r)=>t+r.totaal,0),
+    open:alle.reduce((t,r)=>t+r.open,0)};
+}
+// Voor een klus uit KLUSSEN (met de namen erbij).
+function klusBezetting(k){
+  const pers=k.personeel||[],los=k.losse||[];
+  return klusPlekken(k.personeel_nodig,(k.shifts||[]).map(sh=>({id:sh.id,nodig:sh.personeel_nodig,
+    bezet:pers.filter(p=>p.shift_id===sh.id).length+los.filter(l=>l.shift_id===sh.id).length})),
+    pers.length+los.length,!!k.kraam_id);
+}
+// Voor een klus uit Open klussen (alleen aantallen, zoals de database ze geeft).
+function openKlusBezetting(k){
+  const shifts=Array.isArray(k.shifts)?k.shifts:[];
+  return klusPlekken(k.personeel_nodig,shifts.map(sh=>({id:sh.id,nodig:sh.personeel_nodig,bezet:sh.bezet})),
+    (k.bezet_aantal!=null)?k.bezet_aantal:(k.ingedeeld_aantal||0),!!k.kraam_id);
+}
+// BEZETTING-EIND ──────────────────────────────────────────────────────────
 function pbGetShifts(k){
   // Losse krachten staan óók op de klus, dus die tellen gewoon mee in de bezetting.
   const team=(k.trucks&&k.trucks.length)
     ?k.trucks.map(t=>t.label).join(', ')
     :(k.categorie==='franklins'?'Snackbar':'Onbekend');
+  const bz=klusBezetting(k);          // de aantallen komen altijd hiervandaan
+  const lid=(wie,los)=>wie.map(p=>({soort:'pers',id:p.id,naam:p.naam}))
+    .concat(los.map(l=>({soort:'los',id:l.id,naam:l.naam})));
 
   // Heeft de klus echte shifts, dan is elke shift een blok op het bord.
   const echt=k.shifts||[];
   if(echt.length){
-    const rijen=echt.map(sh=>{
-      const wie=(k.personeel||[]).filter(p=>p.shift_id===sh.id);
-      const los=(k.losse||[]).filter(l=>l.shift_id===sh.id);
-      const bezet=wie.length+los.length;
+    const bekend=new Set(echt.map(sh=>sh.id));
+    const rijen=echt.map((sh,i)=>{
       const t1=tijdFromDb(sh.start_tijd)||'?';
       const t2=tijdFromDb(sh.eind_tijd)||'?';
       return{
         id:sh.id,
         tijd:(t1!=='?'||t2!=='?')?`${t1} → ${t2}`:'Hele dag',
         team:sh.naam||team,
-        bezet,
-        totaal:Math.max(sh.personeel_nodig||0,bezet),
-        leden:wie.map(p=>({soort:'pers',id:p.id,naam:p.naam}))
-          .concat(los.map(l=>({soort:'los',id:l.id,naam:l.naam}))),
+        bezet:bz.shifts[i].bezet,
+        totaal:bz.shifts[i].totaal,
+        leden:lid((k.personeel||[]).filter(p=>p.shift_id===sh.id),(k.losse||[]).filter(l=>l.shift_id===sh.id)),
       };
     });
-    // Wie op de klus staat zonder shift krijgt een eigen regel, anders zou je
-    // hem nergens terugzien.
-    const zonder=(k.personeel||[]).filter(p=>!p.shift_id);
-    const zonderLos=(k.losse||[]).filter(l=>!l.shift_id);
-    // "Personeel nodig" op de klus is het totaal. Wat de shifts daarvan niet
-    // vragen, zijn de plekken voor "Hele klus". Zonder dit telde die regel
-    // alleen wie er al stond en leek de klus vol terwijl er nog plek was.
-    // Kramen (Manchester e.d.) hebben een eigen planbord en doen niet mee.
-    const shiftNodig=echt.reduce((s,sh)=>s+(sh.personeel_nodig||0),0);
-    const restNodig=k.kraam_id?0:Math.max(0,(k.personeel_nodig||0)-shiftNodig);
-    const zonderAantal=zonder.length+zonderLos.length;
-    if(zonderAantal||restNodig){
+    // Wie op de klus staat zonder (bestaande) shift krijgt de regel "Hele
+    // klus", net als de plekken die de shifts van het totaal overlaten.
+    if(bz.rest.totaal>0){
       rijen.push({id:'shift-'+k.id,tijd:'Hele klus',team,
-        bezet:zonderAantal,totaal:Math.max(restNodig,zonderAantal),
-        leden:zonder.map(p=>({soort:'pers',id:p.id,naam:p.naam}))
-          .concat(zonderLos.map(l=>({soort:'los',id:l.id,naam:l.naam})))});
+        bezet:bz.rest.bezet,totaal:bz.rest.totaal,
+        leden:lid((k.personeel||[]).filter(p=>!p.shift_id||!bekend.has(p.shift_id)),
+                  (k.losse||[]).filter(l=>!l.shift_id||!bekend.has(l.shift_id)))});
     }
     return rijen;
   }
 
-  const bezet=(k.personeel?k.personeel.length:0)+(k.losse?k.losse.length:0);
-  const nodig=k.personeel_nodig||0;
-  if(nodig===0&&bezet===0)return[];
+  if(bz.totaal===0)return[];
   const t1=tijdFromDb(k.start_tijd)||tijdFromDb(k.vertrek_tijd)||tijdFromDb(k.start_opbouw)||'?';
   const t2=tijdFromDb(k.einde_klus)||tijdFromDb(k.einde_feest)||'?';
-  return[{id:'shift-'+k.id,tijd:t1!=='?'||t2!=='?'?`${t1} → ${t2}`:'Hele dag',team,bezet,totaal:Math.max(nodig,bezet),
-    leden:(k.personeel||[]).map(p=>({soort:'pers',id:p.id,naam:p.naam}))
-      .concat((k.losse||[]).map(l=>({soort:'los',id:l.id,naam:l.naam})))}];
+  return[{id:'shift-'+k.id,tijd:t1!=='?'||t2!=='?'?`${t1} → ${t2}`:'Hele dag',team,bezet:bz.bezet,totaal:bz.totaal,
+    leden:lid(k.personeel||[],k.losse||[])}];
 }
 function pbGetStatus(k){
   const shifts=pbGetShifts(k);
@@ -24597,8 +24636,11 @@ async function pbWijsToe(klusId,mwId,gekozenShift){
   const klus=KLUSSEN.find(k=>k.id===klusId);const mw=PERSONEEL.find(p=>p.id===mwId);
   if(!klus||!mw)return;if(!klus.personeel)klus.personeel=[];
   if(klus.personeel.find(p=>p.id===mwId))return;
-  const alBezet=klus.personeel.length+((klus.losse||[]).length);
-  if(alBezet>=(klus.personeel_nodig||0)&&(klus.personeel_nodig||0)>0)return;
+  const bzNu=klusBezetting(klus);
+  if(bzNu.open<=0&&bzNu.totaal>0){
+    toast('Deze klus is vol ('+bzNu.bezet+' van '+bzNu.totaal+'). Moet er iemand bij? Zet dan bij de klus het aantal personeel hoger.','fout');
+    return;
+  }
 
   // Wie zich heeft aangemeld mag altijd. Is iemand niet beschikbaar, dan kan
   // het nog steeds — je bevestigt dan alleen even dat je het hebt afgestemd.
@@ -24623,12 +24665,8 @@ async function pbWijsToe(klusId,mwId,gekozenShift){
   if(gekozenShift){
     if(String(gekozenShift).indexOf('shift-')!==0)shiftId=gekozenShift;
   }else{
-    (klus.shifts||[]).some(sh=>{
-      const vol=(klus.personeel||[]).filter(p=>p.shift_id===sh.id).length
-               +((klus.losse||[]).filter(l=>l.shift_id===sh.id).length);
-      if(vol<(sh.personeel_nodig||0)){shiftId=sh.id;return true;}
-      return false;
-    });
+    const vrij=bzNu.shifts.find(r=>r.open>0);
+    if(vrij)shiftId=vrij.id;
   }
 
   klus.personeel.push({id:mw.id,naam:mw.naam,shift_id:shiftId});pbOpenDrop=null;

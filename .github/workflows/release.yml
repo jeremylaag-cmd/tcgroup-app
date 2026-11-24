@@ -69,6 +69,8 @@ jobs:
         run: |
           set -e
           node .github/scripts/syntaxcheck.js www/*.html $(ls web/*.html 2>/dev/null || true)
+          # Rekent de app nog overal op dezelfde manier uit of een klus vol is?
+          node .github/scripts/bezettingtest.js www/index.html
 
       - name: Huidige online versie ophalen
         run: |
