@@ -8320,7 +8320,8 @@ function mbRondeCsv(soort){
   if(soort==='revolut'){
     const q=v=>{ const s=String(v==null?'':v); return /[",\n]/.test(s)?'"'+s.replace(/"/g,'""')+'"':s; };
     const rijen=[['Name','Recipient type','Account number','Sort code','Recipient bank country','Currency','Amount','Payment reference']];
-    const zonder=[], eenNaam=[], geenFactuur=[];
+    const zonder=[], eenNaam=[], geenFactuur=[], nietOntv=[];
+    // Alleen wie op 'ontvangen' staat gaat mee: Bram drukt daarop als hij de factuur binnen heeft.
     // Wie nog betaald moet worden: deze ronde plus wie uit een eerdere ronde is doorgeschoven.
     // Wie al op betaald staat gaat niet mee, en zonder factuur in de app ook niet.
     const refVan=x=>('TCG R'+(x.nummer||'')+' '+String(x.periode_tot||'').slice(5)).slice(0,18);
@@ -8330,13 +8331,15 @@ function mbRondeCsv(soort){
       const sc=String(r.sort_code||'').replace(/\D/g,''), ac=String(r.bank_account||'').replace(/\D/g,'');
       const naam=String(r.naam||'').replace(/\s+/g,' ').trim().slice(0,80);
       if(!r.factuur_id){ geenFactuur.push(r.naam); return; }
+      if(!r.ontvangen_op){ nietOntv.push(r.naam); return; }
       if(sc.length!==6||ac.length<6){ zonder.push(r.naam); return; }
       if(naam.split(' ').length<2){ eenNaam.push(r.naam); return; }
       rijen.push([naam,'INDIVIDUAL',ac.padStart(8,'0'),sc,'GB','GBP',Number(r.netto).toFixed(2),ref]);
     });
-    if(rijen.length<2){ alert('Er is niemand meer te betalen met een factuur en volledige bankgegevens.'+(geenFactuur.length?'\n\nNog geen factuur: '+geenFactuur.join(', '):'')); return; }
+    if(rijen.length<2){ alert('Er staat niemand op ontvangen die nog betaald moet worden. Druk eerst op "ontvangen" bij de facturen die je binnen hebt.'+(nietOntv.length?'\n\nFactuur gemaakt, nog niet op ontvangen: '+[...new Set(nietOntv)].join(', '):'')+(geenFactuur.length?'\n\nNog geen factuur: '+[...new Set(geenFactuur)].join(', '):'')); return; }
     mbBestandDelen(rijen.map(r=>r.map(q).join(',')).join('\r\n')+'\r\n',marktNaam(dezeMarkt())+' ronde '+(R.nummer||'')+' revolut.csv','text/csv;charset=utf-8');
     const meld=[];
+    if(nietOntv.length)meld.push('Nog niet op ontvangen gezet: '+[...new Set(nietOntv)].join(', '));
     if(geenFactuur.length)meld.push('Nog geen factuur in de app: '+[...new Set(geenFactuur)].join(', '));
     if(zonder.length)meld.push('Sort code of rekeningnummer ontbreekt of klopt niet: '+zonder.join(', '));
     if(eenNaam.length)meld.push('Revolut wil een voor- en achternaam: '+eenNaam.join(', '));
