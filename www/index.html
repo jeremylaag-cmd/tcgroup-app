@@ -4104,6 +4104,7 @@ const MB_EN_REGELS=[
 [/^Sinds (.+) is het minimumloon in het VK £ 12,71 \(21\+\), £ 10,85 \(18–20\) en £ 8,00 \(16–17\)\. (Deze persoon zit|Deze (\d+) mensen zitten) eronder\. Nieuwe uren rekenen met het tarief dat hier staat\.$/,
   (m,a,w,n)=>'Since '+i18nT(a)+' the UK minimum wage is £12.71 (21+), £10.85 (18–20) and £8.00 (16–17). '+(n?'These '+n+' people are':'This person is')+' below it. New hours are calculated with the rate shown here.'],
 [/^(\d+) van de (\d+)$/,'$1 of $2'],
+[/^(\d+) vinkjes? nog niet opgeslagen$/,(m,n)=>n+(n==='1'?' tick':' ticks')+' not saved yet'],
 [/^Je hebt bij (\d+) (persoon|mensen) iets veranderd dat nog niet is opgeslagen\. Weggaan zonder opslaan\?$/,(m,a,p)=>'You changed something for '+a+' '+(p==='persoon'?'person':'people')+' that has not been saved. Leave without saving?'],
 [/^Is nu kraammanager van (.+)\. De app schakelt om zodra hij hem opnieuw opent\.(.*)$/,(m,a,r)=>'Is now stall manager of '+a+'. The app switches as soon as they open it again.'+i18nT(r)],
 [/^afgesloten (.+)$/,'closed $1'],
@@ -20741,18 +20742,24 @@ function bsTekenLijst(){
 
 // ── De bestelling / paklijst ──
 let BS_OPEN=null;
+// Vinkjes op de paklijst die nog niet zijn opgeslagen: regel-id -> gepakt (true/false).
+// Afvinken tekent alleen het scherm bij; opslaan gaat in één keer met de knop Opslaan
+// (of vanzelf bij Bestelling klaar en bij sluiten).
+let BS_WACHT={};
 async function bsOpen(id){
   const[l,r]=await Promise.all([sb.rpc('bestellingen_lijst',{p_van:'2000-01-01',p_tot:'2100-01-01'}),sb.rpc('bestelling_lezen',{p_id:id})]);
   if(r.error){toast(r.error.message,'fout');return;}
   const kop=((l&&l.data)||[]).find(b=>b.id===id);
   if(!kop){toast('Deze bestelling bestaat niet meer','fout');return;}
-  BS_OPEN={kop,regels:r.data||[]};
+  BS_OPEN={kop,regels:r.data||[]}; BS_WACHT={};
   let ov=document.getElementById('bsOverlay');
   if(!ov){ ov=document.createElement('div'); ov.id='bsOverlay'; document.body.appendChild(ov); ov.onclick=e=>{ if(e.target===ov)bsDicht(); }; }
   ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:600;display:flex;align-items:center;justify-content:center;padding:12px';
   bsTekenOpen();
 }
-function bsDicht(){ const ov=document.getElementById('bsOverlay'); if(ov)ov.remove(); BS_OPEN=null;
+async function bsDicht(){
+  if(BS_OPEN&&Object.keys(BS_WACHT).length&&!(await bsOpslaan(true)))return;   // eerst de vinkjes bewaren
+  const ov=document.getElementById('bsOverlay'); if(ov)ov.remove(); BS_OPEN=null; BS_WACHT={};
   if(document.getElementById('page-taken')?.classList.contains('active'))loadTaken();
   if(document.getElementById('page-bestellen')?.classList.contains('active'))loadBestellen(); }
 function bsTekenOpen(){
@@ -20765,6 +20772,8 @@ function bsTekenOpen(){
   const totB=regels.reduce((t,x)=>t+Number(x.prijs||0)*Number(x.aantal),0);
   const totG=regels.reduce((t,x)=>t+Number(x.prijs||0)*geleverdVan(x),0);
   const gepakt=regels.filter(x=>x.gepakt).length, pct=regels.length?Math.round(gepakt/regels.length*100):0;
+  const wacht=Object.keys(BS_WACHT).length;
+  const oudVak=document.getElementById('bsVak'), scrol=oudVak?oudVak.scrollTop:0;
   let lijst='';
   bsCategorieen(regels).forEach(cat=>{
     lijst+=`<div style="margin:14px 0 4px;background:#1F2937;color:#fff;border-radius:7px;padding:6px 11px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase">${veiligTekst(cat)}</div>`;
@@ -20783,7 +20792,7 @@ function bsTekenOpen(){
         ${pakken?`<button class="btn-nav" style="font-size:11.5px;white-space:nowrap;flex:0 0 auto" onclick="bsMinder('${veiligJs(x.regel_id)}')">${min?'aanpassen':'minder'}</button>`:''}</div>`;
     });
   });
-  ov.innerHTML=`<div style="background:var(--card,#fff);width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:14px;padding:16px 18px">
+  ov.innerHTML=`<div id="bsVak" style="background:var(--card,#fff);width:100%;max-width:640px;max-height:92vh;overflow:auto;border-radius:14px;padding:16px 18px 0">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
       <div><div style="font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase">Paklijst Franklins ${bsChip(kop.status)}</div>
         <div style="font-size:19px;font-weight:800;margin-top:3px">${veiligTekst(parseDate(kop.voor_datum).toLocaleDateString('nl-NL',{weekday:'long',day:'numeric',month:'long'}))}</div>
@@ -20797,12 +20806,39 @@ function bsTekenOpen(){
     ${prijzen?`<div style="display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;gap:10px;flex-wrap:wrap">
       <div style="font-size:12px;color:var(--muted)">inkoop excl. btw${totG!==totB?' &middot; besteld '+bsEuro(totB):''}</div>
       <div style="font-size:18px;font-weight:700">${bsEuro(totG)}</div></div>`:''}
-    <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-top:14px">
+    <div style="position:sticky;bottom:0;background:var(--card,#fff);border-top:1px solid var(--border);margin:14px -18px 0;padding:10px 18px 14px;display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;align-items:center">
+      ${wacht?`<span style="font-size:12.5px;color:#8A5307;font-weight:600;margin-right:auto">${wacht} ${wacht===1?'vinkje':'vinkjes'} nog niet opgeslagen</span>
+        <button class="btn-sm" id="bsOpslaanKnop" onclick="bsOpslaan()">Opslaan</button>`:''}
       <button class="btn-ghost" onclick="bsPrint()">Printen / PDF</button>
       ${bewerken?`<button class="btn-ghost" onclick="bsBewerk()">Aanpassen</button><button class="btn-ghost" style="color:#B91C1C" onclick="bsAnnuleer()">Annuleren</button>`:''}
       ${pakken&&kop.status!=='klaar'?`<button class="btn-sm" onclick="bsKlaar(true)">Bestelling klaar</button>`:''}
       ${pakken&&kop.status==='klaar'?`<button class="btn-ghost" onclick="bsKlaar(false)">Terugzetten</button>`:''}
     </div></div>`;
+  const vak=document.getElementById('bsVak'); if(vak&&scrol)vak.scrollTop=scrol;   // blijf staan waar je was
+}
+// Alle wachtende vinkjes in één keer bewaren. Geeft false terug als er iets mislukte
+// (die vinkjes blijven dan wachten).
+let BS_OPSLAAN_BEZIG=false;
+async function bsOpslaan(stil){
+  if(!BS_OPEN||BS_OPSLAAN_BEZIG)return false;
+  const ids=Object.keys(BS_WACHT); if(!ids.length)return true;
+  BS_OPSLAAN_BEZIG=true;
+  const kn=document.getElementById('bsOpslaanKnop'); if(kn){ kn.disabled=true; kn.textContent='Opslaan\u2026'; }
+  let fout=null;
+  try{
+    for(const rid of ids){
+      const x=BS_OPEN.regels.find(r=>r.regel_id===rid); if(!x){ delete BS_WACHT[rid]; continue; }
+      const{error}=await sb.rpc('bestelregel_zetten',{p_regel:rid,p_gepakt:BS_WACHT[rid],p_geleverd:x.geleverd,p_opmerking:x.opmerking});
+      if(error){ fout=error.message; continue; }
+      delete BS_WACHT[rid];
+    }
+  }catch(e){ fout=(e&&e.message)||'Geen verbinding'; }
+  BS_OPSLAAN_BEZIG=false;
+  if(BS_OPEN&&BS_OPEN.kop.status==='verstuurd'&&!fout)BS_OPEN.kop.status='wordt_gepakt';
+  bsTekenOpen();
+  if(fout){ toast('Niet alles is opgeslagen: '+fout,'fout'); return false; }
+  if(!stil)toast('Paklijst opgeslagen');
+  return true;
 }
 async function bsTekortOpgelost(rid,aan){
   const{error}=await sb.rpc('bestel_tekort_opgelost',{p_regel:rid,p_opgelost:aan});
@@ -20811,13 +20847,16 @@ async function bsTekortOpgelost(rid,aan){
   if(document.getElementById('inkBlok'))laadInkoopBlok();
 }
 async function bsHerlaadOpen(){ if(!BS_OPEN)return; const id=BS_OPEN.kop.id; const{data}=await sb.rpc('bestelling_lezen',{p_id:id}); if(data)BS_OPEN.regels=data;
-  const l=await sb.rpc('bestellingen_lijst',{p_van:'2000-01-01',p_tot:'2100-01-01'}); const k=((l&&l.data)||[]).find(b=>b.id===id); if(k)BS_OPEN.kop=k; bsTekenOpen(); }
-async function bsVink(rid){
+  if(!BS_OPEN)return;
+  // Vinkjes die nog niet zijn opgeslagen blijven staan zoals ze op het scherm stonden.
+  BS_OPEN.regels.forEach(x=>{ if(x.regel_id in BS_WACHT)x.gepakt=BS_WACHT[x.regel_id]; });
+  const l=await sb.rpc('bestellingen_lijst',{p_van:'2000-01-01',p_tot:'2100-01-01'}); const k=((l&&l.data)||[]).find(b=>b.id===id); if(k&&BS_OPEN)BS_OPEN.kop=k; bsTekenOpen(); }
+// Afvinken: alleen op het scherm, zonder de lijst te verversen. Opslaan gebeurt met de knop.
+function bsVink(rid){
   const x=BS_OPEN&&BS_OPEN.regels.find(r=>r.regel_id===rid); if(!x)return;
-  x.gepakt=!x.gepakt; bsTekenOpen();
-  const{error}=await sb.rpc('bestelregel_zetten',{p_regel:rid,p_gepakt:x.gepakt,p_geleverd:x.geleverd,p_opmerking:x.opmerking});
-  if(error){ x.gepakt=!x.gepakt; bsTekenOpen(); toast(error.message,'fout'); return; }
-  if(BS_OPEN.kop.status==='verstuurd')BS_OPEN.kop.status='wordt_gepakt';
+  x.gepakt=!x.gepakt;
+  if(rid in BS_WACHT)delete BS_WACHT[rid]; else BS_WACHT[rid]=x.gepakt;   // twee keer tikken = niets te bewaren
+  bsTekenOpen();
 }
 async function bsMinder(rid){
   const x=BS_OPEN&&BS_OPEN.regels.find(r=>r.regel_id===rid); if(!x)return;
@@ -20830,10 +20869,12 @@ async function bsMinder(rid){
   const geleverd=(n==null||n>=Number(x.aantal))?null:n;
   const{error}=await sb.rpc('bestelregel_zetten',{p_regel:rid,p_gepakt:true,p_geleverd:geleverd,p_opmerking:geleverd==null&&n!=null?null:opm||null});
   if(error){ toast(error.message,'fout'); return; }
+  delete BS_WACHT[rid];
   bsHerlaadOpen();
 }
 async function bsKlaar(klaar){
   if(!BS_OPEN)return;
+  if(Object.keys(BS_WACHT).length&&!(await bsOpslaan(true)))return;   // eerst de vinkjes bewaren
   if(klaar){
     const open=BS_OPEN.regels.filter(x=>!x.gepakt).length;
     const min=BS_OPEN.regels.filter(x=>x.geleverd!=null&&Number(x.geleverd)<Number(x.aantal)).length;
@@ -20853,13 +20894,13 @@ async function bsAnnuleer(){
   const ok=await vraagBevestiging('Bestelling annuleren?','De taak verdwijnt bij de hal.','Ja, annuleren'); if(!ok)return;
   const{error}=await sb.rpc('bestelling_annuleren',{p_id:BS_OPEN.kop.id});
   if(error){ toast(error.message,'fout'); return; }
-  toast('Bestelling geannuleerd'); bsDicht();
+  BS_WACHT={}; toast('Bestelling geannuleerd'); bsDicht();
 }
 function bsBewerk(){
   if(!BS_OPEN)return;
   BS_BEWERK=BS_OPEN.kop.id; BS_VOOR=BS_OPEN.kop.voor_datum; BS_OPM=BS_OPEN.kop.opmerking||''; BS_AANTAL={};
   BS_OPEN.regels.forEach(r=>{ if(r.product_id)BS_AANTAL[r.product_id]=Number(r.aantal); });
-  const ov=document.getElementById('bsOverlay'); if(ov)ov.remove(); BS_OPEN=null;
+  const ov=document.getElementById('bsOverlay'); if(ov)ov.remove(); BS_OPEN=null; BS_WACHT={};
   BS_TAB='nieuw'; showPage('bestellen');
 }
 
