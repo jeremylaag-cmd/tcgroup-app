@@ -5446,6 +5446,7 @@ function mbAfsluitHtml(){
       uit+=rg('Checklist',`schoonmaaklijst ${a.schoonmaak?'<b style="color:#0F7A52">ingevuld</b>':'<b style="color:#B4472B">niet gedaan</b>'} &middot; gas dicht`);
       uit+=rg('Voorraad',a.voorraad_nodig?'<b>'+veiligTekst(mbVrRegel(a).concat(a.voorraad_tekst?[a.voorraad_tekst]:[]).join(', '))+'</b>'
         +(a.geregeld_op?' <span style="color:#0F7A52">&#10003; geregeld</span>':''):'niets nodig');
+      if(a.dagrapport)uit+=rg('Dagrapport',`<span class="notr" style="display:block;white-space:pre-wrap;font-size:13.5px;color:var(--text,#1A1917);margin-top:2px">${veiligTekst(a.dagrapport)}</span>`);
       const beo=a.beoordelingen||[];
       if(beo.length)uit+=rg('Beoordeling',beo.map(b=>`${mbNaamLink(null,b.naam)} ${b.van?veiligTekst(MB_OORDEEL_NL[b.van]||b.van)+' &rarr; ':''}<b>${veiligTekst(MB_OORDEEL_NL[b.naar]||b.naar||'geen')}</b>${b.van?'':' <span style="color:var(--muted)">(nieuw)</span>'}${b.reden?` <span style="color:var(--muted)">&ldquo;${veiligTekst(b.reden)}&rdquo;</span>`:''}`).join('<br>'));
       const kl=a.kleding||[];
@@ -12934,7 +12935,7 @@ async function mgrBeoordeel(id){
 // De manager controleert; Bram geeft daarna nog steeds akkoord op de uren.
 // 1 minuut na de start van de dienst inklokken is al te laat.
 let MGR_CL={kraam:null,datum:null,stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{},toevoeg:{},
-  gasN:'',aard:'',ban:'',pin:{},pinNieuw:[]};
+  gasN:'',aard:'',ban:'',pin:{},pinNieuw:[],rapport:''};
 let MGR_VR_STATUS=[];
 let MGR_CL_OPTIES=[], MGR_CL_D=null, MGR_CL_CODES=[];
 const MGR_VOORRAAD=['Batter mix','Sugar','Butter','Nutella','Lotus','White chocolate','Pistachio','Bueno','Whipped cream',
@@ -12956,7 +12957,7 @@ function mgrClBezig(){
   return false;
 }
 function mgrClReset(){ Object.assign(MGR_CL,{stap:1,schoon:null,gas:null,voorraad:null,items:{},tekst:'',fout:'',open:{},wijzig:{},beo:{},beoOpen:{},toevoeg:{},
-  gasN:'',aard:'',ban:'',pin:{},pinNieuw:[]}); }
+  gasN:'',aard:'',ban:'',pin:{},pinNieuw:[],rapport:''}); }
 // Wat er naast de vinkjes nodig is: gas, aardbeien, bananen (aantallen).
 function mgrClAantal(v){ const n=parseInt(String(v||'').trim(),10); return Number.isFinite(n)&&n>0?n:0; }
 function mgrClExtra(){
@@ -13117,6 +13118,7 @@ function mgrClTeken(){
       <div style="font-size:13px;line-height:1.8">Cleaning list: ${a.schoonmaak?'done':'<span style="color:#B45309">not done</span>'}<br>Gas: off<br>
         Stock: ${a.voorraad_nodig?veiligTekst(mgrVrTekst(a)):'nothing needed'}${a.voorraad_nodig?(a.geregeld_op?' <span style="color:#0F7A52">&middot; &#10003; sorted by '+veiligTekst(a.geregeld_door||'?')+'</span>':' <span style="color:#B45309">&middot; waiting</span>'):''}
         ${a.notitie?'<br><span style="color:#6B6A66">&ldquo;'+veiligTekst(a.notitie)+'&rdquo;</span>':''}</div></div>
+      ${a.dagrapport?`<div class="mcr-kaart"><div class="mcr-kop">Day report</div><div style="font-size:13px;line-height:1.55;white-space:pre-wrap">${veiligTekst(a.dagrapport)}</div></div>`:''}
       <div class="mcr-kaart" style="padding:2px 15px"><div class="mcr-kop" style="margin-top:12px">Hours</div>${mensen.map(mgrClPersoon).join('')}</div>
       <div style="font-size:12.5px;color:#6B6A66;text-align:center;margin:4px 0 14px">Need to change something? Ask Bram to reopen the day.</div>`;
     document.getElementById('mcrMain').innerHTML=uit+mgrVrStatusHtml(); return;
@@ -13193,6 +13195,10 @@ function mgrClTeken(){
           <input class="mcr-veld" inputmode="decimal" placeholder="0.00" value="${veiligTekst(x.omzet||'')}" oninput="MGR_CL.pinNieuw[${i}].omzet=this.value" style="width:110px;text-align:right;padding:10px;font-size:16px"></div>`).join('')}
         <button class="mcr-linkje" style="margin-top:8px" onclick="MGR_CL.pinNieuw.push({tid:'',omzet:''});mgrClTeken()">+ ${rg.length?'another card machine':'add a card machine'}</button></div>`;
     }
+    // Dagrapport: vrije tekst van de kraammanager, komt bij Bram in de afsluiting en in de melding.
+    uit+=`<div class="mcr-kaart" style="padding:2px 15px 12px"><div class="mcr-kop" style="margin-top:12px">Day report</div>
+      <div style="font-size:12.5px;color:#6B6A66;margin-bottom:6px">How did the day go? Anything that happened, broke or stood out. Optional.</div>
+      <textarea class="mcr-veld" rows="4" maxlength="1500" placeholder="Write your day report here" oninput="MGR_CL.rapport=this.value" style="padding:10px 12px;font-size:14px;width:100%;box-sizing:border-box;resize:vertical">${veiligTekst(MGR_CL.rapport||'')}</textarea></div>`;
   }
   if(MGR_CL.stap===4){
     const items=Object.keys(MGR_CL.items).filter(k=>MGR_CL.items[k]);
@@ -13202,6 +13208,7 @@ function mgrClTeken(){
         <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Ratings</b><br>${mensen.map(p=>`${veiligTekst(p.naam.split(' ')[0])} <span style="color:#6B6A66">${veiligTekst(mgrOordeel(p.beoordeling))}</span>`).join(' &middot; ')}</div>
         <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Stall</b><br>Cleaning list ${MGR_CL.schoon?'done':'<span style="color:#B45309">not done</span>'} &middot; Gas off</div>
         <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Stock</b><br>${(MGR_CL.voorraad||mgrClExtra().length)?veiligTekst([...(MGR_CL.voorraad?items:[]),...mgrClExtra(),MGR_CL.voorraad?MGR_CL.tekst.trim():''].filter(Boolean).join(', ')):'Nothing needed'}</div>
+        <div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Day report</b><br>${(MGR_CL.rapport||'').trim()?`<span style="white-space:pre-wrap">${veiligTekst(MGR_CL.rapport.trim())}</span>`:'<span style="color:#6B6A66">Nothing written</span>'}</div>
         ${(MGR_CL_D||{}).pin_handmatig?`<div style="padding:7px 0;border-top:1px solid #EFEDE7"><b>Card payments</b><br>${mgrClPinRegels().map(r=>veiligTekst(r.tid)+' <b>'+veiligTekst(valSym()+' '+(mgrClPinGetal(r.omzet)||0).toFixed(2))+'</b>').join(' &middot; ')}</div>`:''}
       </div></div>`;
   }
@@ -13347,7 +13354,8 @@ async function mgrClVerder(){
       const{error}=await sb.rpc('mgr_dag_afsluiten',{p_kraam:MGR_CL.kraam,p_datum:MGR_CL.datum,p_schoonmaak:MGR_CL.schoon,
         p_gas:MGR_CL.gas,p_voorraad:MGR_CL.voorraad,p_items:MGR_CL.voorraad?items:[],p_tekst:MGR_CL.voorraad?MGR_CL.tekst:null,
         p_gas_flessen:mgrClAantal(MGR_CL.gasN),p_aardbeien:D.vraag_fruit?mgrClAantal(MGR_CL.aard):0,p_bananen:D.vraag_fruit?mgrClAantal(MGR_CL.ban):0,
-        p_pin:D.pin_handmatig?mgrClPinRegels().map(r=>({tid:r.tid,omzet:mgrClPinGetal(r.omzet)})):null});
+        p_pin:D.pin_handmatig?mgrClPinRegels().map(r=>({tid:r.tid,omzet:mgrClPinGetal(r.omzet)})):null,
+        p_dagrapport:(MGR_CL.rapport||'').trim()||null});
       if(error)throw error;
       mgrClReset(); toast('Day closed. Bram has been notified.');
       await mcrSluitDag();
